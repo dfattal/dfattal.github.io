@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Face Pose Estimation</title>
+  <!-- Require the peer dependencies of face-landmarks-detection. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+
+  <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+
+  <style>
+    /* Hide the video element */
+    #video {
+      display: none;
+    }
+  </style>
+
+</head>
+<body>
+  <h1>Face Pose Estimation</h1>
+  <video id="video" width="640" height="480" autoplay></video>
+  <canvas id="output" width="640" height="480"></canvas>
+  <script type="module" src="index.js"></script>
+</body>
+</html>
