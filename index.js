@@ -50,7 +50,10 @@ async function estimatePose() {
 
     const estimationConfig = {flipHorizontal: false};
     const predictions = await detector.estimateFaces(video, estimationConfig);
-
+    // Mirror the canvas horizontally
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.translate(-canvas.width, 0);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
@@ -79,8 +82,8 @@ async function estimatePose() {
         const faceCenterY = (leftEye.y + rightEye.y) / 2;
 
         // Convert face center to world coordinates
-        const x = (faceCenterX - video.width / 2) * depth / focalLength;
-        const y = (faceCenterY - video.height / 2) * depth / focalLength;
+        const x = -(faceCenterX - video.width / 2) * depth / focalLength;
+        const y = -(faceCenterY - video.height / 2) * depth / focalLength;
 
         // Draw landmarks and pose
         ctx.beginPath();
@@ -102,6 +105,7 @@ async function estimatePose() {
         ctx.arc(rightEye.x, rightEye.y, 1, 0, 2 * Math.PI);
         ctx.stroke();
 
+        ctx.restore();
         // Display the XYZ coordinates
         ctx.fillStyle = 'red';
         ctx.font = '12px Arial';
@@ -110,6 +114,7 @@ async function estimatePose() {
         ctx.fillText(`Z: ${depth.toFixed(2)} mm`, 10, 60);
       });
     }
+
 
     requestAnimationFrame(detect);
   }
