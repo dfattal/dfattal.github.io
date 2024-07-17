@@ -113,6 +113,8 @@ async function estimatePose() {
         ctx.fillText(`Y: ${y.toFixed(2)} mm`, 10, 40);
         ctx.fillText(`Z: ${depth.toFixed(2)} mm`, 10, 60);
       });
+    } else {
+       ctx.restore();
     }
 
 
