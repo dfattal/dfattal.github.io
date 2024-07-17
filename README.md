@@ -6,18 +6,6 @@ This project demonstrates how to use TensorFlow.js and the Face Landmarks Detect
 
 - Real-time face pose estimation using a webcam
 - Display of face landmarks on a video feed
-- Calculation of the average x, y, and z coordinates of detected keypoints
+- Calculation of the average x, y, and z coordinates for left and right eyes
 
-## Prerequisites
-
-- Node.js and npm installed
-- A webcam
-
-## Installation
-
-1. Clone the repository:
-
-```sh
-git clone https://github.com/yourusername/face-pose-estimation.git
-cd face-pose-estimation
 
