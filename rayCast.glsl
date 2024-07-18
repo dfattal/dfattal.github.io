@@ -179,7 +179,8 @@ void main(void) {
 
     vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,-uFacePosition.z)/IO; // normalized camera space coordinates
     vec2 sk2 = C2.xy/C2.z; //keeps 3D focus at specified location
-    vec2 f2 = f1/adjustAr(iRes,oRes)*C2.z/C1.z; // extra numerical zoom for exit effect only
+    vec2 f2 = f1/adjustAr(iRes,oRes)*max(C2.z/C1.z,1.0);
+    //vec2 f2 = f1/adjustAr(iRes,oRes)*sqrt(pow(C2.z/C1.z,2.0) + 1.0);
     //vec2 f2 = f1/adjustAr(iRes,oRes);
 
     mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
