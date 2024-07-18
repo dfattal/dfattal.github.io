@@ -58,6 +58,14 @@
       box-shadow: 0 5px #666;
       transform: translateY(4px);
     }
+
+    /* Fullscreen container to center the canvas */
+    .canvas-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh; /* Full viewport height */
+     }
   </style>
 
 </head>
@@ -67,7 +75,9 @@
     <a href="index3.html" class="button">Surprise</a>
   </div>
   <video id="video" width="640" height="480" autoplay></video>
-  <canvas id="output" width="640" height="480"></canvas>
+  div class="canvas-container">
+    <canvas id="output" width="640" height="480"></canvas>
+  </div>
   <script type="module" src="index.js"></script>
 </body>
 </html>
