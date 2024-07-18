@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Full FOV Webcam Feed</title>
+</head>
+<body>
+  <video id="video" width="1280" height="720" autoplay></video>
+  <div id="resolution"></div>
+
+  <script>
+    const constraints = {
+      video: {
+
+        facingMode: 'user' // 'user' for front camera, 'environment' for rear camera
+      }
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(function(stream) {
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+
+        const track = stream.getVideoTracks()[0];
+        const settings = track.getSettings();
+
+        const resolutionDiv = document.getElementById('resolution');
+        resolutionDiv.textContent = `Resolution: ${settings.width}x${settings.height}`;
+      })
+      .catch(function(err) {
+        console.error('Error accessing the camera: ' + err);
+      });
+  </script>
+</body>
+</html>
