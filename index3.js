@@ -61,7 +61,7 @@ function extractFacePosition(predictions) {
       const y = -(faceCenterY - video.height / 2) * depth / focalLength;
       return {x:x, y:y, z:depth};
     } else {
-      return {x:0, y:0, z:500};
+      return {x:0, y:0, z:600};
     }
 }
 
@@ -248,8 +248,8 @@ async function main() {
   const video = await setupCamera();
   video.play();
 
-  let facePosition = {x: 0, y: 0, z: 630};
-  let oldFacePosition = {x: 0, y: 0, z: 630};
+  let facePosition = {x: 0, y: 0, z: 600};
+  let oldFacePosition = {x: 0, y: 0, z: 600};
   const axy = 0.5; // exponential smoothing
   const az = 0.1; // exponential smoothing
 
