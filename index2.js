@@ -106,8 +106,10 @@ function setupWebGL(gl, fragmentShaderSource) {
       textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
     },
     uniformLocations: {
-      uImage: gl.getUniformLocation(shaderProgram, 'uImage'),
-      uDisparityMap: gl.getUniformLocation(shaderProgram, 'uDisparityMap'),
+      uImageL: gl.getUniformLocation(shaderProgram, 'uImageL'),
+      uDisparityMapL: gl.getUniformLocation(shaderProgram, 'uDisparityMapL'),
+      uImageR: gl.getUniformLocation(shaderProgram, 'uImageR'),
+      uDisparityMapR: gl.getUniformLocation(shaderProgram, 'uDisparityMapR'),
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
@@ -223,14 +225,23 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
 
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, textures.albedo);
-  gl.uniform1i(programInfo.uniformLocations.uImage, 0);
+  gl.bindTexture(gl.TEXTURE_2D, textures.albedoL);
+  gl.uniform1i(programInfo.uniformLocations.uImageL, 0);
 
   gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, textures.disparity);
-  gl.uniform1i(programInfo.uniformLocations.uDisparityMap, 1);
+  gl.bindTexture(gl.TEXTURE_2D, textures.disparityL);
+  gl.uniform1i(programInfo.uniformLocations.uDisparityMapL, 1);
+
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, textures.albedoR);
+  gl.uniform1i(programInfo.uniformLocations.uImageR, 2);
+
+  gl.activeTexture(gl.TEXTURE3);
+  gl.bindTexture(gl.TEXTURE_2D, textures.disparityR);
+  gl.uniform1i(programInfo.uniformLocations.uDisparityMapR, 3);
+
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, facePosition.x, facePosition.y, facePosition.z);
-  //gl.uniform2f(programInfo.uniformLocations.iRes, albedoImage.width, albedoImage.height);  // Add this line
+
   gl.uniform2f(programInfo.uniformLocations.iRes, textures.width, textures.height);  // Add this line
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
 
@@ -270,19 +281,23 @@ async function main() {
   }
 
   //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
-  const fragmentShaderSource = await loadShaderFile('./rayCastMono.glsl');
-  const albedoImage = await loadImage('./images/albedo.jpg');
-  const disparityImage = await loadImage('./images/disparity.png');
+  const fragmentShaderSource = await loadShaderFile('./rayCastStereo.glsl');
+  const albedoImageL = await loadImage('./images/IMG_20240211_11563928_L.jpg');
+  const disparityImageL = await loadImage('./images/IMG_20240211_11563928_dispL_-0.1366_-0.0027_dil.png');
+  const albedoImageR = await loadImage('./images/IMG_20240211_11563928_R.jpg');
+  const disparityImageR = await loadImage('./images/IMG_20240211_11563928_dispR_-0.1366_-0.0027_dil.png');
 
   // Set canvas size to match image aspect ratio
-  canvas.width = albedoImage.width;
-  canvas.height = albedoImage.height;
+  canvas.width = albedoImageL.width;
+  canvas.height = albedoImageL.height;
 
   const textures = {
-    albedo: createTexture(gl, albedoImage),
-    disparity: createTexture(gl, disparityImage),
-    width: albedoImage.width,
-    height: albedoImage.height
+    albedoL: createTexture(gl, albedoImageL),
+    disparityL: createTexture(gl, disparityImageL),
+    albedoR: createTexture(gl, albedoImageR),
+    disparityR: createTexture(gl, disparityImageR),
+    width: albedoImageL.width,
+    height: albedoImageL.height
   };
 
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);

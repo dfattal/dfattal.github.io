@@ -168,20 +168,19 @@ void main(void) {
 
     vec2 uv = vTextureCoord;
 
-    float minDisp = -IO*f/vd;
-    float maxDisp = minDisp/2.0;
+    float minDisp = -0.1;
+    float maxDisp = 0.0*minDisp/2.0;
     float invZmin = disp2invZ(minDisp);
     float invZmax = disp2invZ(maxDisp);
+    float invd = invZmin; // pivot
 
     vec2 f1 = vec2(f,f*iRes.x/iRes.y);
     mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
-    vec3 C1 = vec3(0.0,0.0,-1.0/invZmin); // original position
+    vec3 C1 = vec3(0.0,0.0,0.0); // original position
 
-    vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,-uFacePosition.z)/IO; // normalized camera space coordinates
-    vec2 sk2 = C2.xy/C2.z; //keeps 3D focus at specified location
-    vec2 f2 = f1/adjustAr(iRes,oRes)*max(C2.z/C1.z,1.0);
-    //vec2 f2 = f1/adjustAr(iRes,oRes)*sqrt(pow(C2.z/C1.z,2.0) + 1.0);
-    //vec2 f2 = f1/adjustAr(iRes,oRes);
+    vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
+    vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
+    vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
     mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
 
