@@ -72,12 +72,7 @@ function extractFacePosition(predictions) {
         Math.pow(rightEye.z - leftEye.z, 2)
       );
 
-      if (isMobileDevice()) {
-        agentDiv.textContent = "Mobile";
-      } else {
-        agentDiv.textContent = navigator.userAgent;
-      }
-      const focalLength = isMobileDevice() ? 640 : 640/2.0; // Focal length in pixels (estimated)
+      const focalLength = isMobileDevice() ? 640*0.5 : 640; // Focal length in pixels (estimated)
       const realInterocularDistance = 63; // Real interocular distance in mm
 
       const depth = (focalLength * realInterocularDistance) / interocularDistance;
