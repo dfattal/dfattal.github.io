@@ -16,6 +16,26 @@ async function setupCamera() {
   });
 }
 
+function isMobileDevice() {
+  var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+
+  // Check for the presence of common mobile device identifiers
+  if (/android|linux|galaxy|pixel/i.test(userAgent)) {
+    return true;
+  }
+
+  if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+    return true;
+  }
+
+  // Additional checks for other mobile devices
+  if (/mobile/i.test(userAgent)) {
+    return true;
+  }
+
+  return false;
+}
+
 function calculateAverageKeypoint(filteredKeypoints) {
       if (filteredKeypoints.length === 0) {
         return { x: 0, y: 0, z: 0 }; // or handle the empty case as needed
