@@ -36,7 +36,7 @@ function isMobileDevice() {
   var userAgent = navigator.userAgent || navigator.vendor || window.opera;
 
   // Check for the presence of common mobile device identifiers
-  if (/android|linux/i.test(userAgent)) {
+  if (/android|linux|galaxy|pixel/i.test(userAgent)) {
     return true;
   }
 
