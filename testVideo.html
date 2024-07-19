@@ -32,20 +32,25 @@
       });
 
       // Function to check if the device is mobile
-  function isMobileDevice() {
-    var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+function isMobileDevice() {
+  var userAgent = navigator.userAgent || navigator.vendor || window.opera;
 
-    // Check for the presence of common mobile device identifiers
-    if (/android/i.test(userAgent)) {
-     return true;
-    }
-
-    if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-      return true;
-    }
-
-    return false;
+  // Check for the presence of common mobile device identifiers
+  if (/android/i.test(userAgent)) {
+    return true;
   }
+
+  if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+    return true;
+  }
+
+  // Additional checks for other mobile devices
+  if (/mobile/i.test(userAgent)) {
+    return true;
+  }
+
+  return false;
+}
 
   const agentDiv = document.getElementById('agent');
   // Use the function to check the device type
