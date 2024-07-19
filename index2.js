@@ -133,6 +133,9 @@ function setupWebGL(gl, fragmentShaderSource) {
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
+      vd: gl.getUniformLocation(shaderProgram, 'vd'),
+      IO: gl.getUniformLocation(shaderProgram, 'IO'),
+      f: gl.getUniformLocation(shaderProgram, 'f')
     },
   };
 
@@ -263,7 +266,11 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, facePosition.x, facePosition.y, facePosition.z);
 
   gl.uniform2f(programInfo.uniformLocations.iRes, textures.width, textures.height);  // Add this line
-  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
+  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height); // Add this line
+
+  gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 400 : 600);
+  gl.uniform1f(programInfo.uniformLocations.f, 1.0);
+  gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;

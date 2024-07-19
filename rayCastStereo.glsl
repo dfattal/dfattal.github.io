@@ -6,6 +6,7 @@ uniform sampler2D uImageR;
 uniform sampler2D uDisparityMapR;
 uniform vec3 uFacePosition;
 uniform vec2 iRes, oRes;
+uniform float vd, IO, f;
 
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {
     ivec2 ivec = ivec2(int(coord.x * iRes.x),  // asssuming all input textures are of same size
@@ -14,9 +15,9 @@ uniform vec2 iRes, oRes;
 }*/
 #define texture texture2D
 
-const float vd = 600.0;
-const float IO = 63.0;
-const float f = 0.78;
+//const float vd = 600.0;
+//const float IO = 63.0;
+//const float f = 0.78;
 
 vec2 adjustAr(vec2 iRes,vec2 oRes) {
     float s = min(iRes.x,iRes.y)/min(oRes.x,oRes.y);
