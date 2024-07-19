@@ -57,7 +57,7 @@ function isMobileDevice() {
   if (isMobileDevice()) {
     agentDiv.textContent = "Mobile";
   } else {
-    agentDiv.textContent = "Not Mobile";
+    agentDiv.textContent = navigator.userAgent;
   }
   </script>
 </body>
