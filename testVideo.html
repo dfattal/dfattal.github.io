@@ -6,6 +6,7 @@
 <body>
   <video id="video" width="1280" height="720" autoplay></video>
   <div id="resolution"></div>
+  <div id="agent"></div>
 
   <script>
     const constraints = {
@@ -29,6 +30,30 @@
       .catch(function(err) {
         console.error('Error accessing the camera: ' + err);
       });
+
+      // Function to check if the device is mobile
+  function isMobileDevice() {
+    var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+
+    // Check for the presence of common mobile device identifiers
+    if (/android/i.test(userAgent)) {
+     return true;
+    }
+
+    if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+      return true;
+    }
+
+    return false;
+  }
+
+  const agentDiv = document.getElementById('agent');
+  // Use the function to check the device type
+  if (isMobileDevice()) {
+    agentDiv.textContent = "Mobile";
+  } else {
+    agentDiv.textContent = "Not Mobile";
+  }
   </script>
 </body>
 </html>
