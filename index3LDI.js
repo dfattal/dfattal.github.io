@@ -1,4 +1,38 @@
 
+const numLayers = 3;
+const MAX_LAYERS = 5;
+
+function create4ChannelImage(rgbImage, maskImage) {
+  const width = rgbImage.width;
+  const height = rgbImage.height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+
+  // Draw the RGB image
+  ctx.drawImage(rgbImage, 0, 0, width, height);
+  const rgbData = ctx.getImageData(0, 0, width, height).data;
+
+  // Draw the mask image
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(maskImage, 0, 0, width, height);
+  const maskData = ctx.getImageData(0, 0, width, height).data;
+
+  // Create a new image data object for the 4-channel image
+  const combinedData = ctx.createImageData(width, height);
+  for (let i = 0; i < rgbData.length / 4; i++) {
+    combinedData.data[i * 4] = rgbData[i * 4];
+    combinedData.data[i * 4 + 1] = rgbData[i * 4 + 1];
+    combinedData.data[i * 4 + 2] = rgbData[i * 4 + 2];
+    combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
+  }
+
+  return combinedData;
+}
+
 function setupWebGL(gl, fragmentShaderSource) {
 
   const vsSource = vertexShaderSource;
@@ -13,8 +47,9 @@ function setupWebGL(gl, fragmentShaderSource) {
       textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
     },
     uniformLocations: {
-      uImage: gl.getUniformLocation(shaderProgram, 'uImage'),
-      uDisparityMap: gl.getUniformLocation(shaderProgram, 'uDisparityMap'),
+      uImage: [],
+      uDisparityMap: [],
+      uNumLayers: gl.getUniformLocation(shaderProgram, 'uNumLayers'),
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
@@ -23,6 +58,12 @@ function setupWebGL(gl, fragmentShaderSource) {
       f: gl.getUniformLocation(shaderProgram, 'f')
     },
   };
+
+  // Populate the uniform location arrays
+  for (let i = 0; i < MAX_LAYERS; i++) {
+    programInfo.uniformLocations.uImage.push(gl.getUniformLocation(shaderProgram, `uImage[${i}]`));
+    programInfo.uniformLocations.uDisparityMap.push(gl.getUniformLocation(shaderProgram, `uDisparityMap[${i}]`));
+  }
 
   // Vertex positions and texture coordinates
   const positions = new Float32Array([
@@ -87,16 +128,23 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, textures.albedo);
-  gl.uniform1i(programInfo.uniformLocations.uImage, 0);
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayers; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (2 * i));
+    gl.bindTexture(gl.TEXTURE_2D, textures[i].albedo);
+    gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
 
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, textures.disparity);
-  gl.uniform1i(programInfo.uniformLocations.uDisparityMap, 1);
+    gl.activeTexture(gl.TEXTURE0 + (2 * i + 1));
+    gl.bindTexture(gl.TEXTURE_2D, textures[i].disparity);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
+
+
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, facePosition.x, facePosition.y, facePosition.z);
   //gl.uniform2f(programInfo.uniformLocations.iRes, albedoImage.width, albedoImage.height);  // Add this line
-  gl.uniform2f(programInfo.uniformLocations.iRes, textures.width, textures.height);  // Add this line
+  gl.uniform2f(programInfo.uniformLocations.iRes, textures[0].width, textures[0].height);  // Add this line
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
   gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 400 : 600);
   gl.uniform1f(programInfo.uniformLocations.f, 1.0);
@@ -132,20 +180,28 @@ async function main() {
   }
 
   //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
-  const fragmentShaderSource = await loadShaderFile('./rayCastMono.glsl');
-  const albedoImage = await loadImage('./images/albedo.jpg');
-  const disparityImage = await loadImage('./images/disparity.png');
+  const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
+  const textures = [];
+
+  for (let i = 0; i < numLayers; i++) {
+    const albedoImage = await loadImage(`./images/robotLDI/rgb_${i}.jpg`);
+    const disparityImage = await loadImage(`./images/robotLDI/disparity_${i}.jpg`);
+    const maskImage = await loadImage(`./images/robotLDI/mask_${i}.png`);
+    const disparity4Image = create4ChannelImage(disparityImage, maskImage);
+
+    textures.push({
+      albedo: createTexture(gl, albedoImage),
+      disparity: createTexture(gl, disparity4Image),
+      width: albedoImage.width,
+      height: albedoImage.height
+    });
+  }
+    console.log(textures);
   // Set canvas size to match image aspect ratio
-  canvas.width = albedoImage.width;
-  canvas.height = albedoImage.height;
+  canvas.width = textures[0].width;
+  canvas.height = textures[0].height;
 
-  const textures = {
-    albedo: createTexture(gl, albedoImage),
-    disparity: createTexture(gl, disparityImage),
-    width: albedoImage.width,
-    height: albedoImage.height
-  };
 
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 
