@@ -1,16 +1,7 @@
 
 function setupWebGL(gl, fragmentShaderSource) {
-  const vsSource = `
-    attribute vec4 aVertexPosition;
-    attribute vec2 aTextureCoord;
-    varying highp vec2 vTextureCoord;
 
-    void main(void) {
-      gl_Position = aVertexPosition;
-      vTextureCoord = aTextureCoord;
-    }
-  `;
-
+  const vsSource = vertexShaderSource;
   const fsSource = fragmentShaderSource;
 
   // Initialize shaders and program

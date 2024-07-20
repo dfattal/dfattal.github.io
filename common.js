@@ -1,4 +1,15 @@
 
+const vertexShaderSource = `
+    attribute vec4 aVertexPosition;
+    attribute vec2 aTextureCoord;
+    varying highp vec2 vTextureCoord;
+
+    void main(void) {
+      gl_Position = aVertexPosition;
+      vTextureCoord = aTextureCoord;
+    }
+  `;
+
 async function setupCamera() {
   const video = document.getElementById('video');
   const stream = await navigator.mediaDevices.getUserMedia({
