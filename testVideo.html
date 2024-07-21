@@ -28,7 +28,7 @@
         resolutionDiv.textContent = `Resolution: ${settings.width}x${settings.height}`;
       })
       .catch(function(err) {
-        console.error('Error accessing the camera: ' + err);
+        console.error('Error accessing the camera: ' + err.name + " " + err.message);
       });
 
       // Function to check if the device is mobile
@@ -56,6 +56,7 @@ function isMobileDevice() {
   // Use the function to check the device type
   if (isMobileDevice()) {
     agentDiv.textContent = "Mobile";
+    console.log("Mobile");
   } else {
     agentDiv.textContent = navigator.userAgent;
   }
