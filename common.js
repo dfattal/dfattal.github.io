@@ -195,3 +195,17 @@ function create4ChannelImage(rgbImage, maskImage) {
   return combinedData;
 }
 
+// Log all uniforms
+function logAllUniforms(gl, program) {
+  const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+  const uniforms = {};
+
+  for (let i = 0; i < numUniforms; ++i) {
+    const info = gl.getActiveUniform(program, i);
+    const location = gl.getUniformLocation(program, info.name);
+    const value = gl.getUniform(program, location);
+    uniforms[info.name] = value;
+  }
+
+  console.log('Uniforms:', uniforms);
+}

@@ -21,19 +21,20 @@
       display: none;
     }
     /* Fullscreen container to center the canvas */
-    .canvas-container {
+    #canvas-container {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh; /* Full viewport height */
+      width: 100vw;
+      height: 100vh;
     }
   </style>
 
 </head>
 <body>
   <video id="video" width="640" height="480" autoplay></video>
-  <div class="canvas-container">
-    <canvas id="glCanvas" width="640" height="480"></canvas>
+  <div id="canvas-container">
+    <canvas id="glCanvas"></canvas>
   </div>
   <script  src="common.js"></script>
   <script  src="index3.js"></script>

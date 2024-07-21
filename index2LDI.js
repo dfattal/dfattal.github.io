@@ -153,11 +153,29 @@ async function main() {
   const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
   const canvas = document.getElementById('glCanvas');
   const gl = canvas.getContext('webgl');
+  const container = document.getElementById('canvas-container');
 
   if (!gl) {
     console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
     return;
   }
+
+  function resizeCanvasToContainer() {
+      const displayWidth = container.clientWidth;
+      const displayHeight = container.clientHeight;
+
+      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+
+        // Update the WebGL viewport
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+  // Event listener for window resize
+  window.addEventListener('resize', resizeCanvasToContainer);
+  resizeCanvasToContainer(); // Initial resize to set the correct canvas size
 
   const fragmentShaderSource = await loadShaderFile('./rayCastStereoLDI.glsl');
 
@@ -191,6 +209,7 @@ async function main() {
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 
   async function render() {
+    resizeCanvasToContainer(); // Ensure canvas is resized before rendering
     const estimationConfig = {flipHorizontal: false};
     const predictions = await detector.estimateFaces(video, estimationConfig);
     const newFacePosition = extractFacePosition(predictions);
