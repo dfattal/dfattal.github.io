@@ -115,7 +115,7 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
   //gl.uniform2f(programInfo.uniformLocations.iRes, albedoImage.width, albedoImage.height);  // Add this line
   gl.uniform2f(programInfo.uniformLocations.iRes, textures[0].width, textures[0].height);  // Add this line
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
-  gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 400 : 600);
+  gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 0.7*restPos : restPos);
   gl.uniform1f(programInfo.uniformLocations.f, 1.0);
   gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
 
@@ -132,8 +132,8 @@ async function main() {
   const video = await setupCamera();
   video.play();
 
-  let facePosition = {x: 0, y: 0, z: 600};
-  let oldFacePosition = {x: 0, y: 0, z: 600};
+  let facePosition = {x: 0, y: 0, z: restPos};
+  let oldFacePosition = {x: 0, y: 0, z: restPos};
   const axy = 0.5; // exponential smoothing
   const az = 0.1; // exponential smoothing
 

@@ -1,4 +1,6 @@
 
+const restPos = 700; // rest distance for viewing
+
 const vertexShaderSource = `
     attribute vec4 aVertexPosition;
     attribute vec2 aTextureCoord;
@@ -95,7 +97,7 @@ function extractFacePosition(predictions) {
       const y = -(faceCenterY - video.height / 2) * depth / focalLength;
       return {x:x, y:y, z:depth};
     } else {
-      return {x:0, y:0, z:600};
+      return {x:0, y:0, z:restPos};
     }
 }
 

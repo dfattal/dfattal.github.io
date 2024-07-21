@@ -110,7 +110,7 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
   gl.uniform2f(programInfo.uniformLocations.iRes, textures.width, textures.height);  // Add this line
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height); // Add this line
 
-  gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 400 : 600);
+  gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 0.7*restPos : restPos);
   gl.uniform1f(programInfo.uniformLocations.f, 1.0);
   gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
 
