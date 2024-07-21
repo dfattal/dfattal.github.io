@@ -1,6 +1,6 @@
 
-const numLayers = 3;
-const MAX_LAYERS = 5;
+const numLayers = 2;
+const MAX_LAYERS = 4;
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -16,8 +16,10 @@ function setupWebGL(gl, fragmentShaderSource) {
       textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
     },
     uniformLocations: {
-      uImage: [],
-      uDisparityMap: [],
+      uImageL: [],
+      uDisparityMapL: [],
+      uImageR: [],
+      uDisparityMapR: [],
       uNumLayers: gl.getUniformLocation(shaderProgram, 'uNumLayers'),
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'),
@@ -30,8 +32,10 @@ function setupWebGL(gl, fragmentShaderSource) {
 
   // Populate the uniform location arrays
   for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
-    programInfo.uniformLocations.uImage.push(gl.getUniformLocation(shaderProgram, `uImage[${i}]`));
-    programInfo.uniformLocations.uDisparityMap.push(gl.getUniformLocation(shaderProgram, `uDisparityMap[${i}]`));
+    programInfo.uniformLocations.uImageL.push(gl.getUniformLocation(shaderProgram, `uImageL[${i}]`));
+    programInfo.uniformLocations.uDisparityMapL.push(gl.getUniformLocation(shaderProgram, `uDisparityMapL[${i}]`));
+    programInfo.uniformLocations.uImageR.push(gl.getUniformLocation(shaderProgram, `uImageR[${i}]`));
+    programInfo.uniformLocations.uDisparityMapR.push(gl.getUniformLocation(shaderProgram, `uDisparityMapR[${i}]`));
   }
 
   // Vertex positions and texture coordinates
@@ -97,24 +101,31 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
 
-  // Loop through each layer and bind textures
   for (let i = 0; i < numLayers; i++) {
-    gl.activeTexture(gl.TEXTURE0 + (2 * i));
-    gl.bindTexture(gl.TEXTURE_2D, textures[i].albedo);
-    gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
+    gl.activeTexture(gl.TEXTURE0 + (4 * i));
+    gl.bindTexture(gl.TEXTURE_2D, textures[i].albedoL);
+    gl.uniform1i(programInfo.uniformLocations.uImageL[i], 4 * i);
 
-    gl.activeTexture(gl.TEXTURE0 + (2 * i + 1));
-    gl.bindTexture(gl.TEXTURE_2D, textures[i].disparity);
-    gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 1));
+    gl.bindTexture(gl.TEXTURE_2D, textures[i].disparityL);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMapL[i], 4 * i + 1);
+
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 2));
+    gl.bindTexture(gl.TEXTURE_2D, textures[i].albedoR);
+    gl.uniform1i(programInfo.uniformLocations.uImageR[i], 4 * i + 2);
+
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 3));
+    gl.bindTexture(gl.TEXTURE_2D, textures[i].disparityR);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMapR[i], 4 * i + 3);
   }
   // Pass the actual number of layers to the shader
   gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
 
-
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, facePosition.x, facePosition.y, facePosition.z);
-  //gl.uniform2f(programInfo.uniformLocations.iRes, albedoImage.width, albedoImage.height);  // Add this line
+
   gl.uniform2f(programInfo.uniformLocations.iRes, textures[0].width, textures[0].height);  // Add this line
-  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
+  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height); // Add this line
+
   gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 400 : 600);
   gl.uniform1f(programInfo.uniformLocations.f, 1.0);
   gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
@@ -148,29 +159,34 @@ async function main() {
     return;
   }
 
-  //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
-  const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
+  const fragmentShaderSource = await loadShaderFile('./rayCastStereoLDI.glsl');
 
   const textures = [];
 
   for (let i = 0; i < numLayers; i++) {
-    const albedoImage = await loadImage(`./images/robotLDI/rgb_${i}.jpg`);
-    const disparityImage = await loadImage(`./images/robotLDI/disparity_${i}.jpg`);
-    const maskImage = await loadImage(`./images/robotLDI/mask_${i}.png`);
-    const disparity4Image = create4ChannelImage(disparityImage, maskImage);
+    const albedoImageL = await loadImage(`./images/JoeJuiceLDI/ldi0/rgb_${i}.jpg`);
+    const disparityImageL = await loadImage(`./images/JoeJuiceLDI/ldi0/disparity_${i}.jpg`);
+    const maskImageL = await loadImage(`./images/JoeJuiceLDI/ldi0/mask_${i}.png`);
+    const disparity4ImageL = create4ChannelImage(disparityImageL, maskImageL);
+
+    const albedoImageR = await loadImage(`./images/JoeJuiceLDI/ldi1/rgb_${i}.jpg`);
+    const disparityImageR = await loadImage(`./images/JoeJuiceLDI/ldi1/disparity_${i}.jpg`);
+    const maskImageR = await loadImage(`./images/JoeJuiceLDI/ldi1/mask_${i}.png`);
+    const disparity4ImageR = create4ChannelImage(disparityImageR, maskImageR);
 
     textures.push({
-      albedo: createTexture(gl, albedoImage),
-      disparity: createTexture(gl, disparity4Image),
-      width: albedoImage.width,
-      height: albedoImage.height
+      albedoL: createTexture(gl, albedoImageL),
+      disparityL: createTexture(gl, disparity4ImageL),
+      albedoR: createTexture(gl, albedoImageR),
+      disparityR: createTexture(gl, disparity4ImageR),
+      width: albedoImageL.width,
+      height: albedoImageL.height
     });
   }
     console.log(textures);
   // Set canvas size to match image aspect ratio
   canvas.width = textures[0].width;
   canvas.height = textures[0].height;
-
 
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 

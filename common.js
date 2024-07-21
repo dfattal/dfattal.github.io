@@ -164,5 +164,34 @@ async function getFacePosition() {
   return facePosition;
 }
 
+function create4ChannelImage(rgbImage, maskImage) {
+  const width = rgbImage.width;
+  const height = rgbImage.height;
 
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+
+  // Draw the RGB image
+  ctx.drawImage(rgbImage, 0, 0, width, height);
+  const rgbData = ctx.getImageData(0, 0, width, height).data;
+
+  // Draw the mask image
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(maskImage, 0, 0, width, height);
+  const maskData = ctx.getImageData(0, 0, width, height).data;
+
+  // Create a new image data object for the 4-channel image
+  const combinedData = ctx.createImageData(width, height);
+  for (let i = 0; i < rgbData.length / 4; i++) {
+    combinedData.data[i * 4] = rgbData[i * 4];
+    combinedData.data[i * 4 + 1] = rgbData[i * 4 + 1];
+    combinedData.data[i * 4 + 2] = rgbData[i * 4 + 2];
+    combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
+  }
+
+  return combinedData;
+}
 
