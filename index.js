@@ -1,5 +1,10 @@
 //import * as tf from '@tensorflow/tfjs';
 //import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
+// Function to check if the device is iOS
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
 function isMobileDevice() {
   var userAgent = navigator.userAgent || navigator.vendor || window.opera;
 
@@ -53,9 +58,20 @@ async function setupCamera() {
   });
 }
 
+function startVideo() {
+    video.play();
+}
+
 async function estimatePose() {
   const video = await setupCamera();
-  video.play();
+  if (isIOS()) {
+      console.log("iOS Device Detected");
+      document.getElementById("agent").textContent = "iOS Device Detected. Click to start video.";
+      document.addEventListener('click', startVideo, { once: true });
+    } else {
+      startVideo();
+    }
+  //video.play();
 
   const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
   const detectorConfig = {
