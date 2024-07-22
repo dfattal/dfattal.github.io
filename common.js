@@ -29,6 +29,7 @@ async function setupCamera() {
   });
 }
 
+// Function to check if the device is Mobile to adjust vd
 function isMobileDevice() {
   var userAgent = navigator.userAgent || navigator.vendor || window.opera;
 
@@ -47,6 +48,11 @@ function isMobileDevice() {
   }
 
   return false;
+}
+
+// Function to check if the device is iOS
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
 
 function calculateAverageKeypoint(filteredKeypoints) {
