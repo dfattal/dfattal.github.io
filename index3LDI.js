@@ -129,8 +129,18 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 
 async function main() {
 
+  function startVideo() {
+    video.play();
+  }
   const video = await setupCamera();
-  video.play();
+  if (isIOS()) {
+      console.log("iOS Device Detected");
+      document.getElementById("canvas-container").textContent = "iOS Device Detected. Click to start video.";
+      document.addEventListener('click', startVideo, { once: true });
+    } else {
+      startVideo();
+    }
+  //video.play();
 
   let facePosition = {x: 0, y: 0, z: restPos};
   let oldFacePosition = {x: 0, y: 0, z: restPos};
