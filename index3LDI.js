@@ -129,13 +129,15 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 
 async function main() {
 
+  iOSmsg = document.getElementById("iOSmsg");
   function startVideo() {
+    iOSmsg.remove();
     video.play();
   }
   const video = await setupCamera();
   if (isIOS()) {
       console.log("iOS Device Detected");
-      document.getElementById("iOSmsg").textContent = "iOS Device Detected. Click to start video.";
+      iOSmsg.textContent = "iOS Device Detected. Click to start video.";
       document.addEventListener('click', startVideo, { once: true });
     } else {
       startVideo();
