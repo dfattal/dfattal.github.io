@@ -135,7 +135,7 @@ async function main() {
   const video = await setupCamera();
   if (isIOS()) {
       console.log("iOS Device Detected");
-      document.getElementById("canvas-container").textContent = "iOS Device Detected. Click to start video.";
+      document.getElementById("iOSmsg").textContent = "iOS Device Detected. Click to start video.";
       document.addEventListener('click', startVideo, { once: true });
     } else {
       startVideo();
