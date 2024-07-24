@@ -2,55 +2,15 @@
 <html>
 <head>
   <title>Full FOV Webcam Feed</title>
+
 </head>
 <body>
-  <video id="video" width="1280" height="720"></video>
+
   <div id="resolution"></div>
-  <div id="agent"></div>
+  <div id="iOSmsg"></div>
 
-  <script>
-    const constraints = {
-      video: {
-        width: { ideal: 640 },
-        facingMode: 'user' // 'user' for front camera, 'environment' for rear camera
-      }
-    };
-
-    function startVideo() {
-      navigator.mediaDevices.getUserMedia(constraints)
-        .then(function(stream) {
-          const video = document.getElementById('video');
-          video.srcObject = stream;
-
-          const track = stream.getVideoTracks()[0];
-          const settings = track.getSettings();
-
-          const resolutionDiv = document.getElementById('resolution');
-          resolutionDiv.textContent = `Resolution: ${settings.width}x${settings.height}`;
-
-          // Play the video
-          video.play();
-        })
-        .catch(function(err) {
-          console.error('Error accessing the camera: ' + err.name + " " + err.message);
-        });
-    }
-
-    // Function to check if the device is iOS
-    function isIOS() {
-      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    }
-
-    const agentDiv = document.getElementById('agent');
-    if (isIOS()) {
-      agentDiv.textContent = "iOS Device Detected. Click to start video.";
-      console.log("iOS Device Detected");
-      document.addEventListener('click', startVideo, { once: true });
-    } else {
-      agentDiv.textContent = navigator.userAgent;
-      startVideo();
-    }
-  </script>
+  <script  src="common.js"></script>
+  <script  src="testVideo.js"></script>
 </body>
 </html>
 
