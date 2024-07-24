@@ -21,6 +21,9 @@ async function setupCamera() {
       }
   });
   video.srcObject = stream;
+  const track = stream.getVideoTracks()[0];
+  const settings = track.getSettings();
+  console.log([settings.width,settings.height]);
 
   return new Promise((resolve) => {
     video.onloadedmetadata = () => {
