@@ -13,17 +13,19 @@ const vertexShaderSource = `
   `;
 
 async function setupCamera() {
-  const video = document.getElementById('video');
+  //const video = document.getElementById('video');
+  const video = document.createElement('video');
   const stream = await navigator.mediaDevices.getUserMedia({
     video: {
         //width: { ideal: 640 },
-        facingMode: 'user' // 'user' for front camera, 'environment' for rear camera
+        facingMode: { ideal: 'user' } // 'user' for front camera, 'environment' for rear camera
       }
   });
   video.srcObject = stream;
   const track = stream.getVideoTracks()[0];
   const settings = track.getSettings();
   console.log([settings.width,settings.height]);
+  console.log(`Actual video resolution: ${video.videoWidth}x${video.videoHeight}`);
 
   return new Promise((resolve) => {
     video.onloadedmetadata = () => {
