@@ -217,7 +217,7 @@ void main(void) {
 
         vec3 C2 = vec3(uFacePosition.x, -uFacePosition.y, vd-uFacePosition.z)/IO;// normalized camera space coordinates
         vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd);//keeps 3D focus at specified location
-        vec2 f2 = f1/adjustAr(iRes, oRes)*max(1.0-C2.z*invd, 1.0);
+        vec2 f2 = f1/adjustAr(iRes, oRes)*max(1.0-C2.z*invd, 1.0); // multiply by 1.4 if 40% outpainting
 
         mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2);// non need for extra rot calculation here
 
