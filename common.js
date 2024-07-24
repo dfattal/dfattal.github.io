@@ -104,8 +104,10 @@ function extractFacePosition(predictions) {
       // Convert face center to world coordinates
       const x = -(faceCenterX - video.width / 2) * depth / focalLength;
       const y = -(faceCenterY - video.height / 2) * depth / focalLength;
+      console.log([x,y,depth]);
       return {x:x, y:y, z:depth};
     } else {
+      console.log("no face - defaulting to " + [0,0,restPos]);
       return {x:0, y:0, z:restPos};
     }
 }

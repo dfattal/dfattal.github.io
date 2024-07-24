@@ -215,7 +215,7 @@ async function main() {
     facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
     facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
     oldFacePosition = facePosition;
-    console.log([gl.canvas.width,gl.canvas.height]);
+    //console.log([gl.canvas.width,gl.canvas.height]);
     drawScene(gl, programInfo, buffers, textures, facePosition);
     requestAnimationFrame(render);
     //console.log(facePosition);
