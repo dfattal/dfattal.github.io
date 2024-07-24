@@ -1,5 +1,5 @@
 
-const restPos = 700; // rest distance for viewing
+const restPos = 600; // rest distance for viewing
 
 const vertexShaderSource = `
     attribute vec4 aVertexPosition;
@@ -93,7 +93,7 @@ function extractFacePosition(predictions) {
         Math.pow(rightEye.y - leftEye.y, 2) +
         Math.pow(rightEye.z - leftEye.z, 2)
       );
-      const focalLength = isMobileDevice() ? 640*0.5 : 640; // Focal length in pixels (estimated)
+      const focalLength = isMobileDevice() ? 640*0.8 : 640; // Focal length in pixels (estimated)
       const realInterocularDistance = 63; // Real interocular distance in mm
 
       const depth = (focalLength * realInterocularDistance) / interocularDistance;
@@ -104,7 +104,7 @@ function extractFacePosition(predictions) {
       // Convert face center to world coordinates
       const x = -(faceCenterX - video.width / 2) * depth / focalLength;
       const y = -(faceCenterY - video.height / 2) * depth / focalLength;
-      console.log([x,y,depth]);
+      console.log([x,y,depth].map(Math.round));
       return {x:x, y:y, z:depth};
     } else {
       console.log("no face - defaulting to " + [0,0,restPos]);

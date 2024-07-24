@@ -210,6 +210,7 @@ async function main() {
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
     const estimationConfig = {flipHorizontal: false};
     const predictions = await detector.estimateFaces(video, estimationConfig);
+    console.log(video.srcObject.getVideoTracks()[0].settings);
     const newFacePosition = extractFacePosition(predictions);
     facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
     facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
