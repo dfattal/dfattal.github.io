@@ -187,39 +187,47 @@ void main(void) {
 
     vec2 uv = vTextureCoord;
 
-    float minDisp = -0.1;
-    float maxDisp = 0.0*minDisp/2.0;
-    float invZmin = disp2invZ(minDisp);
-    float invZmax = disp2invZ(maxDisp);
-    float invd = invZmin; // pivot
+    float s = min(oRes.x,oRes.y)/min(iRes.x,iRes.y);
+    vec2 newDim = iRes*s/oRes;
 
-    vec2 f1 = vec2(f,f*iRes.x/iRes.y);
-    mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
-    vec3 C1 = vec3(0.0,0.0,0.0); // original position
+    if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
-    vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
-    vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
-    vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+        float minDisp = -0.1;
+        float maxDisp = 0.0*minDisp/2.0;
+        float invZmin = disp2invZ(minDisp);
+        float invZmax = disp2invZ(maxDisp);
+        float invd = invZmin;// pivot
 
-    mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
+        vec2 f1 = vec2(f, f*iRes.x/iRes.y);
+        mat3 FSKR1 = mat3(f1.x, 0.0, 0.0, 0.0, f1.y, 0.0, 0.0, 0.0, 1.0);// only f matrix is on trivial, no frustum skew no rotation
+        vec3 C1 = vec3(0.0, 0.0, 0.0);// original position
 
-    // LDI
-    vec3 color;
-    vec4 layer1 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[0], uDisparityMap[0], minDisp, maxDisp, 1.0);
-    //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
-    if (layer1.a == 1.0 || uNumLayers == 1) { color = layer1.rgb; }
-    vec4 layer2 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[1], uDisparityMap[1], minDisp, maxDisp, 1.0) * (1.0 - layer1.w) + layer1 * layer1.w;
-    if (layer2.a == 1.0 || uNumLayers == 2) { color = layer2.rgb;  }
-    vec4 layer3 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[2], uDisparityMap[2], minDisp, maxDisp, 1.0) * (1.0 - layer2.w) + layer2 * layer2.w;
-    if (layer3.a == 1.0 || uNumLayers == 3) { color = layer3.rgb;  }
-    vec4 layer4 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[3], uDisparityMap[3], minDisp, maxDisp, 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
-    if (layer4.a == 1.0 || uNumLayers == 4) { color = layer4.rgb;  }
-    vec4 layer5 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[4], uDisparityMap[4], minDisp, maxDisp, 1.0) * (1.0 - layer4.w) + layer4 * layer4.w;
-    if (uNumLayers == 5) { color = layer5.rgb;  }
-    //color = vec3(1.0, 0.0, 0.0); // should not happen
+        vec3 C2 = vec3(uFacePosition.x, -uFacePosition.y, vd-uFacePosition.z)/IO;// normalized camera space coordinates
+        vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd);//keeps 3D focus at specified location
+        vec2 f2 = f1/adjustAr(iRes, oRes)*max(1.0-C2.z*invd, 1.0);
 
-    //vec4 albedoColor = texture2D(uImage, vTextureCoord);
-    //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
-    gl_FragColor = vec4(color,1.0);
-    //gl_FragColor = texture(uImage[0],uv);
+        mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2);// non need for extra rot calculation here
+
+        // LDI
+        vec3 color;
+        vec4 layer1 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[0], uDisparityMap[0], minDisp, maxDisp, 1.0);
+        //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
+        if (layer1.a == 1.0 || uNumLayers == 1) { color = layer1.rgb; }
+        vec4 layer2 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[1], uDisparityMap[1], minDisp, maxDisp, 1.0) * (1.0 - layer1.w) + layer1 * layer1.w;
+        if (layer2.a == 1.0 || uNumLayers == 2) { color = layer2.rgb; }
+        vec4 layer3 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[2], uDisparityMap[2], minDisp, maxDisp, 1.0) * (1.0 - layer2.w) + layer2 * layer2.w;
+        if (layer3.a == 1.0 || uNumLayers == 3) { color = layer3.rgb; }
+        vec4 layer4 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[3], uDisparityMap[3], minDisp, maxDisp, 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
+        if (layer4.a == 1.0 || uNumLayers == 4) { color = layer4.rgb; }
+        vec4 layer5 = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage[4], uDisparityMap[4], minDisp, maxDisp, 1.0) * (1.0 - layer4.w) + layer4 * layer4.w;
+        if (uNumLayers == 5) { color = layer5.rgb; }
+        //color = vec3(1.0, 0.0, 0.0); // should not happen
+
+        //vec4 albedoColor = texture2D(uImage, vTextureCoord);
+        //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
+        gl_FragColor = vec4(color, 1.0);
+        //gl_FragColor = texture(uImage[0],uv);
+    } else {
+        gl_FragColor = vec4(vec3(0.0), 1.0);
+    }
 }

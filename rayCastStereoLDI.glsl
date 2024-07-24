@@ -197,59 +197,66 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 void main(void) {
 
     vec2 uv = vTextureCoord;
+    float s = min(oRes.x,oRes.y)/min(iRes.x,iRes.y);
+    vec2 newDim = iRes*s/oRes;
 
-    float minDispL = -0.1366;
-    float maxDispL = -0.0027;
-    float minDispR = -0.1366;
-    float maxDispR = -0.0027;
-    float invZmin = disp2invZ(min(minDispL,minDispR));
-    float invZmax = disp2invZ(max(maxDispL,maxDispR));
-    float invd = invZmin; // pivot
+    if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
-    vec2 f1 = vec2(f,f*iRes.x/iRes.y);
-    mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
-    vec3 C1L = vec3(-0.5,0.0,0.0); // original position
-    vec3 C1R = vec3(0.5,0.0,0.0); // original position
+        float minDispL = -0.1366;
+        float maxDispL = -0.0027;
+        float minDispR = -0.1366;
+        float maxDispR = -0.0027;
+        float invZmin = disp2invZ(min(minDispL, minDispR));
+        float invZmax = disp2invZ(max(maxDispL, maxDispR));
+        float invd = invZmin;// pivot
 
-    vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
-    vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
-    vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+        vec2 f1 = vec2(f, f*iRes.x/iRes.y);
+        mat3 FSKR1 = mat3(f1.x, 0.0, 0.0, 0.0, f1.y, 0.0, 0.0, 0.0, 1.0);// only f matrix is on trivial, no frustum skew no rotation
+        vec3 C1L = vec3(-0.5, 0.0, 0.0);// original position
+        vec3 C1R = vec3(0.5, 0.0, 0.0);// original position
 
-    mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
+        vec3 C2 = vec3(uFacePosition.x, -uFacePosition.y, vd-uFacePosition.z)/IO;// normalized camera space coordinates
+        vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd);//keeps 3D focus at specified location
+        vec2 f2 = f1/adjustAr(iRes, oRes)*max(1.0-C2.z*invd, 1.0);
 
-    // LDI
-    vec4 resultL, resultR;
-    
-    vec4 layer1L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[0], uDisparityMapL[0], minDispL, maxDispL, 1.0);
-    //fragColor = vec4(layer1L.a); return; // to debug alpha of top layer
-    if (layer1L.a == 1.0 || uNumLayers == 1) { resultL = layer1L; }
-    vec4 layer2L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[1], uDisparityMapL[1], minDispL, maxDispL, 1.0) * (1.0 - layer1L.w) + layer1L * layer1L.w;
-    if (layer2L.a == 1.0 || uNumLayers == 2) { resultL = layer2L;  }
-    vec4 layer3L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[2], uDisparityMapL[2], minDispL, maxDispL, 1.0) * (1.0 - layer2L.w) + layer2L * layer2L.w;
-    if (layer3L.a == 1.0 || uNumLayers == 3) { resultL = layer3L;  }
-    vec4 layer4L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[3], uDisparityMapL[3], minDispL, maxDispL, 1.0) * (1.0 - layer3L.w) + layer3L * layer3L.w;
-    if (uNumLayers == 4 ) { resultL = layer4L;  }
-    
-    vec4 layer1R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[0], uDisparityMapR[0], minDispR, maxDispR, 1.0);
-    //fragColor = vec4(layer1R.a); return; // to debug alpha of top layer
-    if (layer1R.a == 1.0 || uNumLayers == 1) { resultR = layer1R; }
-    vec4 layer2R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[1], uDisparityMapR[1], minDispR, maxDispR, 1.0) * (1.0 - layer1R.w) + layer1R * layer1R.w;
-    if (layer2R.a == 1.0 || uNumLayers == 2) { resultR = layer2R;  }
-    vec4 layer3R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[2], uDisparityMapR[2], minDispR, maxDispR, 1.0) * (1.0 - layer2R.w) + layer2R * layer2R.w;
-    if (layer3R.a == 1.0 || uNumLayers == 3) { resultR = layer3R;  }
-    vec4 layer4R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[3], uDisparityMapR[3], minDispR, maxDispR, 1.0) * (1.0 - layer3R.w) + layer3R * layer3R.w;
-    if (uNumLayers == 4 ) { resultR = layer4R;  }
+        mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2);// non need for extra rot calculation here
 
-    
-    float wR = weight2(C2, C1L, C1R);
+        // LDI
+        vec4 resultL, resultR;
 
-    vec4 result = (1.0-wR)*resultL + wR*resultR;
-    if (resultL.a > resultR.a + .001) result = resultL;
-    if (resultR.a > resultL.a + .001) result = resultR;
-    
-    //vec4 albedoColor = texture2D(uImage, vTextureCoord);
-    //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
-    gl_FragColor = vec4(result.rgb,1.0);
-    //gl_FragColor = vec4(vec3(layer1L.a),1.0);
-    //gl_FragColor = texture(uDisparityMapL[0],uv);
+        vec4 layer1L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[0], uDisparityMapL[0], minDispL, maxDispL, 1.0);
+        //fragColor = vec4(layer1L.a); return; // to debug alpha of top layer
+        if (layer1L.a == 1.0 || uNumLayers == 1) { resultL = layer1L; }
+        vec4 layer2L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[1], uDisparityMapL[1], minDispL, maxDispL, 1.0) * (1.0 - layer1L.w) + layer1L * layer1L.w;
+        if (layer2L.a == 1.0 || uNumLayers == 2) { resultL = layer2L; }
+        vec4 layer3L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[2], uDisparityMapL[2], minDispL, maxDispL, 1.0) * (1.0 - layer2L.w) + layer2L * layer2L.w;
+        if (layer3L.a == 1.0 || uNumLayers == 3) { resultL = layer3L; }
+        vec4 layer4L = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL[3], uDisparityMapL[3], minDispL, maxDispL, 1.0) * (1.0 - layer3L.w) + layer3L * layer3L.w;
+        if (uNumLayers == 4) { resultL = layer4L; }
+
+        vec4 layer1R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[0], uDisparityMapR[0], minDispR, maxDispR, 1.0);
+        //fragColor = vec4(layer1R.a); return; // to debug alpha of top layer
+        if (layer1R.a == 1.0 || uNumLayers == 1) { resultR = layer1R; }
+        vec4 layer2R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[1], uDisparityMapR[1], minDispR, maxDispR, 1.0) * (1.0 - layer1R.w) + layer1R * layer1R.w;
+        if (layer2R.a == 1.0 || uNumLayers == 2) { resultR = layer2R; }
+        vec4 layer3R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[2], uDisparityMapR[2], minDispR, maxDispR, 1.0) * (1.0 - layer2R.w) + layer2R * layer2R.w;
+        if (layer3R.a == 1.0 || uNumLayers == 3) { resultR = layer3R; }
+        vec4 layer4R = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR[3], uDisparityMapR[3], minDispR, maxDispR, 1.0) * (1.0 - layer3R.w) + layer3R * layer3R.w;
+        if (uNumLayers == 4) { resultR = layer4R; }
+
+
+        float wR = weight2(C2, C1L, C1R);
+
+        vec4 result = (1.0-wR)*resultL + wR*resultR;
+        if (resultL.a > resultR.a + .001) result = resultL;
+        if (resultR.a > resultL.a + .001) result = resultR;
+
+        //vec4 albedoColor = texture2D(uImage, vTextureCoord);
+        //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
+        gl_FragColor = vec4(result.rgb, 1.0);
+        //gl_FragColor = vec4(vec3(layer1L.a),1.0);
+        //gl_FragColor = texture(uDisparityMapL[0],uv);
+    } else {
+        gl_FragColor = vec4(vec3(0.1), 1.0);
+    }
 }
