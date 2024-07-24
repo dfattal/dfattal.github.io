@@ -135,6 +135,10 @@ async function main() {
     video.play();
   }
   const video = await setupCamera();
+  let focalLength = Math.max(video.videoWidth,video.videoHeight);
+  focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
+  console.log("using focal " + focalLength);
+
   if (isIOS()) {
       console.log("iOS Device Detected");
       iOSmsg.textContent = "iOS Device Detected. Click to start video.";
@@ -210,8 +214,7 @@ async function main() {
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
     const estimationConfig = {flipHorizontal: false};
     const predictions = await detector.estimateFaces(video, estimationConfig);
-    console.log(video.srcObject.getVideoTracks()[0].settings);
-    const newFacePosition = extractFacePosition(predictions);
+    const newFacePosition = extractFacePosition(predictions,focalLength);
     facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
     facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
     facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;

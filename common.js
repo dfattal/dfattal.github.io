@@ -22,10 +22,6 @@ async function setupCamera() {
       }
   });
   video.srcObject = stream;
-  const track = stream.getVideoTracks()[0];
-  const settings = track.getSettings();
-  console.log([settings.width,settings.height]);
-
 
   return new Promise((resolve) => {
     video.onloadedmetadata = () => {
@@ -80,7 +76,8 @@ function calculateAverageKeypoint(filteredKeypoints) {
       };
     }
 
-function extractFacePosition(predictions) {
+function extractFacePosition(predictions,focalLength) {
+
     if (predictions.length > 0) {
       const keypoints = predictions[0].keypoints;
 
@@ -96,7 +93,7 @@ function extractFacePosition(predictions) {
         Math.pow(rightEye.y - leftEye.y, 2) +
         Math.pow(rightEye.z - leftEye.z, 2)
       );
-      const focalLength = isMobileDevice() ? 640*0.8 : 640; // Focal length in pixels (estimated)
+      //const focalLength = isMobileDevice() ? 640*0.8 : 640; // Focal length in pixels (estimated)
       const realInterocularDistance = 63; // Real interocular distance in mm
 
       const depth = (focalLength * realInterocularDistance) / interocularDistance;
