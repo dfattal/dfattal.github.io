@@ -16,7 +16,7 @@ async function setupCamera() {
   const video = document.getElementById('video');
   const stream = await navigator.mediaDevices.getUserMedia({
     video: {
-        width: { ideal: 640 },
+        //width: { ideal: 640 },
         facingMode: 'user' // 'user' for front camera, 'environment' for rear camera
       }
   });
