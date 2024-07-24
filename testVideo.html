@@ -4,14 +4,14 @@
   <title>Full FOV Webcam Feed</title>
 </head>
 <body>
-  <video id="video" width="1280" height="720"></video>
+  <video id="video" width="480" height="640"></video>
   <div id="resolution"></div>
   <div id="agent"></div>
 
   <script>
     const constraints = {
       video: {
-        width: { ideal: 640 },
+
         facingMode: 'user' // 'user' for front camera, 'environment' for rear camera
       }
     };
