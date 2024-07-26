@@ -140,18 +140,44 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 async function main() {
 
   const video = await setupCamera();
+  const textures = [];
+
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl');
+  const container = document.getElementById('canvas-container');
+
+  if (!gl) {
+    console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
+    return;
+  }
 
   async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (file) {
         currentImgData = await parseLif5(file);
+        numLayers = currentImgData.layers.length;
+
+          for (let i = 0; i < numLayers; i++) {
+            const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
+            const disparityImage = await loadImage2(currentImgData.layers[i].disp);
+            const maskImage = await loadImage2(currentImgData.layers[i].mask);
+            const disparity4Image = create4ChannelImage(disparityImage, maskImage);
+
+            textures.push({
+              albedo: createTexture(gl, albedoImage),
+              disparity: createTexture(gl, disparity4Image),
+              width: albedoImage.width,
+              height: albedoImage.height
+            });
+          }
+          const mainImage = await loadImage2(currentImgData.rgb);
+          currentImgData.outpaintRatio = textures[0].width/mainImage.width;
         console.log(currentImgData);
         document.getElementById("filePicker").remove();
         video.play();
         document.body.appendChild(stats.dom);
     }
   }
-
   document.getElementById('filePicker').addEventListener('change', handleFileSelect);
 
   let focalLength = Math.max(video.videoWidth,video.videoHeight);
@@ -168,14 +194,6 @@ async function main() {
     runtime: 'tfjs',
   };
   const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-  const canvas = document.getElementById('glCanvas');
-  const gl = canvas.getContext('webgl');
-  const container = document.getElementById('canvas-container');
-
-  if (!gl) {
-    console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
-    return;
-  }
 
   function resizeCanvasToContainer() {
       const displayWidth = container.clientWidth;
@@ -197,25 +215,7 @@ async function main() {
   //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
-  const textures = [];
-  //numLayers = currentImgData.layers.length;
 
-  for (let i = 0; i < currentImgData.layers.length; i++) {
-    const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
-    const disparityImage = await loadImage2(currentImgData.layers[i].disp);
-    const maskImage = await loadImage2(currentImgData.layers[i].mask);
-    const disparity4Image = create4ChannelImage(disparityImage, maskImage);
-
-    textures.push({
-      albedo: createTexture(gl, albedoImage),
-      disparity: createTexture(gl, disparity4Image),
-      width: albedoImage.width,
-      height: albedoImage.height
-    });
-  }
-
-  const mainImage = await loadImage2(currentImgData.rgb);
-  currentImgData.outpaintRatio = textures[0].width/mainImage.width;
 
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 
