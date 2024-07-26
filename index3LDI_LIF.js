@@ -198,9 +198,9 @@ async function main() {
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
   const textures = [];
-  numLayers = currentImgData.layers.length;
+  //numLayers = currentImgData.layers.length;
 
-  for (let i = 0; i < numLayers; i++) {
+  for (let i = 0; i < currentImgData.layers.length; i++) {
     const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
     const disparityImage = await loadImage2(currentImgData.layers[i].disp);
     const maskImage = await loadImage2(currentImgData.layers[i].mask);
