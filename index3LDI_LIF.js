@@ -223,7 +223,7 @@ async function main() {
     stats.begin();
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
 
-    console.log("texture length " + textures.length);
+    //console.log("texture length " + textures.length);
     if (textures.length==numLayers) {
         console.log("texture length " + textures.length + "-- numLayers " + numLayers);
         const estimationConfig = {flipHorizontal: false};
