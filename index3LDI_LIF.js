@@ -229,9 +229,9 @@ async function main() {
     facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
     facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
     oldFacePosition = facePosition;
-    //console.log([gl.canvas.width,gl.canvas.height]);
+    console.log("texture length " + textures.length);
     if (textures.length>0) {
-    drawScene(gl, programInfo, buffers, textures, facePosition);
+        drawScene(gl, programInfo, buffers, textures, facePosition);
     }
     stats.end();
     requestAnimationFrame(render);
