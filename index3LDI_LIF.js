@@ -124,8 +124,9 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
   gl.uniform1f(programInfo.uniformLocations.f, currentImgData.f);
   gl.uniform1f(programInfo.uniformLocations.minDisp, currentImgData.minDisp);
   gl.uniform1f(programInfo.uniformLocations.maxDisp, currentImgData.maxDisp);
-  gl.uniform1f(programInfo.uniformLocations.outpaintRatio, textures[0].width / (textures[0].width - currentImgData.outpaintWidth));
-  console.log(textures[0].width / (textures[0].width - currentImgData.outpaintWidth));
+  //gl.uniform1f(programInfo.uniformLocations.outpaintRatio, currentImgData.outpaintWidth ? textures[0].width / (textures[0].width - currentImgData.outpaintWidth : currentImgData.totalOutpaintWidth));
+  gl.uniform1f(programInfo.uniformLocations.outpaintRatio,currentImgData.outpaintRatio);
+  console.log(currentImgData.outpaintRatio);
   gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
 
   const vertexCount = 6;
@@ -147,6 +148,7 @@ async function main() {
         console.log(currentImgData);
         document.getElementById("filePicker").remove();
         video.play();
+        document.body.appendChild(stats.dom);
     }
   }
 
@@ -196,7 +198,7 @@ async function main() {
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
   const textures = [];
-  //numLayers = currentImgData.layers.length;
+  numLayers = currentImgData.layers.length;
 
   for (let i = 0; i < numLayers; i++) {
     const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
@@ -211,11 +213,9 @@ async function main() {
       height: albedoImage.height
     });
   }
-    //console.log(textures);
-  // Set canvas size to match image aspect ratio
-  //canvas.width = textures[0].width;
-  //canvas.height = textures[0].height;
 
+  const mainImage = await loadImage2(currentImgData.rgb);
+  currentImgData.outpaintRatio = textures[0].width/mainImage.width;
 
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 

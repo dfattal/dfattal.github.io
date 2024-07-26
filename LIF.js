@@ -138,7 +138,11 @@ async function parseLif5(file) {
           //console.log(layer);
           // access other layer propeties here if needed
         }
-        result.outpaintWidth = view.layered_depth_image_data.outpainting_added_width_px;
+//        if (view.layered_depth_image_data) {
+//          result.outpaintWidth = view.layered_depth_image_data.outpainting_added_width_px;
+//        } else {
+//          result.totalOutpaintedWidth = view.view.layers_top_to_bottom[0].outpainting_added_width_px;
+//        }
     }
     return result;
 }
