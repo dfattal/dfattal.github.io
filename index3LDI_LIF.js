@@ -225,7 +225,7 @@ async function main() {
 
     console.log("texture length " + textures.length);
     if (textures.length==numLayers) {
-
+        console.log("texture length " + textures.length + "-- numLayers " + numLayers);
         const estimationConfig = {flipHorizontal: false};
         const predictions = await detector.estimateFaces(video, estimationConfig);
         const newFacePosition = extractFacePosition(predictions,focalLength);
