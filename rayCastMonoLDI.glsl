@@ -4,7 +4,7 @@ uniform sampler2D uImage[5];
 uniform sampler2D uDisparityMap[5];
 uniform vec3 uFacePosition;
 uniform vec2 iRes, oRes;
-uniform float vd, IO, f;
+uniform float vd, IO, f, outpaintRatio, minDisp, maxDisp;
 uniform int uNumLayers;
 
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {
@@ -192,8 +192,8 @@ void main(void) {
 
     if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
-        float minDisp = -0.1;
-        float maxDisp = 0.0*minDisp/2.0;
+        //float minDisp = -0.1;
+        //float maxDisp = 0.0;
         float invZmin = disp2invZ(minDisp);
         float invZmax = disp2invZ(maxDisp);
         float invd = invZmin;// pivot
@@ -204,7 +204,7 @@ void main(void) {
 
         vec3 C2 = vec3(uFacePosition.x, -uFacePosition.y, vd-uFacePosition.z)/IO;// normalized camera space coordinates
         vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd);//keeps 3D focus at specified location
-        vec2 f2 = f1/adjustAr(iRes, oRes)*max(1.0-C2.z*invd, 1.0)*1.4; // 1.4 to crop LDI outpainted area
+        vec2 f2 = f1/adjustAr(iRes, oRes)*max(1.0-C2.z*invd, 1.0)*outpaintRatio; // 1.4 to crop LDI outpainted area
 
         mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2);// non need for extra rot calculation here
 

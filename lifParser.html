@@ -90,6 +90,7 @@ class LifFileParser {
     async handleFileSelect(event) {
         const file = event.target.files[0];
         if (file) {
+            console.log(file);
             const arrayBuffer = await file.arrayBuffer();
             this.parseLif5(arrayBuffer);
         }
@@ -106,14 +107,14 @@ class LifFileParser {
         bf.offset = fullSize - 6;
         const regionOffset = bf.readUInt32();
         bf.offset = fullSize - regionOffset;
-      
+
         const metadata = new Metadata();
         metadata.fieldCount = bf.readUInt32();
         console.log(metadata.fieldCount);
         for (let i = 0; i < metadata.fieldCount; i++) {
           const fieldType = bf.readUInt32();
           const fieldDataSize = bf.readUInt32();
-          const fieldData = bf.readBytes(fieldDataSize);  
+          const fieldData = bf.readBytes(fieldDataSize);
           const field = new Field(fieldType, fieldData);
           metadata.addField(field);
         }

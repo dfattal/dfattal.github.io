@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIF5 Loading Test</title>
+</head>
+<body>
+    <h1>LIF5 Loading Test</h1>
+    <input type="file" id="filePicker" /> <br>
+    <img id="img">
+    <script src="LIF.js"></script>
+    <script>
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const result = await parseLif5(file);
+                console.log(result);
+                document.getElementById("img").src = result.rgb;
+                currentImgData = result;
+            }
+        }
+        document.getElementById('filePicker').addEventListener('change', handleFileSelect);
+    </script>
+</body>
+</html>
+

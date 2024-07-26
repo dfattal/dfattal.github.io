@@ -1,6 +1,8 @@
 
-const numLayers = 3;
+let numLayers = 3;
 const MAX_LAYERS = 5;
+
+let currentImgData = {};
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -119,10 +121,11 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
   gl.uniform2f(programInfo.uniformLocations.iRes, textures[0].width, textures[0].height);  // Add this line
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
   gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 0.7*restPos : restPos);
-  gl.uniform1f(programInfo.uniformLocations.f, 1.0);
-  gl.uniform1f(programInfo.uniformLocations.minDisp, -0.1);
-  gl.uniform1f(programInfo.uniformLocations.maxDisp, 0.0);
-  gl.uniform1f(programInfo.uniformLocations.outpaintRatio, 1.4);
+  gl.uniform1f(programInfo.uniformLocations.f, currentImgData.f);
+  gl.uniform1f(programInfo.uniformLocations.minDisp, currentImgData.minDisp);
+  gl.uniform1f(programInfo.uniformLocations.maxDisp, currentImgData.maxDisp);
+  gl.uniform1f(programInfo.uniformLocations.outpaintRatio, textures[0].width / (textures[0].width - currentImgData.outpaintWidth));
+  console.log(textures[0].width / (textures[0].width - currentImgData.outpaintWidth));
   gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
 
   const vertexCount = 6;
@@ -135,24 +138,23 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 
 async function main() {
 
-  iOSmsg = document.getElementById("iOSmsg");
-  function startVideo() {
-    iOSmsg.remove();
-    video.play();
-  }
   const video = await setupCamera();
+
+  async function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (file) {
+        currentImgData = await parseLif5(file);
+        console.log(currentImgData);
+        document.getElementById("filePicker").remove();
+        video.play();
+    }
+  }
+
+  document.getElementById('filePicker').addEventListener('change', handleFileSelect);
+
   let focalLength = Math.max(video.videoWidth,video.videoHeight);
   focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
   console.log("using focal " + focalLength);
-
-  if (isIOS()) {
-      console.log("iOS Device Detected");
-      iOSmsg.textContent = "iOS Device Detected. Click to start video.";
-      document.addEventListener('click', startVideo, { once: true });
-    } else {
-      startVideo();
-    }
-  //video.play();
 
   let facePosition = {x: 0, y: 0, z: restPos};
   let oldFacePosition = {x: 0, y: 0, z: restPos};
@@ -194,11 +196,12 @@ async function main() {
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
   const textures = [];
+  numLayers = currentImgData.layers.length;
 
   for (let i = 0; i < numLayers; i++) {
-    const albedoImage = await loadImage(`./images/robotLDI/rgb_${i}.jpg`);
-    const disparityImage = await loadImage(`./images/robotLDI/disparity_${i}.jpg`);
-    const maskImage = await loadImage(`./images/robotLDI/mask_${i}.png`);
+    const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
+    const disparityImage = await loadImage2(currentImgData.layers[i].disp);
+    const maskImage = await loadImage2(currentImgData.layers[i].mask);
     const disparity4Image = create4ChannelImage(disparityImage, maskImage);
 
     textures.push({

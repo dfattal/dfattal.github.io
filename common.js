@@ -126,6 +126,14 @@ async function loadImage(url) {
   });
 }
 
+async function loadImage2(url) { // without cache busting
+  const img = new Image();
+  img.src = url;
+  return new Promise((resolve) => {
+    img.onload = () => resolve(img);
+  });
+}
+
 function initShaderProgram(gl, vsSource, fsSource) {
   const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
   const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
