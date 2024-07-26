@@ -183,6 +183,7 @@ async function main() {
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 
   async function render() {
+    stats.begin();
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
     const estimationConfig = {flipHorizontal: false};
     const predictions = await detector.estimateFaces(video, estimationConfig);
@@ -193,6 +194,7 @@ async function main() {
     oldFacePosition = facePosition;
 
     drawScene(gl, programInfo, buffers, textures, facePosition);
+    stats.end();
     requestAnimationFrame(render);
     console.log(facePosition);
   }

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIF5 LDL 5.2 JS Parser example</title>
+    <style>
+        img {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>LIF5 LDL 5.2 JS Parser example</h1>
+    <input type="file" id="filePicker" /> <br>
+    <script>
+
+// Jul 25, 2024, 19:39, supports 5.1 and 5.2 LIF LDL (LDI) files
+
+class BinaryStream {
+    constructor(arrayBuffer) {
+        this.dataView = new DataView(arrayBuffer);
+        this.offset = 0;
+    }
+    readBytes(length) {
+        const bytes = new Uint8Array(this.dataView.buffer, this.offset, length);
+        this.offset += length;
+        return bytes;
+    }
+    readUInt16() {
+        const value = this.dataView.getUint16(this.offset, false); // Big-endian
+        this.offset += 2;
+        return value;
+    }
+    readUInt32() {
+        const value = this.dataView.getUint32(this.offset, false); // Big-endian
+        this.offset += 4;
+        return value;
+    }
+}
+
+class Field {
+    constructor(fieldType = -1, data = new Uint8Array()) {
+        this.fieldType = fieldType;
+        this.fieldDataSize = data.byteLength;
+        this.fieldData = data;
+    }
+    toBlob() {
+        return new Blob([this.fieldData]);
+    }
+    toObjectUrl() {
+        return URL.createObjectURL(this.toBlob());
+    }
+    toString() {
+      return new TextDecoder().decode(this.fieldData);
+    }
+}
+
+
+class Metadata {
+    constructor() {
+        this.fields = [];
+        this.fullSize = 0;
+        this.regionOffset = 0;
+    }
+    addField(field) {
+        this.fields.push(field);
+    }
+    getFieldByType(fieldType) {
+        return this.fields.find(field => field.fieldType === fieldType);
+    }
+    getJsonMeta() {
+        const JSON_META = 7;
+        const JSON_META_NEW = 8;
+        const metaField = this.getFieldByType(JSON_META_NEW) || this.getFieldByType(JSON_META);
+        if (!metaField) {
+            throw new Error('Failed to extract LIF meta');
+        }
+        return JSON.parse(metaField.toString());
+    }
+}
+
+
+class LifFileParser {
+    constructor() {
+        this.fileInput = document.getElementById('filePicker');
+        this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+    }
+
+    async handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const arrayBuffer = await file.arrayBuffer();
+            this.parseLif5(arrayBuffer);
+        }
+    }
+
+    async parseBinary(arrayBuffer) {
+        const fullSize = arrayBuffer.byteLength;
+        const bf = new BinaryStream(arrayBuffer);
+        bf.offset = fullSize - 2;
+        const endMarker = bf.readUInt16();
+        if (endMarker !== 0x1e1a) {
+          throw new Error('Not a LIF file');
+        }
+        bf.offset = fullSize - 6;
+        const regionOffset = bf.readUInt32();
+        bf.offset = fullSize - regionOffset;
+      
+        const metadata = new Metadata();
+        metadata.fieldCount = bf.readUInt32();
+        console.log(metadata.fieldCount);
+        for (let i = 0; i < metadata.fieldCount; i++) {
+          const fieldType = bf.readUInt32();
+          const fieldDataSize = bf.readUInt32();
+          const fieldData = bf.readBytes(fieldDataSize);  
+          const field = new Field(fieldType, fieldData);
+          metadata.addField(field);
+        }
+        metadata.regionOffset = regionOffset;
+        metadata.fullSize = fullSize;
+        console.log(metadata);
+        return metadata;
+    }
+
+    async debugAddBlobAsImageToPage(blob) {
+        const blobUrl = URL.createObjectURL(blob);
+        const img = document.createElement('img');
+        img.src = blobUrl;
+        img.style.width = '300px';
+        img.style.height = 'auto';
+        document.body.appendChild(img);
+        img.onload = () => {
+            URL.revokeObjectURL(blobUrl);
+        };
+    }
+
+    async parseLif5(arrayBuffer) {
+        const lifMeta = await this.parseBinary(arrayBuffer);
+        const lifJson = lifMeta.getJsonMeta();
+        console.log(lifJson);
+        const layers = [];
+        for (const view of lifJson.views) {
+            if (view.albedo) {
+                if (view.albedo.blob_id == -1 /*source image*/) {
+                    const albedo = new Blob([arrayBuffer], { type: 'image/jpeg' });
+                    this.debugAddBlobAsImageToPage(albedo);
+                } else {
+                  const albedo = lifMeta.getFieldByType(view.albedo.blob_id).toBlob();
+                  this.debugAddBlobAsImageToPage(albedo);
+                }
+            }
+            if (view.disparity) {
+              const disparity = lifMeta.getFieldByType(view.disparity.blob_id).toBlob();
+              this.debugAddBlobAsImageToPage(disparity);
+              document.body.append(document.createElement('br'));
+              document.body.append(view.disparity.min_disparity);
+              document.body.append(document.createElement('br'));
+              document.body.append(view.disparity.max_disparity);
+              document.body.append(document.createElement('br'));
+            }
+            let layers = view.layers_top_to_bottom;
+            if (!layers) layers = view.layered_depth_image_data.layers_top_to_bottom;
+            for (const layer of layers) {
+              const rgb = lifMeta.getFieldByType(layer.albedo.blob_id).toBlob();
+              const disp = lifMeta.getFieldByType(layer.disparity.blob_id).toBlob();
+              const mask = lifMeta.getFieldByType(layer.mask.blob_id).toBlob();
+              this.debugAddBlobAsImageToPage(rgb);
+              this.debugAddBlobAsImageToPage(disp);
+              this.debugAddBlobAsImageToPage(mask);
+              console.log(layer);
+              document.body.append(document.createElement('br'));
+              document.body.append(layer.disparity.min_disparity);
+              document.body.append(document.createElement('br'));
+              document.body.append(layer.disparity.max_disparity);
+              document.body.append(document.createElement('br'));
+              // access other layer propeties here if needed
+            }
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new LifFileParser();
+});
+    </script>
+</body>
+</html>
+
