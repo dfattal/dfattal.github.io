@@ -224,7 +224,7 @@ async function main() {
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
 
     console.log("texture length " + textures.length);
-    if (!textures.length<numLayers) {
+    if (textures.length==numLayers) {
 
         const estimationConfig = {flipHorizontal: false};
         const predictions = await detector.estimateFaces(video, estimationConfig);
