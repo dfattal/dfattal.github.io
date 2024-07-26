@@ -113,7 +113,7 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
     gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
   }
   // Pass the actual number of layers to the shader
-  gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
+  gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), currentImgData.layers.length);
 
 
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, facePosition.x, facePosition.y, facePosition.z);
@@ -196,7 +196,7 @@ async function main() {
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
   const textures = [];
-  numLayers = currentImgData.layers.length;
+  //numLayers = currentImgData.layers.length;
 
   for (let i = 0; i < numLayers; i++) {
     const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
