@@ -222,15 +222,18 @@ async function main() {
   async function render() {
     stats.begin();
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
-    const estimationConfig = {flipHorizontal: false};
-    const predictions = await detector.estimateFaces(video, estimationConfig);
-    const newFacePosition = extractFacePosition(predictions,focalLength);
-    facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
-    facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
-    facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
-    oldFacePosition = facePosition;
+
     console.log("texture length " + textures.length);
     if (textures.length>0) {
+
+        const estimationConfig = {flipHorizontal: false};
+        const predictions = await detector.estimateFaces(video, estimationConfig);
+        const newFacePosition = extractFacePosition(predictions,focalLength);
+        facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
+        facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
+        facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
+        oldFacePosition = facePosition;
+
         drawScene(gl, programInfo, buffers, textures, facePosition);
     }
     stats.end();
