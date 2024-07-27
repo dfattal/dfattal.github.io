@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disparity Map Generator</title>
+</head>
+<body>
+    <h1>Upload an Image to Generate a Disparity Map</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="uploadImage()">Upload and Generate</button>
+    <div id="result">
+        <h2>Generated Disparity Map:</h2>
+        <img id="disparityMap" alt="Disparity Map will be displayed here">
+    </div>
+    <script src="dispMapGen.js"></script>
+</body>
+</html>
+
+
