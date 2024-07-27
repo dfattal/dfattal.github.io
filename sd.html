@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative AI Image Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        #image-container {
+            margin-top: 20px;
+        }
+        #image-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        #log-container {
+            margin-top: 20px;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #log-container pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Generative AI Image Generator</h1>
+    <input type="text" id="prompt" placeholder="Enter your prompt here" size="50">
+    <button onclick="generateImage()">Generate Image</button>
+    <div id="image-container"></div>
+    <div id="log-container">
+        <h3>Logs:</h3>
+        <pre id="log"></pre>
+    </div>
+
+    <script>
+        async function generateImage() {
+            const prompt = document.getElementById('prompt').value;
+            const token = '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';
+            //const url = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3-medium';
+            //const url = 'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5';
+            const url = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0';
+            //const url = 'https://api-inference.huggingface.co/models/stabilityai/sdxl-turbo';
+            const logContainer = document.getElementById('log');
+            const maxRetries = 3;
+            const retryDelay = 2000;
+
+            logContainer.textContent = 'Generating image...';
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ inputs: prompt })
+                    });
+
+                    if (!response.ok) {
+                        const errorResponse = await response.json();
+                        const errorMessage = errorResponse.error || `HTTP error! status: ${response.status}`;
+
+                        if (response.status === 503) {
+                            logContainer.textContent += `\nAttempt ${attempt} failed: ${errorMessage}. Retrying in ${retryDelay / 1000} seconds...`;
+                            await new Promise(resolve => setTimeout(resolve, retryDelay));
+                            continue;
+                        } else {
+                            throw new Error(errorMessage);
+                        }
+                    }
+
+                    const result = await response.blob();
+                    const imageURL = URL.createObjectURL(result);
+
+                    document.getElementById('image-container').innerHTML = `<img src="${imageURL}" alt="Generated Image">`;
+                    logContainer.textContent += '\nImage generated successfully.';
+                    break;
+                } catch (error) {
+                    logContainer.textContent += `\nError: ${error.message}\n${error.stack}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
