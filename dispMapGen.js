@@ -22,12 +22,14 @@ async function uploadImage() {
 }
 
 async function getAccessToken() {
-    const response = await fetch('https://api.immersity.ai/v1/auth/token', {
+    const response = await fetch('https://auth.immersity.ai/auth/realms/immersity/protocol/openid-connect/token', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            accept: 'application/json',
+            'content-type': 'application/x-www-form-urlencoded'
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
+            grant_type: 'client_credentials',
             client_id: 'f6371d27-20d6-4551-9775-b903ca7c1c14',
             client_secret: 'f6371d27-20d6-4551-9775-b903ca7c1c14'
         })
@@ -37,13 +39,13 @@ async function getAccessToken() {
     return data.access_token;
 }
 
-async function getStorageUrl(accessToken) {
-    const response = await fetch('https://api.immersity.ai/v1/storage/url', {
-        method: 'POST',
+async function getStorageUrl(accessToken,file) {
+    const response = await fetch('https://api.immersity.ai/api/v1/get-upload-url?fileName' + file + '&mediaType=image%2Fjpeg', {
+        method: 'GET',
         headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        }
+            authorization: `Bearer ${accessToken}`,
+            accept: 'application/json'
+        },
     });
 
     const data = await response.json();
@@ -61,10 +63,11 @@ async function uploadToStorage(url, file) {
 }
 
 async function generateDisparityMap(accessToken, storageUrl) {
-    const response = await fetch('https://api.immersity.ai/v1/disparity', {
+    const response = await fetch('https://api.immersity.ai/api/v1/disparity', {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            accept: 'application/json',
+            authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
