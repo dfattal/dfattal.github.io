@@ -34,7 +34,6 @@ async function getAccessToken() {
             client_secret: 'f6371d27-20d6-4551-9775-b903ca7c1c14'
         })
     });
-
     const data = await response.json();
     return data.access_token;
 }
