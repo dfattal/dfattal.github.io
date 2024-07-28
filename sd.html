@@ -34,7 +34,8 @@
 </head>
 <body>
     <h1>Generative AI Image Generator</h1>
-    <input type="text" id="prompt" placeholder="Enter your prompt here" size="50">
+    <input type="text" id="prompt" placeholder="Enter your prompt here" size="50"><br/>
+    <input type="text" id="negPrompt" placeholder="Enter your negative prompt here" size="50"><br/>
     <button onclick="generateImage()">Generate Image</button>
     <div id="image-container"></div>
     <div id="log-container">
@@ -43,8 +44,13 @@
     </div>
 
     <script>
+        //Hugging Face API endpoints and headers
+        BASE_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+        REFINER_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-refiner-1.0"
+
         async function generateImage() {
             const prompt = document.getElementById('prompt').value;
+            const negPrompt = document.getElementById('negPrompt').value;
             const token = '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';
             //const url = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3-medium';
             //const url = 'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5';
@@ -65,7 +71,7 @@
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ inputs: prompt })
+                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, })
                     });
 
                     if (!response.ok) {

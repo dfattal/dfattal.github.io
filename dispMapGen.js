@@ -31,7 +31,7 @@ async function getAccessToken() {
         body: new URLSearchParams({
             grant_type: 'client_credentials',
             client_id: 'f6371d27-20d6-4551-9775-b903ca7c1c14',
-            client_secret: 'f6371d27-20d6-4551-9775-b903ca7c1c14'
+            client_secret: '1hLBJXOcOwh1wcADT39B4Y21sb6be4rn'
         })
     });
     const data = await response.json();
