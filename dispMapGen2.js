@@ -17,8 +17,8 @@ async function main() {
     const tokenResponse = await axios.post('https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws/', {
         headers: {
             'Content-Type' : 'application/x-www-form-urlencoded',
-            'Access-Control-Allow-Origin': '*',
-        }
+            'Access-Control-Allow-Origin': '*'
+        },
     });
 
     console.log('Access token acquired:', tokenResponse.data);

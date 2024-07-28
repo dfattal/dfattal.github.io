@@ -44,34 +44,32 @@
     </div>
 
     <script>
-        //Hugging Face API endpoints and headers
-        BASE_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-        REFINER_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-refiner-1.0"
+        // Hugging Face API endpoints and headers
+        const BASE_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
+        const REFINER_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-refiner-1.0";
 
         async function generateImage() {
             const prompt = document.getElementById('prompt').value;
             const negPrompt = document.getElementById('negPrompt').value;
             const token = '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';
-            //const url = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3-medium';
-            //const url = 'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5';
-            //const url = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-refiner-1.0;
-            //const url = 'https://api-inference.huggingface.co/models/stabilityai/sdxl-turbo';
-            const url = BASE_API_URL;
             const logContainer = document.getElementById('log');
             const maxRetries = 3;
             const retryDelay = 2000;
 
             logContainer.textContent = 'Generating image...';
 
+            let imageBlob;
+
+            // Step 1: Generate base image
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
-                    const response = await fetch(url, {
+                    const response = await fetch(BASE_API_URL, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, })
+                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt })
                     });
 
                     if (!response.ok) {
@@ -87,17 +85,58 @@
                         }
                     }
 
-                    const result = await response.blob();
-                    const imageURL = URL.createObjectURL(result);
-
+                    imageBlob = await response.blob();
+                    const imageURL = URL.createObjectURL(imageBlob);
                     document.getElementById('image-container').innerHTML = `<img src="${imageURL}" alt="Generated Image">`;
-                    logContainer.textContent += '\nImage generated successfully.';
+                    logContainer.textContent += '\nBase image generated successfully.';
                     break;
                 } catch (error) {
                     logContainer.textContent += `\nError: ${error.message}\n${error.stack}`;
+                }
+            }
+
+            // Step 2: Refine the image
+            if (imageBlob) {
+                logContainer.textContent += '\nRefining image...';
+
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('image', imageBlob, 'image.png');
+
+                        const response = await fetch(REFINER_API_URL, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            const errorResponse = await response.json();
+                            const errorMessage = errorResponse.error || `HTTP error! status: ${response.status}`;
+
+                            if (response.status === 503) {
+                                logContainer.textContent += `\nAttempt ${attempt} failed: ${errorMessage}. Retrying in ${retryDelay / 1000} seconds...`;
+                                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                                continue;
+                            } else {
+                                throw new Error(errorMessage);
+                            }
+                        }
+
+                        const refinedImageBlob = await response.blob();
+                        const refinedImageURL = URL.createObjectURL(refinedImageBlob);
+                        document.getElementById('image-container').innerHTML = `<img src="${refinedImageURL}" alt="Refined Image">`;
+                        logContainer.textContent += '\nImage refined successfully.';
+                        break;
+                    } catch (error) {
+                        logContainer.textContent += `\nError: ${error.message}\n${error.stack}`;
+                    }
                 }
             }
         }
     </script>
 </body>
 </html>
+
