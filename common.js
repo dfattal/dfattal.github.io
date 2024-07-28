@@ -128,6 +128,7 @@ async function loadImage(url) {
 
 async function loadImage2(url) { // without cache busting
   const img = new Image();
+  img.crossorigin = "anonymous"; // Set cross-origin attribute
   img.src = url;
   return new Promise((resolve) => {
     img.onload = () => resolve(img);

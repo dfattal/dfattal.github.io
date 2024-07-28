@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative AI Image and Interactive Experience</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+        }
+        #prompt-container {
+            margin-top: 50px;
+        }
+        input {
+            margin-bottom: 4px;
+        }
+        #image-container, #depth-map-container {
+            margin-top: 20px;
+        }
+        #image-container img, #depth-map-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        #log-container {
+            margin-top: 20px;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #log-container pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        #video {
+            display: none;
+        }
+        #canvas-container {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+        #iOSmsg {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 50vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="prompt-container">
+        <h1>Generative AI Image and Depth Map Generator</h1>
+        <input type="text" id="prompt" placeholder="Enter your prompt here" size="100"><br/>
+        <input type="text" id="negPrompt" placeholder="Enter your negative prompt here (optional)" size="100"><br/>
+        <button onclick="generateImageAndDepthMap()">Generate Image and Depth Map</button>
+        <div id="log-container">
+            <h3>Logs:</h3>
+            <pre id="log"></pre>
+        </div>
+        <div id="image-container"></div>
+        <div id="disp-map-container"></div>
+    </div>
+    <div id="iOSmsg"></div>
+    <div id="canvas-container">
+        <canvas id="glCanvas"></canvas>
+    </div>
+    <video id="video" width="640" height="480" autoplay></video>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+    <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+    <script src="common.js"></script>
+    <script src="sdTracking.js"></script>
+</body>
+</html>

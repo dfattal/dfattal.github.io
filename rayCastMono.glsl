@@ -161,7 +161,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     //if ((abs(s1.x*adjustAr(iChannelResolution[0].xy,iResolution.xy).x)<0.495)&&(abs(s1.y*adjustAr(iChannelResolution[0].xy,iResolution.xy).y)<0.495)&&(invZ2>0.0)) {
         return vec4(readColor(iChannelCol, s1+.5), alpha*invZ2);
     } else {
-        return vec4(0.0);
+        return vec4(0.1);
     }
 }
 

@@ -170,8 +170,8 @@ async function main() {
   const disparityImage = await loadImage('./images/disparity.png');
 
   // Set canvas size to match image aspect ratio
-  canvas.width = albedoImage.width;
-  canvas.height = albedoImage.height;
+  //canvas.width = albedoImage.width;
+  //canvas.height = albedoImage.height;
 
   const textures = {
     albedo: createTexture(gl, albedoImage),
