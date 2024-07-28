@@ -41,12 +41,12 @@
     <input type="text" id="prompt" placeholder="Enter your prompt here" size="50"><br/>
     <input type="text" id="negPrompt" placeholder="Enter your negative prompt here" size="50"><br/>
     <button onclick="generateImageAndDepthMap()">Generate Image and Depth Map</button>
-    <div id="image-container"></div>
-    <div id="disp-map-container"></div>
     <div id="log-container">
         <h3>Logs:</h3>
         <pre id="log"></pre>
     </div>
+    <div id="image-container"></div>
+    <div id="disp-map-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
@@ -61,48 +61,36 @@
             const token = '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';
             const url = BASE_API_URL;
             const logContainer = document.getElementById('log');
-            const maxRetries = 3;
-            const retryDelay = 2000;
 
             logContainer.textContent = 'Generating image...';
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, })
+                });
 
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, })
-                    });
-
-                    if (!response.ok) {
-                        const errorResponse = await response.json();
-                        const errorMessage = errorResponse.error || `HTTP error! status: ${response.status}`;
-
-                        if (response.status === 503) {
-                            logContainer.textContent += `\nAttempt ${attempt} failed: ${errorMessage}. Retrying in ${retryDelay / 1000} seconds...`;
-                            await new Promise(resolve => setTimeout(resolve, retryDelay));
-                            continue;
-                        } else {
-                            throw new Error(errorMessage);
-                        }
-                    }
-
-                    const result = await response.blob();
-                    const imageURL = URL.createObjectURL(result);
-
-                    document.getElementById('image-container').innerHTML = `<img id="generatedImage" src="${imageURL}" alt="Generated Image">`;
-                    logContainer.textContent += '\nImage generated successfully.';
-
-                    // Proceed to generate the depth map
-                    await generateDepthMap(imageURL);
-                    break;
-                } catch (error) {
-                    logContainer.textContent += `\nError: ${error.message}\n${error.stack}`;
+                if (!response.ok) {
+                    const errorResponse = await response.json();
+                    const errorMessage = errorResponse.error || `HTTP error! status: ${response.status}`;
+                    throw new Error(errorMessage);
                 }
+                const result = await response.blob();
+                const imageURL = URL.createObjectURL(result);
+
+                document.getElementById('image-container').innerHTML = `<img id="generatedImage" src="${imageURL}" alt="Generated Image">`;
+                logContainer.textContent += '\nImage generated successfully.';
+
+                // Proceed to generate the depth map
+                await generateDepthMap(imageURL);
+
+            } catch (error) {
+                logContainer.textContent += `\nError: ${error.message}\n${error.stack}`;
             }
+
         }
 
         async function generateDepthMap(imageURL) {
