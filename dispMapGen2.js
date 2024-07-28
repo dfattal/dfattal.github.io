@@ -14,7 +14,7 @@ AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.
 async function main() {
     console.log('Acquiring access token from LeiaLogin...');
 
-    const tokenResponse = await axios.post('https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws/', {
+    const tokenResponse = await axios.post(AWS_LAMBDA_URL, {
         headers: {
             'Content-Type' : 'application/x-www-form-urlencoded',
             'Access-Control-Allow-Origin': '*'

@@ -10,10 +10,10 @@
             text-align: center;
             margin-top: 50px;
         }
-        #image-container {
+        #base-image-container, #refined-image-container {
             margin-top: 20px;
         }
-        #image-container img {
+        #base-image-container img, #refined-image-container img {
             max-width: 100%;
             height: auto;
         }
@@ -36,8 +36,10 @@
     <h1>Generative AI Image Generator</h1>
     <input type="text" id="prompt" placeholder="Enter your prompt here" size="50"><br/>
     <input type="text" id="negPrompt" placeholder="Enter your negative prompt here" size="50"><br/>
+    <input type="text" id="seed" placeholder="Enter the seed here" size="50"><br/>
     <button onclick="generateImage()">Generate Image</button>
-    <div id="image-container"></div>
+    <div id="base-image-container"></div>
+    <div id="refined-image-container"></div>
     <div id="log-container">
         <h3>Logs:</h3>
         <pre id="log"></pre>
@@ -51,6 +53,7 @@
         async function generateImage() {
             const prompt = document.getElementById('prompt').value;
             const negPrompt = document.getElementById('negPrompt').value;
+            const seed = document.getElementById('seed').value;
             const token = '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';
             const logContainer = document.getElementById('log');
             const maxRetries = 3;
@@ -69,7 +72,7 @@
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt })
+                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, seed: seed ? parseInt(seed) : undefined  })
                     });
 
                     if (!response.ok) {
@@ -87,7 +90,7 @@
 
                     imageBlob = await response.blob();
                     const imageURL = URL.createObjectURL(imageBlob);
-                    document.getElementById('image-container').innerHTML = `<img src="${imageURL}" alt="Generated Image">`;
+                    document.getElementById('base-image-container').innerHTML = `<img src="${imageURL}" alt="Generated Image">`;
                     logContainer.textContent += '\nBase image generated successfully.';
                     break;
                 } catch (error) {
@@ -99,17 +102,18 @@
             if (imageBlob) {
                 logContainer.textContent += '\nRefining image...';
 
+                // Convert Blob to Base64
+                const base64Image = await blobToBase64(imageBlob);
+
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
                     try {
-                        const formData = new FormData();
-                        formData.append('image', imageBlob, 'image.png');
-
                         const response = await fetch(REFINER_API_URL, {
                             method: 'POST',
                             headers: {
-                                'Authorization': `Bearer ${token}`
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
                             },
-                            body: formData
+                            body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, image: base64Image })
                         });
 
                         if (!response.ok) {
@@ -127,7 +131,7 @@
 
                         const refinedImageBlob = await response.blob();
                         const refinedImageURL = URL.createObjectURL(refinedImageBlob);
-                        document.getElementById('image-container').innerHTML = `<img src="${refinedImageURL}" alt="Refined Image">`;
+                        document.getElementById('refined-image-container').innerHTML = `<img src="${refinedImageURL}" alt="Refined Image">`;
                         logContainer.textContent += '\nImage refined successfully.';
                         break;
                     } catch (error) {
@@ -136,7 +140,21 @@
                 }
             }
         }
+
+        // Utility function to convert Blob to Base64
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
     </script>
 </body>
 </html>
+
+
+
+
 
