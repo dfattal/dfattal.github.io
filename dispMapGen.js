@@ -1,3 +1,6 @@
+AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
+
+
 async function uploadImage() {
     const imageInput = document.getElementById('imageInput');
     if (!imageInput.files.length) {
@@ -9,7 +12,7 @@ async function uploadImage() {
     const accessToken = await getAccessToken();
 
     // Step 1: Get a pre-signed URL for temporary storage
-    const storageUrl = await getStorageUrl(accessToken);
+    const storageUrl = await getStorageUrl(accessToken,file.name);
 
     // Step 2: Upload the image to the pre-signed URL
     await uploadToStorage(storageUrl, file);
@@ -22,24 +25,21 @@ async function uploadImage() {
 }
 
 async function getAccessToken() {
-    const response = await fetch('https://auth.immersity.ai/auth/realms/immersity/protocol/openid-connect/token?f6371d27-20d6-4551-9775-b903ca7c1c14', {
-        method: 'POST',
+    console.log('Acquiring access token from LeiaLogin...');
+
+    const tokenResponse = await axios.post(AWS_LAMBDA_URL, {
         headers: {
-            accept: 'application/json',
-            'content-type': 'application/x-www-form-urlencoded'
+            'Content-Type' : 'application/x-www-form-urlencoded',
+            'Access-Control-Allow-Origin': '*'
         },
-        body: new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: 'f6371d27-20d6-4551-9775-b903ca7c1c14',
-            client_secret: '1hLBJXOcOwh1wcADT39B4Y21sb6be4rn'
-        })
     });
-    const data = await response.json();
-    return data.access_token;
+
+    console.log('Access token acquired:', tokenResponse.data);
+    return tokenResponse.data.access_token;
 }
 
-async function getStorageUrl(accessToken,file) {
-    const response = await fetch('https://api.immersity.ai/api/v1/get-upload-url?fileName' + file + '&mediaType=image%2Fjpeg', {
+async function getStorageUrl(accessToken,fileName) {
+    const response = await fetch('https://api.immersity.ai/api/v1/get-upload-url?fileName=' + fileName + '&mediaType=image%2Fjpeg', {
         method: 'GET',
         headers: {
             authorization: `Bearer ${accessToken}`,
@@ -48,17 +48,26 @@ async function getStorageUrl(accessToken,file) {
     });
 
     const data = await response.json();
+    console.log('upload URL : ', data.url);
     return data.url;
 }
 
 async function uploadToStorage(url, file) {
-    await fetch(url, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': file.type
-        },
-        body: file
-    });
+    try {
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': file.type
+            },
+            body: file
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        console.log('File uploaded successfully');
+    } catch (error) {
+        console.error('Error uploading file:', error);
+    }
 }
 
 async function generateDisparityMap(accessToken, storageUrl) {
@@ -70,12 +79,14 @@ async function generateDisparityMap(accessToken, storageUrl) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            imageUrl: storageUrl
+            inputImageUrl: storageUrl,
+            outputBitDepth: 'uint16'
         })
     });
 
     const data = await response.json();
-    return data.disparityMapUrl;
+    console.log('Disp Map available at: ', data.resultPresignedUrl);
+    return data.resultPresignedUrl;
 }
 
 function displayDisparityMap(url) {

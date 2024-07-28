@@ -26,6 +26,17 @@ async function main() {
     const accessToken = tokenResponse.data.access_token;
 
     console.log(`\nLeiaLogin AccessToken acquired: ${accessToken}`);
+
+    const response = await fetch('https://api.immersity.ai/api/v1/get-upload-url?fileName=myFile.jpg&mediaType=image%2Fjpeg', {
+        method: 'GET',
+        headers: {
+            authorization: `Bearer ${accessToken}`,
+            accept: 'application/json'
+        },
+    });
+    const data = await response.json();
+    console.log(data.url);
+
 }
 
 main();
