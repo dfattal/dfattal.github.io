@@ -27,7 +27,7 @@ async function main() {
 
     console.log(`\nLeiaLogin AccessToken acquired: ${accessToken}`);
 
-    const response = await fetch('https://media-cloud-rest-api.leiapix-development.com/api/v1/get-upload-url?fileName=myFile.jpg&mediaType=image%2Fjpeg', {
+    const response = await fetch('https://api.dev.immersity.ai/api/v1/get-upload-url?fileName=myFile.jpg&mediaType=image%2Fjpeg', {
         method: 'GET',
         headers: {
             authorization: `Bearer ${accessToken}`,

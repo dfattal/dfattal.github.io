@@ -39,7 +39,7 @@ async function getAccessToken() {
 }
 
 async function getStorageUrl(accessToken,fileName) {
-    const response = await fetch('https://media-cloud-rest-api.leiapix-development.com/api/v1/get-upload-url?fileName=' + fileName + '&mediaType=image%2Fjpeg', {
+    const response = await fetch('https://api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + fileName + '&mediaType=image%2Fjpeg', {
         method: 'GET',
         headers: {
             authorization: `Bearer ${accessToken}`,
@@ -71,7 +71,7 @@ async function uploadToStorage(url, file) {
 }
 
 async function generateDisparityMap(accessToken, storageUrl) {
-    const response = await fetch('https://media-cloud-rest-api.leiapix-development.com/api/v1/disparity', {
+    const response = await fetch('https://api.dev.immersity.ai/api/v1/disparity', {
         method: 'POST',
         headers: {
             accept: 'application/json',
