@@ -22,7 +22,7 @@ async function uploadImage() {
 }
 
 async function getAccessToken() {
-    const response = await fetch('https://auth.immersity.ai/auth/realms/immersity/protocol/openid-connect/token', {
+    const response = await fetch('https://auth.immersity.ai/auth/realms/immersity/protocol/openid-connect/token?f6371d27-20d6-4551-9775-b903ca7c1c14', {
         method: 'POST',
         headers: {
             accept: 'application/json',
