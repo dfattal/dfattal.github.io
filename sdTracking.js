@@ -117,6 +117,7 @@ function drawScene(gl, programInfo, buffers, textures, facePosition) {
 async function generateImageAndDepthMap() {
     const prompt = document.getElementById('prompt').value;
     const negPrompt = document.getElementById('negPrompt').value;
+    const seed = document.getElementById('seed').value;
     const logContainer = document.getElementById('log');
     const token = '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';
 
@@ -129,7 +130,7 @@ async function generateImageAndDepthMap() {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt })
+            body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, seed: seed ? parseInt(seed) : undefined })
         });
 
         if (!response.ok) {
