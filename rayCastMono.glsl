@@ -169,26 +169,34 @@ void main(void) {
 
     vec2 uv = vTextureCoord;
 
-    float minDisp = -0.1;
-    float maxDisp = 0.0*minDisp/2.0;
-    float invZmin = disp2invZ(minDisp);
-    float invZmax = disp2invZ(maxDisp);
-    float invd = invZmin; // pivot
+    float s = min(oRes.x,oRes.y)/min(iRes.x,iRes.y);
+    vec2 newDim = iRes*s/oRes;
 
-    vec2 f1 = vec2(f,f*iRes.x/iRes.y);
-    mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
-    vec3 C1 = vec3(0.0,0.0,0.0); // original position
+    if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
-    vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
-    vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
-    vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+        float minDisp = -0.1;
+        float maxDisp = 0.0*minDisp/2.0;
+        float invZmin = disp2invZ(minDisp);
+        float invZmax = disp2invZ(maxDisp);
+        float invd = invZmin; // pivot
 
-    mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
+        vec2 f1 = vec2(f,f*iRes.x/iRes.y);
+        mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
+        vec3 C1 = vec3(0.0,0.0,0.0); // original position
 
-    vec4 result = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage, uDisparityMap, minDisp, maxDisp, 1.0);
-    gl_FragColor = vec4(result.rgb,1.0);
+        vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
+        vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
+        vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
-    //vec4 albedoColor = texture2D(uImage, vTextureCoord);
-    //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
-    //gl_FragColor = vec4(albedoColor.rgb,1.0);
+        mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
+
+        vec4 result = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1, uImage, uDisparityMap, minDisp, maxDisp, 1.0);
+        gl_FragColor = vec4(result.rgb,1.0);
+
+        //vec4 albedoColor = texture2D(uImage, vTextureCoord);
+        //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
+        //gl_FragColor = vec4(albedoColor.rgb,1.0);
+    } else {
+        gl_FragColor = vec4(vec3(0.1), 1.0);
+    }
 }

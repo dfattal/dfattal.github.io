@@ -228,6 +228,6 @@ void main(void) {
         gl_FragColor = vec4(color, 1.0);
         //gl_FragColor = texture(uImage[0],uv);
     } else {
-        gl_FragColor = vec4(vec3(0.0), 1.0);
+        gl_FragColor = vec4(vec3(0.1), 1.0);
     }
 }

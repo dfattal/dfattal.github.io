@@ -179,39 +179,47 @@ void main(void) {
 
     vec2 uv = vTextureCoord;
 
-    float minDispL = -0.1366;
-    float maxDispL = -0.0027;
-    float minDispR = -0.1366;
-    float maxDispR = -0.0027;
-    float invZmin = disp2invZ(min(minDispL,minDispR));
-    float invZmax = disp2invZ(max(maxDispL,maxDispR));
-    float invd = invZmin; // pivot
+    float s = min(oRes.x,oRes.y)/min(iRes.x,iRes.y);
+    vec2 newDim = iRes*s/oRes;
 
-    vec2 f1 = vec2(f,f*iRes.x/iRes.y);
-    mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
-    vec3 C1L = vec3(-0.5,0.0,0.0); // original position
-    vec3 C1R = vec3(0.5,0.0,0.0); // original position
+    if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
-    vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
-    vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
-    //vec2 f2 = f1/adjustAr(iRes,oRes);
-    vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
-    //vec2 f2 = f1/adjustAr(iRes,oRes)*(1.0-C2.z*invd);
+        float minDispL = -0.1366;
+        float maxDispL = -0.0027;
+        float minDispR = -0.1366;
+        float maxDispR = -0.0027;
+        float invZmin = disp2invZ(min(minDispL,minDispR));
+        float invZmax = disp2invZ(max(maxDispL,maxDispR));
+        float invd = invZmin; // pivot
 
-    mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
+        vec2 f1 = vec2(f,f*iRes.x/iRes.y);
+        mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
+        vec3 C1L = vec3(-0.5,0.0,0.0); // original position
+        vec3 C1R = vec3(0.5,0.0,0.0); // original position
 
-    vec4 resultL = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL, uDisparityMapL, minDispL, maxDispL, 1.0);
-    vec4 resultR = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR, uDisparityMapR, minDispR, maxDispR, 1.0);
+        vec3 C2 = vec3(uFacePosition.x,-uFacePosition.y,vd-uFacePosition.z)/IO; // normalized camera space coordinates
+        vec2 sk2 = -C2.xy*invd/(1.0-C2.z*invd); //keeps 3D focus at specified location
+        //vec2 f2 = f1/adjustAr(iRes,oRes);
+        vec2 f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+        //vec2 f2 = f1/adjustAr(iRes,oRes)*(1.0-C2.z*invd);
 
-    float wR = weight2(C2,C1L,C1R); // Mix LR contributions
+        mat3 FSKR2 = matFromFocal(f2)*matFromSkew(sk2); // non need for extra rot calculation here
 
-    vec4 result = (1.0-wR)*resultL + wR*resultR;
-    if (resultL.a > resultR.a + .001) result = resultL;
-    if (resultR.a > resultL.a + .001) result = resultR;
+        vec4 resultL = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1L, uImageL, uDisparityMapL, minDispL, maxDispL, 1.0);
+        vec4 resultR = raycasting(uv-0.5, FSKR2, C2, FSKR1, C1R, uImageR, uDisparityMapR, minDispR, maxDispR, 1.0);
 
-    gl_FragColor = vec4(result.rgb,1.0);
+        float wR = weight2(C2,C1L,C1R); // Mix LR contributions
 
-    //vec4 albedoColor = texture2D(uImage, vTextureCoord);
-    //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
-    //gl_FragColor = vec4(albedoColor.rgb,1.0);
+        vec4 result = (1.0-wR)*resultL + wR*resultR;
+        if (resultL.a > resultR.a + .001) result = resultL;
+        if (resultR.a > resultL.a + .001) result = resultR;
+
+        gl_FragColor = vec4(result.rgb,1.0);
+
+        //vec4 albedoColor = texture2D(uImage, vTextureCoord);
+        //float disparity = texture2D(uDisparityMap, vTextureCoord).r;
+        //gl_FragColor = vec4(albedoColor.rgb,1.0);
+    } else {
+        gl_FragColor = vec4(vec3(0.1), 1.0);
+    }
 }
