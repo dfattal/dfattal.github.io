@@ -186,14 +186,20 @@ async function processImageForLDL(imageBlob) {
 
     try {
         const accessToken = await getAccessToken();
+        logContainer.textContent += '\nAuthenticated to IAI Cloud 🤗';
         const storageUrl = await getStorageUrl(accessToken, 'generated_image.jpg');
+        logContainer.textContent += '\nGot temporary storage URL on IAI Cloud 💪';
         await uploadToStorage(storageUrl, imageBlob);
+        logContainer.textContent += '\nuploaded AI Image to IAI Cloud 🚀';
+
 
         const ldiUrl = await generateLifUrl(accessToken, storageUrl);
-        displayDisparityMap(ldiUrl);
+        logContainer.textContent += '\nIAI Cloud returned LDI image 🎉';
+        //displayDisparityMap(ldiUrl);
 
         const ldiResponse = await fetch(ldiUrl, { mode: 'cors' });
         const ldiBlob = await ldiResponse.blob();
+        logContainer.textContent += '\nStarting Interactive Session 😍';
         startInteractiveExperience(ldiBlob);
     } catch (error) {
         logContainer.textContent += `\nError generating LDI: ${error.message}\n${error.stack}`;
@@ -257,31 +263,8 @@ async function generateLifUrl(accessToken, storageUrl) {
         })
     });
     const data = await response.json();
+    console.log("LDI endpoint returned presigned URL: ", data.resultPresignedUrl);
     return data.resultPresignedUrl;
-}
-
-function displayDisparityMap(url) {
-    document.getElementById('disp-map-container').innerHTML = `<img id="generatedDispMap" src="${url}" alt="Generated Disp Map">`;
-}
-
-async function generateLif(file) {
-    const logContainer = document.getElementById('log');
-    logContainer.textContent += '\nGenerating depth map...';
-
-    try {
-        const accessToken = await getAccessToken();
-        const storageUrl = await getStorageUrl(accessToken, 'generated_image.jpg');
-        await uploadToStorage(storageUrl, file);
-
-        const lifUrl = await generateLifUrl(accessToken, storageUrl);
-
-        const lifFile = await fetch(lifUrl, { mode: 'cors' });
-
-        logContainer.textContent += '\nLif File generated successfully.';
-        startInteractiveExperience(lifFile);
-    } catch (error) {
-        logContainer.textContent += `\nError generating LIF file: ${error.message}\n${error.stack}`;
-    }
 }
 
 function startInteractiveExperience(lifFile) {

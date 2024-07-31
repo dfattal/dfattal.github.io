@@ -53,17 +53,21 @@
             width: 100vw;
             height: 50vh;
         }
+        #log:empty::before {
+            content: "Logs...";
+            color: #888;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <div id="prompt-container">
         <h1>Generative AI Image and Interactive Experience</h1>
-        <input type="text" id="prompt" placeholder="Enter your prompt here" size="100"><br/>
-        <input type="text" id="negPrompt" placeholder="Enter your negative prompt here (optional)" size="100"><br/>
-        <input type="text" id="seed" placeholder="Enter your seed (number) to vary the result (optional)" size="50"><br/>
-        <button onclick="generateImageAndLif()">Generate Image and Depth Map</button>
+        <input type="text" id="prompt" placeholder="Enter your prompt here" size="75"><br/>
+        <input type="text" id="negPrompt" placeholder="Enter your negative prompt here (optional)" size="75"><br/>
+        <input type="text" id="seed" placeholder="Enter your seed (number) to vary the result (optional)" size="75"><br/>
+        <button onclick="generateImageAndLif()" style="margin-top: 10px">Generate Image and Start Interactive Session</button>
         <div id="log-container">
-            <h3>Logs:</h3>
             <pre id="log"></pre>
         </div>
         <div id="disp-map-container"></div>
