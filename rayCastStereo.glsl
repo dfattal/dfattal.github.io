@@ -190,7 +190,7 @@ void main(void) {
         float maxDispR = -0.0027;
         float invZmin = disp2invZ(min(minDispL,minDispR));
         float invZmax = disp2invZ(max(maxDispL,maxDispR));
-        float invd = invZmin; // pivot
+        float invd = 0.8*invZmin; // pivot
 
         vec2 f1 = vec2(f,f*iRes.x/iRes.y);
         mat3 FSKR1 = mat3(f1.x,0.0,0.0,0.0,f1.y,0.0,0.0,0.0,1.0); // only f matrix is on trivial, no frustum skew no rotation
