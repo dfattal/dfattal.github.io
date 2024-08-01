@@ -45,8 +45,8 @@
 
     <script>
         //Hugging Face API endpoints and headers
-        BASE_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-        REFINER_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-refiner-1.0"
+        BASE_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
+        REFINER_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-refiner-1.0";
 
         async function generateImage() {
             const prompt = document.getElementById('prompt').value;
@@ -71,7 +71,7 @@
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt, })
+                        body: JSON.stringify({ inputs: prompt, negative_prompt: negPrompt })
                     });
 
                     if (!response.ok) {
