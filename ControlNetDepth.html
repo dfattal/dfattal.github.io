@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depth to RGB Image Generator</title>
+</head>
+<body>
+    <h1>Depth to RGB Image Generator</h1>
+    <input type="file" id="depthMap" accept="image/png">
+    <input type="text" id="prompt" placeholder="Enter prompt">
+    <button onclick="generateImage()">Generate Image</button>
+    <br><br>
+    <img id="generatedImage" alt="Generated Image" style="max-width: 100%;">
+
+    <script>
+        async function generateImage() {
+            const depthMap = document.getElementById('depthMap').files[0];
+            const prompt = document.getElementById('prompt').value;
+            const formData = new FormData();
+            formData.append('file', depthMap);
+            formData.append('prompt', prompt);
+
+            const response = await fetch('http://44.200.28.120:8000/generate-image/', {
+                method: 'POST',
+                body: formData
+            });
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            document.getElementById('generatedImage').src = url;
+        }
+    </script>
+</body>
+</html>
