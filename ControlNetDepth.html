@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Upload and Process</title>
+    <title>SDXL ControlNet Depth Test</title>
     <style>
         #image-container {
             display: flex;
@@ -83,8 +83,8 @@
                     const { value, done } = await reader.read();
                     if (done) break;
 
-                    const text = decoder.decode(value, { stream: true });
-                    logWindow.textContent += text;
+                    const text = decoder.decode(value, { stream: true }).replace(/^data: /gm, '').trim();;
+                    logWindow.textContent += text + '\n';
                     logWindow.scrollTop = logWindow.scrollHeight;
                 }
             } catch (error) {
