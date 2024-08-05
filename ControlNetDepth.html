@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Upload and Process</title>
     <style>
+        #image-container {
+            display: flex;
+            justify-content: space-between;
+        }
+        #depth-image, #processed-image {
+            width: 48%; /* Each image will take half the viewport width */
+        }
         #log-window {
             max-height: 100px;
             overflow-y: auto;
@@ -14,17 +21,16 @@
             background-color: #f0f0f0;
             white-space: pre-wrap; /* Ensures that whitespace is preserved and line breaks are applied */
         }
-        #uploaded-image {
-            display: block;
-            margin-top: 10px;
-        }
     </style>
 </head>
 <body>
-    <h1>SDXL ControlNet Depth Test</h1>
+    <h1>Upload and Process Image</h1>
     <input type="file" id="file-input" accept="image/png">
     <button id="upload-button">Upload and Process</button>
-    <img id="uploaded-image" style="display:none;" />
+    <div id="image-container">
+        <img id="depth-image" style="display:none;" />
+        <img id="processed-image" style="display:none;" />
+    </div>
     <div id="log-window"></div>
 
     <script>
@@ -39,6 +45,10 @@
             const formData = new FormData();
             formData.append('depthImage', file);
 
+            const depthImage = document.getElementById('depth-image');
+            depthImage.src = URL.createObjectURL(file);
+            depthImage.style.display = 'block';
+
             try {
                 const response = await fetch('http://35.173.31.207:5001/process', {
                     method: 'POST',
@@ -52,9 +62,9 @@
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
 
-                const img = document.getElementById('uploaded-image');
-                img.src = url;
-                img.style.display = 'block';
+                const processedImage = document.getElementById('processed-image');
+                processedImage.src = url;
+                processedImage.style.display = 'block';
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error processing image');
@@ -74,7 +84,7 @@
                     if (done) break;
 
                     const text = decoder.decode(value, { stream: true });
-                    logWindow.textContent += text + '\n';
+                    logWindow.textContent += text;
                     logWindow.scrollTop = logWindow.scrollHeight;
                 }
             } catch (error) {
