@@ -3,33 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Depth to RGB Image Generator</title>
+    <title>Image Upload and Process</title>
+    <style>
+        #log-window {
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #000;
+            margin-top: 10px;
+            padding: 5px;
+            background-color: #f0f0f0;
+        }
+        #uploaded-image {
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Depth to RGB Image Generator</h1>
-    <input type="file" id="depthMap" accept="image/png">
-    <input type="text" id="prompt" placeholder="Enter prompt">
-    <button onclick="generateImage()">Generate Image</button>
-    <br><br>
-    <img id="generatedImage" alt="Generated Image" style="max-width: 100%;">
+    <h1>SDXL ControlNet Depth Test</h1>
+    <input type="file" id="file-input" accept="image/png">
+    <button id="upload-button">Upload and Process</button>
+    <img id="uploaded-image" style="display:none;" />
+    <div id="log-window"></div>
 
     <script>
-        async function generateImage() {
-            const depthMap = document.getElementById('depthMap').files[0];
-            const prompt = document.getElementById('prompt').value;
+        document.getElementById('upload-button').addEventListener('click', async () => {
+            const fileInput = document.getElementById('file-input');
+            if (fileInput.files.length === 0) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const file = fileInput.files[0];
             const formData = new FormData();
-            formData.append('file', depthMap);
-            formData.append('prompt', prompt);
+            formData.append('depthImage', file);
 
-            const response = await fetch('https://44.221.85.193:8000/generate-image/', {
-                method: 'POST',
-                body: formData
-            });
+            try {
+                const response = await fetch('http://35.173.31.207:5001/process', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            document.getElementById('generatedImage').src = url;
+                if (!response.ok) {
+                    throw new Error('Failed to process image');
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+
+                const img = document.getElementById('uploaded-image');
+                img.src = url;
+                img.style.display = 'block';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error processing image');
+            }
+        });
+
+        // Function to fetch logs continuously
+        async function fetchLogs() {
+            try {
+                const response = await fetch('http://35.173.31.207:5001/events');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let logWindow = document.getElementById('log-window');
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value, { stream: true });
+                    logWindow.textContent += text + '\n';
+                    logWindow.scrollTop = logWindow.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+            }
         }
+
+        fetchLogs();
     </script>
 </body>
 </html>
