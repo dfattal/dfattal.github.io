@@ -167,8 +167,6 @@ void main(void) {
     float s = min(oRes.x,oRes.y)/min(iRes.x,iRes.y);
     vec2 newDim = iRes*s/oRes;
 
-    // TODO: define Window at arbitrary invd...
-
     if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
         vec3 C1 = uCameraPosition;

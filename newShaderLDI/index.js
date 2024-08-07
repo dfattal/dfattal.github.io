@@ -27,6 +27,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       roll1: gl.getUniformLocation(shaderProgram, 'roll1'),
       f1: gl.getUniformLocation(shaderProgram, 'f1'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
+      iResOriginal : gl.getUniformLocation(shaderProgram, 'iResOriginal'),
 
       // rendering info
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
@@ -134,17 +135,15 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZmin));
   gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZmax));
   gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width,layer.height]).flat());
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width,views[0].height); // for window effect only
 
   // rendering info
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x,renderCam.pos.y,renderCam.pos.z); // normalized to camera space
-  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);      // Add this line
+  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
   gl.uniform2f(programInfo.uniformLocations.sl2, renderCam.sl.x, renderCam.sl.y);
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
-  //gl.uniform1f(programInfo.uniformLocations.vd, isMobileDevice() ? 0.7*restPos : restPos);
-  //gl.uniform1f(programInfo.uniformLocations.f, 1.0);
-  //gl.uniform1f(programInfo.uniformLocations.IO, 63.0);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
