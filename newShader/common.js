@@ -232,3 +232,7 @@ function logAllUniforms(gl, program) {
   console.log('Uniforms:', uniforms);
 }
 
+// focal calculations
+function viewportScale(iRes,oRes) {
+    return Math.min(oRes.x,oRes.y)/Math.min(iRes.x,iRes.y);
+}
