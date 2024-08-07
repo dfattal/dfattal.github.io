@@ -188,11 +188,23 @@ async function main() {
     const file = event.target.files[0];
     if (file) {
         const currentImgData = await parseLif5(file);
-        numLayers = currentImgData.layers.length;
+        console.log(currentImgData);
+        const numLayers = currentImgData.layers.length;
         const mainImage = await loadImage2(currentImgData.rgb);
         views[0].width = mainImage.width;
         views[0].height = mainImage.height;
         views[0].f = currentImgData.f*views[0].width;
+        if (numLayers==0) { // no layer data
+            const dispImage = await loadImage2(currentImgData.disp);
+            views[0].layers.push({
+                albedo: createTexture(gl, mainImage),
+                disparity: createTexture(gl, dispImage),
+                width: views[0].width, // iRes.x for the layer, includes outpainting
+                height: views[0].height, // // iRes.y for the layer, includes outpainting
+                invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
+                invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
+          })
+        }
         for (let i = 0; i < numLayers; i++) {
           const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
           const disparityImage = await loadImage2(currentImgData.layers[i].disp);
