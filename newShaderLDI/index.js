@@ -1,4 +1,6 @@
 
+const MAX_LAYERS = 5;
+
 function setupWebGL(gl, fragmentShaderSource) {
 
   const vsSource = vertexShaderSource;
@@ -14,16 +16,18 @@ function setupWebGL(gl, fragmentShaderSource) {
     },
     uniformLocations: {
       //views info
-      uImage: gl.getUniformLocation(shaderProgram, 'uImage'),
-      uDisparityMap: gl.getUniformLocation(shaderProgram, 'uDisparityMap'),
-      invZmin: gl.getUniformLocation(shaderProgram, 'invZmin'),
-      invZmax: gl.getUniformLocation(shaderProgram, 'invZmax'),
+      uImage: [],
+      uDisparityMap: [],
+      uNumLayers: gl.getUniformLocation(shaderProgram, 'uNumLayers'),
+      invZmin: gl.getUniformLocation(shaderProgram, 'invZmin'), // float array
+      invZmax: gl.getUniformLocation(shaderProgram, 'invZmax'), // float array
       uCameraPosition: gl.getUniformLocation(shaderProgram, 'uCameraPosition'),
       sk1: gl.getUniformLocation(shaderProgram, 'sk1'),
       sl1: gl.getUniformLocation(shaderProgram, 'sl1'),
       roll1: gl.getUniformLocation(shaderProgram, 'roll1'),
       f1: gl.getUniformLocation(shaderProgram, 'f1'),
-      iRes: gl.getUniformLocation(shaderProgram, 'iRes'),
+      iRes: gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
+
       // rendering info
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
@@ -36,6 +40,12 @@ function setupWebGL(gl, fragmentShaderSource) {
       //f: gl.getUniformLocation(shaderProgram, 'f')
     },
   };
+
+  // Populate the uniform location arrays
+  for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+    programInfo.uniformLocations.uImage.push(gl.getUniformLocation(shaderProgram, `uImage[${i}]`));
+    programInfo.uniformLocations.uDisparityMap.push(gl.getUniformLocation(shaderProgram, `uDisparityMap[${i}]`));
+  }
 
   // Vertex positions and texture coordinates
   const positions = new Float32Array([
@@ -68,7 +78,7 @@ function setupWebGL(gl, fragmentShaderSource) {
 }
 
 function drawScene(gl, programInfo, buffers, views, renderCam) {
-// TODO : takes in views/layers and renderCam info
+
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
@@ -101,13 +111,19 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, views[0].layers[0].albedo);
-  gl.uniform1i(programInfo.uniformLocations.uImage, 0);
+  const numLayers = views[0].layers.length;
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayers; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (2 * i));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].albedo);
+    gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
 
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, views[0].layers[0].disparity);
-  gl.uniform1i(programInfo.uniformLocations.uDisparityMap, 1);
+    gl.activeTexture(gl.TEXTURE0 + (2 * i + 1));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].disparity);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
 
   // views info
   gl.uniform3f(programInfo.uniformLocations.uCameraPosition, views[0].camPos.x, views[0].camPos.y, views[0].camPos.z);
@@ -115,9 +131,9 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform2f(programInfo.uniformLocations.sl1, views[0].sl.x,views[0].sl.y);
   gl.uniform1f(programInfo.uniformLocations.roll1, views[0].roll);
   gl.uniform1f(programInfo.uniformLocations.f1, views[0].f); // in px
-  gl.uniform1f(programInfo.uniformLocations.invZmin, views[0].layers[0].invZmin);
-  gl.uniform1f(programInfo.uniformLocations.invZmax, views[0].layers[0].invZmax);
-  gl.uniform2f(programInfo.uniformLocations.iRes, views[0].layers[0].width, views[0].layers[0].height);
+  gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZmin));
+  gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZmax));
+  gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width,layer.height]).flat());
 
   // rendering info
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x,renderCam.pos.y,renderCam.pos.z); // normalized to camera space
@@ -138,23 +154,79 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
 
 async function main() {
 
-  iOSmsg = document.getElementById("iOSmsg");
-  function startVideo() {
-    iOSmsg.remove();
-    video.play();
-  }
   const video = await setupCamera();
-  let focalLength = Math.max(video.videoWidth,video.videoHeight);
+
+  const views = [{ // you get this info from decoding LIF
+                camPos: {x: 0, y: 0, z: 0},
+                sl: {x: 0, y:0},
+                sk: {x:0, y:0},
+                roll: 0,
+                f: 0, // in px
+                width: 0, // original view width, pre outpainting
+                height: 0, //original view height, pre outpainting
+                layers: []
+              }]
+
+  const renderCam = {
+            pos: {x: 0, y: 0, z: 0}, // default
+            sl: {x: 0, y:0},
+            sk: {x:0, y:0},
+            roll: 0,
+            f: 0 // placeholder
+        }
+  let invd;
+
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl');
+  const container = document.getElementById('canvas-container');
+
+  if (!gl) {
+    console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
+    return;
+  }
+
+  async function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const currentImgData = await parseLif5(file);
+        numLayers = currentImgData.layers.length;
+        const mainImage = await loadImage2(currentImgData.rgb);
+        views[0].width = mainImage.width;
+        views[0].height = mainImage.height;
+        views[0].f = currentImgData.f*views[0].width;
+        for (let i = 0; i < numLayers; i++) {
+          const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
+          const disparityImage = await loadImage2(currentImgData.layers[i].disp);
+          const maskImage = await loadImage2(currentImgData.layers[i].mask);
+          const disparity4Image = create4ChannelImage(disparityImage, maskImage);
+
+          views[0].layers.push({
+                albedo: createTexture(gl, albedoImage),
+                disparity: createTexture(gl, disparity4Image),
+                width: albedoImage.width, // iRes.x for the layer, includes outpainting
+                height: albedoImage.height, // // iRes.y for the layer, includes outpainting
+                invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
+                invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
+          })
+        }
+        console.log(views);
+        console.log(views[0].layers.map(layer => [layer.width,layer.height]).flat());
+        renderCam.f = views[0].f*viewportScale({x:views[0].width, y:views[0].height},{x: gl.canvas.width, y: gl.canvas.height})
+        console.log(renderCam);
+
+        invd = 0.8*views[0].layers[0].invZmin; // set focus point
+
+        document.getElementById("filePicker").remove();
+        video.play();
+        document.body.appendChild(stats.dom);
+        render();
+    }
+  }
+  document.getElementById('filePicker').addEventListener('change', handleFileSelect);
+
+  let focalLength = Math.max(video.videoWidth,video.videoHeight); // for tracking
   focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
   console.log("using focal " + focalLength);
-
-  if (isIOS()) {
-    console.log("iOS Device Detected");
-    iOSmsg.textContent = "iOS Device Detected. Click to start video.";
-    document.addEventListener('click', startVideo, { once: true });
-  } else {
-    startVideo();
-  }
 
   let facePosition = {x: 0, y: 0, z: 600};
   let oldFacePosition = {x: 0, y: 0, z: 600};
@@ -171,14 +243,6 @@ async function main() {
     runtime: 'tfjs',
   };
   const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-  const canvas = document.getElementById('glCanvas');
-  const gl = canvas.getContext('webgl');
-  const container = document.getElementById('canvas-container');
-
-  if (!gl) {
-    console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
-    return;
-  }
 
   function resizeCanvasToContainer() {
       const displayWidth = container.clientWidth;
@@ -198,43 +262,7 @@ async function main() {
   resizeCanvasToContainer(); // Initial resize to set the correct canvas size
 
   //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
-  const fragmentShaderSource = await loadShaderFile('./rayCastMono.glsl');
-  const albedoImage = await loadImage('../images/albedo.jpg');
-  const disparityImage = await loadImage('../images/disparity.png');
-
-  // Set canvas size to match image aspect ratio
-  //canvas.width = albedoImage.width;
-  //canvas.height = albedoImage.height;
-
-  const views = [{ // you get this info from decoding LIF
-    camPos: {x: 0, y: 0, z: 0},
-    sl: {x: 0, y:0},
-    sk: {x:0, y:0},
-    roll: 0,
-    f: 1.0*albedoImage.width, // in px
-    width: albedoImage.width, // original view width, pre outpainting
-    height: albedoImage.height, //original view height, pre outpainting
-    layers: [{
-        albedo: createTexture(gl, albedoImage),
-        disparity: createTexture(gl, disparityImage),
-        width: albedoImage.width, // iRes.x for the layer, includes outpainting
-        height: albedoImage.height, // // iRes.y for the layer, includes outpainting
-        invZmin: 0.1,
-        invZmax: 0.0
-    }]
-  }]
-  console.log(views);
-
-  const renderCam = {
-    pos: {x: 0, y: 0, z: 0}, // default
-    sl: {x: 0, y:0},
-    sk: {x:0, y:0},
-    roll: 0,
-    f: views[0].f*viewportScale({x:albedoImage.width, y:albedoImage.height},{x: gl.canvas.width, y: gl.canvas.height})
-  }
-  console.log(renderCam);
-
-  const invd = 0.8*views[0].layers[0].invZmin; // set focus point
+  const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
 
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
 
@@ -262,7 +290,7 @@ async function main() {
     //console.log(renderCam.pos);
   }
 
-  render();
+
 }
 
 main();
