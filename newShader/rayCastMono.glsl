@@ -6,12 +6,14 @@ uniform sampler2D uImage; // for LDI this is an array
 uniform sampler2D uDisparityMap; // for LDI this is an array
 uniform float invZmin, invZmax; // used to get invZ
 uniform vec3 uCameraPosition; // in normalized camera space, common to all layers, "C1"
-uniform float sk1,sl1,roll1,f1; // common to all layers, f1 in px
+uniform vec2 sk1,sl1; // common to all layers
+uniform float roll1,f1; // common to all layers, f1 in px
 uniform vec2 iRes; // layer resolution in px, for LDI this is an array
 
 // info rendering params
 uniform vec3 uFacePosition; // in normalized camera space
-uniform float sk2,sl2,roll2,f2; // f2 in px
+uniform vec2 sk2,sl2;
+uniform float roll2,f2; // f2 in px
 uniform vec2 oRes; // viewport resolution in px
 
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {

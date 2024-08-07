@@ -104,10 +104,10 @@ function extractFacePosition(predictions,focalLength) {
       // Convert face center to world coordinates
       const x = -(faceCenterX - video.width / 2) * depth / focalLength;
       const y = -(faceCenterY - video.height / 2) * depth / focalLength;
-      //console.log([x,y,depth].map(Math.round));
+      console.log([x,y,depth].map(Math.round));
       return {x:x, y:y, z:depth};
     } else {
-      //console.log("no face - defaulting to " + [0,0,restPos]);
+      console.log("no face - defaulting to " + [0,0,restPos]);
       return {x:0, y:0, z:restPos};
     }
 }
@@ -232,7 +232,3 @@ function logAllUniforms(gl, program) {
   console.log('Uniforms:', uniforms);
 }
 
-// focal calculations
-function viewportScale(iRes,oRes) {
-    return Math.min(oRes.x,oRes.y)/Math.min(iRes.x,iRes.y);
-}
