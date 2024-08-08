@@ -198,7 +198,7 @@ async function main() {
         //views[0].disparity = createTexture(gl,dispImage); // moved to layers
         views[0].width = mainImage.width;
         views[0].height = mainImage.height;
-        views[0].f = currentImgData.f*views[0].width;
+        views[0].f = currentImgData.f*views[0].width; // focal of main image
         if (numLayers==0) { // no layer data
             const dispImage = await loadImage2(currentImgData.disp);
             views[0].layers.push({
@@ -206,7 +206,7 @@ async function main() {
                 disparity: createTexture(gl, dispImage),
                 width: views[0].width, // iRes.x for the layer, includes outpainting
                 height: views[0].height, // // iRes.y for the layer, includes outpainting
-                f: currentImgData.f*views[0].width, // same as views[0].f unless rescaling
+                f: currentImgData.f*views[0].width, // same as main image unless rescaling
                 invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
                 invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
           })
