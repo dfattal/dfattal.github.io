@@ -131,7 +131,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x,views[0].sk.y);
   gl.uniform2f(programInfo.uniformLocations.sl1, views[0].sl.x,views[0].sl.y);
   gl.uniform1f(programInfo.uniformLocations.roll1, views[0].roll);
-  gl.uniform1f(programInfo.uniformLocations.f1, views[0].f); // in px
+  gl.uniform1fv(programInfo.uniformLocations.f1, views[0].layers.map(layer => layer.f)); // in px
   gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZmin));
   gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZmax));
   gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width,layer.height]).flat());
@@ -156,13 +156,15 @@ async function main() {
   const video = await setupCamera();
 
   const views = [{ // you get this info from decoding LIF
+                //albedo: null, // moved to layers
+                //disparity: null, // // moved to layers
+                width: 0, // original view width, pre outpainting
+                height: 0, //original view height, pre outpainting
                 camPos: {x: 0, y: 0, z: 0},
                 sl: {x: 0, y:0},
                 sk: {x:0, y:0},
                 roll: 0,
                 f: 0, // in px
-                width: 0, // original view width, pre outpainting
-                height: 0, //original view height, pre outpainting
                 layers: []
               }]
 
@@ -190,7 +192,10 @@ async function main() {
         const currentImgData = await parseLif5(file);
         console.log(currentImgData);
         const numLayers = currentImgData.layers.length;
-        const mainImage = await loadImage2(currentImgData.rgb);
+        const mainImage = await loadImage2(currentImgData.rgb); // only needed to extract original width+height
+        //const dispImage = await loadImage2(currentImgData.disp);
+        //views[0].albedo = createTexture(gl,mainImage); // moved to layers
+        //views[0].disparity = createTexture(gl,dispImage); // moved to layers
         views[0].width = mainImage.width;
         views[0].height = mainImage.height;
         views[0].f = currentImgData.f*views[0].width;
@@ -201,6 +206,7 @@ async function main() {
                 disparity: createTexture(gl, dispImage),
                 width: views[0].width, // iRes.x for the layer, includes outpainting
                 height: views[0].height, // // iRes.y for the layer, includes outpainting
+                f: currentImgData.f*views[0].width, // same as views[0].f unless rescaling
                 invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
                 invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
           })
@@ -216,6 +222,7 @@ async function main() {
                 disparity: createTexture(gl, disparity4Image),
                 width: albedoImage.width, // iRes.x for the layer, includes outpainting
                 height: albedoImage.height, // // iRes.y for the layer, includes outpainting
+                f: currentImgData.f*views[0].width, // same as views[0].f unless rescaling
                 invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
                 invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
           })
