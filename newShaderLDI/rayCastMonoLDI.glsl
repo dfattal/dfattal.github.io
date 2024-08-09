@@ -205,15 +205,16 @@ void main(void) {
         vec3 color;
         vec4 layer1 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[0]/iRes[0].x,f1[0]/iRes[0].y))*SKR1, C1, uImage[0], uDisparityMap[0], invZmin[0], invZmax[0], iRes[0], 1.0);
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
-        if (layer1.a == 1.0 || uNumLayers == 1) { color = layer1.rgb; }
-        vec4 layer2 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[1]/iRes[1].x,f1[1]/iRes[1].y))*SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0) * (1.0 - layer1.w) + layer1 * layer1.w;
-        if (layer2.a == 1.0 || uNumLayers == 2) { color = layer2.rgb; }
-        vec4 layer3 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[2]/iRes[2].x,f1[2]/iRes[2].y))*SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0) * (1.0 - layer2.w) + layer2 * layer2.w;
-        if (layer3.a == 1.0 || uNumLayers == 3) { color = layer3.rgb; }
-        vec4 layer4 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[3]/iRes[3].x,f1[3]/iRes[3].y))*SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
-        if (layer4.a == 1.0 || uNumLayers == 4) { color = layer4.rgb; }
-        vec4 layer5 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[4]/iRes[4].x,f1[4]/iRes[4].y))*SKR1, C1, uImage[4], uDisparityMap[4], invZmin[4], invZmax[4], iRes[4], 1.0) * (1.0 - layer4.w) + layer4 * layer4.w;
-        if (uNumLayers == 5) { color = layer5.rgb; }
+        if (layer1.a == 1.0 || uNumLayers == 1) { color = layer1.rgb; } else {
+            vec4 layer2 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[1]/iRes[1].x, f1[1]/iRes[1].y))*SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0) * (1.0 - layer1.w) + layer1 * layer1.w;
+            if (layer2.a == 1.0 || uNumLayers == 2) { color = layer2.rgb; } else {
+            vec4 layer3 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[2]/iRes[2].x, f1[2]/iRes[2].y))*SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0) * (1.0 - layer2.w) + layer2 * layer2.w;
+            if (layer3.a == 1.0 || uNumLayers == 3) { color = layer3.rgb; } else {
+            vec4 layer4 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[3]/iRes[3].x, f1[3]/iRes[3].y))*SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
+            if (layer4.a == 1.0 || uNumLayers == 4) { color = layer4.rgb; } else {
+            vec4 layer5 = raycasting(uv-0.5, FSKR2, C2, matFromFocal(vec2(f1[4]/iRes[4].x, f1[4]/iRes[4].y))*SKR1, C1, uImage[4], uDisparityMap[4], invZmin[4], invZmax[4], iRes[4], 1.0) * (1.0 - layer4.w) + layer4 * layer4.w;
+            if (uNumLayers == 5) { color = layer5.rgb; }
+        }}}}
 
         gl_FragColor = vec4(color, 1.0);
 
