@@ -26,7 +26,11 @@ uniform vec2 oRes; // viewport resolution in px
 }*/
 #define texture texture2D
 
-vec3 readColor(sampler2D iChannel, vec2 uv) { return texture(iChannel, uv).rgb; }
+float taper(vec2 uv) {
+    return smoothstep(0.0,0.1,uv.x)*(1.0-smoothstep(0.9,1.0,uv.x))*smoothstep(0.0,0.1,uv.y)*(1.0-smoothstep(0.9,1.0,uv.y));
+}
+
+vec3 readColor(sampler2D iChannel, vec2 uv) { return texture(iChannel, uv).rgb*taper(uv)+0.1; }
 float readDisp(sampler2D iChannel, vec2 uv, float vMin, float vMax, vec2 iRes) { return texture(iChannel, vec2(clamp(uv.x,2.0/iRes.x,1.0-2.0/iRes.x),clamp(uv.y,2.0/iRes.y,1.0-2.0/iRes.y))).x * (vMin - vMax) + vMax; }
 
 mat3 matFromSlant(vec2 sl) {
