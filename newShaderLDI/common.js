@@ -135,6 +135,37 @@ async function loadImage2(url) { // without cache busting
   });
 }
 
+async function downsampleImage(img_url, factor) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous'; // This is necessary if you're loading an image from a different domain
+
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set the canvas size to the new downsampled size
+            canvas.width = img.width / factor;
+            canvas.height = img.height / factor;
+
+            // Draw the image on the canvas at the new size
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Create a new Image object from the downsampled canvas
+            const downsampledImg = new Image();
+            downsampledImg.src = canvas.toDataURL();
+
+            resolve(downsampledImg);
+        };
+
+        img.onerror = function(err) {
+            reject(err);
+        };
+
+        img.src = img_url;
+    });
+}
+
 function initShaderProgram(gl, vsSource, fsSource) {
   const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
   const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);

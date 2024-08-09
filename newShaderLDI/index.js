@@ -211,10 +211,14 @@ async function main() {
                 invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
           })
         }
-        for (let i = 0; i < numLayers; i++) {
-          const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
-          const disparityImage = await loadImage2(currentImgData.layers[i].disp);
-          const maskImage = await loadImage2(currentImgData.layers[i].mask);
+        for (let i = 0; i < numLayers; i++) { // example showing progressive reduction of resolution with layers
+          const layerDs = 2; // change to 1 to get full resolution per layer
+          //const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
+          const albedoImage = await downsampleImage(currentImgData.layers[i].rgb,Math.pow(layerDs,i));
+          //const disparityImage = await loadImage2(currentImgData.layers[i].disp);
+          const disparityImage = await downsampleImage(currentImgData.layers[i].disp,Math.pow(layerDs,i));
+          //const maskImage = await loadImage2(currentImgData.layers[i].mask);
+          const maskImage = await downsampleImage(currentImgData.layers[i].mask,Math.pow(layerDs,i));
           const disparity4Image = create4ChannelImage(disparityImage, maskImage);
 
           views[0].layers.push({
@@ -222,7 +226,7 @@ async function main() {
                 disparity: createTexture(gl, disparity4Image),
                 width: albedoImage.width, // iRes.x for the layer, includes outpainting
                 height: albedoImage.height, // // iRes.y for the layer, includes outpainting
-                f: currentImgData.f*views[0].width, // same as views[0].f unless rescaling
+                f: currentImgData.f*views[0].width/Math.pow(layerDs,i), // same as views[0].f unless rescaling
                 invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
                 invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
           })
