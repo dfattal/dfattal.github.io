@@ -27,7 +27,7 @@ float taper(vec2 uv) {
     return smoothstep(0.0,0.1,uv.x)*(1.0-smoothstep(0.9,1.0,uv.x))*smoothstep(0.0,0.1,uv.y)*(1.0-smoothstep(0.9,1.0,uv.y));
 }
 
-vec3 readColor(sampler2D iChannel, vec2 uv) { return texture(iChannel, uv).rgb*taper(uv)+0.1; }
+vec3 readColor(sampler2D iChannel, vec2 uv) { return texture(iChannel, uv).rgb*taper(uv)+0.1*(1.0-taper(uv)); }
 //vec3 readColor(sampler2D iChannel, vec2 uv) { return texture(iChannel, uv).rgb; }
 float readDisp(sampler2D iChannel, vec2 uv, float minDisp, float maxDisp) { return texture(iChannel, vec2(clamp(uv.x,2.0/iRes.x,1.0-2.0/iRes.x),clamp(uv.y,2.0/iRes.y,1.0-2.0/iRes.y))).x * (minDisp - maxDisp) + maxDisp; }
 
