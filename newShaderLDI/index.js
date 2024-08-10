@@ -212,7 +212,7 @@ async function main() {
           })
         }
         for (let i = 0; i < numLayers; i++) { // example showing progressive reduction of resolution with layers
-          const layerDs = 2; // change to 1 to get full resolution per layer
+          const layerDs = 1; // change to 2 to get lower resolution per layer
           //const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
           const albedoImage = await downsampleImage(currentImgData.layers[i].rgb,Math.pow(layerDs,i));
           //const disparityImage = await loadImage2(currentImgData.layers[i].disp);
