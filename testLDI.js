@@ -88,17 +88,26 @@ class LifFileParser {
 
                 if (userWantsToCreateLif) {
                     console.log("Generating LIF file...");
+                    document.getElementById("log-container").style.display='block';
+                    const logContainer = document.getElementById('log');
+
                     try {
                         // Authenticate to IAI
                         const accessToken = await this.getAccessToken();
+                        logContainer.textContent += 'Authenticated to IAI Cloud 🤗';
                         // Get a pre-signed URL for temporary storage
                         const storageUrl = await this.getStorageUrl(accessToken, file.name);
+                        logContainer.textContent += '\nGot temporary storage URL on IAI Cloud 💪';
                         // Upload the image to the pre-signed URL
                         await this.uploadToStorage(storageUrl, file);
+                        logContainer.textContent += '\nuploaded Image to IAI Cloud 🚀';
                         // Get the LIF
+                        logContainer.textContent += '\nGenerating LDI File... ⏳';
                         await this.generateLif(accessToken, storageUrl);
+                        document.getElementById("log-container").style.display='none';
                     } catch (error) {
                         console.error("Error during LIF generation process:", error.message);
+                        logContainer.textContent += "Error during LIF generation process:" + error.message;
                     }
                 } else {
                     console.log("User chose not to create a LIF file.");
@@ -188,7 +197,7 @@ class LifFileParser {
         const vizBut = document.getElementById('visualize');
         vizBut.style.display = 'inline';
         vizBut.addEventListener('click', function() {
-            document.getElementById("filePicker").value = "";
+            //document.getElementById("filePicker").value = "";
             console.log("Attempting to open visualization at newShaderLDI");
             const binaryString = arrayBufferToBinaryString(arrayBuffer);
             const base64String = btoa(binaryString);
@@ -196,7 +205,8 @@ class LifFileParser {
              // Store the base64 string in localStorage
             localStorage.setItem('lifFileData', base64String);
 
-            window.location.href = `./newShaderLDI/index.html`;
+            //window.location.href = `./newShaderLDI/index.html`;
+            window.open(`./newShaderLDI/index.html`, '_blank');
         });
 
         function arrayBufferToBinaryString(buffer) {
@@ -259,6 +269,26 @@ class LifFileParser {
     async generateLif(accessToken, storageUrl) {
     // Start timing the fetch
     console.time('fetchDuration');
+    // Show the progress bar
+    const progressBar = document.getElementById('progress-bar');
+    const progressContainer = document.getElementById('progress-container');
+    progressContainer.style.display = 'block';
+
+    // Simulate the progress bar
+    let progress = 0;
+    const interval = 500; // Update progress every 500ms
+    const totalDuration = 60000; // Total duration of 60 seconds
+    const increment = 100 / (totalDuration / interval); // Calculate how much to increment each interval
+
+    const progressInterval = setInterval(() => {
+        progress += increment;
+        progressBar.style.width = `${progress}%`;
+
+        // Ensure progress doesn't exceed 100%
+        if (progress >= 100) {
+            clearInterval(progressInterval);
+        }
+    }, interval);
 
     const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
         method: 'POST',
@@ -271,6 +301,11 @@ class LifFileParser {
             inputImageUrl: storageUrl
         })
     });
+
+    // Clear the progress bar when the fetch completes
+    clearInterval(progressInterval);
+    progressBar.style.width = '100%'; // Set to 100% when done
+    progressContainer.style.display = 'none'; // Hide the progress bar
 
     const data = await response.json();
     const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field

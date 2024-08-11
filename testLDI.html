@@ -10,7 +10,16 @@
             border: 1px solid black;
         }
         div {
-            margin-bottom: 5px;
+            margin: 2px;
+        }
+        #log-container {
+            text-align: left;
+        }
+        #log-container pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            overflow-x: auto;
         }
 
     </style>
@@ -21,7 +30,12 @@
         <input type="file" id="filePicker" accept=".jpg,.jpeg,.png" />
         <button id="visualize" style="display:none">Visualize</button>
         <button id="downloadBut" style="display:none">Download</button>
-
+    </div>
+    <div id="log-container" style="display:none;">
+            <pre id="log"></pre>
+    </div>
+    <div id="progress-container" style="border: 1px solid black; display:none;">
+        <div id="progress-bar" style="width: 0%; height: 20px; background-color: #4CAF50;"></div>
     </div>
     <div id="lifContent"></div>
     <script src="testLDI.js"></script>
