@@ -188,6 +188,11 @@ async function main() {
 
   async function handleFileSelect(event) {
     const file = event.target.files[0];
+    visualizeFile(file);
+   }
+
+  async function visualizeFile(file) {
+    //const file = event.target.files[0];
     if (file) {
         const currentImgData = await parseLif5(file);
         console.log(currentImgData);
@@ -244,7 +249,6 @@ async function main() {
         render();
     }
   }
-  document.getElementById('filePicker').addEventListener('change', handleFileSelect);
 
   let focalLength = Math.max(video.videoWidth,video.videoHeight); // for tracking
   focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
@@ -312,6 +316,40 @@ async function main() {
     //console.log(renderCam.pos);
   }
 
+  // Retrieve the base64 string from localStorage
+    const base64String = localStorage.getItem('lifFileData');
+    console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
+
+    if (base64String) {
+        try {
+            // Decode the base64 string back to binary string
+            console.log("Decoding base64 string...");
+            const byteCharacters = atob(base64String);
+
+            console.log("Creating Uint8Array from decoded data...");
+            const byteNumbers = new Uint8Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+
+            console.log("Constructing File object from Uint8Array...");
+            const file = new File([byteNumbers], "uploaded-file", { type: "application/octet-stream" });
+            console.log("File object created:", file);
+
+            // Call the visualization function with the file
+            console.log("Calling visualizeFile function...");
+            visualizeFile(file);
+        } catch (error) {
+            console.error("Error processing base64 string:", error);
+        }
+
+        // Clean up by removing the data from localStorage
+        console.log("Cleaning up localStorage...");
+        localStorage.removeItem('lifFileData');
+    } else {
+        console.log("No base64 string found in localStorage.");
+        document.getElementById('filePicker').addEventListener('change', handleFileSelect);
+    }
 
 }
 

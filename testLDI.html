@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <title>LIF5 Parsing and Generation</title>
+    <style>
+        img {
+            border: 1px solid black;
+        }
+        div {
+            margin-bottom: 5px;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>LIF5 Parsing | Generation | Visualization</h1>
+    <div id="UI">
+        <input type="file" id="filePicker" accept=".jpg,.jpeg,.png" />
+        <button id="visualize" style="display:none">Visualize</button>
+        <button id="downloadBut" style="display:none">Download</button>
+
+    </div>
+    <div id="lifContent"></div>
+    <script src="testLDI.js"></script>
+</body>
+</html>

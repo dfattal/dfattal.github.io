@@ -1,25 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <title>LIF5 LDL 5.2 JS Parser example</title>
-    <style>
-        img {
-            border: 1px solid black;
-        }
-    </style>
-</head>
-<body>
-    <h1>LIF5 LDL 5.2 JS Parser example</h1>
-    <input type="file" id="filePicker" accept=".lif,.jpg,.jpeg,.png" /> <br>
-    <script>
-
 // Jul 25, 2024, 19:39, supports 5.1 and 5.2 LIF LDL (LDI) files
 AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
-
-
 
 class BinaryStream {
     constructor(arrayBuffer) {
@@ -60,7 +40,6 @@ class Field {
     }
 }
 
-
 class Metadata {
     constructor() {
         this.fields = [];
@@ -84,7 +63,6 @@ class Metadata {
     }
 }
 
-
 class LifFileParser {
     constructor() {
         this.fileInput = document.getElementById('filePicker');
@@ -92,21 +70,39 @@ class LifFileParser {
     }
 
     async handleFileSelect(event) {
+        document.getElementById('lifContent').innerHTML = '';
+        document.getElementById('visualize').style.display='none';
+        document.getElementById('downloadBut').style.display='none';
         const file = event.target.files[0];
         if (file) {
-            console.log(file);
-            if (file.name.endsWith('.lif')) {
+            console.log("Picker: " + file.name);
+
+            try {
                 const arrayBuffer = await file.arrayBuffer();
-                this.parseLif5(arrayBuffer);
-            } else {
-                // Authenticate to IAI
-                const accessToken = await this.getAccessToken();
-                // Get a pre-signed URL for temporary storage
-                const storageUrl = await this.getStorageUrl(accessToken,file.name);
-                // Upload the image to the pre-signed URL
-                await this.uploadToStorage(storageUrl, file);
-                // Get the Lif
-                this.generateLif(accessToken, storageUrl);
+                await this.parseLif5(arrayBuffer);
+            } catch (e) {
+                console.log("Not a LIF file:", e.message);
+
+                // Create a confirmation dialog
+                const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
+
+                if (userWantsToCreateLif) {
+                    console.log("Generating LIF file...");
+                    try {
+                        // Authenticate to IAI
+                        const accessToken = await this.getAccessToken();
+                        // Get a pre-signed URL for temporary storage
+                        const storageUrl = await this.getStorageUrl(accessToken, file.name);
+                        // Upload the image to the pre-signed URL
+                        await this.uploadToStorage(storageUrl, file);
+                        // Get the LIF
+                        await this.generateLif(accessToken, storageUrl);
+                    } catch (error) {
+                        console.error("Error during LIF generation process:", error.message);
+                    }
+                } else {
+                    console.log("User chose not to create a LIF file.");
+                }
             }
         }
     }
@@ -125,7 +121,7 @@ class LifFileParser {
 
         const metadata = new Metadata();
         metadata.fieldCount = bf.readUInt32();
-        console.log(metadata.fieldCount);
+        //console.log(metadata.fieldCount);
         for (let i = 0; i < metadata.fieldCount; i++) {
           const fieldType = bf.readUInt32();
           const fieldDataSize = bf.readUInt32();
@@ -135,7 +131,7 @@ class LifFileParser {
         }
         metadata.regionOffset = regionOffset;
         metadata.fullSize = fullSize;
-        console.log(metadata);
+        //console.log(metadata);
         return metadata;
     }
 
@@ -145,7 +141,7 @@ class LifFileParser {
         img.src = blobUrl;
         img.style.width = '300px';
         img.style.height = 'auto';
-        document.body.appendChild(img);
+        document.getElementById("lifContent").appendChild(img);
         img.onload = () => {
             URL.revokeObjectURL(blobUrl);
         };
@@ -169,9 +165,9 @@ class LifFileParser {
             if (view.disparity) {
               const disparity = lifMeta.getFieldByType(view.disparity.blob_id).toBlob();
               this.debugAddBlobAsImageToPage(disparity);
-              document.body.append(document.createElement('br'));
-              document.body.append('minDisp: ', view.disparity.min_disparity.toFixed(3), ' | maxDisp: ', view.disparity.max_disparity.toFixed(3), ' | focal: ', view.camera_data.focal_ratio_to_width.toFixed(3));
-              document.body.append(document.createElement('br'));
+              document.getElementById("lifContent").append(document.createElement('br'));
+              document.getElementById("lifContent").append('minDisp: ', view.disparity.min_disparity.toFixed(3), ' | maxDisp: ', view.disparity.max_disparity.toFixed(3), ' | focal: ', view.camera_data.focal_ratio_to_width.toFixed(3));
+              document.getElementById("lifContent").append(document.createElement('br'));
             }
             let layers = view.layers_top_to_bottom;
             if (!layers) layers = view.layered_depth_image_data.layers_top_to_bottom;
@@ -183,11 +179,34 @@ class LifFileParser {
               this.debugAddBlobAsImageToPage(disp);
               this.debugAddBlobAsImageToPage(mask);
               console.log(layer);
-              document.body.append(document.createElement('br'));
-              document.body.append('minDisp: ', layer.disparity.min_disparity.toFixed(3), ' | maxDisp: ', layer.disparity.max_disparity.toFixed(3), ' | focal: ',layer.camera_data.focal_ratio_to_width.toFixed(3));
-              document.body.append(document.createElement('br'));
+              document.getElementById("lifContent").append(document.createElement('br'));
+              document.getElementById("lifContent").append('minDisp: ', layer.disparity.min_disparity.toFixed(3), ' | maxDisp: ', layer.disparity.max_disparity.toFixed(3), ' | focal: ',layer.camera_data.focal_ratio_to_width.toFixed(3));
+              document.getElementById("lifContent").append(document.createElement('br'));
               // access other layer properties here if needed
             }
+        }
+        const vizBut = document.getElementById('visualize');
+        vizBut.style.display = 'inline';
+        vizBut.addEventListener('click', function() {
+            document.getElementById("filePicker").value = "";
+            console.log("Attempting to open visualization at newShaderLDI");
+            const binaryString = arrayBufferToBinaryString(arrayBuffer);
+            const base64String = btoa(binaryString);
+
+             // Store the base64 string in localStorage
+            localStorage.setItem('lifFileData', base64String);
+
+            window.location.href = `./newShaderLDI/index.html`;
+        });
+
+        function arrayBufferToBinaryString(buffer) {
+            let binaryString = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binaryString += String.fromCharCode(bytes[i]);
+            }
+            return binaryString;
         }
     }
 
@@ -238,30 +257,66 @@ class LifFileParser {
     }
 
     async generateLif(accessToken, storageUrl) {
-        const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
-            method: 'POST',
-            headers: {
-                accept: 'application/json',
-                authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                inputImageUrl: storageUrl
-            })
-        });
+    // Start timing the fetch
+    console.time('fetchDuration');
 
-        const data = await response.json();
-        const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
+    const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
+        method: 'POST',
+        headers: {
+            accept: 'application/json',
+            authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            inputImageUrl: storageUrl
+        })
+    });
 
-        const lifResponse = await fetch(lifUrl);
-        const lifArrayBuffer = await lifResponse.arrayBuffer();
-        this.parseLif5(lifArrayBuffer);
-    }
+    const data = await response.json();
+    const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
+
+    const lifResponse = await fetch(lifUrl);
+    const lifArrayBuffer = await lifResponse.arrayBuffer();
+
+    // Stop timing the fetch
+    console.timeEnd('fetchDuration');
+
+    await this.parseLif5(lifArrayBuffer);
+
+    // Create the download button
+    const downloadButton = document.getElementById('downloadBut');
+    downloadButton.style.display='inline';
+
+    // On button click, prompt user with a file save dialog
+    downloadButton.onclick = async () => {
+        try {
+            const fileName = storageUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
+
+            const options = {
+                suggestedName: fileName,
+                types: [{
+                    description: 'JPEG Image',
+                    accept: { 'image/jpeg': ['.jpg', '.jpeg'] }
+                }]
+            };
+
+            const handle = await window.showSaveFilePicker(options);
+
+            const writableStream = await handle.createWritable();
+            await writableStream.write(new Blob([lifArrayBuffer], { type: 'image/jpeg' }));
+            await writableStream.close();
+
+            console.log('File saved successfully');
+        } catch (err) {
+            console.error('Error saving the file:', err);
+        }
+    };
+
+
+}
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM Loaded " + new Date());
     new LifFileParser();
 });
-    </script>
-</body>
-</html>
