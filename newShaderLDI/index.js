@@ -336,6 +336,13 @@ async function main() {
 
         request.onsuccess = function(event) {
             const db = event.target.result;
+
+            if (!db.objectStoreNames.contains("lifFiles")) {
+                console.warn("Object store 'lifFiles' not found.");
+                resolve(null); // Resolve with null if the object store doesn't exist
+                return;
+            }
+
             const transaction = db.transaction(["lifFiles"], "readonly");
             const objectStore = transaction.objectStore("lifFiles");
 
@@ -345,7 +352,7 @@ async function main() {
                 if (event.target.result) {
                     resolve(event.target.result.data);
                 } else {
-                    reject("No data found for 'lifFileData' in IndexedDB");
+                    resolve(null); // Resolve with null if no data is found
                 }
             };
 
@@ -358,7 +365,7 @@ async function main() {
             reject("Error opening IndexedDB");
         };
     });
-  }
+}
 
   async function deleteFromIndexedDB() {
     return new Promise((resolve, reject) => {
@@ -366,6 +373,13 @@ async function main() {
 
         request.onsuccess = function(event) {
             const db = event.target.result;
+
+            if (!db.objectStoreNames.contains("lifFiles")) {
+                console.warn("Object store 'lifFiles' not found.");
+                resolve(); // Resolve without error if the object store doesn't exist
+                return;
+            }
+
             const transaction = db.transaction(["lifFiles"], "readwrite");
             const objectStore = transaction.objectStore("lifFiles");
 
@@ -377,24 +391,23 @@ async function main() {
             };
 
             requestDelete.onerror = function() {
-                console.error("Error deleting data from IndexedDB");
                 reject("Error deleting data from IndexedDB");
             };
         };
 
         request.onerror = function() {
-            console.error("Error opening IndexedDB");
             reject("Error opening IndexedDB");
         };
     });
-  }
+}
 
+    const filePicker = document.getElementById('filePicker');
     //const base64String = localStorage.getItem('lifFileData');
-    const base64String = await getFromIndexedDB();
-    console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
+    try {const base64String = await getFromIndexedDB();
+    //console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
 
     if (base64String) {
-        try {
+
             // Decode the base64 string back to binary string
             console.log("Decoding base64 string...");
             const byteCharacters = atob(base64String);
@@ -412,17 +425,25 @@ async function main() {
             // Call the visualization function with the file
             console.log("Calling visualizeFile function...");
             visualizeFile(file);
-        } catch (error) {
-            console.error("Error processing base64 string:", error);
-        }
 
         // Clean up by removing the data from localStorage
         console.log("Cleaning up localStorage...");
         await deleteFromIndexedDB();
+        document.getElementById("tmpMsg").remove();
+
     } else {
         console.log("No base64 string found in localStorage.");
-        document.getElementById('filePicker').addEventListener('change', handleFileSelect);
+        document.getElementById("tmpMsg").remove();
+        filePicker.addEventListener('change', handleFileSelect);
+        filePicker.style.display='inline';
+
     }
+    } catch (e) {
+        console.log("No base64 string found in localStorage.");
+        filePicker.addEventListener('change', handleFileSelect);
+        filePicker.style.display='inline';
+        document.getElementById("tmpMsg").remove();
+     };
 
 }
 
