@@ -351,9 +351,11 @@ class LifFileParser {
 
     // On button click, prompt user with a file save dialog
     downloadButton.onclick = async () => {
-        try {
-            const fileName = storageUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
+    try {
+        const fileName = storageUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
 
+        // Check if showSaveFilePicker is supported
+        if (window.showSaveFilePicker) {
             const options = {
                 suggestedName: fileName,
                 types: [{
@@ -369,10 +371,27 @@ class LifFileParser {
             await writableStream.close();
 
             console.log('File saved successfully');
-        } catch (err) {
-            console.error('Error saving the file:', err);
+        } else {
+            // Fallback for iOS or other browsers that do not support showSaveFilePicker
+            const blob = new Blob([lifArrayBuffer], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+
+            // Clean up and remove the link
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log('File downloaded successfully using fallback');
         }
-    };
+    } catch (err) {
+        console.error('Error saving the file:', err);
+    }
+  };
 
 
 }
