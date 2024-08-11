@@ -244,7 +244,20 @@ async function main() {
         invd = 0.8*views[0].layers[0].invZmin; // set focus point
 
         document.getElementById("filePicker").remove();
-        video.play();
+
+        iOSmsg = document.getElementById("iOSmsg");
+        function startVideo() {
+            iOSmsg.remove();
+            video.play();
+        }
+        if (isIOS()) {
+            console.log("iOS Device Detected");
+            iOSmsg.textContent = "iOS Device Detected. Click to start video.";
+            document.addEventListener('click', startVideo, { once: true });
+            } else {
+                startVideo();
+            }
+        //video.play();
         document.body.appendChild(stats.dom);
         render();
     }
