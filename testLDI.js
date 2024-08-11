@@ -203,7 +203,34 @@ class LifFileParser {
             const base64String = btoa(binaryString);
 
              // Store the base64 string in localStorage
-            localStorage.setItem('lifFileData', base64String);
+            //localStorage.setItem('lifFileData', base64String);
+            const request = indexedDB.open("lifFileDB", 1);
+
+            request.onupgradeneeded = function(event) {
+                const db = event.target.result;
+                db.createObjectStore("lifFiles", { keyPath: "id" });
+            };
+
+            request.onsuccess = function(event) {
+                const db = event.target.result;
+                const transaction = db.transaction(["lifFiles"], "readwrite");
+                const objectStore = transaction.objectStore("lifFiles");
+                const fileData = { id: "lifFileData", data: base64String };
+
+                const requestUpdate = objectStore.put(fileData);
+
+                requestUpdate.onsuccess = function() {
+                    console.log("File saved to IndexedDB successfully!");
+                };
+
+                requestUpdate.onerror = function() {
+                    console.error("Error saving file to IndexedDB");
+                };
+            };
+
+    request.onerror = function() {
+        console.error("Error opening IndexedDB");
+    };
 
             //window.location.href = `./newShaderLDI/index.html`;
             window.open(`./newShaderLDI/index.html`, '_blank');

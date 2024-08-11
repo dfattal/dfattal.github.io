@@ -254,9 +254,9 @@ async function main() {
             console.log("iOS Device Detected");
             iOSmsg.textContent = "iOS Device Detected. Click to start video.";
             document.addEventListener('click', startVideo, { once: true });
-            } else {
-                startVideo();
-            }
+        } else {
+            startVideo();
+        }
         //video.play();
         document.body.appendChild(stats.dom);
         render();
@@ -330,7 +330,67 @@ async function main() {
   }
 
   // Retrieve the base64 string from localStorage
-    const base64String = localStorage.getItem('lifFileData');
+  async function getFromIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open("lifFileDB", 1);
+
+        request.onsuccess = function(event) {
+            const db = event.target.result;
+            const transaction = db.transaction(["lifFiles"], "readonly");
+            const objectStore = transaction.objectStore("lifFiles");
+
+            const requestGet = objectStore.get("lifFileData");
+
+            requestGet.onsuccess = function(event) {
+                if (event.target.result) {
+                    resolve(event.target.result.data);
+                } else {
+                    reject("No data found for 'lifFileData' in IndexedDB");
+                }
+            };
+
+            requestGet.onerror = function() {
+                reject("Error retrieving file from IndexedDB");
+            };
+        };
+
+        request.onerror = function() {
+            reject("Error opening IndexedDB");
+        };
+    });
+  }
+
+  async function deleteFromIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open("lifFileDB", 1);
+
+        request.onsuccess = function(event) {
+            const db = event.target.result;
+            const transaction = db.transaction(["lifFiles"], "readwrite");
+            const objectStore = transaction.objectStore("lifFiles");
+
+            const requestDelete = objectStore.delete("lifFileData");
+
+            requestDelete.onsuccess = function() {
+                console.log("Data deleted from IndexedDB successfully!");
+                resolve();
+            };
+
+            requestDelete.onerror = function() {
+                console.error("Error deleting data from IndexedDB");
+                reject("Error deleting data from IndexedDB");
+            };
+        };
+
+        request.onerror = function() {
+            console.error("Error opening IndexedDB");
+            reject("Error opening IndexedDB");
+        };
+    });
+  }
+
+    //const base64String = localStorage.getItem('lifFileData');
+    const base64String = await getFromIndexedDB();
     console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
 
     if (base64String) {
@@ -358,7 +418,7 @@ async function main() {
 
         // Clean up by removing the data from localStorage
         console.log("Cleaning up localStorage...");
-        localStorage.removeItem('lifFileData');
+        await deleteFromIndexedDB();
     } else {
         console.log("No base64 string found in localStorage.");
         document.getElementById('filePicker').addEventListener('change', handleFileSelect);
