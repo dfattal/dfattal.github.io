@@ -69,11 +69,51 @@ class LifFileParser {
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
     }
 
+    async resizeImage(image, maxDimension, fileType) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = image.width;
+        let height = image.height;
+
+        if (width > height) {
+            if (width > maxDimension) {
+                height = Math.round((height *= maxDimension / width));
+                width = maxDimension;
+            }
+        } else {
+            if (height > maxDimension) {
+                width = Math.round((width *= maxDimension / height));
+                height = maxDimension;
+            }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(image, 0, 0, width, height);
+
+        return new Promise((resolve) => {
+            canvas.toBlob(resolve, fileType, 1);
+        });
+    }
+
+    async convertHeicToJpeg(file) {
+    const convertedBlob = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 1
+    });
+    return new File([convertedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
+}
+
     async handleFileSelect(event) {
+
         document.getElementById('lifContent').innerHTML = '';
-        document.getElementById('visualize').style.display='none';
-        document.getElementById('downloadBut').style.display='none';
+        document.getElementById('visualize').style.display = 'none';
+        document.getElementById('downloadBut').style.display = 'none';
         const file = event.target.files[0];
+        const maxDimension = 1600;
+
         if (file) {
             console.log("Picker: " + file.name);
 
@@ -81,30 +121,53 @@ class LifFileParser {
                 const arrayBuffer = await file.arrayBuffer();
                 await this.parseLif5(arrayBuffer);
             } catch (e) {
-                console.log("Not a LIF file:", e.message);
-
-                // Create a confirmation dialog
+                console.log(e.message);
                 const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
 
                 if (userWantsToCreateLif) {
                     console.log("Generating LIF file...");
-                    document.getElementById("log-container").style.display='block';
+                    document.getElementById("log-container").style.display = 'block';
                     const logContainer = document.getElementById('log');
 
                     try {
-                        // Authenticate to IAI
-                        const accessToken = await this.getAccessToken();
-                        logContainer.textContent += 'Authenticated to IAI Cloud 🤗';
-                        // Get a pre-signed URL for temporary storage
-                        const storageUrl = await this.getStorageUrl(accessToken, file.name);
-                        logContainer.textContent += '\nGot temporary storage URL on IAI Cloud 💪';
-                        // Upload the image to the pre-signed URL
-                        await this.uploadToStorage(storageUrl, file);
-                        logContainer.textContent += '\nuploaded Image to IAI Cloud 🚀';
-                        // Get the LIF
-                        logContainer.textContent += '\nGenerating LDI File... ⏳';
-                        await this.generateLif(accessToken, storageUrl);
-                        document.getElementById("log-container").style.display='none';
+                        let processedFile = file;
+
+                        // Convert HEIC to a more usable format
+                        if (file.type === 'image/heic' || file.type === 'image/heif') {
+                            console.log("Converting HEIC file...");
+                            logContainer.textContent += 'Converting HEIC file...\n';
+                            processedFile = await this.convertHeicToJpeg(file);
+                        }
+
+                        const img = new Image();
+                        const reader = new FileReader();
+
+                        reader.onload = async (readerEvent) => {
+                            img.src = readerEvent.target.result;
+
+                            img.onload = async () => {
+                                let fileToUpload = processedFile;
+
+                                if (img.width > maxDimension || img.height > maxDimension) {
+                                    const resizedBlob = await this.resizeImage(img, maxDimension, processedFile.type);
+                                    fileToUpload = new File([resizedBlob], processedFile.name, { type: processedFile.type });
+                                    console.log("Image resized before upload.");
+                                    logContainer.textContent += 'Image resized before upload...\n';
+                                }
+
+                                const accessToken = await this.getAccessToken();
+                                logContainer.textContent += 'Authenticated to IAI Cloud 🤗';
+                                const storageUrl = await this.getStorageUrl(accessToken, fileToUpload.name);
+                                logContainer.textContent += '\nGot temporary storage URL on IAI Cloud 💪';
+                                await this.uploadToStorage(storageUrl, fileToUpload);
+                                logContainer.textContent += '\nUploaded Image to IAI Cloud 🚀';
+                                logContainer.textContent += '\nGenerating LDI File... ⏳';
+                                await this.generateLif(accessToken, storageUrl);
+                                document.getElementById("log-container").style.display = 'none';
+                            };
+                        };
+
+                        reader.readAsDataURL(processedFile);
                     } catch (error) {
                         console.error("Error during LIF generation process:", error.message);
                         logContainer.textContent += "Error during LIF generation process:" + error.message;

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="./modules/heic2any.js"></script>
     <title>LIF5 Parsing and Generation</title>
     <style>
         img {
@@ -27,7 +28,7 @@
 <body>
     <h1>LIF5 Parsing | Generation | Visualization</h1>
     <div id="UI">
-        <input type="file" id="filePicker" accept=".jpg,.jpeg,.png" />
+        <input type="file" id="filePicker" accept=".jpg,.jpeg,.png,.heic,.heif" />
         <button id="visualize" style="display:none">Visualize</button>
         <button id="downloadBut" style="display:none">Download</button>
     </div>
