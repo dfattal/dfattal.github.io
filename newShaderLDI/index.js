@@ -270,13 +270,16 @@ async function main() {
   let focalLength = Math.max(video.videoWidth,video.videoHeight); // for tracking
   focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
   console.log("using focal " + focalLength);
+  const OVD = isMobileDevice() ? 0.7*restPos: restPos; // defined in common.js
+  console.log("using OVD " + OVD);
+
 
   let facePosition = {x: 0, y: 0, z: 600};
   let oldFacePosition = {x: 0, y: 0, z: 600};
   function normFacePosition(pos) {
     const IO = 63;
-    const OVD = restPos; // defined in common.js
-    return {x: pos.x/IO, y: -pos.y/IO, z: (OVD-pos.z)/IO}
+    const vd = OVD;
+    return {x: pos.x/IO, y: -pos.y/IO, z: (vd-pos.z)/IO}
   }
   const axy = 0.5; // exponential smoothing
   const az = 0.1; // exponential smoothing
