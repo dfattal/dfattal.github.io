@@ -138,7 +138,7 @@ async function loadImage2(url) { // without cache busting
 async function downsampleImage(img_url, factor) {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.crossOrigin = 'Anonymous'; // This is necessary if you're loading an image from a different domain
+        img.crossOrigin = 'anonymous'; // This is necessary if you're loading an image from a different domain
 
         img.onload = function() {
             const canvas = document.createElement('canvas');
@@ -218,6 +218,7 @@ async function getFacePosition() {
 }
 
 function create4ChannelImage(rgbImage, maskImage) {
+
   const width = rgbImage.width;
   const height = rgbImage.height;
 
@@ -225,7 +226,8 @@ function create4ChannelImage(rgbImage, maskImage) {
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext('2d');
+   // Pass { willReadFrequently: true } to optimize for frequent read operations
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   // Draw the RGB image
   ctx.drawImage(rgbImage, 0, 0, width, height);

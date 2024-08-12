@@ -197,6 +197,7 @@ async function main() {
         const currentImgData = await parseLif5(file);
         console.log(currentImgData);
         const numLayers = currentImgData.layers.length;
+        console.log("numLayers: " + numLayers);
         const mainImage = await loadImage2(currentImgData.rgb); // only needed to extract original width+height
         //const dispImage = await loadImage2(currentImgData.disp);
         //views[0].albedo = createTexture(gl,mainImage); // moved to layers
@@ -218,12 +219,14 @@ async function main() {
         }
         for (let i = 0; i < numLayers; i++) { // example showing progressive reduction of resolution with layers
           const layerDs = 1; // change to 2 to get lower resolution per layer
-          //const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
-          const albedoImage = await downsampleImage(currentImgData.layers[i].rgb,Math.pow(layerDs,i));
-          //const disparityImage = await loadImage2(currentImgData.layers[i].disp);
-          const disparityImage = await downsampleImage(currentImgData.layers[i].disp,Math.pow(layerDs,i));
-          //const maskImage = await loadImage2(currentImgData.layers[i].mask);
-          const maskImage = await downsampleImage(currentImgData.layers[i].mask,Math.pow(layerDs,i));
+          const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
+          //const albedoImage = await downsampleImage(currentImgData.layers[i].rgb,Math.pow(layerDs,i));
+          const disparityImage = await loadImage2(currentImgData.layers[i].disp);
+          //const disparityImage = await downsampleImage(currentImgData.layers[i].disp,Math.pow(layerDs,i));
+          const maskImage = await loadImage2(currentImgData.layers[i].mask);
+          //const maskImage = await downsampleImage(currentImgData.layers[i].mask,Math.pow(layerDs,i));
+          console.log('RGB Image Dimensions:', disparityImage.width, disparityImage.height);
+          console.log('Mask Image Dimensions:', maskImage.width, maskImage.height);
           const disparity4Image = create4ChannelImage(disparityImage, maskImage);
 
           views[0].layers.push({
@@ -250,7 +253,7 @@ async function main() {
             iOSmsg.remove();
             video.play();
         }
-        if (isIOS()) {
+        if (0) {
             console.log("iOS Device Detected");
             iOSmsg.textContent = "iOS Device Detected. Click to start video.";
             document.addEventListener('click', startVideo, { once: true });
