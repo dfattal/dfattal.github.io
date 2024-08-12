@@ -225,8 +225,8 @@ async function main() {
           //const disparityImage = await downsampleImage(currentImgData.layers[i].disp,Math.pow(layerDs,i));
           const maskImage = await loadImage2(currentImgData.layers[i].mask);
           //const maskImage = await downsampleImage(currentImgData.layers[i].mask,Math.pow(layerDs,i));
-          console.log('RGB Image Dimensions:', disparityImage.width, disparityImage.height);
-          console.log('Mask Image Dimensions:', maskImage.width, maskImage.height);
+          //console.log('RGB Image Dimensions:', disparityImage.width, disparityImage.height);
+          //console.log('Mask Image Dimensions:', maskImage.width, maskImage.height);
           const disparity4Image = create4ChannelImage(disparityImage, maskImage);
 
           views[0].layers.push({
