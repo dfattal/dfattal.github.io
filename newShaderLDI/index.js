@@ -252,6 +252,7 @@ async function main() {
         function startVideo() {
             iOSmsg.remove();
             video.play();
+            render();
         }
         if (isIOS()) {
             console.log("iOS Device Detected");
@@ -262,7 +263,7 @@ async function main() {
         }
         //video.play();
         document.body.appendChild(stats.dom);
-        render();
+
     }
   }
 
