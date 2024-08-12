@@ -204,11 +204,16 @@ class LifFileParser {
 
              // Store the base64 string in localStorage
             //localStorage.setItem('lifFileData', base64String);
+            // Optional: Delete the existing database before opening it (for debugging or resetting purposes)
+            indexedDB.deleteDatabase("lifFileDB");
+
             const request = indexedDB.open("lifFileDB", 1);
 
             request.onupgradeneeded = function(event) {
                 const db = event.target.result;
-                db.createObjectStore("lifFiles", { keyPath: "id" });
+                if (!db.objectStoreNames.contains("lifFiles")) {
+                    db.createObjectStore("lifFiles", { keyPath: "id" });
+                }
             };
 
             request.onsuccess = function(event) {
