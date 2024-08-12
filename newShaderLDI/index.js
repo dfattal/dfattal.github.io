@@ -253,7 +253,7 @@ async function main() {
             iOSmsg.remove();
             video.play();
         }
-        if (0) {
+        if (isIOS()) {
             console.log("iOS Device Detected");
             iOSmsg.textContent = "iOS Device Detected. Click to start video.";
             document.addEventListener('click', startVideo, { once: true });
