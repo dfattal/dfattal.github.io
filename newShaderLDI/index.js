@@ -318,10 +318,15 @@ async function main() {
     const estimationConfig = {flipHorizontal: false};
     const predictions = await detector.estimateFaces(video, estimationConfig);
     const newFacePosition = extractFacePosition(predictions,focalLength);
-    facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
-    facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
-    facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
-    oldFacePosition = facePosition;
+    if (newFacePosition) {
+        facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
+        facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
+        facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
+        oldFacePosition = facePosition;
+    } else {
+        facePosition = oldFacePosition;
+    }
+
 
     // update renderCam
     renderCam.pos = normFacePosition(facePosition); // normalize to camera space

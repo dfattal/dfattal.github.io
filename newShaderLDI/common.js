@@ -108,7 +108,7 @@ function extractFacePosition(predictions,focalLength) {
       return {x:x, y:y, z:depth};
     } else {
       //console.log("no face - defaulting to " + [0,0,restPos]);
-      return {x:0, y:0, z:restPos};
+      return null;
     }
 }
 

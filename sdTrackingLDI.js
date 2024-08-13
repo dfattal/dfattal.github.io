@@ -362,11 +362,14 @@ async function main(lifFile) {
         if (textures.length==numLayers) {
             const predictions = await detector.estimateFaces(video, { flipHorizontal: false });
             const newFacePosition = extractFacePosition(predictions, focalLength);
-
-            facePosition.x = (1 - axy) * oldFacePosition.x + axy * newFacePosition.x;
-            facePosition.y = (1 - axy) * oldFacePosition.y + axy * newFacePosition.y;
-            facePosition.z = (1 - az) * oldFacePosition.z + az * newFacePosition.z;
-            oldFacePosition = facePosition;
+            if (newFacePosition) {
+                facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
+                facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
+                facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
+                oldFacePosition = facePosition;
+            } else {
+                facePosition = oldFacePosition;
+            }
 
             drawScene(gl, programInfo, buffers, textures, facePosition);
         }
