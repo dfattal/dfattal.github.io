@@ -259,6 +259,7 @@ class LifFileParser {
         }
         const vizBut = document.getElementById('visualize');
         vizBut.style.display = 'inline';
+
         vizBut.addEventListener('click', function() {
             //document.getElementById("filePicker").value = "";
             console.log("Attempting to open visualization at newShaderLDI");
@@ -267,8 +268,9 @@ class LifFileParser {
 
              // Store the base64 string in localStorage
             //localStorage.setItem('lifFileData', base64String);
+
             // Optional: Delete the existing database before opening it (for debugging or resetting purposes)
-            indexedDB.deleteDatabase("lifFileDB");
+            //indexedDB.deleteDatabase("lifFileDB");
 
             const request = indexedDB.open("lifFileDB", 1);
 
