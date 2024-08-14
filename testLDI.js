@@ -66,6 +66,7 @@ class Metadata {
 class LifFileParser {
     constructor() {
         this.fileInput = document.getElementById('filePicker');
+        this.fileInput.addEventListener('click', function (e) {document.getElementById("filePicker").value = "";});
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
     }
 
@@ -125,56 +126,62 @@ class LifFileParser {
                 const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
 
                 if (userWantsToCreateLif) {
-                    console.log("Generating LIF file...");
-                    document.getElementById("log-container").style.display = 'block';
-                    const logContainer = document.getElementById('log');
+                    ldlForm.style.display = 'block';
 
-                    try {
-                        let processedFile = file;
+                    document.getElementById("ldlSubmit").onclick = async function() {
+                        try {
+                            document.getElementById("log-container").style.display = 'block';
+                            const logContainer = document.getElementById('log');
+                            logContainer.textContent = 'Starting Conversion...';
+                            let processedFile = file;
+                            ldlForm.style.display = 'none';
 
-                        // Convert HEIC to a more usable format
-                        if (file.type === 'image/heic' || file.type === 'image/heif') {
-                            console.log("Converting HEIC file...");
-                            logContainer.textContent += 'Converting HEIC file...\n';
-                            processedFile = await this.convertHeicToJpeg(file);
-                        }
+                            // Convert HEIC to a more usable format
+                            if (file.type === 'image/heic' || file.type === 'image/heif') {
+                                console.log("Converting HEIC file...");
+                                logContainer.textContent += '\nConverting HEIC file...';
+                                processedFile = await this.convertHeicToJpeg(file);
+                            }
 
-                        const img = new Image();
-                        const reader = new FileReader();
+                            const img = new Image();
+                            const reader = new FileReader();
 
-                        reader.onload = async (readerEvent) => {
-                            img.src = readerEvent.target.result;
+                            reader.onload = async (readerEvent) => {
+                                img.src = readerEvent.target.result;
 
-                            img.onload = async () => {
-                                let fileToUpload = processedFile;
+                                img.onload = async () => {
+                                    let fileToUpload = processedFile;
 
-                                if (img.width > maxDimension || img.height > maxDimension) {
-                                    const resizedBlob = await this.resizeImage(img, maxDimension, processedFile.type);
-                                    fileToUpload = new File([resizedBlob], processedFile.name, { type: processedFile.type });
-                                    console.log("Image resized before upload.");
-                                    logContainer.textContent += 'Image resized before upload...\n';
-                                }
+                                    if (img.width > maxDimension || img.height > maxDimension) {
+                                        const resizedBlob = await this.resizeImage(img, maxDimension, processedFile.type);
+                                        fileToUpload = new File([resizedBlob], processedFile.name, { type: processedFile.type });
+                                        console.log("Image resized before upload.");
+                                        logContainer.textContent += '\nImage resized before upload...';
+                                    }
+                                    console.log("Generating LIF file...");
+                                    const accessToken = await this.getAccessToken();
+                                    logContainer.textContent += '\nAuthenticated to IAI Cloud 🤗';
+                                    const storageUrl = await this.getStorageUrl(accessToken, fileToUpload.name);
+                                    logContainer.textContent += '\nGot temporary storage URL on IAI Cloud 💪';
+                                    await this.uploadToStorage(storageUrl, fileToUpload);
+                                    logContainer.textContent += '\nUploaded Image to IAI Cloud 🚀';
+                                    logContainer.textContent += '\nGenerating LDI File... ⏳';
+                                    await this.generateLif(accessToken, storageUrl);
+                                    document.getElementById("log-container").style.display = 'none';
 
-                                const accessToken = await this.getAccessToken();
-                                logContainer.textContent += 'Authenticated to IAI Cloud 🤗';
-                                const storageUrl = await this.getStorageUrl(accessToken, fileToUpload.name);
-                                logContainer.textContent += '\nGot temporary storage URL on IAI Cloud 💪';
-                                await this.uploadToStorage(storageUrl, fileToUpload);
-                                logContainer.textContent += '\nUploaded Image to IAI Cloud 🚀';
-                                logContainer.textContent += '\nGenerating LDI File... ⏳';
-                                await this.generateLif(accessToken, storageUrl);
-                                document.getElementById("log-container").style.display = 'none';
+                                };
                             };
-                        };
 
-                        reader.readAsDataURL(processedFile);
-                    } catch (error) {
-                        console.error("Error during LIF generation process:", error.message);
-                        logContainer.textContent += "Error during LIF generation process:" + error.message;
-                    }
+                            reader.readAsDataURL(processedFile);
+                        } catch (error) {
+                            console.error("Error during LIF generation process:", error.message);
+                            logContainer.textContent += "Error during LIF generation process:" + error.message;
+                        }
+                    }.bind(this);
                 } else {
                     console.log("User chose not to create a LIF file.");
                 }
+
             }
         }
     }
@@ -387,7 +394,8 @@ class LifFileParser {
         }
     }, interval);
 
-    const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
+    //const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
+    const response = await fetch('https://mts-522-api.dev.immersity.ai/api/v1/ldl', {
         method: 'POST',
         headers: {
             accept: 'application/json',
@@ -395,14 +403,15 @@ class LifFileParser {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            inputImageUrl: storageUrl
+            inputImageUrl: storageUrl,
+            paramsRaw: getLdlFormData()
         })
     });
 
     // Clear the progress bar when the fetch completes
     clearInterval(progressInterval);
-    progressBar.style.width = '100%'; // Set to 100% when done
     progressContainer.style.display = 'none'; // Hide the progress bar
+    progressBar.style.width = '0%'; // Set to 100% when done
 
     const data = await response.json();
     const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
