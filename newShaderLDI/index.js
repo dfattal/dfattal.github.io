@@ -252,6 +252,13 @@ async function main() {
         function startVideo() {
             iOSmsg.remove();
             video.play();
+            if (canvas.requestFullscreen) {
+                canvas.requestFullscreen();
+            } else if (canvas.webkitRequestFullscreen) { /* Safari */
+                canvas.webkitRequestFullscreen();
+            } else if (canvas.msRequestFullscreen) { /* IE11 */
+                canvas.msRequestFullscreen();
+            }
             render();
         }
         if (isIOS()) {
@@ -306,6 +313,10 @@ async function main() {
   // Event listener for window resize
   window.addEventListener('resize', resizeCanvasToContainer);
   resizeCanvasToContainer(); // Initial resize to set the correct canvas size
+  // Adjust canvas size when entering fullscreen
+        document.addEventListener('fullscreenchange', resizeCanvasToContainer);
+        document.addEventListener('webkitfullscreenchange', resizeCanvasToContainer);
+        document.addEventListener('msfullscreenchange', resizeCanvasToContainer);
 
   //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
