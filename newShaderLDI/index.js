@@ -151,6 +151,10 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
+function hideAddressBar() {
+    window.scrollTo(0, 1);
+}
+
 async function main() {
 
   const video = await setupCamera();
@@ -264,6 +268,7 @@ async function main() {
         if (isIOS()) {
             console.log("iOS Device Detected");
             iOSmsg.textContent = "iOS Device Detected. Click to start video.";
+            setTimeout(hideAddressBar, 0);
             document.addEventListener('click', startVideo, { once: true });
         } else {
             startVideo();
