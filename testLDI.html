@@ -118,6 +118,16 @@
     </div>
     <!--    Parameter form for LDI generation-->
     <form id="image-generation-form" style="display: none;">
+        <div class="form-row">
+            <div class="input-container tooltip">
+                <label for="inpainting_tech">Inpainting Technique:</label>
+                <select id="inpainting_tech" name="inpainting_tech">
+                    <option value="SD">Stable Diff</option>
+                    <option value="lama">Lama</option>
+                </select>
+                <span class="tooltiptext">Inpainting Technology, Stable Diffusion is more refined but is also slower</span>
+            </div>
+        </div>
         <!-- Row for LDL Dilation and LDL Depth Dilation -->
         <div class="form-row">
             <div class="input-container tooltip">
@@ -211,6 +221,7 @@
         document.getElementById('out_paint_percent').value = 0.1;
         document.getElementById('layers').value = '';
     }
+
     </script>
     <script src="testLDI.js"></script>
 </body>

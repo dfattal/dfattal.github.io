@@ -127,6 +127,24 @@ class LifFileParser {
 
                 if (userWantsToCreateLif) {
                     ldlForm.style.display = 'block';
+                    document.getElementById('inpainting_tech').addEventListener('change', function() {
+                        const inpaintingTech = this.value;
+                        console.log(this.value)
+                        const promptFields = document.querySelectorAll('#inpaint_prompt, #inpaint_negative_prompt, #outpaint_prompt, #outpaint_negative_prompt');
+                    
+                        if (inpaintingTech === 'lama') {
+                            promptFields.forEach(field => {
+                                field.parentElement.style.display = 'none';
+                            });
+                        } else {
+                            promptFields.forEach(field => {
+                                field.parentElement.style.display = 'block';
+                            });
+                        }
+                    });
+                    
+                    // Initialize form based on default selected value
+                    document.getElementById('inpainting_tech').dispatchEvent(new Event('change'));
 
                     document.getElementById("ldlSubmit").onclick = async function() {
                         try {
