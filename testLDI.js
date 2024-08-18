@@ -68,44 +68,56 @@ class LifFileParser {
         this.fileInput = document.getElementById('filePicker');
         this.fileInput.addEventListener('click', function (e) {document.getElementById("filePicker").value = "";});
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+        this.width = 0;
+        this.height = 0;
+        this.inpaintingTech = '';
     }
+
+
 
     async resizeImage(image, maxDimension, fileType) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-
+    
         let width = image.width;
         let height = image.height;
-
+    
         if (width > height) {
             if (width > maxDimension) {
-                height = Math.round((height *= maxDimension / width));
+                height = Math.round((height * maxDimension) / width);
                 width = maxDimension;
             }
         } else {
             if (height > maxDimension) {
-                width = Math.round((width *= maxDimension / height));
+                width = Math.round((width * maxDimension) / height);
                 height = maxDimension;
             }
         }
-
+    
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(image, 0, 0, width, height);
-
-        return new Promise((resolve) => {
+    
+        // Convert canvas to blob and return it along with dimensions
+        const blob = await new Promise((resolve) => {
             canvas.toBlob(resolve, fileType, 1);
         });
+    
+        return {
+            blob: blob,
+            width: width,
+            height: height
+        };
     }
 
     async convertHeicToJpeg(file) {
-    const convertedBlob = await heic2any({
-        blob: file,
-        toType: "image/jpeg",
-        quality: 1
-    });
-    return new File([convertedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
-}
+        const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 1
+        });
+        return new File([convertedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
+    }
 
     async handleFileSelect(event) {
 
@@ -153,6 +165,7 @@ class LifFileParser {
                             logContainer.textContent = 'Starting Conversion...';
                             let processedFile = file;
                             ldlForm.style.display = 'none';
+                            this.inpaintingTech = document.getElementById('inpainting_tech').value;
 
                             // Convert HEIC to a more usable format
                             if (file.type === 'image/heic' || file.type === 'image/heif') {
@@ -169,12 +182,16 @@ class LifFileParser {
 
                                 img.onload = async () => {
                                     let fileToUpload = processedFile;
-
+                                    this.width = img.width;
+                                    this.height = img.height;
                                     if (img.width > maxDimension || img.height > maxDimension) {
-                                        const resizedBlob = await this.resizeImage(img, maxDimension, processedFile.type);
+                                        const resizedObj = await this.resizeImage(img, maxDimension, processedFile.type);
+                                        const resizedBlob = resizedObj.blob;
+                                        this.width = resizedObj.width;
+                                        this.height = resizedObj.height;
                                         fileToUpload = new File([resizedBlob], processedFile.name, { type: processedFile.type });
                                         console.log("Image resized before upload.");
-                                        logContainer.textContent += '\nImage resized before upload...';
+                                        logContainer.textContent += `\nImage resized to ${this.width} x ${this.height} before upload...`;
                                     }
                                     console.log("Generating LIF file...");
                                     const accessToken = await this.getAccessToken();
@@ -323,9 +340,9 @@ class LifFileParser {
                 };
             };
 
-    request.onerror = function() {
-        console.error("Error opening IndexedDB");
-    };
+            request.onerror = function() {
+                console.error("Error opening IndexedDB");
+            };
 
             //window.location.href = `./newShaderLDI/index.html`;
             window.open(`./newShaderLDI/index.html`, '_blank');
@@ -389,109 +406,108 @@ class LifFileParser {
     }
 
     async generateLif(accessToken, storageUrl) {
-    // Start timing the fetch
-    console.time('fetchDuration');
-    // Show the progress bar
-    const progressBar = document.getElementById('progress-bar');
-    const progressContainer = document.getElementById('progress-container');
-    progressContainer.style.display = 'block';
+        // Start timing the fetch
+        console.time('fetchDuration');
+        // Show the progress bar
+        console.log(this.width,' - ', this.height, ' - ', this.inpaintingTech);
+        const progressBar = document.getElementById('progress-bar');
+        const progressContainer = document.getElementById('progress-container');
+        progressContainer.style.display = 'block';
 
-    // Simulate the progress bar
-    let progress = 0;
-    const interval = 500; // Update progress every 500ms
-    const totalDuration = 60000; // Total duration of 60 seconds
-    const increment = 100 / (totalDuration / interval); // Calculate how much to increment each interval
+        // Simulate the progress bar
+        let progress = 0;
+        const interval = 500; // Update progress every 500ms
+        const totalDuration = this.inpaintingTech=='lama' ? 30000: 50000; // Total duration of 60 seconds
+        const increment = 100 / (totalDuration / interval); // Calculate how much to increment each interval
 
-    const progressInterval = setInterval(() => {
-        progress += increment;
-        progressBar.style.width = `${progress}%`;
+        const progressInterval = setInterval(() => {
+            progress += increment;
+            progressBar.style.width = `${progress}%`;
 
-        // Ensure progress doesn't exceed 100%
-        if (progress >= 100) {
-            clearInterval(progressInterval);
-        }
-    }, interval);
+            // Ensure progress doesn't exceed 100%
+            if (progress >= 100) {
+                clearInterval(progressInterval);
+            }
+        }, interval);
 
-    //const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
-    const response = await fetch('https://mts-522-api.dev.immersity.ai/api/v1/ldl', {
-        method: 'POST',
-        headers: {
-            accept: 'application/json',
-            authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            inputImageUrl: storageUrl,
-            paramsRaw: getLdlFormData()
-        })
-    });
+        //const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
+        const response = await fetch('https://mts-522-api.dev.immersity.ai/api/v1/ldl', {
+            method: 'POST',
+            headers: {
+                accept: 'application/json',
+                authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                inputImageUrl: storageUrl,
+                paramsRaw: getLdlFormData()
+            })
+        });
 
-    // Clear the progress bar when the fetch completes
-    clearInterval(progressInterval);
-    progressContainer.style.display = 'none'; // Hide the progress bar
-    progressBar.style.width = '0%'; // Set to 100% when done
+        // Clear the progress bar when the fetch completes
+        clearInterval(progressInterval);
+        progressContainer.style.display = 'none'; // Hide the progress bar
+        progressBar.style.width = '0%'; // Set to 100% when done
 
-    const data = await response.json();
-    const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
+        const data = await response.json();
+        const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
 
-    const lifResponse = await fetch(lifUrl);
-    const lifArrayBuffer = await lifResponse.arrayBuffer();
+        const lifResponse = await fetch(lifUrl);
+        const lifArrayBuffer = await lifResponse.arrayBuffer();
 
-    // Stop timing the fetch
-    console.timeEnd('fetchDuration');
+        // Stop timing the fetch
+        console.timeEnd('fetchDuration');
 
-    await this.parseLif5(lifArrayBuffer);
+        await this.parseLif5(lifArrayBuffer);
 
-    // Create the download button
-    const downloadButton = document.getElementById('downloadBut');
-    downloadButton.style.display='inline';
+        // Create the download button
+        const downloadButton = document.getElementById('downloadBut');
+        downloadButton.style.display='inline';
 
-    // On button click, prompt user with a file save dialog
-    downloadButton.onclick = async () => {
-    try {
-        const fileName = storageUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
+        // On button click, prompt user with a file save dialog
+        downloadButton.onclick = async () => {
+            try {
+                const fileName = storageUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
 
-        // Check if showSaveFilePicker is supported
-        if (window.showSaveFilePicker) {
-            const options = {
-                suggestedName: fileName,
-                types: [{
-                    description: 'JPEG Image',
-                    accept: { 'image/jpeg': ['.jpg', '.jpeg'] }
-                }]
-            };
+                // Check if showSaveFilePicker is supported
+                if (window.showSaveFilePicker) {
+                    const options = {
+                        suggestedName: fileName,
+                        types: [{
+                            description: 'JPEG Image',
+                            accept: { 'image/jpeg': ['.jpg', '.jpeg'] }
+                        }]
+                    };
 
-            const handle = await window.showSaveFilePicker(options);
+                    const handle = await window.showSaveFilePicker(options);
 
-            const writableStream = await handle.createWritable();
-            await writableStream.write(new Blob([lifArrayBuffer], { type: 'image/jpeg' }));
-            await writableStream.close();
+                    const writableStream = await handle.createWritable();
+                    await writableStream.write(new Blob([lifArrayBuffer], { type: 'image/jpeg' }));
+                    await writableStream.close();
 
-            console.log('File saved successfully');
-        } else {
-            // Fallback for iOS or other browsers that do not support showSaveFilePicker
-            const blob = new Blob([lifArrayBuffer], { type: 'image/jpeg' });
-            const url = URL.createObjectURL(blob);
+                    console.log('File saved successfully');
+                } else {
+                    // Fallback for iOS or other browsers that do not support showSaveFilePicker
+                    const blob = new Blob([lifArrayBuffer], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
 
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
 
-            // Clean up and remove the link
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+                    // Clean up and remove the link
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
 
-            console.log('File downloaded successfully using fallback');
-        }
-    } catch (err) {
-        console.error('Error saving the file:', err);
+                    console.log('File downloaded successfully using fallback');
+                }
+            } catch (err) {
+                console.error('Error saving the file:', err);
+            }
+        };
     }
-  };
-
-
-}
 }
 
 document.addEventListener('DOMContentLoaded', () => {
