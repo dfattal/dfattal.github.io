@@ -430,8 +430,8 @@ class LifFileParser {
             }
         }, interval);
 
-        //const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
-        const response = await fetch('https://mts-522-api.dev.immersity.ai/api/v1/ldl', {
+        const response = await fetch('https://api.dev.immersity.ai/api/v1/ldl', {
+            //const response = await fetch('https://mts-522-api.dev.immersity.ai/api/v1/ldl', {
             method: 'POST',
             headers: {
                 accept: 'application/json',
