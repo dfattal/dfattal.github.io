@@ -36,7 +36,7 @@ class Field {
         return URL.createObjectURL(this.toBlob());
     }
     toString() {
-      return new TextDecoder().decode(this.fieldData);
+        return new TextDecoder().decode(this.fieldData);
     }
 }
 
@@ -66,7 +66,7 @@ class Metadata {
 class LifFileParser {
     constructor() {
         this.fileInput = document.getElementById('filePicker');
-        this.fileInput.addEventListener('click', function (e) {document.getElementById("filePicker").value = "";});
+        this.fileInput.addEventListener('click', function (e) { document.getElementById("filePicker").value = ""; });
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
         this.width = 0;
         this.height = 0;
@@ -78,10 +78,10 @@ class LifFileParser {
     async resizeImage(image, maxDimension, fileType) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-    
+
         let width = image.width;
         let height = image.height;
-    
+
         if (width > height) {
             if (width > maxDimension) {
                 height = Math.round((height * maxDimension) / width);
@@ -93,16 +93,16 @@ class LifFileParser {
                 height = maxDimension;
             }
         }
-    
+
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(image, 0, 0, width, height);
-    
+
         // Convert canvas to blob and return it along with dimensions
         const blob = await new Promise((resolve) => {
             canvas.toBlob(resolve, fileType, 1);
         });
-    
+
         return {
             blob: blob,
             width: width,
@@ -139,11 +139,11 @@ class LifFileParser {
 
                 if (userWantsToCreateLif) {
                     ldlForm.style.display = 'block';
-                    document.getElementById('inpainting_tech').addEventListener('change', function() {
+                    document.getElementById('inpainting_tech').addEventListener('change', function () {
                         const inpaintingTech = this.value;
                         console.log(this.value)
                         const promptFields = document.querySelectorAll('#inpaint_prompt, #inpaint_negative_prompt, #outpaint_prompt, #outpaint_negative_prompt');
-                    
+
                         if (inpaintingTech === 'lama') {
                             promptFields.forEach(field => {
                                 field.parentElement.style.display = 'none';
@@ -154,11 +154,11 @@ class LifFileParser {
                             });
                         }
                     });
-                    
+
                     // Initialize form based on default selected value
                     document.getElementById('inpainting_tech').dispatchEvent(new Event('change'));
 
-                    document.getElementById("ldlSubmit").onclick = async function() {
+                    document.getElementById("ldlSubmit").onclick = async function () {
                         try {
                             document.getElementById("log-container").style.display = 'block';
                             const logContainer = document.getElementById('log');
@@ -227,7 +227,7 @@ class LifFileParser {
         bf.offset = fullSize - 2;
         const endMarker = bf.readUInt16();
         if (endMarker !== 0x1e1a) {
-          throw new Error('Not a LIF file');
+            throw new Error('Not a LIF file');
         }
         bf.offset = fullSize - 6;
         const regionOffset = bf.readUInt32();
@@ -237,11 +237,11 @@ class LifFileParser {
         metadata.fieldCount = bf.readUInt32();
         //console.log(metadata.fieldCount);
         for (let i = 0; i < metadata.fieldCount; i++) {
-          const fieldType = bf.readUInt32();
-          const fieldDataSize = bf.readUInt32();
-          const fieldData = bf.readBytes(fieldDataSize);
-          const field = new Field(fieldType, fieldData);
-          metadata.addField(field);
+            const fieldType = bf.readUInt32();
+            const fieldDataSize = bf.readUInt32();
+            const fieldData = bf.readBytes(fieldDataSize);
+            const field = new Field(fieldType, fieldData);
+            metadata.addField(field);
         }
         metadata.regionOffset = regionOffset;
         metadata.fullSize = fullSize;
@@ -272,43 +272,43 @@ class LifFileParser {
                     const albedo = new Blob([arrayBuffer], { type: 'image/jpeg' });
                     this.debugAddBlobAsImageToPage(albedo);
                 } else {
-                  const albedo = lifMeta.getFieldByType(view.albedo.blob_id).toBlob();
-                  this.debugAddBlobAsImageToPage(albedo);
+                    const albedo = lifMeta.getFieldByType(view.albedo.blob_id).toBlob();
+                    this.debugAddBlobAsImageToPage(albedo);
                 }
             }
             if (view.disparity) {
-              const disparity = lifMeta.getFieldByType(view.disparity.blob_id).toBlob();
-              this.debugAddBlobAsImageToPage(disparity);
-              document.getElementById("lifContent").append(document.createElement('br'));
-              document.getElementById("lifContent").append('minDisp: ', view.disparity.min_disparity.toFixed(3), ' | maxDisp: ', view.disparity.max_disparity.toFixed(3), ' | focal: ', view.camera_data.focal_ratio_to_width.toFixed(3));
-              document.getElementById("lifContent").append(document.createElement('br'));
+                const disparity = lifMeta.getFieldByType(view.disparity.blob_id).toBlob();
+                this.debugAddBlobAsImageToPage(disparity);
+                document.getElementById("lifContent").append(document.createElement('br'));
+                document.getElementById("lifContent").append('minDisp: ', view.disparity.min_disparity.toFixed(3), ' | maxDisp: ', view.disparity.max_disparity.toFixed(3), ' | focal: ', view.camera_data.focal_ratio_to_width.toFixed(3));
+                document.getElementById("lifContent").append(document.createElement('br'));
             }
             let layers = view.layers_top_to_bottom;
             if (!layers) layers = view.layered_depth_image_data.layers_top_to_bottom;
             for (const layer of layers) {
-              const rgb = lifMeta.getFieldByType(layer.albedo.blob_id).toBlob();
-              const disp = lifMeta.getFieldByType(layer.disparity.blob_id).toBlob();
-              const mask = lifMeta.getFieldByType(layer.mask.blob_id).toBlob();
-              this.debugAddBlobAsImageToPage(rgb);
-              this.debugAddBlobAsImageToPage(disp);
-              this.debugAddBlobAsImageToPage(mask);
-              console.log(layer);
-              document.getElementById("lifContent").append(document.createElement('br'));
-              document.getElementById("lifContent").append('minDisp: ', layer.disparity.min_disparity.toFixed(3), ' | maxDisp: ', layer.disparity.max_disparity.toFixed(3), ' | focal: ',layer.camera_data.focal_ratio_to_width.toFixed(3));
-              document.getElementById("lifContent").append(document.createElement('br'));
-              // access other layer properties here if needed
+                const rgb = lifMeta.getFieldByType(layer.albedo.blob_id).toBlob();
+                const disp = lifMeta.getFieldByType(layer.disparity.blob_id).toBlob();
+                const mask = lifMeta.getFieldByType(layer.mask.blob_id).toBlob();
+                this.debugAddBlobAsImageToPage(rgb);
+                this.debugAddBlobAsImageToPage(disp);
+                this.debugAddBlobAsImageToPage(mask);
+                console.log(layer);
+                document.getElementById("lifContent").append(document.createElement('br'));
+                document.getElementById("lifContent").append('minDisp: ', layer.disparity.min_disparity.toFixed(3), ' | maxDisp: ', layer.disparity.max_disparity.toFixed(3), ' | focal: ', layer.camera_data.focal_ratio_to_width.toFixed(3));
+                document.getElementById("lifContent").append(document.createElement('br'));
+                // access other layer properties here if needed
             }
         }
         const vizBut = document.getElementById('visualize');
         vizBut.style.display = 'inline';
 
-        vizBut.addEventListener('click', function() {
+        vizBut.addEventListener('click', function () {
             //document.getElementById("filePicker").value = "";
             console.log("Attempting to open visualization at newShaderLDI");
             const binaryString = arrayBufferToBinaryString(arrayBuffer);
             const base64String = btoa(binaryString);
 
-             // Store the base64 string in localStorage
+            // Store the base64 string in localStorage
             //localStorage.setItem('lifFileData', base64String);
 
             // Optional: Delete the existing database before opening it (for debugging or resetting purposes)
@@ -316,14 +316,14 @@ class LifFileParser {
 
             const request = indexedDB.open("lifFileDB", 1);
 
-            request.onupgradeneeded = function(event) {
+            request.onupgradeneeded = function (event) {
                 const db = event.target.result;
                 if (!db.objectStoreNames.contains("lifFiles")) {
                     db.createObjectStore("lifFiles", { keyPath: "id" });
                 }
             };
 
-            request.onsuccess = function(event) {
+            request.onsuccess = function (event) {
                 const db = event.target.result;
                 const transaction = db.transaction(["lifFiles"], "readwrite");
                 const objectStore = transaction.objectStore("lifFiles");
@@ -331,16 +331,16 @@ class LifFileParser {
 
                 const requestUpdate = objectStore.put(fileData);
 
-                requestUpdate.onsuccess = function() {
+                requestUpdate.onsuccess = function () {
                     console.log("File saved to IndexedDB successfully!");
                 };
 
-                requestUpdate.onerror = function() {
+                requestUpdate.onerror = function () {
                     console.error("Error saving file to IndexedDB");
                 };
             };
 
-            request.onerror = function() {
+            request.onerror = function () {
                 console.error("Error opening IndexedDB");
             };
 
@@ -364,7 +364,7 @@ class LifFileParser {
 
         const tokenResponse = await axios.post(AWS_LAMBDA_URL, {
             headers: {
-                'Content-Type' : 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/x-www-form-urlencoded',
                 'Access-Control-Allow-Origin': '*'
             },
         });
@@ -373,7 +373,7 @@ class LifFileParser {
         return tokenResponse.data.access_token;
     }
 
-    async getStorageUrl(accessToken,fileName) {
+    async getStorageUrl(accessToken, fileName) {
         const response = await fetch('https://api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + fileName + '&mediaType=image%2Fjpeg', {
             method: 'GET',
             headers: {
@@ -409,7 +409,7 @@ class LifFileParser {
         // Start timing the fetch
         console.time('fetchDuration');
         // Show the progress bar
-        console.log(this.width,' - ', this.height, ' - ', this.inpaintingTech);
+        console.log(this.width, ' - ', this.height, ' - ', this.inpaintingTech);
         const progressBar = document.getElementById('progress-bar');
         const progressContainer = document.getElementById('progress-container');
         progressContainer.style.display = 'block';
@@ -417,7 +417,7 @@ class LifFileParser {
         // Simulate the progress bar
         let progress = 0;
         const interval = 500; // Update progress every 500ms
-        const totalDuration = this.inpaintingTech=='lama' ? 30000: 50000; // Total duration of 60 seconds
+        const totalDuration = this.inpaintingTech == 'lama' ? 30000 : 50000; // Total duration of 60 seconds
         const increment = 100 / (totalDuration / interval); // Calculate how much to increment each interval
 
         const progressInterval = setInterval(() => {
@@ -462,7 +462,7 @@ class LifFileParser {
 
         // Create the download button
         const downloadButton = document.getElementById('downloadBut');
-        downloadButton.style.display='inline';
+        downloadButton.style.display = 'inline';
 
         // On button click, prompt user with a file save dialog
         downloadButton.onclick = async () => {
