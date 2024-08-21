@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preset LDI Motion</title>
+  
+  <!-- FPS monitor  -->
+  <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+
+  <style>
+    /* Hide the video element */
+    #video {
+      display: none;
+    }
+    /* Fullscreen container to center the canvas */
+    #canvas-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+    }
+    #iOSmsg {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 50vh;
+    }
+    body {
+      margin: 0;
+    }
+  </style>
+
+</head>
+<body>
+  <div id="tmpMsg" style="margin: 5px">looking for passed file...</div>
+  <input type="file" id="filePicker" style="display: none;"/>
+  <div id="canvas-container">
+    <canvas id="glCanvas"></canvas>
+  </div>
+  <script>
+    const stats = new Stats();
+    stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+  </script>
+  <script  src="common.js"></script>
+  <script  src="preset.js"></script>
+  <script src="LIF.js"></script>
+</body>
+</html>

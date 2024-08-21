@@ -28,6 +28,8 @@ uniform vec2 oRes; // viewport resolution in px
 
 float taper(vec2 uv) {
     return smoothstep(0.0,0.1,uv.x)*(1.0-smoothstep(0.9,1.0,uv.x))*smoothstep(0.0,0.1,uv.y)*(1.0-smoothstep(0.9,1.0,uv.y));
+    //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
+    //return 1.0-smoothstep(0.64,1.0,r2);
 }
 
 vec3 readColor(sampler2D iChannel, vec2 uv) { return texture(iChannel, uv).rgb*taper(uv)+0.1*(1.0-taper(uv)); }
