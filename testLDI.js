@@ -119,6 +119,24 @@ class LifFileParser {
         return new File([convertedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
     }
 
+    findGridSize(image, maxGridPerSide = 9) {
+        const preferredPatchWidth = image.width <= 1920 ? 640 : 1024;
+        const preferredPatchHeight = image.height <= 1920 ? 640 : 1024;
+        const h = image.height;
+        const w = image.width;
+        const validGrids = Array.from({ length: maxGridPerSide }, (_, i) => i + 1);
+        const minWidthGrid = validGrids.reduce((a, b) => 
+            Math.abs(w / a - preferredPatchWidth) < Math.abs(w / b - preferredPatchWidth) ? a : b
+        );
+        const minHeightGrid = validGrids.reduce((a, b) => 
+            Math.abs(h / a - preferredPatchHeight) < Math.abs(h / b - preferredPatchHeight) ? a : b
+        );
+        return [minWidthGrid, minHeightGrid];
+    }
+    findExecTime(gridSize, w, h) {
+        return (gridSize[0] * gridSize[1]) * 0.25 * (2 * (1 + (w * h - 512 * 512) / (9000 * 9000))) + 0.25;
+    }
+
     async handleFileSelect(event) {
 
         document.getElementById('lifContent').innerHTML = '';
