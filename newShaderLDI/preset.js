@@ -349,9 +349,9 @@ async function main() {
       const x1 = parseFloat(document.getElementById('x1').value);
       const x2 = parseFloat(document.getElementById('x2').value);
       
-      const y0 = parseFloat(document.getElementById('y0').value);
-      const y1 = parseFloat(document.getElementById('y1').value);
-      const y2 = parseFloat(document.getElementById('y2').value);
+      const y0 = -parseFloat(document.getElementById('y0').value);
+      const y1 = -parseFloat(document.getElementById('y1').value);
+      const y2 = -parseFloat(document.getElementById('y2').value);
       
       const z0 = parseFloat(document.getElementById('z0').value);
       const z1 = parseFloat(document.getElementById('z1').value);
