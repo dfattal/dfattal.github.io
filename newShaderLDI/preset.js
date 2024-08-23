@@ -327,8 +327,6 @@ async function main() {
     // const st = Math.sin(2 * Math.PI * t / animTime);
     // const ct = Math.cos(2 * Math.PI * t / animTime);
     const animTime = parseFloat(document.getElementById('animTime').value);
-    const phShift = t/animTime - t/oldAnimTime ;
-    oldAnimTime = animTime;
     const motionType = document.querySelector('input[name="motionType"]:checked').value;
     
     if (motionType === 'harmonic') {
