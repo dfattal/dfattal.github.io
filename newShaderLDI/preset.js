@@ -316,6 +316,7 @@ async function main() {
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
   
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource); 
+  let oldAnimTime = parseFloat(document.getElementById('animTime').value);
   
   async function render() {
     stats.begin();
@@ -326,6 +327,8 @@ async function main() {
     // const st = Math.sin(2 * Math.PI * t / animTime);
     // const ct = Math.cos(2 * Math.PI * t / animTime);
     const animTime = parseFloat(document.getElementById('animTime').value);
+    const phShift = t/animTime - t/oldAnimTime ;
+    oldAnimTime = animTime;
     const motionType = document.querySelector('input[name="motionType"]:checked').value;
     
     if (motionType === 'harmonic') {
@@ -333,16 +336,16 @@ async function main() {
       const phaseX = 0;
       
       const ampY = parseFloat(document.getElementById('ampY').value);
-      const phaseY = parseFloat(document.getElementById('phaseY').value) * 2 * Math.PI;
+      const phaseY = parseFloat(document.getElementById('phaseY').value);
       
       const ampZ = parseFloat(document.getElementById('ampZ').value);
-      const phaseZ = parseFloat(document.getElementById('phaseZ').value) * 2 * Math.PI;
+      const phaseZ = parseFloat(document.getElementById('phaseZ').value);
       
       // Harmonic motion calculations
       renderCam.pos = {
-        x: ampX * Math.cos(2 * Math.PI * t / animTime + phaseX),
-        y: ampY * Math.cos(2 * Math.PI * t / animTime + phaseY),
-        z: ampZ * Math.sin(2 * Math.PI * t / animTime + phaseZ)
+        x: ampX * Math.cos(2 * Math.PI * (t / animTime + phaseX)),
+        y: ampY * Math.cos(2 * Math.PI * (t / animTime + phaseY)),
+        z: ampZ * Math.cos(2 * Math.PI * (t / animTime + phaseZ))
       };
     } else if (motionType === 'arc') {
       const x0 = parseFloat(document.getElementById('x0').value);
@@ -358,9 +361,8 @@ async function main() {
       const z2 = parseFloat(document.getElementById('z2').value);
       
       // Arc motion interpolation
-      const u = (t % animTime) / animTime;
+      const u = (t / animTime) % 1;
       const u2 = u * u;
-      const u3 = u2 * u;
       renderCam.pos = {
         x: (1 - u) * (1 - u) * x0 + 2 * (1 - u) * u * x1 + u2 * x2,
         y: (1 - u) * (1 - u) * y0 + 2 * (1 - u) * u * y1 + u2 * y2,
