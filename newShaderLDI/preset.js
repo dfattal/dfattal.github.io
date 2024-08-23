@@ -316,7 +316,8 @@ async function main() {
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
   
   const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource); 
-  let oldAnimTime = parseFloat(document.getElementById('animTime').value);
+  let accumulatedPhase = 0;
+  let oldTime = Date.now() / 1000;
   
   async function render() {
     stats.begin();
@@ -327,6 +328,9 @@ async function main() {
     // const st = Math.sin(2 * Math.PI * t / animTime);
     // const ct = Math.cos(2 * Math.PI * t / animTime);
     const animTime = parseFloat(document.getElementById('animTime').value);
+    accumulatedPhase += (t-oldTime)/animTime;
+    oldTime = t;
+
     const motionType = document.querySelector('input[name="motionType"]:checked').value;
     
     if (motionType === 'harmonic') {
@@ -341,9 +345,9 @@ async function main() {
       
       // Harmonic motion calculations
       renderCam.pos = {
-        x: ampX * Math.cos(2 * Math.PI * (t / animTime + phaseX)),
-        y: ampY * Math.cos(2 * Math.PI * (t / animTime + phaseY)),
-        z: ampZ * Math.cos(2 * Math.PI * (t / animTime + phaseZ))
+        x: ampX * Math.cos(2 * Math.PI * (accumulatedPhase + phaseX)),
+        y: ampY * Math.cos(2 * Math.PI * (accumulatedPhase + phaseY)),
+        z: ampZ * Math.cos(2 * Math.PI * (accumulatedPhase + phaseZ))
       };
     } else if (motionType === 'arc') {
       const x0 = parseFloat(document.getElementById('x0').value);
@@ -359,7 +363,7 @@ async function main() {
       const z2 = parseFloat(document.getElementById('z2').value);
       
       // Arc motion interpolation
-      const u = (t / animTime) % 1;
+      const u = (accumulatedPhase) % 1;
       const u2 = u * u;
       renderCam.pos = {
         x: (1 - u) * (1 - u) * x0 + 2 * (1 - u) * u * x1 + u2 * x2,
