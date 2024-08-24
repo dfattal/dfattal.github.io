@@ -244,7 +244,7 @@ void main(void) {
 
         vec4 baseColor = vec4(color, 1.0);
         // Combine the base color with the contour effect
-        gl_FragColor = mix(baseColor, contour, 0.8*contourEffect);
+        gl_FragColor = mix(baseColor, contour, contourEffect*normInvZ);
         //gl_FragColor = contourColorEffect;
         //gl_FragColor = vec4(color, 1.0);
         //gl_FragColor = vec4(vec3(invZ/invZmin[0]), 1.0);
