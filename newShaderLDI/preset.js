@@ -39,7 +39,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       uNumLayers: gl.getUniformLocation(shaderProgram, 'uNumLayers'),
       invZmin: gl.getUniformLocation(shaderProgram, 'invZmin'), // float array
       invZmax: gl.getUniformLocation(shaderProgram, 'invZmax'), // float array
-      uCameraPosition: gl.getUniformLocation(shaderProgram, 'uCameraPosition'),
+      uViewPosition: gl.getUniformLocation(shaderProgram, 'uViewPosition'),
       sk1: gl.getUniformLocation(shaderProgram, 'sk1'),
       sl1: gl.getUniformLocation(shaderProgram, 'sl1'),
       roll1: gl.getUniformLocation(shaderProgram, 'roll1'),
@@ -145,7 +145,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
   
   // views info
-  gl.uniform3f(programInfo.uniformLocations.uCameraPosition, views[0].camPos.x, views[0].camPos.y, views[0].camPos.z);
+  gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].camPos.x, views[0].camPos.y, views[0].camPos.z);
   gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x, views[0].sk.y);
   gl.uniform2f(programInfo.uniformLocations.sl1, views[0].sl.x, views[0].sl.y);
   gl.uniform1f(programInfo.uniformLocations.roll1, views[0].roll);

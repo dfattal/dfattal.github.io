@@ -7,7 +7,7 @@ uniform float time;
 uniform sampler2D uImage[5]; // for LDI this is an array
 uniform sampler2D uDisparityMap[5]; // for LDI this is an array
 uniform float invZmin[5], invZmax[5]; // used to get invZ
-uniform vec3 uCameraPosition; // in normalized camera space, common to all layers, "C1"
+uniform vec3 uViewPosition; // in normalized camera space, common to all layers, "C1"
 uniform vec2 sk1,sl1; // common to all layers
 uniform float roll1; // common to all layers, f1 in px
 uniform float f1[5]; // f per layer
@@ -204,7 +204,7 @@ void main(void) {
     if ((abs(uv.x-.5)<.5*newDim.x) && (abs(uv.y-.5)<.5*newDim.y)) {
 
 
-        vec3 C1 = uCameraPosition;
+        vec3 C1 = uViewPosition;
         mat3 SKR1 = matFromSkew(sk1)*matFromRoll(roll1)*matFromSlant(sl1); // Notice the focal part is missing, changes per layer
 
         vec3 C2 = uFacePosition;
