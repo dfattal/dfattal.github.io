@@ -71,6 +71,26 @@ async function main() {
     // Position the camera
     camera.position.z = 0;
     let focus = 1;
+    let vs; // viewport scaling / zoom
+
+    // Create a sphere for FUN !
+    const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32); // radius, widthSegments, heightSegments
+    const sphereMaterial = new THREE.MeshStandardMaterial({
+        color: 0xA020F0,  // Purple color
+        metalness: 0.5,   // half metallic
+        roughness: 0.2    // Slightly shiny
+    });
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    scene.add(sphere);
+
+    // Add a light source to create reflections
+    const pointLight = new THREE.PointLight(0xffffff, 1); // color, intensity
+    pointLight.position.set(0, 0, 0); // Position the light to the side and above
+    scene.add(pointLight);
+
+    // Optionally add ambient light for softer shadows and even lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // color, intensity
+    scene.add(ambientLight);
 
     // Create a plane geometry
     const geometry = new THREE.PlaneGeometry(1, 1);
@@ -160,11 +180,15 @@ async function main() {
             }
 
             // set plane position and size
-            const d = 1/uniforms.invZmin.value[0]/focus;
+            const d = 1 / uniforms.invZmin.value[0] / focus;
             plane.position.z = -d;
-            plane.scale.x = d/currentImgData.f; // f was frac image width
-            plane.scale.y = d/currentImgData.f*mainImage.height/mainImage.width;
+            plane.scale.x = d / currentImgData.f; // f was frac image width
+            plane.scale.y = d / currentImgData.f * mainImage.height / mainImage.width;
             uniforms.oRes.value = new THREE.Vector2(plane.scale.x, plane.scale.y);
+
+            // put the sphere in front of the plane
+            sphere.position.z = plane.position.z * 0.8;
+            sphere.scale = 0.4;
 
             // initial renderCam
             vs = viewportScale(uniforms.iResOriginal.value, uniforms.oRes.value);
@@ -182,18 +206,23 @@ async function main() {
     function animate() {
         requestAnimationFrame(animate);
 
-        // define camera motion and update uniforms
+        // define camera motion and update uniforms + geometry
         const t = Date.now() / 1000; // current time in seconds
         const st = Math.sin(2 * Math.PI * t / 4);
-        uniforms.uFacePosition.value.x = 2 * st;
-        uniforms.sk2.value.x = uniforms.uFacePosition.value.x / (plane.position.z - uniforms.uFacePosition.value.z )
+        const ct = Math.cos(2 * Math.PI * t / 4);
+
+        uniforms.uFacePosition.value.x = 2 * ct;
         camera.position.x = uniforms.uFacePosition.value.x;
 
-        // Create a red material
-        const redMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        uniforms.uFacePosition.value.y = 1 * st;
+        camera.position.y = uniforms.uFacePosition.value.y;
 
-        // Temporarily override the plane's material with the red material
-        //plane.material = redMaterial;
+        uniforms.uFacePosition.value.z = 2 * st;
+        camera.position.z = -uniforms.uFacePosition.value.z;
+
+        uniforms.sk2.value.x = - uniforms.uFacePosition.value.x / Math.abs(plane.position.z - camera.position.z);
+        uniforms.sk2.value.y = - uniforms.uFacePosition.value.y / Math.abs(plane.position.z - camera.position.z);
+        uniforms.f2.value = uniforms.f1.value[0] * vs * Math.abs(1 - camera.position.z / plane.position.z);
 
         // render scene
         renderer.render(scene, camera);
