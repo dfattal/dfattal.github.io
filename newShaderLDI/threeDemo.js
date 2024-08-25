@@ -71,6 +71,7 @@ async function main() {
     // Position the camera
     camera.position.z = 0;
     let focus = 1;
+    let vs; // viewport scaling / zoom
 
     // Create a plane geometry
     const geometry = new THREE.PlaneGeometry(1, 1);
@@ -185,15 +186,20 @@ async function main() {
         // define camera motion and update uniforms
         const t = Date.now() / 1000; // current time in seconds
         const st = Math.sin(2 * Math.PI * t / 4);
-        uniforms.uFacePosition.value.x = 2 * st;
-        uniforms.sk2.value.x = uniforms.uFacePosition.value.x / (plane.position.z - uniforms.uFacePosition.value.z )
+        const ct = Math.cos(2 * Math.PI * t / 4);
+
+        uniforms.uFacePosition.value.x = 2 * ct;
         camera.position.x = uniforms.uFacePosition.value.x;
 
-        // Create a red material
-        const redMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        uniforms.uFacePosition.value.y = 1 * st;
+        camera.position.y = uniforms.uFacePosition.value.y;
 
-        // Temporarily override the plane's material with the red material
-        //plane.material = redMaterial;
+        uniforms.uFacePosition.value.z = 2 * st;
+        camera.position.z = -uniforms.uFacePosition.value.z;
+
+        uniforms.sk2.value.x = - uniforms.uFacePosition.value.x / Math.abs(plane.position.z - camera.position.z);
+        uniforms.sk2.value.y = - uniforms.uFacePosition.value.y / Math.abs(plane.position.z - camera.position.z);
+        uniforms.f2.value = uniforms.f1.value[0] * vs * Math.abs(1 - camera.position.z/plane.position.z);
 
         // render scene
         renderer.render(scene, camera);
