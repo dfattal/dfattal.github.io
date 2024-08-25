@@ -1,5 +1,10 @@
 precision highp float;
-varying highp vec2 vTextureCoord;
+
+#ifdef GL_ES
+    varying highp vec2 UV;
+#else
+    in vec2 UV;
+#endif
 
 uniform float time;
 
@@ -76,6 +81,7 @@ mat3 matFromFocal(vec2 fxy) {
     return mat3(fxy.x,0.0,0.0,0.0,fxy.y,0.0,0.0,0.0,1.0);
 }
 
+#ifdef GL_ES
 // Matrix Math
 float det(mat2 matrix) {
     return matrix[0].x * matrix[1].y - matrix[0].y * matrix[1].x;
@@ -110,6 +116,7 @@ mat3 inverse(mat3 matrix) {
     mat3 adj = transpose_m(mat3(minors0, minors1, minors2));
     return (1.0 / dot(row0, minors0)) * adj;
 }
+#endif
 
 bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     for (float x = -1.0; x <= 1.0; x += 1.0) {
@@ -195,7 +202,7 @@ vec5 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 
 void main(void) {
 
-    vec2 uv = vTextureCoord;
+    vec2 uv = UV;
 
     // Optional: Window at invZmin
     float s = min(oRes.x,oRes.y)/min(iResOriginal.x,iResOriginal.y);
