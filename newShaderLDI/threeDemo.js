@@ -61,6 +61,8 @@ const MAX_LAYERS = 5; // set by the shader
 
 async function main() {
 
+    let alreadyRunning = 0;
+
     // Basic setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -110,7 +112,7 @@ async function main() {
     const uniforms = {
         uNumLayers: { value: 3 }, // Example value, replace as needed
         invZmin: { value: new Array(MAX_LAYERS).fill(0.1) },
-        invZmax: { value: new Array(MAX_LAYERS).fill(5) },
+        invZmax: { value: new Array(MAX_LAYERS).fill(0) },
         uViewPosition: { value: new THREE.Vector3(0, 0, 0) },
         sk1: { value: new THREE.Vector2(0.0, 0.0) },
         sl1: { value: new THREE.Vector2(0.0, 0.0) },
@@ -159,6 +161,12 @@ async function main() {
             // rest of views[0] has been initialized to zero before
             uniforms.iResOriginal.value = new THREE.Vector2(mainImage.width, mainImage.height);
 
+            if (alreadyRunning) { // reset uniforms if loading image while other image already running
+                uniforms.uImage.value = [];
+                uniforms.uDisparityMap.value = [];
+                uniforms.iRes.value = [];
+            }
+
             for (let i = 0; i < numLayers; i++) {
                 const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
                 const disparityImage = await loadImage2(currentImgData.layers[i].disp);
@@ -193,12 +201,14 @@ async function main() {
 
             // initial renderCam
             vs = viewportScale(uniforms.iResOriginal.value, uniforms.oRes.value);
-            console.log('vs: ', vs);
             uniforms.f2.value = uniforms.f1.value[0] * vs;
 
             console.log(uniforms);
 
-            animate(); // only once file has been picked
+            if (!alreadyRunning) {
+                animate(); // only once file has been picked
+            }
+            alreadyRunning = 1;
         }
 
     }
@@ -226,7 +236,11 @@ async function main() {
         uniforms.f2.value = uniforms.f1.value[0] * vs * Math.abs(1 - camera.position.z / plane.position.z);
 
         // render scene
-        renderer.render(scene, camera);
+        try {
+            renderer.render(scene, camera);
+        } catch (e) {
+            console.log('Render Error: ', e);
+        }
     }
 }
 
