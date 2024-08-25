@@ -70,7 +70,7 @@ async function main() {
 
     // Position the camera
     camera.position.z = 0;
-    let focus = 1;
+    let focus = 1.0;
     let vs; // viewport scaling / zoom
 
     // Create a sphere for FUN  
@@ -106,7 +106,7 @@ async function main() {
 
     const fragmentShader = await loadShaderFile('./rayCastMonoLDI.glsl');
 
-    // Set up the uniforms
+    // Set up the uniforms with preliminary values
     const uniforms = {
         uNumLayers: { value: 3 }, // Example value, replace as needed
         invZmin: { value: new Array(MAX_LAYERS).fill(0.1) },
