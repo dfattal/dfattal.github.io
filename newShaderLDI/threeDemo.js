@@ -69,12 +69,11 @@ async function main() {
     document.body.appendChild(renderer.domElement);
 
     // Position the camera
-    camera.position.z = 5;
+    camera.position.z = 0;
+    let focus = 1;
 
     // Create a plane geometry
-    const planeWidth = 2;
-    const planeHeight = 2;
-    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const geometry = new THREE.PlaneGeometry(1, 1);
 
     //Load the shader material
     const vertexShader = `
@@ -103,7 +102,7 @@ async function main() {
         sl2: { value: new THREE.Vector2(0.0, 0.0) },
         roll2: { value: 0.0 },
         f2: { value: 400.0 },
-        oRes: { value: new THREE.Vector2(planeWidth, planeHeight) },
+        oRes: { value: new THREE.Vector2(1, 1) },
         uImage: { value: [] }, // Placeholder for textures
         uDisparityMap: { value: [] } // Placeholder for disparity maps
     };
@@ -160,6 +159,13 @@ async function main() {
                 uniforms.iRes.value.push(new THREE.Vector2(mainImage.width, mainImage.height));
             }
 
+            // set plane position and size
+            const d = 1/uniforms.invZmin.value[0]/focus;
+            plane.position.z = -d;
+            plane.scale.x = d/currentImgData.f; // f was frac image width
+            plane.scale.y = d/currentImgData.f*mainImage.height/mainImage.width;
+            uniforms.oRes.value = new THREE.Vector2(plane.scale.x, plane.scale.y);
+
             // initial renderCam
             vs = viewportScale(uniforms.iResOriginal.value, uniforms.oRes.value);
             console.log('vs: ', vs);
@@ -180,6 +186,8 @@ async function main() {
         const t = Date.now() / 1000; // current time in seconds
         const st = Math.sin(2 * Math.PI * t / 4);
         uniforms.uFacePosition.value.x = 2 * st;
+        uniforms.sk2.value.x = uniforms.uFacePosition.value.x / (plane.position.z - uniforms.uFacePosition.value.z )
+        camera.position.x = uniforms.uFacePosition.value.x;
 
         // Create a red material
         const redMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
