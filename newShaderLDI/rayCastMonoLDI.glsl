@@ -1,5 +1,10 @@
 precision highp float;
-varying highp vec2 vTextureCoord;
+
+#ifdef GL_ES
+    varying highp vec2 UV;
+#else
+    in vec2 UV;
+#endif
 
 // info views
 uniform sampler2D uImage[5]; // for LDI this is an array
@@ -82,7 +87,7 @@ mat3 transpose_m(mat3 matrix){
     vec3(matrix[0].z, matrix[1].z, matrix[2].z));
 }
 
-mat3 inverse(mat3 matrix) {
+mat3 inverseMat(mat3 matrix) {
     vec3 row0 = matrix[0];
     vec3 row1 = matrix[1];
     vec3 row2 = matrix[2];
@@ -140,7 +145,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 
     vec3 nor = vec3(0.0);
 
-    mat3 P = FSKR1*inverse(FSKR2);
+    mat3 P = FSKR1*inverseMat(FSKR2);
     vec3 C = FSKR1*(C2-C1);
 
     // extract matrix blocks
@@ -189,7 +194,10 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 
 void main(void) {
 
-    vec2 uv = vTextureCoord;
+    // gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+    // return;
+    
+    vec2 uv = UV;
 
     // Optional: Window at invZmin
     float s = min(oRes.x,oRes.y)/min(iResOriginal.x,iResOriginal.y);
