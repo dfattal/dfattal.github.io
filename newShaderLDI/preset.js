@@ -1,5 +1,6 @@
 
 const MAX_LAYERS = 5;
+let fname;
 
 function toggleControls() {
   const motionType = document.querySelector('input[name="motionType"]:checked').value;
@@ -226,6 +227,7 @@ async function main() {
 
   async function handleFileSelect(event) {
     const file = event.target.files[0];
+    fname = file.name;
     visualizeFile(file);
   }
 
@@ -440,10 +442,18 @@ async function main() {
       saving = 0;
       resizeCanvasToContainer();
 
+      // Extract the original file name from the file picker
+      let originalFileName = fname.split('.').slice(0, -1).join('.');
+      
+      // Remove "_LIF5" if it exists
+      originalFileName = originalFileName.replace('_LIF5', '');
+
+      const outputFileName = `${originalFileName}.mp4`;
+
       // Create a temporary download link and click it
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'animation.mp4';
+      a.download = outputFileName;
       document.body.appendChild(a);
       a.click();
 
