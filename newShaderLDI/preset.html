@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Preset LDI Motion</title>
-  
+
   <!-- FPS monitor  -->
   <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+  <!-- FFmpeg WASM library -->
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.10.0/dist/ffmpeg.min.js"></script>
 
   <style>
     /* Hide the video element */
     #video {
       display: none;
     }
+
     /* Fullscreen container to center the canvas */
     #canvas-container {
       display: flex;
@@ -22,6 +26,7 @@
       height: 100vh;
       position: relative;
     }
+
     #iOSmsg {
       display: flex;
       justify-content: center;
@@ -29,9 +34,11 @@
       width: 100vw;
       height: 50vh;
     }
+
     body {
       margin: 0;
     }
+
     .slider-container {
       position: absolute;
       top: 10px;
@@ -40,32 +47,56 @@
       padding: 10px;
       border-radius: 8px;
     }
+
     .slider-container label {
       display: block;
       margin-bottom: 5px;
     }
+
     .slider-container input[type="range"] {
       width: 100%;
     }
+
     .slider-container .arc-controls,
     .slider-container .harmonic-controls {
       display: none;
     }
+
     .slider-container .slider-label {
       display: inline-block;
       width: 70%;
     }
+
     .slider-container .slider-value {
       display: inline-block;
       width: 30%;
       text-align: right;
     }
-    
+
+    /* Center the Create Video button */
+    #createVideoButton {
+      display: block;
+      margin: 10px auto;
+      /* Center horizontally with auto margins */
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    #createVideoButton:hover {
+      background-color: #0056b3;
+      /* Darker blue on hover */
+    }
   </style>
 </head>
+
 <body>
   <div id="tmpMsg" style="margin: 5px">looking for passed file...</div>
-  <input type="file" id="filePicker" style="display: none;"/>
+  <input type="file" id="filePicker" style="display: none;" />
   <div id="canvas-container">
     <canvas id="glCanvas"></canvas>
     <div class="slider-container">
@@ -74,7 +105,7 @@
 
       <label><input type="radio" name="motionType" value="arc" checked> Arc Motion</label>
       <label><input type="radio" name="motionType" value="harmonic"> Harmonic Motion</label>
-      
+
 
       <div class="arc-controls" style="display: block;">
         <label for="x0">X0: <span id="x0val">0</span></label>
@@ -112,6 +143,7 @@
         <label for="phaseZ">Phase Z: <span id="phZval">0.25</span></label>
         <input type="range" id="phaseZ" min="-0.5" max="0.5" step="0.25" value="0.25">
       </div>
+      <button id="createVideoButton">Create Video</button>
     </div>
   </div>
   <script>
@@ -122,4 +154,5 @@
   <script src="preset.js"></script>
   <script src="LIF.js"></script>
 </body>
+
 </html>
