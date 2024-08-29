@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LIF file inspector</title>
+    <style>
+        #filePicker {
+            margin-left: 10px;
+        }
+        #log-container {
+            text-align: left;
+        }
+
+        #log-container pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            overflow-x: auto;
+        }
+
+        .view {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 5px;
+            margin-top:5px;
+        }
+
+        .main_img {
+            border: 1px solid #111;
+            margin:3px;
+            width: 300px;
+        }
+
+        .layer_img {
+            background: #999;
+            border: 1px solid #222;
+            margin:2px;
+            width: 200px;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>LIF File Inspector</h1>
+    <input type="file" id="filePicker" accept="image/*">
+    <div id="log-container">
+        <pre id="log"></pre>
+    </div>
+    <div id="views_div"></div>
+    <script src="index.js"></script>
+    <script src="LIF.js"></script>
+</body>
+</html>
