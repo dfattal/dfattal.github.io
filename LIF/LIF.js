@@ -190,7 +190,7 @@ async function parseLif53(file) {
     const lifJson = lifMeta.getJsonMeta();
     console.log(lifJson);
     let result = replaceKeys(lifJson, ['albedo', 'disparity', 'inv_z_dist', 'max_disparity', 'min_disparity', 'inv_z_dist_min', 'inv_z_dist_max'], ['image', 'inv_z_map', 'inv_z_map', 'max', 'min', 'max', 'min']);
-    console.log(result);
+    //console.log(result);
 
     function make_urls(obj) {
         // handle image
@@ -228,21 +228,29 @@ async function parseLif53(file) {
                 view.rotation = view.camera_data.rotation;
                 view.inv_z_map.max /= -view.camera_data.focal_ratio_to_width;
                 view.inv_z_map.min /= -view.camera_data.focal_ratio_to_width;
-                delete view.camera_data;
             }
 
-            let outpaint_width, outpaint_height;
+            let outpaint_width_px, outpaint_height_px, camera_data;
 
             if (!view.layers_top_to_bottom) { // 5.1
                 view.layers_top_to_bottom = view.layered_depth_image_data.layers_top_to_bottom;
-                delete view.layered_depth_image_data;
+                outpaint_width_px = view.layered_depth_image_data.outpainting_added_width_px;
+                outpaint_height_px = view.layered_depth_image_data.outpainting_added_height_px;
+                camera_data = view.camera_data;
+                delete view.camera_data;
             }
 
             let layers = view.layers_top_to_bottom;
             for (const layer of layers) {
                 make_urls(layer);
-
-                if (layer.outpainting_added_width_px) { //5.1, 5.2
+                if (camera_data) { // 5.1
+                    layer.camera_data = camera_data;
+                    layer.outpainting_added_width_px = outpaint_width_px;
+                    layer.outpainting_added_height_px = outpaint_height_px;
+                    layer.inv_z_map.min /= 1+2*outpaint_width_px/view.width_px;
+                    layer.inv_z_map.max /= 1+2*outpaint_width_px/view.width_px;
+                }
+                if (layer.outpainting_added_width_px ) { //5.2
                     outpaint_height_px = layer.outpainting_added_height_px;
                     outpaint_width_px = layer.outpainting_added_width_px;
                     layer.width_px = view.width_px + 2 * outpaint_width_px;
@@ -253,6 +261,7 @@ async function parseLif53(file) {
                     delete layer.camera_data;
                     delete layer.outpainting_added_width_px;
                     delete layer.outpainting_added_height_px;
+                    delete view.layered_depth_image_data;
                 }
 
             }
