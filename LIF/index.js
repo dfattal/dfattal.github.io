@@ -39,7 +39,7 @@ async function handleFileSelect(event) {
             viewDOM.appendChild(mainImg);
             viewDOM.appendChild(dispImg);
             viewDiv.appendChild(viewDOM);
-
+            
             for (const [index, layer] of layers.entries()) {
                 const layImg = document.createElement('img');
                 layImg.className = 'layer_img';
@@ -49,7 +49,9 @@ async function handleFileSelect(event) {
                 layDispImg.src = layer.inv_z_map.url;
                 const layMaskImg = document.createElement('img');
                 layMaskImg.className = 'layer_img';
-                layMaskImg.src = layer.mask.url;
+                if (layer.mask) {
+                    layMaskImg.src = layer.mask.url;
+                }
                 const layTitle = `Layer ${index} | ${layer.width_px} x ${layer.height_px} | f: ${layer.focal_px.toFixed(0)} | invZ: ${layer.inv_z_map.min.toFixed(4)} - ${layer.inv_z_map.max.toFixed(4)}`;
                 viewDOM.appendChild(Object.assign(document.createElement('h3'), { textContent: layTitle }));
                 viewDOM.appendChild(layImg);

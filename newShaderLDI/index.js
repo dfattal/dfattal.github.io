@@ -194,18 +194,23 @@ async function main() {
           } catch (error) {
             console.error('Error loading image:', error);
           }
-        } else if (key === 'mask' && obj.hasOwnProperty('invZ')) {
+        } else if (key === 'invZ' && obj.hasOwnProperty('mask')) {
           try {
-            const maskImg = await loadImage2(obj[key].url);
-            console.log(maskImg);
+            const maskImg = await loadImage2(obj['mask'].url);
             const invzImg = await loadImage2(obj['invZ'].url);
-            console.log(invzImg);
             const maskedInvz = create4ChannelImage(invzImg, maskImg);
-            console.log(maskedInvz);
             obj['invZ']['texture'] = createTexture(gl, maskedInvz);
           } catch (error) {
             console.error('Error loading mask or invz image:', error);
           }
+        } else if (key === 'invZ') { // no mask
+          try {
+            const invzImg = await loadImage2(obj['invZ'].url);
+            obj['invZ']['texture'] = createTexture(gl, invzImg);
+          } catch (error) {
+            console.error('Error loading invz image:', error);
+          }
+
         } else if (typeof obj[key] === 'object' && obj[key] !== null) {
           // Recursively parse nested objects
           await parseObjectAndCreateTextures(obj[key]);
