@@ -27,7 +27,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       roll1: gl.getUniformLocation(shaderProgram, 'roll1'),
       f1: gl.getUniformLocation(shaderProgram, 'f1'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
-      iResOriginal : gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
 
       // rendering info
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
@@ -50,17 +50,17 @@ function setupWebGL(gl, fragmentShaderSource) {
 
   // Vertex positions and texture coordinates
   const positions = new Float32Array([
-    -1.0,  1.0,
-     1.0,  1.0,
+    -1.0, 1.0,
+    1.0, 1.0,
     -1.0, -1.0,
-     1.0, -1.0,
+    1.0, -1.0,
   ]);
   const textureCoords = new Float32Array([
-    0.0,  0.0,
-    1.0,  0.0,
-    0.0,  1.0,
-    1.0,  1.0,
-]);
+    0.0, 0.0,
+    1.0, 0.0,
+    0.0, 1.0,
+    1.0, 1.0,
+  ]);
 
   const positionBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -116,29 +116,29 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   // Loop through each layer and bind textures
   for (let i = 0; i < numLayers; i++) {
     gl.activeTexture(gl.TEXTURE0 + (2 * i));
-    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].albedo);
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].image.texture);
     gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
 
     gl.activeTexture(gl.TEXTURE0 + (2 * i + 1));
-    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].disparity);
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
     gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
   }
   // Pass the actual number of layers to the shader
   gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
 
   // views info
-  gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].camPos.x, views[0].camPos.y, views[0].camPos.z);
-  gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x,views[0].sk.y);
-  gl.uniform2f(programInfo.uniformLocations.sl1, views[0].sl.x,views[0].sl.y);
-  gl.uniform1f(programInfo.uniformLocations.roll1, views[0].roll);
+  gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].position.x, views[0].position.y, views[0].position.z);
+  gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x, views[0].sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl1, views[0].rotation.sl.x, views[0].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1, views[0].rotation.roll_degrees);
   gl.uniform1fv(programInfo.uniformLocations.f1, views[0].layers.map(layer => layer.f)); // in px
-  gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZmin));
-  gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZmax));
-  gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width,layer.height]).flat());
-  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width,views[0].height); // for window effect only
+  gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZ.max));
+  gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width, layer.height]).flat());
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
 
   // rendering info
-  gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x,renderCam.pos.y,renderCam.pos.z); // normalized to camera space
+  gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
   gl.uniform2f(programInfo.uniformLocations.sl2, renderCam.sl.x, renderCam.sl.y);
@@ -148,37 +148,26 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
   const offset = 0;
+  logAllUniforms(gl, programInfo.program);
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
 function hideAddressBar() {
-    window.scrollTo(0, 1);
+  window.scrollTo(0, 1);
 }
 
 async function main() {
 
   const video = await setupCamera();
 
-  const views = [{ // you get this info from decoding LIF
-                //albedo: null, // moved to layers
-                //disparity: null, // // moved to layers
-                width: 0, // original view width, pre outpainting
-                height: 0, //original view height, pre outpainting
-                camPos: {x: 0, y: 0, z: 0},
-                sl: {x: 0, y:0},
-                sk: {x:0, y:0},
-                roll: 0,
-                f: 0, // in px
-                layers: []
-              }]
-
+  let views;
   const renderCam = {
-            pos: {x: 0, y: 0, z: 0}, // default
-            sl: {x: 0, y:0},
-            sk: {x:0, y:0},
-            roll: 0,
-            f: 0 // placeholder
-        }
+    pos: { x: 0, y: 0, z: 0 }, // default
+    sl: { x: 0, y: 0 },
+    sk: { x: 0, y: 0 },
+    roll: 0,
+    f: 0 // placeholder
+  }
   let invd;
 
   const canvas = document.getElementById('glCanvas');
@@ -193,105 +182,97 @@ async function main() {
   async function handleFileSelect(event) {
     const file = event.target.files[0];
     visualizeFile(file);
-   }
+  }
+
+  async function parseObjectAndCreateTextures(obj) {
+    for (let key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        if (key === 'image') {
+          try {
+            const img = await loadImage2(obj[key].url);
+            obj[key]['texture'] = createTexture(gl, img);
+          } catch (error) {
+            console.error('Error loading image:', error);
+          }
+        } else if (key === 'mask' && obj.hasOwnProperty('invZ')) {
+          try {
+            const maskImg = await loadImage2(obj[key].url);
+            console.log(maskImg);
+            const invzImg = await loadImage2(obj['invZ'].url);
+            console.log(invzImg);
+            const maskedInvz = create4ChannelImage(invzImg, maskImg);
+            console.log(maskedInvz);
+            obj['invZ']['texture'] = createTexture(gl, maskedInvz);
+          } catch (error) {
+            console.error('Error loading mask or invz image:', error);
+          }
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          // Recursively parse nested objects
+          await parseObjectAndCreateTextures(obj[key]);
+        }
+      }
+    }
+  }
 
   async function visualizeFile(file) {
     //const file = event.target.files[0];
     if (file) {
-        const currentImgData = await parseLif5(file);
-        console.log(currentImgData);
-        const numLayers = currentImgData.layers.length;
-        console.log("numLayers: " + numLayers);
-        const mainImage = await loadImage2(currentImgData.rgb); // only needed to extract original width+height
-        //const dispImage = await loadImage2(currentImgData.disp);
-        //views[0].albedo = createTexture(gl,mainImage); // moved to layers
-        //views[0].disparity = createTexture(gl,dispImage); // moved to layers
-        views[0].width = mainImage.width;
-        views[0].height = mainImage.height;
-        views[0].f = currentImgData.f*views[0].width; // focal of main image
-        if (numLayers==0) { // no layer data
-            const dispImage = await loadImage2(currentImgData.disp);
-            views[0].layers.push({
-                albedo: createTexture(gl, mainImage),
-                disparity: createTexture(gl, dispImage),
-                width: views[0].width, // iRes.x for the layer, includes outpainting
-                height: views[0].height, // // iRes.y for the layer, includes outpainting
-                f: currentImgData.f*views[0].width, // same as main image unless rescaling
-                invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
-                invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
-          })
-        }
-        for (let i = 0; i < numLayers; i++) { // example showing progressive reduction of resolution with layers
-          const layerDs = 1; // change to 2 to get lower resolution per layer
-          const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
-          //const albedoImage = await downsampleImage(currentImgData.layers[i].rgb,Math.pow(layerDs,i));
-          const disparityImage = await loadImage2(currentImgData.layers[i].disp);
-          //const disparityImage = await downsampleImage(currentImgData.layers[i].disp,Math.pow(layerDs,i));
-          const maskImage = await loadImage2(currentImgData.layers[i].mask);
-          //const maskImage = await downsampleImage(currentImgData.layers[i].mask,Math.pow(layerDs,i));
-          //console.log('RGB Image Dimensions:', disparityImage.width, disparityImage.height);
-          //console.log('Mask Image Dimensions:', maskImage.width, maskImage.height);
-          const disparity4Image = create4ChannelImage(disparityImage, maskImage);
+      const lifInfo = await parseLif53(file);
+      //console.log(lifInfo);
+      views = replaceKeys(lifInfo.views, 
+        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'], 
+        ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
+      );
+      await parseObjectAndCreateTextures(views);
+      console.log(views);
 
-          views[0].layers.push({
-                albedo: createTexture(gl, albedoImage),
-                disparity: createTexture(gl, disparity4Image),
-                width: albedoImage.width, // iRes.x for the layer, includes outpainting
-                height: albedoImage.height, // // iRes.y for the layer, includes outpainting
-                f: currentImgData.f*views[0].width/Math.pow(layerDs,i), // same as views[0].f unless rescaling
-                invZmin: -currentImgData.minDisp/views[0].f*views[0].width,
-                invZmax: -currentImgData.maxDisp/views[0].f*views[0].width
-          })
-        }
-        console.log(views);
-        console.log(views[0].layers.map(layer => [layer.width,layer.height]).flat());
-        renderCam.f = views[0].f*viewportScale({x:views[0].width, y:views[0].height},{x: gl.canvas.width, y: gl.canvas.height})
-        console.log(renderCam);
+      renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
+      //console.log(renderCam);
 
-        invd = 0.8*views[0].layers[0].invZmin; // set focus point
+      invd = 0.8 * views[0].layers[0].invZ.min; // set focus point
 
-        document.getElementById("filePicker").remove();
+      document.getElementById("filePicker").remove();
 
-        iOSmsg = document.getElementById("iOSmsg");
-        function startVideo() {
-            iOSmsg.remove();
-            video.play();
-            if (canvas.requestFullscreen) {
-                canvas.requestFullscreen();
-            } else if (canvas.webkitRequestFullscreen) { /* Safari */
-                canvas.webkitRequestFullscreen();
-            } else if (canvas.msRequestFullscreen) { /* IE11 */
-                canvas.msRequestFullscreen();
-            }
-            render();
+      iOSmsg = document.getElementById("iOSmsg");
+      function startVideo() {
+        iOSmsg.remove();
+        video.play();
+        if (canvas.requestFullscreen) {
+          canvas.requestFullscreen();
+        } else if (canvas.webkitRequestFullscreen) { /* Safari */
+          canvas.webkitRequestFullscreen();
+        } else if (canvas.msRequestFullscreen) { /* IE11 */
+          canvas.msRequestFullscreen();
         }
-        if (isIOS()) {
-            console.log("iOS Device Detected");
-            iOSmsg.textContent = "iOS Device Detected. Click to start video.";
-            setTimeout(hideAddressBar, 0);
-            document.addEventListener('click', startVideo, { once: true });
-        } else {
-            startVideo();
-        }
-        //video.play();
-        document.body.appendChild(stats.dom);
+        render();
+      }
+      if (isIOS()) {
+        console.log("iOS Device Detected");
+        iOSmsg.textContent = "iOS Device Detected. Click to start video.";
+        setTimeout(hideAddressBar, 0);
+        document.addEventListener('click', startVideo, { once: true });
+      } else {
+        startVideo();
+      }
+      //video.play();
+      document.body.appendChild(stats.dom);
 
     }
   }
 
-  let focalLength = Math.max(video.videoWidth,video.videoHeight); // for tracking
+  let focalLength = Math.max(video.videoWidth, video.videoHeight); // for tracking
   focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
   console.log("using focal " + focalLength);
-  const OVD = isMobileDevice() ? 0.7*restPos: restPos; // defined in common.js
+  const OVD = isMobileDevice() ? 0.7 * restPos : restPos; // defined in common.js
   console.log("using OVD " + OVD);
 
 
-  let facePosition = {x: 0, y: 0, z: 600};
-  let oldFacePosition = {x: 0, y: 0, z: 600};
+  let facePosition = { x: 0, y: 0, z: 600 };
+  let oldFacePosition = { x: 0, y: 0, z: 600 };
   function normFacePosition(pos) {
     const IO = 63;
     const vd = OVD;
-    return {x: pos.x/IO, y: -pos.y/IO, z: (vd-pos.z)/IO}
+    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO }
   }
   const axy = 0.5; // exponential smoothing
   const az = 0.1; // exponential smoothing
@@ -303,25 +284,25 @@ async function main() {
   const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
 
   function resizeCanvasToContainer() {
-      const displayWidth = container.clientWidth;
-      const displayHeight = container.clientHeight;
+    const displayWidth = container.clientWidth;
+    const displayHeight = container.clientHeight;
 
-      if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
 
-        // Update the WebGL viewport
-        gl.viewport(0, 0, canvas.width, canvas.height);
-      }
+      // Update the WebGL viewport
+      gl.viewport(0, 0, canvas.width, canvas.height);
     }
+  }
 
   // Event listener for window resize
   window.addEventListener('resize', resizeCanvasToContainer);
   resizeCanvasToContainer(); // Initial resize to set the correct canvas size
   // Adjust canvas size when entering fullscreen
-        document.addEventListener('fullscreenchange', resizeCanvasToContainer);
-        document.addEventListener('webkitfullscreenchange', resizeCanvasToContainer);
-        document.addEventListener('msfullscreenchange', resizeCanvasToContainer);
+  document.addEventListener('fullscreenchange', resizeCanvasToContainer);
+  document.addEventListener('webkitfullscreenchange', resizeCanvasToContainer);
+  document.addEventListener('msfullscreenchange', resizeCanvasToContainer);
 
   //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
   const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
@@ -331,25 +312,24 @@ async function main() {
   async function render() {
     stats.begin();
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
-    const estimationConfig = {flipHorizontal: false};
+    const estimationConfig = { flipHorizontal: false };
     const predictions = await detector.estimateFaces(video, estimationConfig);
-    const newFacePosition = extractFacePosition(predictions,focalLength);
+    const newFacePosition = extractFacePosition(predictions, focalLength);
     if (newFacePosition) {
-        facePosition.x = (1-axy)*oldFacePosition.x + axy*newFacePosition.x;
-        facePosition.y = (1-axy)*oldFacePosition.y + axy*newFacePosition.y;
-        facePosition.z = (1-az)*oldFacePosition.z + az*newFacePosition.z;
-        oldFacePosition = facePosition;
+      facePosition.x = (1 - axy) * oldFacePosition.x + axy * newFacePosition.x;
+      facePosition.y = (1 - axy) * oldFacePosition.y + axy * newFacePosition.y;
+      facePosition.z = (1 - az) * oldFacePosition.z + az * newFacePosition.z;
+      oldFacePosition = facePosition;
     } else {
-        facePosition = oldFacePosition;
+      facePosition = oldFacePosition;
     }
-
 
     // update renderCam
     renderCam.pos = normFacePosition(facePosition); // normalize to camera space
-    renderCam.sk.x = -renderCam.pos.x*invd/(1-renderCam.pos.z*invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
-    renderCam.sk.y = -renderCam.pos.y*invd/(1-renderCam.pos.z*invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
-    const vs = viewportScale({x:views[0].width, y:views[0].height},{x: gl.canvas.width, y: gl.canvas.height});
-    renderCam.f = views[0].f*vs*Math.max(1-renderCam.pos.z*invd,1); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+    renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+    renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+    const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
+    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 1); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
     drawScene(gl, programInfo, buffers, views, renderCam);
     stats.end();
@@ -360,118 +340,119 @@ async function main() {
   // Retrieve the base64 string from localStorage
   async function getFromIndexedDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open("lifFileDB", 1);
+      const request = indexedDB.open("lifFileDB", 1);
 
-        request.onsuccess = function(event) {
-            const db = event.target.result;
+      request.onsuccess = function (event) {
+        const db = event.target.result;
 
-            if (!db.objectStoreNames.contains("lifFiles")) {
-                console.warn("Object store 'lifFiles' not found.");
-                resolve(null); // Resolve with null if the object store doesn't exist
-                return;
-            }
+        if (!db.objectStoreNames.contains("lifFiles")) {
+          console.warn("Object store 'lifFiles' not found.");
+          resolve(null); // Resolve with null if the object store doesn't exist
+          return;
+        }
 
-            const transaction = db.transaction(["lifFiles"], "readonly");
-            const objectStore = transaction.objectStore("lifFiles");
+        const transaction = db.transaction(["lifFiles"], "readonly");
+        const objectStore = transaction.objectStore("lifFiles");
 
-            const requestGet = objectStore.get("lifFileData");
+        const requestGet = objectStore.get("lifFileData");
 
-            requestGet.onsuccess = function(event) {
-                if (event.target.result) {
-                    resolve(event.target.result.data);
-                } else {
-                    resolve(null); // Resolve with null if no data is found
-                }
-            };
-
-            requestGet.onerror = function() {
-                reject("Error retrieving file from IndexedDB");
-            };
+        requestGet.onsuccess = function (event) {
+          if (event.target.result) {
+            resolve(event.target.result.data);
+          } else {
+            resolve(null); // Resolve with null if no data is found
+          }
         };
 
-        request.onerror = function() {
-            reject("Error opening IndexedDB");
+        requestGet.onerror = function () {
+          reject("Error retrieving file from IndexedDB");
         };
+      };
+
+      request.onerror = function () {
+        reject("Error opening IndexedDB");
+      };
     });
-}
+  }
 
   async function deleteFromIndexedDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open("lifFileDB", 1);
+      const request = indexedDB.open("lifFileDB", 1);
 
-        request.onsuccess = function(event) {
-            const db = event.target.result;
+      request.onsuccess = function (event) {
+        const db = event.target.result;
 
-            if (!db.objectStoreNames.contains("lifFiles")) {
-                console.warn("Object store 'lifFiles' not found.");
-                resolve(); // Resolve without error if the object store doesn't exist
-                return;
-            }
+        if (!db.objectStoreNames.contains("lifFiles")) {
+          console.warn("Object store 'lifFiles' not found.");
+          resolve(); // Resolve without error if the object store doesn't exist
+          return;
+        }
 
-            const transaction = db.transaction(["lifFiles"], "readwrite");
-            const objectStore = transaction.objectStore("lifFiles");
+        const transaction = db.transaction(["lifFiles"], "readwrite");
+        const objectStore = transaction.objectStore("lifFiles");
 
-            const requestDelete = objectStore.delete("lifFileData");
+        const requestDelete = objectStore.delete("lifFileData");
 
-            requestDelete.onsuccess = function() {
-                console.log("Data deleted from IndexedDB successfully!");
-                resolve();
-            };
-
-            requestDelete.onerror = function() {
-                reject("Error deleting data from IndexedDB");
-            };
+        requestDelete.onsuccess = function () {
+          console.log("Data deleted from IndexedDB successfully!");
+          resolve();
         };
 
-        request.onerror = function() {
-            reject("Error opening IndexedDB");
+        requestDelete.onerror = function () {
+          reject("Error deleting data from IndexedDB");
         };
+      };
+
+      request.onerror = function () {
+        reject("Error opening IndexedDB");
+      };
     });
-}
+  }
 
-    const filePicker = document.getElementById('filePicker');
-    //const base64String = localStorage.getItem('lifFileData');
-    try {const base64String = await getFromIndexedDB();
+  const filePicker = document.getElementById('filePicker');
+  //const base64String = localStorage.getItem('lifFileData');
+  try {
+    const base64String = await getFromIndexedDB();
     //console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
 
     if (base64String) {
 
-            // Decode the base64 string back to binary string
-            console.log("Decoding base64 string...");
-            const byteCharacters = atob(base64String);
+      // Decode the base64 string back to binary string
+      console.log("Decoding base64 string...");
+      const byteCharacters = atob(base64String);
 
-            console.log("Creating Uint8Array from decoded data...");
-            const byteNumbers = new Uint8Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
+      console.log("Creating Uint8Array from decoded data...");
+      const byteNumbers = new Uint8Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
 
-            console.log("Constructing File object from Uint8Array...");
-            const file = new File([byteNumbers], "uploaded-file", { type: "application/octet-stream" });
-            console.log("File object created:", file);
+      console.log("Constructing File object from Uint8Array...");
+      const file = new File([byteNumbers], "uploaded-file", { type: "application/octet-stream" });
+      console.log("File object created:", file);
 
-            // Call the visualization function with the file
-            console.log("Calling visualizeFile function...");
-            visualizeFile(file);
+      // Call the visualization function with the file
+      console.log("Calling visualizeFile function...");
+      visualizeFile(file);
 
-        // Clean up by removing the data from localStorage
-        console.log("Cleaning up localStorage...");
-        await deleteFromIndexedDB();
-        document.getElementById("tmpMsg").remove();
+      // Clean up by removing the data from localStorage
+      console.log("Cleaning up localStorage...");
+      await deleteFromIndexedDB();
+      document.getElementById("tmpMsg").remove();
 
     } else {
-        console.log("No base64 string found in localStorage.");
-        document.getElementById("tmpMsg").remove();
-        filePicker.addEventListener('change', handleFileSelect);
-        filePicker.style.display='inline';
+      console.log("No base64 string found in localStorage.");
+      document.getElementById("tmpMsg").remove();
+      filePicker.addEventListener('change', handleFileSelect);
+      filePicker.style.display = 'inline';
 
     }
-    } catch (e) {
-        console.log("No base64 string found in localStorage.");
-        filePicker.addEventListener('change', handleFileSelect);
-        filePicker.style.display='inline';
-        document.getElementById("tmpMsg").remove();
-     };
+  } catch (e) {
+    console.log("No base64 string found in localStorage.");
+    filePicker.addEventListener('change', handleFileSelect);
+    filePicker.style.display = 'inline';
+    document.getElementById("tmpMsg").remove();
+  };
 
 }
 

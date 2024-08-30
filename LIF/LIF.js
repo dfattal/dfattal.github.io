@@ -189,8 +189,10 @@ async function parseLif53(file) {
     const lifMeta = await parseBinary(arrayBuffer);
     const lifJson = lifMeta.getJsonMeta();
     console.log(lifJson);
-    let result = replaceKeys(lifJson, ['albedo', 'disparity', 'inv_z_dist', 'max_disparity', 'min_disparity', 'inv_z_dist_min', 'inv_z_dist_max'], ['image', 'inv_z_map', 'inv_z_map', 'max', 'min', 'max', 'min']);
-    //console.log(result);
+    let result = replaceKeys(lifJson, 
+        ['albedo', 'disparity', 'inv_z_dist', 'max_disparity', 'min_disparity', 'inv_z_dist_min', 'inv_z_dist_max'], 
+        ['image', 'inv_z_map', 'inv_z_map', 'max', 'min', 'max', 'min']
+    );
 
     function make_urls(obj) {
         // handle image
@@ -247,10 +249,10 @@ async function parseLif53(file) {
                     layer.camera_data = camera_data;
                     layer.outpainting_added_width_px = outpaint_width_px;
                     layer.outpainting_added_height_px = outpaint_height_px;
-                    layer.inv_z_map.min /= 1+2*outpaint_width_px/view.width_px;
-                    layer.inv_z_map.max /= 1+2*outpaint_width_px/view.width_px;
+                    layer.inv_z_map.min /= 1 + 2 * outpaint_width_px / view.width_px;
+                    layer.inv_z_map.max /= 1 + 2 * outpaint_width_px / view.width_px;
                 }
-                if (layer.outpainting_added_width_px ) { //5.2
+                if (layer.outpainting_added_width_px) { //5.2
                     outpaint_height_px = layer.outpainting_added_height_px;
                     outpaint_width_px = layer.outpainting_added_width_px;
                     layer.width_px = view.width_px + 2 * outpaint_width_px;
@@ -262,6 +264,7 @@ async function parseLif53(file) {
                     delete layer.outpainting_added_width_px;
                     delete layer.outpainting_added_height_px;
                     delete view.layered_depth_image_data;
+                    delete view.camera_data;
                 }
 
             }
