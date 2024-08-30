@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>LIF file inspector</title>
@@ -7,6 +8,7 @@
         #filePicker {
             margin-left: 10px;
         }
+
         #log-container {
             text-align: left;
         }
@@ -22,24 +24,36 @@
             background: #f8f8f8;
             border: 1px solid #ddd;
             padding: 5px;
-            margin-top:5px;
+            margin-top: 5px;
         }
 
         .main_img {
             border: 1px solid #111;
-            margin:3px;
+            margin: 2px;
             width: 300px;
+
         }
 
         .layer_img {
-            background: #999;
+            /* background: #999; */
             border: 1px solid #222;
-            margin:2px;
-            width: 200px;
+            margin: 2px;
+            width: 300px;
+            background-color: white;
+            /* Fallback color */
+            background-image:
+                linear-gradient(45deg, #ccc 25%, transparent 25%),
+                linear-gradient(135deg, #ccc 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ccc 75%),
+                linear-gradient(135deg, transparent 75%, #ccc 75%);
+            background-size: 30px 30px;
+            /* Size of each checkerboard square */
+            background-position: 0 0, 15px 0, 15px -15px, 0px 15px;
         }
 
     </style>
 </head>
+
 <body>
     <h1>LIF File Inspector</h1>
     <input type="file" id="filePicker" accept="image/*">
@@ -50,4 +64,5 @@
     <script src="index.js"></script>
     <script src="LIF.js"></script>
 </body>
+
 </html>

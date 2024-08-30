@@ -249,14 +249,14 @@ async function parseLif53(file) {
                     layer.camera_data = camera_data;
                     layer.outpainting_added_width_px = outpaint_width_px;
                     layer.outpainting_added_height_px = outpaint_height_px;
-                    layer.inv_z_map.min /= 1 + 2 * outpaint_width_px / view.width_px;
-                    layer.inv_z_map.max /= 1 + 2 * outpaint_width_px / view.width_px;
+                    layer.inv_z_map.min /= 1 + outpaint_width_px / view.width_px;
+                    layer.inv_z_map.max /= 1 + outpaint_width_px / view.width_px;
                 }
                 if (layer.outpainting_added_width_px) { //5.2
                     outpaint_height_px = layer.outpainting_added_height_px;
                     outpaint_width_px = layer.outpainting_added_width_px;
-                    layer.width_px = view.width_px + 2 * outpaint_width_px;
-                    layer.height_px = view.height_px + 2 * outpaint_height_px;
+                    layer.width_px = view.width_px + outpaint_width_px;
+                    layer.height_px = view.height_px + outpaint_height_px;
                     layer.focal_px = view.focal_px;
                     layer.inv_z_map.max /= -layer.camera_data.focal_ratio_to_width;
                     layer.inv_z_map.min /= -layer.camera_data.focal_ratio_to_width;
