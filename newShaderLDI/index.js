@@ -148,7 +148,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
   const offset = 0;
-  logAllUniforms(gl, programInfo.program);
+  //logAllUniforms(gl, programInfo.program);
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
