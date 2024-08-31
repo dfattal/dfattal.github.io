@@ -156,28 +156,126 @@ function hideAddressBar() {
   window.scrollTo(0, 1);
 }
 
+// Retrieve the base64 string from localStorage
+async function getFromIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("lifFileDB", 1);
+
+    request.onsuccess = function (event) {
+      const db = event.target.result;
+
+      if (!db.objectStoreNames.contains("lifFiles")) {
+        console.warn("Object store 'lifFiles' not found.");
+        resolve(null); // Resolve with null if the object store doesn't exist
+        return;
+      }
+
+      const transaction = db.transaction(["lifFiles"], "readonly");
+      const objectStore = transaction.objectStore("lifFiles");
+
+      const requestGet = objectStore.get("lifFileData");
+
+      requestGet.onsuccess = function (event) {
+        if (event.target.result) {
+          resolve(event.target.result.data);
+        } else {
+          resolve(null); // Resolve with null if no data is found
+        }
+      };
+
+      requestGet.onerror = function () {
+        reject("Error retrieving file from IndexedDB");
+      };
+    };
+
+    request.onerror = function () {
+      reject("Error opening IndexedDB");
+    };
+  });
+}
+
+async function deleteFromIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("lifFileDB", 1);
+
+    request.onsuccess = function (event) {
+      const db = event.target.result;
+
+      if (!db.objectStoreNames.contains("lifFiles")) {
+        console.warn("Object store 'lifFiles' not found.");
+        resolve(); // Resolve without error if the object store doesn't exist
+        return;
+      }
+
+      const transaction = db.transaction(["lifFiles"], "readwrite");
+      const objectStore = transaction.objectStore("lifFiles");
+
+      const requestDelete = objectStore.delete("lifFileData");
+
+      requestDelete.onsuccess = function () {
+        console.log("Data deleted from IndexedDB successfully!");
+        resolve();
+      };
+
+      requestDelete.onerror = function () {
+        reject("Error deleting data from IndexedDB");
+      };
+    };
+
+    request.onerror = function () {
+      reject("Error opening IndexedDB");
+    };
+  });
+}
+
 async function main() {
 
-  const video = await setupCamera();
+  const filePicker = document.getElementById('filePicker');
+  //const base64String = localStorage.getItem('lifFileData');
 
-  let views;
-  const renderCam = {
-    pos: { x: 0, y: 0, z: 0 }, // default
-    sl: { x: 0, y: 0 },
-    sk: { x: 0, y: 0 },
-    roll: 0,
-    f: 0 // placeholder
-  }
-  let invd;
+  // try to read LIF file in DB and if not show file picker
+  try {
+    const base64String = await getFromIndexedDB();
+    //console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
 
-  const canvas = document.getElementById('glCanvas');
-  const gl = canvas.getContext('webgl');
-  const container = document.getElementById('canvas-container');
+    if (base64String) {
 
-  if (!gl) {
-    console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
-    return;
-  }
+      // Decode the base64 string back to binary string
+      console.log("Decoding base64 string...");
+      const byteCharacters = atob(base64String);
+
+      console.log("Creating Uint8Array from decoded data...");
+      const byteNumbers = new Uint8Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+
+      console.log("Constructing File object from Uint8Array...");
+      const file = new File([byteNumbers], "uploaded-file", { type: "application/octet-stream" });
+      console.log("File object created:", file);
+
+      // Call the visualization function with the file
+      console.log("Calling visualizeFile function...");
+      visualizeFile(file);
+
+      // Clean up by removing the data from localStorage
+      console.log("Cleaning up localStorage...");
+      await deleteFromIndexedDB();
+      document.getElementById("tmpMsg").remove();
+
+    } else {
+      console.log("No base64 string found in localStorage.");
+      document.getElementById("tmpMsg").remove();
+      filePicker.addEventListener('change', handleFileSelect);
+      filePicker.style.display = 'inline';
+
+    }
+  } catch (e) {
+    console.log("No base64 string found in localStorage.");
+    filePicker.addEventListener('change', handleFileSelect);
+    filePicker.style.display = 'inline';
+    document.getElementById("tmpMsg").remove();
+  };
 
   async function handleFileSelect(event) {
     const file = event.target.files[0];
@@ -224,8 +322,8 @@ async function main() {
     if (file) {
       const lifInfo = await parseLif53(file);
       //console.log(lifInfo);
-      views = replaceKeys(lifInfo.views, 
-        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'], 
+      views = replaceKeys(lifInfo.views,
+        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
         ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
       );
       await parseObjectAndCreateTextures(views);
@@ -238,7 +336,15 @@ async function main() {
 
       document.getElementById("filePicker").remove();
 
+      const video = await setupCamera();
+      trackingFocal = Math.max(video.videoWidth, video.videoHeight); // for tracking
+      trackingFocal *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
+      console.log("using focal " + trackingFocal);
+      OVD = isMobileDevice() ? 0.7 * restPos : restPos; // defined in common.js
+      console.log("using OVD " + OVD);
+
       iOSmsg = document.getElementById("iOSmsg");
+
       function startVideo() {
         iOSmsg.remove();
         video.play();
@@ -251,6 +357,7 @@ async function main() {
         }
         render();
       }
+
       if (isIOS()) {
         console.log("iOS Device Detected");
         iOSmsg.textContent = "iOS Device Detected. Click to start video.";
@@ -265,61 +372,12 @@ async function main() {
     }
   }
 
-  let focalLength = Math.max(video.videoWidth, video.videoHeight); // for tracking
-  focalLength *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
-  console.log("using focal " + focalLength);
-  const OVD = isMobileDevice() ? 0.7 * restPos : restPos; // defined in common.js
-  console.log("using OVD " + OVD);
-
-
-  let facePosition = { x: 0, y: 0, z: 600 };
-  let oldFacePosition = { x: 0, y: 0, z: 600 };
-  function normFacePosition(pos) {
-    const IO = 63;
-    const vd = OVD;
-    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO }
-  }
-  const axy = 0.5; // exponential smoothing
-  const az = 0.1; // exponential smoothing
-
-  const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-  const detectorConfig = {
-    runtime: 'tfjs',
-  };
-  const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-
-  function resizeCanvasToContainer() {
-    const displayWidth = container.clientWidth;
-    const displayHeight = container.clientHeight;
-
-    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-      canvas.width = displayWidth;
-      canvas.height = displayHeight;
-
-      // Update the WebGL viewport
-      gl.viewport(0, 0, canvas.width, canvas.height);
-    }
-  }
-
-  // Event listener for window resize
-  window.addEventListener('resize', resizeCanvasToContainer);
-  resizeCanvasToContainer(); // Initial resize to set the correct canvas size
-  // Adjust canvas size when entering fullscreen
-  document.addEventListener('fullscreenchange', resizeCanvasToContainer);
-  document.addEventListener('webkitfullscreenchange', resizeCanvasToContainer);
-  document.addEventListener('msfullscreenchange', resizeCanvasToContainer);
-
-  //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
-  const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
-
-  const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
-
   async function render() {
     stats.begin();
     resizeCanvasToContainer(); // Ensure canvas is resized before rendering
     const estimationConfig = { flipHorizontal: false };
     const predictions = await detector.estimateFaces(video, estimationConfig);
-    const newFacePosition = extractFacePosition(predictions, focalLength);
+    const newFacePosition = extractFacePosition(predictions, trackingFocal);
     if (newFacePosition) {
       facePosition.x = (1 - axy) * oldFacePosition.x + axy * newFacePosition.x;
       facePosition.y = (1 - axy) * oldFacePosition.y + axy * newFacePosition.y;
@@ -342,122 +400,71 @@ async function main() {
     //console.log(renderCam.pos);
   }
 
-  // Retrieve the base64 string from localStorage
-  async function getFromIndexedDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open("lifFileDB", 1);
+  function resizeCanvasToContainer() {
+    const displayWidth = container.clientWidth;
+    const displayHeight = container.clientHeight;
 
-      request.onsuccess = function (event) {
-        const db = event.target.result;
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
 
-        if (!db.objectStoreNames.contains("lifFiles")) {
-          console.warn("Object store 'lifFiles' not found.");
-          resolve(null); // Resolve with null if the object store doesn't exist
-          return;
-        }
-
-        const transaction = db.transaction(["lifFiles"], "readonly");
-        const objectStore = transaction.objectStore("lifFiles");
-
-        const requestGet = objectStore.get("lifFileData");
-
-        requestGet.onsuccess = function (event) {
-          if (event.target.result) {
-            resolve(event.target.result.data);
-          } else {
-            resolve(null); // Resolve with null if no data is found
-          }
-        };
-
-        requestGet.onerror = function () {
-          reject("Error retrieving file from IndexedDB");
-        };
-      };
-
-      request.onerror = function () {
-        reject("Error opening IndexedDB");
-      };
-    });
-  }
-
-  async function deleteFromIndexedDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open("lifFileDB", 1);
-
-      request.onsuccess = function (event) {
-        const db = event.target.result;
-
-        if (!db.objectStoreNames.contains("lifFiles")) {
-          console.warn("Object store 'lifFiles' not found.");
-          resolve(); // Resolve without error if the object store doesn't exist
-          return;
-        }
-
-        const transaction = db.transaction(["lifFiles"], "readwrite");
-        const objectStore = transaction.objectStore("lifFiles");
-
-        const requestDelete = objectStore.delete("lifFileData");
-
-        requestDelete.onsuccess = function () {
-          console.log("Data deleted from IndexedDB successfully!");
-          resolve();
-        };
-
-        requestDelete.onerror = function () {
-          reject("Error deleting data from IndexedDB");
-        };
-      };
-
-      request.onerror = function () {
-        reject("Error opening IndexedDB");
-      };
-    });
-  }
-
-  const filePicker = document.getElementById('filePicker');
-  //const base64String = localStorage.getItem('lifFileData');
-  try {
-    const base64String = await getFromIndexedDB();
-    //console.log("Retrieved base64 string from localStorage:", base64String ? "found" : "not found");
-
-    if (base64String) {
-
-      // Decode the base64 string back to binary string
-      console.log("Decoding base64 string...");
-      const byteCharacters = atob(base64String);
-
-      console.log("Creating Uint8Array from decoded data...");
-      const byteNumbers = new Uint8Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-
-      console.log("Constructing File object from Uint8Array...");
-      const file = new File([byteNumbers], "uploaded-file", { type: "application/octet-stream" });
-      console.log("File object created:", file);
-
-      // Call the visualization function with the file
-      console.log("Calling visualizeFile function...");
-      visualizeFile(file);
-
-      // Clean up by removing the data from localStorage
-      console.log("Cleaning up localStorage...");
-      await deleteFromIndexedDB();
-      document.getElementById("tmpMsg").remove();
-
-    } else {
-      console.log("No base64 string found in localStorage.");
-      document.getElementById("tmpMsg").remove();
-      filePicker.addEventListener('change', handleFileSelect);
-      filePicker.style.display = 'inline';
-
+      // Update the WebGL viewport
+      gl.viewport(0, 0, canvas.width, canvas.height);
     }
-  } catch (e) {
-    console.log("No base64 string found in localStorage.");
-    filePicker.addEventListener('change', handleFileSelect);
-    filePicker.style.display = 'inline';
-    document.getElementById("tmpMsg").remove();
+  }
+
+  let views;
+  const renderCam = {
+    pos: { x: 0, y: 0, z: 0 }, // default
+    sl: { x: 0, y: 0 },
+    sk: { x: 0, y: 0 },
+    roll: 0,
+    f: 0 // placeholder
+  }
+  let invd;
+
+  // Setup gl context + Shaders
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl');
+  const container = document.getElementById('canvas-container');
+
+  if (!gl) {
+    console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
+    return;
+  }
+
+  const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
+  const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
+
+  // Tracking Setup
+  let trackingFocal;
+  let OVD;
+
+  function normFacePosition(pos) {
+    const IO = 63;
+    const vd = OVD;
+    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO }
+  }
+
+  let facePosition = { x: 0, y: 0, z: 600 };
+  let oldFacePosition = { x: 0, y: 0, z: 600 };
+
+  const axy = 0.5; // exponential smoothing
+  const az = 0.1; // exponential smoothing
+
+  const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+  const detectorConfig = {
+    runtime: 'tfjs',
   };
+  const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
+
+  // Event listener for window resize
+  window.addEventListener('resize', resizeCanvasToContainer);
+  resizeCanvasToContainer(); // Initial resize to set the correct canvas size
+  // Adjust canvas size when entering fullscreen
+  document.addEventListener('fullscreenchange', resizeCanvasToContainer);
+  document.addEventListener('webkitfullscreenchange', resizeCanvasToContainer);
+  document.addEventListener('msfullscreenchange', resizeCanvasToContainer);
 
 }
 
