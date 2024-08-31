@@ -14,12 +14,12 @@ const vertexShaderSource = `
 
 async function setupCamera() {
   const video = document.getElementById('video');
-//  const video = document.createElement('video');
+  //  const video = document.createElement('video');
   const stream = await navigator.mediaDevices.getUserMedia({
     video: {
-        //width: { ideal: 640 },
-        facingMode: { ideal: 'user' } // 'user' for front camera, 'environment' for rear camera
-      }
+      //width: { ideal: 640 },
+      facingMode: { ideal: 'user' } // 'user' for front camera, 'environment' for rear camera
+    }
   });
   video.srcObject = stream;
 
@@ -58,58 +58,58 @@ function isIOS() {
 }
 
 function calculateAverageKeypoint(filteredKeypoints) {
-      if (filteredKeypoints.length === 0) {
-        return { x: 0, y: 0, z: 0 }; // or handle the empty case as needed
-      }
-      const sum = filteredKeypoints.reduce((acc, keypoint) => {
-        return {
-          x: acc.x + keypoint.x,
-          y: acc.y + keypoint.y,
-          z: acc.z + keypoint.z
-        };
-      }, { x: 0, y: 0, z: 0 });
+  if (filteredKeypoints.length === 0) {
+    return { x: 0, y: 0, z: 0 }; // or handle the empty case as needed
+  }
+  const sum = filteredKeypoints.reduce((acc, keypoint) => {
+    return {
+      x: acc.x + keypoint.x,
+      y: acc.y + keypoint.y,
+      z: acc.z + keypoint.z
+    };
+  }, { x: 0, y: 0, z: 0 });
 
-      return {
-        x: sum.x / filteredKeypoints.length,
-        y: sum.y / filteredKeypoints.length,
-        z: sum.z / filteredKeypoints.length
-      };
-    }
+  return {
+    x: sum.x / filteredKeypoints.length,
+    y: sum.y / filteredKeypoints.length,
+    z: sum.z / filteredKeypoints.length
+  };
+}
 
-function extractFacePosition(predictions,focalLength) {
+function extractFacePosition(predictions, focalLength) {
 
-    if (predictions.length > 0) {
-      const keypoints = predictions[0].keypoints;
+  if (predictions.length > 0) {
+    const keypoints = predictions[0].keypoints;
 
-      // Calculate the center of the face
-      const leftEyePts = keypoints.filter(keypoint => keypoint.name && keypoint.name === "leftEye");
-      const rightEyePts = keypoints.filter(keypoint => keypoint.name && keypoint.name === "rightEye");
-      const leftEye = calculateAverageKeypoint(leftEyePts);
-      const rightEye = calculateAverageKeypoint(rightEyePts);
+    // Calculate the center of the face
+    const leftEyePts = keypoints.filter(keypoint => keypoint.name && keypoint.name === "leftEye");
+    const rightEyePts = keypoints.filter(keypoint => keypoint.name && keypoint.name === "rightEye");
+    const leftEye = calculateAverageKeypoint(leftEyePts);
+    const rightEye = calculateAverageKeypoint(rightEyePts);
 
-      // Calculate distances (Assuming average interocular distance is 63mm)
-      const interocularDistance = Math.sqrt(
-        Math.pow(rightEye.x - leftEye.x, 2) +
-        Math.pow(rightEye.y - leftEye.y, 2) +
-        Math.pow(rightEye.z - leftEye.z, 2)
-      );
-      //const focalLength = isMobileDevice() ? 640*0.8 : 640; // Focal length in pixels (estimated)
-      const realInterocularDistance = 63; // Real interocular distance in mm
+    // Calculate distances (Assuming average interocular distance is 63mm)
+    const interocularDistance = Math.sqrt(
+      Math.pow(rightEye.x - leftEye.x, 2) +
+      Math.pow(rightEye.y - leftEye.y, 2) +
+      Math.pow(rightEye.z - leftEye.z, 2)
+    );
+    //const focalLength = isMobileDevice() ? 640*0.8 : 640; // Focal length in pixels (estimated)
+    const realInterocularDistance = 63; // Real interocular distance in mm
 
-      const depth = (focalLength * realInterocularDistance) / interocularDistance;
+    const depth = (focalLength * realInterocularDistance) / interocularDistance;
 
-      const faceCenterX = (leftEye.x + rightEye.x) / 2;
-      const faceCenterY = (leftEye.y + rightEye.y) / 2;
+    const faceCenterX = (leftEye.x + rightEye.x) / 2;
+    const faceCenterY = (leftEye.y + rightEye.y) / 2;
 
-      // Convert face center to world coordinates
-      const x = -(faceCenterX - video.width / 2) * depth / focalLength;
-      const y = -(faceCenterY - video.height / 2) * depth / focalLength;
-      //console.log([x,y,depth].map(Math.round));
-      return {x:x, y:y, z:depth};
-    } else {
-      //console.log("no face - defaulting to " + [0,0,restPos]);
-      return null;
-    }
+    // Convert face center to world coordinates
+    const x = -(faceCenterX - video.width / 2) * depth / focalLength;
+    const y = -(faceCenterY - video.height / 2) * depth / focalLength;
+    //console.log([x,y,depth].map(Math.round));
+    return { x: x, y: y, z: depth };
+  } else {
+    //console.log("no face - defaulting to " + [0,0,restPos]);
+    return null;
+  }
 }
 
 async function loadShaderFile(url) {
@@ -136,34 +136,34 @@ async function loadImage2(url) { // without cache busting
 }
 
 async function downsampleImage(img_url, factor) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous'; // This is necessary if you're loading an image from a different domain
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // This is necessary if you're loading an image from a different domain
 
-        img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+    img.onload = function () {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
 
-            // Set the canvas size to the new downsampled size
-            canvas.width = img.width / factor;
-            canvas.height = img.height / factor;
+      // Set the canvas size to the new downsampled size
+      canvas.width = img.width / factor;
+      canvas.height = img.height / factor;
 
-            // Draw the image on the canvas at the new size
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // Draw the image on the canvas at the new size
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            // Create a new Image object from the downsampled canvas
-            const downsampledImg = new Image();
-            downsampledImg.src = canvas.toDataURL();
+      // Create a new Image object from the downsampled canvas
+      const downsampledImg = new Image();
+      downsampledImg.src = canvas.toDataURL();
 
-            resolve(downsampledImg);
-        };
+      resolve(downsampledImg);
+    };
 
-        img.onerror = function(err) {
-            reject(err);
-        };
+    img.onerror = function (err) {
+      reject(err);
+    };
 
-        img.src = img_url;
-    });
+    img.src = img_url;
+  });
 }
 
 function initShaderProgram(gl, vsSource, fsSource) {
@@ -226,7 +226,7 @@ function create4ChannelImage(dispImage, maskImage) {
   canvas.width = width;
   canvas.height = height;
 
-   // Pass { willReadFrequently: true } to optimize for frequent read operations
+  // Pass { willReadFrequently: true } to optimize for frequent read operations
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   // Draw the disp image
@@ -265,10 +265,6 @@ function combineImgDisp(rgbImage, dispImage, maskImage = null) {
   ctx.drawImage(dispImage, 0, 0, width, height);
   const dispData = ctx.getImageData(0, 0, width, height).data;
 
-  // Determine bit depth based on the maximum value in dispData
-  const is16Bit = Math.max(...dispData) > 255;
-  const alphaValue = is16Bit ? 65535 : 255; // Set alpha value based on bit depth
-
   // If maskImage is provided, create a combined 4-channel image
   let combinedData = null;
   if (maskImage) {
@@ -292,7 +288,7 @@ function combineImgDisp(rgbImage, dispImage, maskImage = null) {
       combinedData.data[i * 4] = dispData[i * 4];
       combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
       combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
-      combinedData.data[i * 4 + 3] = alphaValue; // Set alpha to 1 based on bit depth
+      combinedData.data[i * 4 + 3] = 255; // Set alpha to 1 (255 in 8-bit)
     }
   }
 
@@ -304,7 +300,7 @@ function combineImgDisp(rgbImage, dispImage, maskImage = null) {
   const extendedWidth = width * 2; // New width to accommodate both images side by side
   const extendedData = ctx.createImageData(extendedWidth, height);
 
-  // Fill the left half with the additional image and alpha=255 or 65535 based on bit depth
+  // Fill the left half with the additional image and alpha=255
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const index = (y * width + x) * 4;
@@ -313,7 +309,7 @@ function combineImgDisp(rgbImage, dispImage, maskImage = null) {
       extendedData.data[extendedIndex] = additionalData[index];
       extendedData.data[extendedIndex + 1] = additionalData[index + 1];
       extendedData.data[extendedIndex + 2] = additionalData[index + 2];
-      extendedData.data[extendedIndex + 3] = alphaValue; // Set alpha to 1 based on bit depth
+      extendedData.data[extendedIndex + 3] = 255; // Set alpha to 1 (255 in 8-bit)
     }
   }
 
@@ -350,6 +346,6 @@ function logAllUniforms(gl, program) {
 }
 
 // focal calculations
-function viewportScale(iRes,oRes) {
-    return Math.min(oRes.x,oRes.y)/Math.min(iRes.x,iRes.y);
+function viewportScale(iRes, oRes) {
+  return Math.min(oRes.x, oRes.y) / Math.min(iRes.x, iRes.y);
 }
