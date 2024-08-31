@@ -9,14 +9,14 @@ in vec2 UV;
 uniform float time;
 
 // info views
-uniform sampler2D uImage[5]; // for LDI this is an array
-uniform sampler2D uDisparityMap[5]; // for LDI this is an array
-uniform float invZmin[5], invZmax[5]; // used to get invZ
+uniform sampler2D uImage[4]; // for LDI this is an array
+uniform sampler2D uDisparityMap[4]; // for LDI this is an array
+uniform float invZmin[5], invZmax[4]; // used to get invZ
 uniform vec3 uViewPosition; // in normalized camera space, common to all layers, "C1"
 uniform vec2 sk1, sl1; // common to all layers
 uniform float roll1; // common to all layers, f1 in px
-uniform float f1[5]; // f per layer
-uniform vec2 iRes[5];
+uniform float f1[4]; // f per layer
+uniform vec2 iRes[4];
 uniform vec2 iResOriginal;
 uniform int uNumLayers;
 
