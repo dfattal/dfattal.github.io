@@ -217,10 +217,10 @@ async function getFacePosition() {
   return facePosition;
 }
 
-function create4ChannelImage(rgbImage, maskImage) {
+function create4ChannelImage(dispImage, maskImage) {
 
-  const width = rgbImage.width;
-  const height = rgbImage.height;
+  const width = dispImage.width;
+  const height = dispImage.height;
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -229,9 +229,9 @@ function create4ChannelImage(rgbImage, maskImage) {
    // Pass { willReadFrequently: true } to optimize for frequent read operations
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  // Draw the RGB image
-  ctx.drawImage(rgbImage, 0, 0, width, height);
-  const rgbData = ctx.getImageData(0, 0, width, height).data;
+  // Draw the disp image
+  ctx.drawImage(dispImage, 0, 0, width, height);
+  const dispData = ctx.getImageData(0, 0, width, height).data;
 
   // Draw the mask image
   ctx.clearRect(0, 0, width, height);
@@ -240,15 +240,99 @@ function create4ChannelImage(rgbImage, maskImage) {
 
   // Create a new image data object for the 4-channel image
   const combinedData = ctx.createImageData(width, height);
-  for (let i = 0; i < rgbData.length / 4; i++) {
-    combinedData.data[i * 4] = rgbData[i * 4];
-    combinedData.data[i * 4 + 1] = rgbData[i * 4 + 1];
-    combinedData.data[i * 4 + 2] = rgbData[i * 4 + 2];
+  for (let i = 0; i < dispData.length / 4; i++) {
+    combinedData.data[i * 4] = dispData[i * 4];
+    combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
+    combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
     combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
   }
 
   return combinedData;
 }
+
+function combineImgDisp(rgbImage, dispImage, maskImage = null) {
+
+  const width = rgbImage.width;
+  const height = rgbImage.height;
+
+  // Create a canvas to handle image data processing
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  // Draw the display image
+  ctx.drawImage(dispImage, 0, 0, width, height);
+  const dispData = ctx.getImageData(0, 0, width, height).data;
+
+  // Determine bit depth based on the maximum value in dispData
+  const is16Bit = Math.max(...dispData) > 255;
+  const alphaValue = is16Bit ? 65535 : 255; // Set alpha value based on bit depth
+
+  // If maskImage is provided, create a combined 4-channel image
+  let combinedData = null;
+  if (maskImage) {
+    // Draw the mask image
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(maskImage, 0, 0, width, height);
+    const maskData = ctx.getImageData(0, 0, width, height).data;
+
+    // Create a new image data object for the combined 4-channel image
+    combinedData = ctx.createImageData(width, height);
+    for (let i = 0; i < dispData.length / 4; i++) {
+      combinedData.data[i * 4] = dispData[i * 4];
+      combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
+      combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
+      combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
+    }
+  } else {
+    // If no maskImage is provided, use the dispImage data directly with full opacity
+    combinedData = ctx.createImageData(width, height);
+    for (let i = 0; i < dispData.length / 4; i++) {
+      combinedData.data[i * 4] = dispData[i * 4];
+      combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
+      combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
+      combinedData.data[i * 4 + 3] = alphaValue; // Set alpha to 1 based on bit depth
+    }
+  }
+
+  // Now, create the 4-channel image from the additional image with alpha=1
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(rgbImage, 0, 0, width, height);
+  const additionalData = ctx.getImageData(0, 0, width, height).data;
+
+  const extendedWidth = width * 2; // New width to accommodate both images side by side
+  const extendedData = ctx.createImageData(extendedWidth, height);
+
+  // Fill the left half with the additional image and alpha=255 or 65535 based on bit depth
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      const extendedIndex = (y * extendedWidth + x) * 4;
+
+      extendedData.data[extendedIndex] = additionalData[index];
+      extendedData.data[extendedIndex + 1] = additionalData[index + 1];
+      extendedData.data[extendedIndex + 2] = additionalData[index + 2];
+      extendedData.data[extendedIndex + 3] = alphaValue; // Set alpha to 1 based on bit depth
+    }
+  }
+
+  // Fill the right half with the combined data
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      const extendedIndex = (y * extendedWidth + (x + width)) * 4;
+
+      extendedData.data[extendedIndex] = combinedData.data[index];
+      extendedData.data[extendedIndex + 1] = combinedData.data[index + 1];
+      extendedData.data[extendedIndex + 2] = combinedData.data[index + 2];
+      extendedData.data[extendedIndex + 3] = combinedData.data[index + 3];
+    }
+  }
+
+  return extendedData;
+}
+
 
 // Log all uniforms
 function logAllUniforms(gl, program) {
