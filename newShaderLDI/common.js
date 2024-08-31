@@ -325,10 +325,26 @@ function combineImgDisp(rgbImage, dispImage, maskImage = null) {
       extendedData.data[extendedIndex + 3] = combinedData.data[index + 3];
     }
   }
-
   return extendedData;
 }
 
+function displayImageInImgTag(imageData, imgTagId) {
+  // Create a canvas to hold the image data
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d');
+
+  // Put the image data onto the canvas
+  ctx.putImageData(imageData, 0, 0);
+
+  // Convert the canvas to a Blob and set it as the src of the img tag
+  canvas.toBlob(function(blob) {
+    const url = URL.createObjectURL(blob);
+    const imgTag = document.getElementById(imgTagId);
+    imgTag.src = url;
+  });
+}
 
 // Log all uniforms
 function logAllUniforms(gl, program) {

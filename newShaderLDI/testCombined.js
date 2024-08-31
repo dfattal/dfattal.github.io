@@ -273,8 +273,9 @@ async function main() {
     const file = event.target.files[0];
     visualizeFile(file);
   }
-
+  let c = 0;
   async function parseObjectAndCreateTextures(obj) {
+    
     for (let key in obj) {
       if (obj.hasOwnProperty(key)) {
         if (key === 'invZ' && obj.hasOwnProperty('mask')) {
@@ -283,7 +284,11 @@ async function main() {
             const maskImg = await loadImage2(obj['mask'].url);
             const invzImg = await loadImage2(obj['invZ'].url);
             //const maskedInvz = create4ChannelImage(invzImg, maskImg);
-            obj['image']['texture'] = createTexture(gl, combineImgDisp(mainImg,invzImg,maskImg));
+            obj['image']['texture'] = createTexture(gl, combineImgDisp(mainImg, invzImg, maskImg));
+            if (c < 1) {
+              displayImageInImgTag(combineImgDisp(mainImg, invzImg, maskImg), 'debug-im');
+              c += 1;
+            }
           } catch (error) {
             console.error('Error loading mask or invz image:', error);
           }
@@ -291,7 +296,11 @@ async function main() {
           try {
             const mainImg = await loadImage2(obj['image'].url);
             const invzImg = await loadImage2(obj['invZ'].url);
-            obj['image']['texture'] = createTexture(gl, combineImgDisp(mainImg,invzImg));
+            obj['image']['texture'] = createTexture(gl, combineImgDisp(mainImg, invzImg));
+            if (c < 1) {
+              displayImageInImgTag(combineImgDisp(mainImg, invzImg), 'debug-im');
+              c += 1;
+            }
           } catch (error) {
             console.error('Error loading invz image:', error);
           }
