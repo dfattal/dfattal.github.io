@@ -152,10 +152,6 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function hideAddressBar() {
-  window.scrollTo(0, 1);
-}
-
 // Retrieve the base64 string from localStorage
 async function getFromIndexedDB() {
   return new Promise((resolve, reject) => {
@@ -361,7 +357,6 @@ async function main() {
       if (isIOS()) {
         console.log("iOS Device Detected");
         iOSmsg.textContent = "iOS Device Detected. Click to start video.";
-        setTimeout(hideAddressBar, 0);
         document.addEventListener('click', startVideo, { once: true });
       } else {
         startVideo();
