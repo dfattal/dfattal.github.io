@@ -7,14 +7,14 @@ in vec2 UV;
 #endif
 
 // info views
-uniform sampler2D uImage[5]; // for LDI this is an array
-uniform sampler2D uDisparityMap[5]; // for LDI this is an array
-uniform float invZmin[5], invZmax[5]; // used to get invZ
+uniform sampler2D uImage[4]; // for LDI this is an array
+uniform sampler2D uDisparityMap[4]; // for LDI this is an array
+uniform float invZmin[5], invZmax[4]; // used to get invZ
 uniform vec3 uViewPosition; // in normalized camera space, common to all layers, "C1"
 uniform vec2 sk1, sl1; // common to all layers
 uniform float roll1; // common to all layers, f1 in px
-uniform float f1[5]; // f per layer
-uniform vec2 iRes[5];
+uniform float f1[4]; // f per layer
+uniform vec2 iRes[4];
 uniform vec2 iResOriginal;
 // add originalF
 uniform int uNumLayers;
@@ -221,14 +221,9 @@ void main(void) {
                     color = layer3.rgb;
                 } else {
                     vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
-                    if(layer4.a == 1.0 || uNumLayers == 4) {
+                    if( uNumLayers == 4) {
                         color = layer4.rgb;
-                    } else {
-                        vec4 layer5 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[4] / iRes[4].x, f1[4] / iRes[4].y)) * SKR1, C1, uImage[4], uDisparityMap[4], invZmin[4], invZmax[4], iRes[4], 1.0) * (1.0 - layer4.w) + layer4 * layer4.w;
-                        if(uNumLayers == 5) {
-                            color = layer5.rgb;
-                        }
-                    }
+                    } 
                 }
             }
         }

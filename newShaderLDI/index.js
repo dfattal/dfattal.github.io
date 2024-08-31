@@ -1,5 +1,5 @@
 
-const MAX_LAYERS = 5;
+const MAX_LAYERS = 4;
 
 function setupWebGL(gl, fragmentShaderSource) {
 

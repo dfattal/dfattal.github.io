@@ -234,17 +234,10 @@ void main(void) {
                 } else {
                     vec5 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0);
                     layer = layer4.xyzw * (1.0 - layer.w) + layer * layer.w;
-                    if(layer4.xyzw.w == 1.0 || uNumLayers == 4) {
+                    if(uNumLayers == 4) {
                         color = layer.xyz;
                         invZ = layer4.v;
-                    } else {
-                        vec5 layer5 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[4] / iRes[4].x, f1[4] / iRes[4].y)) * SKR1, C1, uImage[4], uDisparityMap[4], invZmin[4], invZmax[4], iRes[4], 1.0);
-                        layer = layer5.xyzw * (1.0 - layer.w) + layer * layer.w;
-                        if(uNumLayers == 5) {
-                            color = layer.xyz;
-                            invZ = layer5.v;
-                        }
-                    }
+                    } 
                 }
             }
         }

@@ -220,14 +220,9 @@ void main(void) {
                     color = layer3.rgb;
                 } else {
                     vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
-                    if(layer4.a == 1.0 || uNumLayers == 4) {
+                    if(uNumLayers == 4) {
                         color = layer4.rgb;
-                    } else {
-                        vec4 layer5 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[4] / iRes[4].x, f1[4] / iRes[4].y)) * SKR1, C1, uImage[4], invZmin[4], invZmax[4], iRes[4], 1.0) * (1.0 - layer4.w) + layer4 * layer4.w;
-                        if(uNumLayers == 5) {
-                            color = layer5.rgb;
-                        }
-                    }
+                    } 
                 }
             }
         }
