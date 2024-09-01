@@ -32,7 +32,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       // rendering info
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
-      sk2: gl.getUniformLocation(shaderProgram, 'sl2'),
+      sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes')
@@ -120,7 +120,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
     gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
   }
   // Pass the actual number of layers to the shader
-  gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
+  gl.uniform1i(programInfo.uniformLocations.uNumLayers, numLayers);
 
   // views info
   gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].position.x, views[0].position.y, views[0].position.z);
@@ -275,7 +275,7 @@ async function main() {
   }
   let c = 0;
   async function parseObjectAndCreateTextures(obj) {
-    
+
     for (let key in obj) {
       if (obj.hasOwnProperty(key)) {
         if (key === 'invZ' && obj.hasOwnProperty('mask')) {
@@ -285,10 +285,15 @@ async function main() {
             const invzImg = await loadImage2(obj['invZ'].url);
             //const maskedInvz = create4ChannelImage(invzImg, maskImg);
             obj['image']['texture'] = createTexture(gl, combineImgDisp(mainImg, invzImg, maskImg));
-            if (c < 1) {
-              displayImageInImgTag(combineImgDisp(mainImg, invzImg, maskImg), 'debug-im');
-              c += 1;
-            }
+            // debug
+            const img = document.createElement('img');
+            img.style.width = '50%';
+            img.id = `debug-im${c}`;
+            img.classList.add('debug-im');
+            displayImageInImgTag(combineImgDisp(mainImg, invzImg), img.id);
+            document.body.appendChild(img);
+            c+=1;
+            
           } catch (error) {
             console.error('Error loading mask or invz image:', error);
           }
@@ -297,10 +302,16 @@ async function main() {
             const mainImg = await loadImage2(obj['image'].url);
             const invzImg = await loadImage2(obj['invZ'].url);
             obj['image']['texture'] = createTexture(gl, combineImgDisp(mainImg, invzImg));
-            if (c < 1) {
-              displayImageInImgTag(combineImgDisp(mainImg, invzImg), 'debug-im');
-              c += 1;
-            }
+            // debug
+            const img = document.createElement('img');
+            img.style.width = '50%';
+            img.id = `debug-im${c}`;
+            img.classList.add('debug-im');
+            displayImageInImgTag(combineImgDisp(mainImg, invzImg), img.id);
+            document.body.appendChild(img);
+            document.body.appendChild(document.createElement('br'));
+            c+=1;
+            
           } catch (error) {
             console.error('Error loading invz image:', error);
           }
