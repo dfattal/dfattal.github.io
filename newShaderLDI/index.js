@@ -120,7 +120,7 @@ function setupWebGLST(gl, fragmentShaderSource) {
       iResR: gl.getUniformLocation(shaderProgram, 'iResR'), // vec2 array
 
       // rendering info
-      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginalL'),
+      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
       sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
