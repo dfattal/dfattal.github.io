@@ -92,6 +92,7 @@ function setupWebGLST(gl, fragmentShaderSource) {
       textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
     },
     uniformLocations: {
+      
       //view L info
       uImageL: [],
       uDisparityMapL: [],
@@ -104,7 +105,6 @@ function setupWebGLST(gl, fragmentShaderSource) {
       roll1L: gl.getUniformLocation(shaderProgram, 'roll1L'),
       f1L: gl.getUniformLocation(shaderProgram, 'f1L'),
       iResL: gl.getUniformLocation(shaderProgram, 'iResL'), // vec2 array
-      iResOriginalL: gl.getUniformLocation(shaderProgram, 'iResOriginalL'),
 
       //view R info
       uImageR: [],
@@ -118,9 +118,9 @@ function setupWebGLST(gl, fragmentShaderSource) {
       roll1R: gl.getUniformLocation(shaderProgram, 'roll1R'),
       f1R: gl.getUniformLocation(shaderProgram, 'f1R'),
       iResR: gl.getUniformLocation(shaderProgram, 'iResR'), // vec2 array
-      iResOriginalR: gl.getUniformLocation(shaderProgram, 'iResOriginalR'),
 
       // rendering info
+      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginalL'),
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
       sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
@@ -228,9 +228,9 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZ.min));
   gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZ.max));
   gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width, layer.height]).flat());
-  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
 
   // rendering info
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
@@ -303,7 +303,6 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1fv(programInfo.uniformLocations.invZminL, views[0].layers.map(layer => layer.invZ.min));
   gl.uniform1fv(programInfo.uniformLocations.invZmaxL, views[0].layers.map(layer => layer.invZ.max));
   gl.uniform2fv(programInfo.uniformLocations.iResL, views[0].layers.map(layer => [layer.width, layer.height]).flat());
-  gl.uniform2f(programInfo.uniformLocations.iResOriginalL, views[0].width, views[0].height); // for window effect only
 
   // view R info
   const numLayersR = views[1].layers.length;
@@ -329,9 +328,9 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1fv(programInfo.uniformLocations.invZminR, views[1].layers.map(layer => layer.invZ.min));
   gl.uniform1fv(programInfo.uniformLocations.invZmaxR, views[1].layers.map(layer => layer.invZ.max));
   gl.uniform2fv(programInfo.uniformLocations.iResR, views[1].layers.map(layer => [layer.width, layer.height]).flat());
-  gl.uniform2f(programInfo.uniformLocations.iResOriginalR, views[1].width, views[1].height); // for window effect only
 
   // rendering info
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);

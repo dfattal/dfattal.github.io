@@ -6,6 +6,8 @@ varying highp vec2 UV;
 in vec2 UV;
 #endif
 
+uniform vec2 iResOriginal;
+
 // info view L
 uniform sampler2D uImageL[4]; // for LDI this is an array
 uniform sampler2D uDisparityMapL[4]; // for LDI this is an array
@@ -15,7 +17,7 @@ uniform vec2 sk1L, sl1L; // common to all layers
 uniform float roll1L; // common to all layers, f1 in px
 uniform float f1L[4]; // f per layer
 uniform vec2 iResL[4];
-uniform vec2 iResOriginalL;
+
 // add originalF
 uniform int uNumLayersL;
 
@@ -28,7 +30,6 @@ uniform vec2 sk1R, sl1R; // common to all layers
 uniform float roll1R; // common to all layers, f1 in px
 uniform float f1R[4]; // f per layer
 uniform vec2 iResR[4];
-uniform vec2 iResOriginalR;
 // add originalF
 uniform int uNumLayersR;
 
@@ -220,8 +221,8 @@ void main(void) {
     vec2 uv = UV;
 
     // Optional: Window at invZmin
-    float s = min(oRes.x, oRes.y) / min(iResOriginalL.x, iResOriginalL.y);
-    vec2 newDim = iResOriginalL * s / oRes;
+    float s = min(oRes.x, oRes.y) / min(iResOriginal.x, iResOriginal.y);
+    vec2 newDim = iResOriginal * s / oRes;
 
     if((abs(uv.x - .5) < .5 * newDim.x) && (abs(uv.y - .5) < .5 * newDim.y)) {
 
@@ -242,11 +243,12 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1L.a == 1.0 || uNumLayersL == 1) {
             resultL = layer1L;
-            invZL += 100.0;
+            invZL += 200.0;
         } else {
             vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL) * (1.0 - layer1L.w) + layer1L * layer1L.w;
             if(layer2L.a == 1.0 || uNumLayersL == 2) {
                 resultL = layer2L;
+                invZL += 100.0;
             } else {
                 vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL) * (1.0 - layer2L.w) + layer2L * layer2L.w;
                 if(layer3L.a == 1.0 || uNumLayersL == 3) {
@@ -264,11 +266,12 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1R.a == 1.0 || uNumLayersR == 1) {
             resultR = layer1R;
-            invZR += 100.0;
+            invZR += 200.0;
         } else {
             vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR) * (1.0 - layer1R.w) + layer1R * layer1R.w;
             if(layer2R.a == 1.0 || uNumLayersR == 2) {
                 resultR = layer2R;
+                invZR += 100.0;
             } else {
                 vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR) * (1.0 - layer2R.w) + layer2R * layer2R.w;
                 if(layer3R.a == 1.0 || uNumLayersR == 3) {
