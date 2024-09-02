@@ -46,17 +46,18 @@ uniform vec2 oRes; // viewport resolution in px
 #define texture texture2D
 
 float taper(vec2 uv) {
-    return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+    //return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+    return smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
     //return 1.0-smoothstep(0.64,1.0,r2);
 }
 
-// vec3 readColor(sampler2D iChannel, vec2 uv) {
-//     return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
-// }
 vec3 readColor(sampler2D iChannel, vec2 uv) {
-    return texture(iChannel, uv).rgb;
+    return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
 }
+// vec3 readColor(sampler2D iChannel, vec2 uv) {
+//     return texture(iChannel, uv).rgb;
+// }
 float readDisp(sampler2D iChannel, vec2 uv, float vMin, float vMax, vec2 iRes) {
     return texture(iChannel, vec2(clamp(uv.x, 2.0 / iRes.x, 1.0 - 2.0 / iRes.x), clamp(uv.y, 2.0 / iRes.y, 1.0 - 2.0 / iRes.y))).x * (vMin - vMax) + vMax;
 }
@@ -241,6 +242,7 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1L.a == 1.0 || uNumLayersL == 1) {
             resultL = layer1L;
+            invZL += 100.0;
         } else {
             vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL) * (1.0 - layer1L.w) + layer1L * layer1L.w;
             if(layer2L.a == 1.0 || uNumLayersL == 2) {
@@ -262,6 +264,7 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1R.a == 1.0 || uNumLayersR == 1) {
             resultR = layer1R;
+            invZR += 100.0;
         } else {
             vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR) * (1.0 - layer1R.w) + layer1R * layer1R.w;
             if(layer2R.a == 1.0 || uNumLayersR == 2) {
@@ -283,12 +286,18 @@ void main(void) {
 
         vec4 result = (1.0 - wR) * resultL + wR * resultR;
 
-        if(invZR < -50.0 || invZL > invZR + 0.01)
+        // if(invZR < -50.0 || invZL > invZR + 0.01)
+        //     result = resultL;
+        // if(invZL < -50.0 || invZR > invZL + 0.01)
+        //     result = resultR;    
+
+        if(invZL - invZR >= 100.0)
             result = resultL;
-        if(invZL < -50.0 || invZR > invZL + 0.01)
+        if(invZR - invZL >= 100.0)
             result = resultR;
 
         gl_FragColor = vec4(result.rgb, 1.0);
+        //gl_FragColor = vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
 
     } else {
         gl_FragColor = vec4(vec3(0.1), 1.0);
