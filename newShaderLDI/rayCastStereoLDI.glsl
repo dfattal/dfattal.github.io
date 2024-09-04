@@ -294,9 +294,9 @@ void main(void) {
         // if(invZL < -50.0 || invZR > invZL + 0.01)
         //     result = resultR;    
 
-        if(invZL - invZR >= 100.0)
+        if(invZL - invZR >= 50.0)
             result = resultL;
-        if(invZR - invZL >= 100.0)
+        if(invZR - invZL >= 50.0)
             result = resultR;
 
         gl_FragColor = vec4(result.rgb, 1.0);
