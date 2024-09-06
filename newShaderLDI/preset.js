@@ -1,5 +1,5 @@
 
-const MAX_LAYERS = 5;
+const MAX_LAYERS = 4;
 let fname;
 
 function toggleControls() {
@@ -51,7 +51,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       // rendering info
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
-      sk2: gl.getUniformLocation(shaderProgram, 'sl2'),
+      sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes')
@@ -65,6 +65,99 @@ function setupWebGL(gl, fragmentShaderSource) {
   for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
     programInfo.uniformLocations.uImage.push(gl.getUniformLocation(shaderProgram, `uImage[${i}]`));
     programInfo.uniformLocations.uDisparityMap.push(gl.getUniformLocation(shaderProgram, `uDisparityMap[${i}]`));
+  }
+
+  // Vertex positions and texture coordinates
+  const positions = new Float32Array([
+    -1.0, 1.0,
+    1.0, 1.0,
+    -1.0, -1.0,
+    1.0, -1.0,
+  ]);
+  const textureCoords = new Float32Array([
+    0.0, 0.0,
+    1.0, 0.0,
+    0.0, 1.0,
+    1.0, 1.0,
+  ]);
+
+  const positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+  const textureCoordBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
+
+  const indexBuffer = gl.createBuffer();
+  const indices = [0, 1, 2, 2, 1, 3];
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+  return { programInfo, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer } };
+}
+
+function setupWebGLST(gl, fragmentShaderSource) {
+
+  const vsSource = vertexShaderSource;
+  const fsSource = fragmentShaderSource;
+
+  // Initialize shaders and program
+  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+  const programInfo = {
+    program: shaderProgram,
+    attribLocations: {
+      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+      textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
+    },
+    uniformLocations: {
+
+      //view L info
+      uImageL: [],
+      uDisparityMapL: [],
+      uNumLayersL: gl.getUniformLocation(shaderProgram, 'uNumLayersL'),
+      invZminL: gl.getUniformLocation(shaderProgram, 'invZminL'), // float array
+      invZmaxL: gl.getUniformLocation(shaderProgram, 'invZmaxL'), // float array
+      uViewPositionL: gl.getUniformLocation(shaderProgram, 'uViewPositionL'),
+      sk1L: gl.getUniformLocation(shaderProgram, 'sk1L'),
+      sl1L: gl.getUniformLocation(shaderProgram, 'sl1L'),
+      roll1L: gl.getUniformLocation(shaderProgram, 'roll1L'),
+      f1L: gl.getUniformLocation(shaderProgram, 'f1L'),
+      iResL: gl.getUniformLocation(shaderProgram, 'iResL'), // vec2 array
+
+      //view R info
+      uImageR: [],
+      uDisparityMapR: [],
+      uNumRayersR: gl.getUniformLocation(shaderProgram, 'uNumLayersR'),
+      invZminR: gl.getUniformLocation(shaderProgram, 'invZminR'), // float array
+      invZmaxR: gl.getUniformLocation(shaderProgram, 'invZmaxR'), // float array
+      uViewPositionR: gl.getUniformLocation(shaderProgram, 'uViewPositionR'),
+      sk1R: gl.getUniformLocation(shaderProgram, 'sk1R'),
+      sl1R: gl.getUniformLocation(shaderProgram, 'sl1R'),
+      roll1R: gl.getUniformLocation(shaderProgram, 'roll1R'),
+      f1R: gl.getUniformLocation(shaderProgram, 'f1R'),
+      iResR: gl.getUniformLocation(shaderProgram, 'iResR'), // vec2 array
+
+      // rendering info
+      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
+      sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
+      sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
+      roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
+      f2: gl.getUniformLocation(shaderProgram, 'f2'),
+      oRes: gl.getUniformLocation(shaderProgram, 'oRes')
+      //vd: gl.getUniformLocation(shaderProgram, 'vd'),
+      //IO: gl.getUniformLocation(shaderProgram, 'IO'),
+      //f: gl.getUniformLocation(shaderProgram, 'f')
+    },
+  };
+
+  // Populate the uniform location arrays
+  for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+    programInfo.uniformLocations.uImageL.push(gl.getUniformLocation(shaderProgram, `uImageL[${i}]`));
+    programInfo.uniformLocations.uDisparityMapL.push(gl.getUniformLocation(shaderProgram, `uDisparityMapL[${i}]`));
+    programInfo.uniformLocations.uImageR.push(gl.getUniformLocation(shaderProgram, `uImageR[${i}]`));
+    programInfo.uniformLocations.uDisparityMapR.push(gl.getUniformLocation(shaderProgram, `uDisparityMapR[${i}]`));
   }
 
   // Vertex positions and texture coordinates
@@ -135,29 +228,28 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   // Loop through each layer and bind textures
   for (let i = 0; i < numLayers; i++) {
     gl.activeTexture(gl.TEXTURE0 + (2 * i));
-    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].albedo);
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].image.texture);
     gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
 
     gl.activeTexture(gl.TEXTURE0 + (2 * i + 1));
-    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].disparity);
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
     gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
   }
   // Pass the actual number of layers to the shader
   gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
 
   // views info
-  gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].camPos.x, views[0].camPos.y, views[0].camPos.z);
+  gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].position.x, views[0].position.y, views[0].position.z);
   gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x, views[0].sk.y);
-  gl.uniform2f(programInfo.uniformLocations.sl1, views[0].sl.x, views[0].sl.y);
-  gl.uniform1f(programInfo.uniformLocations.roll1, views[0].roll);
+  gl.uniform2f(programInfo.uniformLocations.sl1, views[0].rotation.sl.x, views[0].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1, views[0].rotation.roll_degrees);
   gl.uniform1fv(programInfo.uniformLocations.f1, views[0].layers.map(layer => layer.f)); // in px
-  gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZmin));
-  gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZmax));
+  gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZ.max));
   gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width, layer.height]).flat());
-  //gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
-  gl.uniform2f(programInfo.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height); // no window effect
 
   // rendering info
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
@@ -168,6 +260,107 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
   const offset = 0;
+  //logAllUniforms(gl, programInfo.program);
+  gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+}
+
+function drawSceneST(gl, programInfo, buffers, views, renderCam) {
+
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.useProgram(programInfo.program);
+
+  // Vertex positions
+  {
+    const numComponents = 2;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+    gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
+    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+  }
+
+  // Texture coordinates
+  {
+    const numComponents = 2;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+    gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, numComponents, type, normalize, stride, offset);
+    gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+  }
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+  // view L info
+  const numLayersL = views[0].layers.length;
+
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayersL; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (4 * i));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].image.texture);
+    gl.uniform1i(programInfo.uniformLocations.uImageL[i], 4 * i);
+
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 1));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMapL[i], 4 * i + 1);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(programInfo.uniformLocations.uNumLayersL, numLayersL);
+
+  gl.uniform3f(programInfo.uniformLocations.uViewPositionL, views[0].position.x, views[0].position.y, views[0].position.z);
+  gl.uniform2f(programInfo.uniformLocations.sk1L, views[0].sk.x, views[0].sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl1L, views[0].rotation.sl.x, views[0].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1L, views[0].rotation.roll_degrees);
+  gl.uniform1fv(programInfo.uniformLocations.f1L, views[0].layers.map(layer => layer.f)); // in px
+  gl.uniform1fv(programInfo.uniformLocations.invZminL, views[0].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmaxL, views[0].layers.map(layer => layer.invZ.max));
+  gl.uniform2fv(programInfo.uniformLocations.iResL, views[0].layers.map(layer => [layer.width, layer.height]).flat());
+
+  // view R info
+  const numLayersR = views[1].layers.length;
+
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayersR; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 2));
+    gl.bindTexture(gl.TEXTURE_2D, views[1].layers[i].image.texture);
+    gl.uniform1i(programInfo.uniformLocations.uImageR[i], 4 * i + 2);
+
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 3));
+    gl.bindTexture(gl.TEXTURE_2D, views[1].layers[i].invZ.texture);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMapR[i], 4 * i + 3);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(programInfo.uniformLocations.uNumLayersr, numLayersR);
+
+  gl.uniform3f(programInfo.uniformLocations.uViewPositionR, views[1].position.x, views[1].position.y, views[1].position.z);
+  gl.uniform2f(programInfo.uniformLocations.sk1R, views[1].sk.x, views[1].sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl1R, views[1].rotation.sl.x, views[1].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1R, views[1].rotation.roll_degrees);
+  gl.uniform1fv(programInfo.uniformLocations.f1R, views[1].layers.map(layer => layer.f)); // in px
+  gl.uniform1fv(programInfo.uniformLocations.invZminR, views[1].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmaxR, views[1].layers.map(layer => layer.invZ.max));
+  gl.uniform2fv(programInfo.uniformLocations.iResR, views[1].layers.map(layer => [layer.width, layer.height]).flat());
+
+  // rendering info
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
+  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
+  gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl2, renderCam.sl.x, renderCam.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
+  gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
+
+  const vertexCount = 6;
+  const type = gl.UNSIGNED_SHORT;
+  const offset = 0;
+  //logAllUniforms(gl, programInfo.program);
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
@@ -194,18 +387,7 @@ async function main() {
   updateSliderValue('ampZ', 'ampZval');
   updateSliderValue('phaseZ', 'phZval');
 
-  const views = [{ // you get this info from decoding LIF
-    //albedo: null, // moved to layers
-    //disparity: null, // // moved to layers
-    width: 0, // original view width, pre outpainting
-    height: 0, //original view height, pre outpainting
-    camPos: { x: 0, y: 0, z: 0 },
-    sl: { x: 0, y: 0 },
-    sk: { x: 0, y: 0 },
-    roll: 0,
-    f: 0, // in px
-    layers: []
-  }]
+  let views;
 
   const renderCam = {
     pos: { x: 0, y: 0, z: 0 }, // default
@@ -231,62 +413,86 @@ async function main() {
     visualizeFile(file);
   }
 
+  let c = 0;
+  function debugTexture(imgData) {
+    const img = document.createElement('img');
+    img.style.width = '50%';
+    img.id = `debug-im${c}`;
+    img.classList.add('debug-im');
+    if (imgData.src) {
+      img.src = imgData.src;
+      document.body.appendChild(document.createElement('br'));
+    } else {
+      displayImageInImgTag(imgData, img.id);
+    }
+    document.body.appendChild(img);
+    c += 1;
+  }
+  async function parseObjectAndCreateTextures(obj) {
+    for (let key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        if (key === 'image') {
+          try {
+            const img = await loadImage2(obj[key].url);
+            obj[key]['texture'] = createTexture(gl, img);
+            debugTexture(img);
+          } catch (error) {
+            console.error('Error loading image:', error);
+          }
+        } else if (key === 'invZ' && obj.hasOwnProperty('mask')) {
+          try {
+            const maskImg = await loadImage2(obj['mask'].url);
+            const invzImg = await loadImage2(obj['invZ'].url);
+            const maskedInvz = create4ChannelImage(invzImg, maskImg);
+            obj['invZ']['texture'] = createTexture(gl, maskedInvz);
+            debugTexture(maskedInvz);
+          } catch (error) {
+            console.error('Error loading mask or invz image:', error);
+          }
+        } else if (key === 'invZ') { // no mask
+          try {
+            const invzImg = await loadImage2(obj['invZ'].url);
+            obj['invZ']['texture'] = createTexture(gl, invzImg);
+          } catch (error) {
+            console.error('Error loading invz image:', error);
+          }
+
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          // Recursively parse nested objects
+          await parseObjectAndCreateTextures(obj[key]);
+        }
+      }
+    }
+  }
+
   async function visualizeFile(file) {
     //const file = event.target.files[0];
     if (file) {
-      const currentImgData = await parseLif5(file);
-      console.log(currentImgData);
-      const numLayers = currentImgData.layers.length;
-      console.log("numLayers: " + numLayers);
-      const mainImage = await loadImage2(currentImgData.rgb); // only needed to extract original width+height
-      //const dispImage = await loadImage2(currentImgData.disp);
-      //views[0].albedo = createTexture(gl,mainImage); // moved to layers
-      //views[0].disparity = createTexture(gl,dispImage); // moved to layers
-      views[0].width = mainImage.width;
-      views[0].height = mainImage.height;
-      views[0].f = currentImgData.f * views[0].width; // focal of main image
-      if (numLayers == 0) { // no layer data
-        const dispImage = await loadImage2(currentImgData.disp);
-        views[0].layers.push({
-          albedo: createTexture(gl, mainImage),
-          disparity: createTexture(gl, dispImage),
-          width: views[0].width, // iRes.x for the layer, includes outpainting
-          height: views[0].height, // // iRes.y for the layer, includes outpainting
-          f: currentImgData.f * views[0].width, // same as main image unless rescaling
-          invZmin: -currentImgData.minDisp / views[0].f * views[0].width,
-          invZmax: -currentImgData.maxDisp / views[0].f * views[0].width
-        })
-      }
-      for (let i = 0; i < numLayers; i++) { // example showing progressive reduction of resolution with layers
-        const layerDs = 1; // change to 2 to get lower resolution per layer
-        const albedoImage = await loadImage2(currentImgData.layers[i].rgb);
-        //const albedoImage = await downsampleImage(currentImgData.layers[i].rgb,Math.pow(layerDs,i));
-        const disparityImage = await loadImage2(currentImgData.layers[i].disp);
-        //const disparityImage = await downsampleImage(currentImgData.layers[i].disp,Math.pow(layerDs,i));
-        const maskImage = await loadImage2(currentImgData.layers[i].mask);
-        //const maskImage = await downsampleImage(currentImgData.layers[i].mask,Math.pow(layerDs,i));
-        //console.log('RGB Image Dimensions:', disparityImage.width, disparityImage.height);
-        //console.log('Mask Image Dimensions:', maskImage.width, maskImage.height);
-        const disparity4Image = create4ChannelImage(disparityImage, maskImage);
-
-        views[0].layers.push({
-          albedo: createTexture(gl, albedoImage),
-          disparity: createTexture(gl, disparity4Image),
-          width: albedoImage.width, // iRes.x for the layer, includes outpainting
-          height: albedoImage.height, // // iRes.y for the layer, includes outpainting
-          f: currentImgData.f * views[0].width / Math.pow(layerDs, i), // same as views[0].f unless rescaling
-          invZmin: -currentImgData.minDisp / views[0].f * views[0].width,
-          invZmax: -currentImgData.maxDisp / views[0].f * views[0].width
-        })
-      }
+      const lifInfo = await parseLif53(file);
+      //console.log(lifInfo);
+      views = replaceKeys(lifInfo.views,
+        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
+        ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
+      );
+      await parseObjectAndCreateTextures(views);
       console.log(views);
-      console.log(views[0].layers.map(layer => [layer.width, layer.height]).flat());
-      renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
-      console.log(renderCam);
 
-      invd = 0.0 * views[0].layers[0].invZmin; // set focus point
+      // Now that we know if mono or stereo setup webGL
+      if (views.length < 2) {
+        const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
+        ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
+      } else {
+        const fragmentShaderSource = await loadShaderFile('./rayCastStereoLDI.glsl');
+        ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
+      }
+
+      renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
+      //console.log(renderCam);
+
+      invd = 0.0 * views[0].layers[0].invZ.min; // set focus point
 
       document.getElementById("filePicker").remove();
+
       document.body.appendChild(stats.dom);
       render();
 
@@ -316,10 +522,7 @@ async function main() {
   document.addEventListener('webkitfullscreenchange', resizeCanvasToContainer);
   document.addEventListener('msfullscreenchange', resizeCanvasToContainer);
 
-  //const fragmentShaderSource = await loadShaderFile('./fragmentShader.glsl');
-  const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
-
-  const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
+  let programInfo, buffers;
   let accumulatedPhase = 0;
   let oldTime = Date.now() / 1000;
 
@@ -444,7 +647,7 @@ async function main() {
 
       // Extract the original file name from the file picker
       let originalFileName = fname.split('.').slice(0, -1).join('.');
-      
+
       // Remove "_LIF5" if it exists
       originalFileName = originalFileName.replace('_LIF5', '');
 
@@ -478,7 +681,11 @@ async function main() {
 
       updateRenderCamPosition(accumulatedPhase);
 
-      drawScene(gl, programInfo, buffers, views, renderCam);
+      if (views.length < 2) {
+        drawScene(gl, programInfo, buffers, views, renderCam);
+      } else {
+        drawSceneST(gl, programInfo, buffers, views, renderCam);
+      }
       stats.end();
     }
     requestAnimationFrame(render);
