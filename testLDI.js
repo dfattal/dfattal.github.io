@@ -73,8 +73,6 @@ class LifFileParser {
         this.inpaintingTech = '';
     }
 
-
-
     async resizeImage(image, maxDimension, fileType) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');

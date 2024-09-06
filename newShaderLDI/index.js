@@ -419,6 +419,29 @@ async function deleteFromIndexedDB() {
 
 async function main() {
 
+  let views;
+  // Tracking Setup
+  let trackingFocal;
+  let OVD;
+
+  function normFacePosition(pos) {
+    const IO = 63;
+    const vd = OVD;
+    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO }
+  }
+
+  let facePosition = { x: 0, y: 0, z: 600 };
+  let oldFacePosition = { x: 0, y: 0, z: 600 };
+
+  const axy = 0.5; // exponential smoothing
+  const az = 0.1; // exponential smoothing
+
+  const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+  const detectorConfig = {
+    runtime: 'tfjs',
+  };
+  const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
+
   const filePicker = document.getElementById('filePicker');
   //const base64String = localStorage.getItem('lifFileData');
 
@@ -632,7 +655,6 @@ async function main() {
     }
   }
 
-  let views;
   const renderCam = {
     pos: { x: 0, y: 0, z: 0 }, // default
     sl: { x: 0, y: 0 },
@@ -656,28 +678,6 @@ async function main() {
   // const { programInfo, buffers } = setupWebGL(gl, fragmentShaderSource);
   //const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
   let programInfo, buffers; // will be set once we know if mono or stereo
-
-  // Tracking Setup
-  let trackingFocal;
-  let OVD;
-
-  function normFacePosition(pos) {
-    const IO = 63;
-    const vd = OVD;
-    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO }
-  }
-
-  let facePosition = { x: 0, y: 0, z: 600 };
-  let oldFacePosition = { x: 0, y: 0, z: 600 };
-
-  const axy = 0.5; // exponential smoothing
-  const az = 0.1; // exponential smoothing
-
-  const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-  const detectorConfig = {
-    runtime: 'tfjs',
-  };
-  const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
 
   // Event listener for window resize
   window.addEventListener('resize', resizeCanvasToContainer);

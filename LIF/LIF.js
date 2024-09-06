@@ -185,7 +185,7 @@ async function getImageDimensions(url) {
 }
 
 async function parseLif53(file) {
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
     const lifMeta = await parseBinary(arrayBuffer);
     const lifJson = lifMeta.getJsonMeta();
     console.log(lifJson);
