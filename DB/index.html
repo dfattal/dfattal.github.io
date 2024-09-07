@@ -24,20 +24,6 @@
             margin-bottom: 20px;
         }
 
-        .upload-button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-
-        .upload-button:hover {
-            background-color: #45a049;
-        }
-
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -53,9 +39,7 @@
 
         .grid img:hover {
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-            /* Pronounced shadow on hover */
             transform: scale(1.05);
-            /* Slight zoom effect on hover */
         }
     </style>
 </head>
@@ -65,7 +49,6 @@
         <h1>Supabase Image Uploader</h1>
         <div class="upload-section">
             <input type="file" id="imageInput" />
-            <button class="upload-button" onclick="uploadImage()">Upload Image</button>
         </div>
         <div class="grid" id="imageGrid"></div>
     </div>
@@ -79,7 +62,9 @@
 
         const bucketName = 'testAppImages';
 
-        window.uploadImage = async function () {
+        document.getElementById('imageInput').addEventListener('change', uploadImage);
+
+        async function uploadImage() {
             const fileInput = document.getElementById('imageInput');
             const file = fileInput.files[0];
 
@@ -114,27 +99,30 @@
                 return;
             }
 
-            // Log all files retrieved from the bucket
-            console.log('Retrieved files:', data);
-
             const imageGrid = document.getElementById('imageGrid');
             imageGrid.innerHTML = '';
 
             for (const file of data) {
                 try {
-                    // Log the file name to ensure it's valid
                     console.log('Processing file:', file.name);
 
                     const signedURL = await supabase.storage
                         .from(bucketName)
                         .createSignedUrl(file.name, 60);
 
-                    // Append the image to the grid if the signedURL exists
                     if (signedURL) {
                         const img = document.createElement('img');
-                        img.src = signedURL.data.signedUrl;  // Use the signed URL as the image source
+                        img.src = signedURL.data.signedUrl;
                         img.alt = file.name;
-                        imageGrid.appendChild(img);  // Append the image to the grid
+
+                        // Add onclick event to each image
+                        img.onclick = () => {
+                            if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
+                                deleteImage(file.name);
+                            }
+                        };
+
+                        imageGrid.appendChild(img);
                     } else {
                         console.error('Signed URL is undefined for file:', file.name);
                     }
@@ -143,7 +131,22 @@
                 }
             }
         }
-        // Load images when page loads
+
+        async function deleteImage(fileName) {
+            const { error } = await supabase.storage
+                .from(bucketName)
+                .remove([fileName]);
+
+            if (error) {
+                console.error('Error deleting file:', error);
+                alert('Failed to delete the image.');
+            } else {
+                // alert('Image deleted successfully!');
+                displayImages();  // Refresh the image grid after deletion
+            }
+        }
+
+        // Load images when the page loads
         document.addEventListener('DOMContentLoaded', displayImages);
     </script>
 </body>
