@@ -4,43 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIF Image Uploader</title>
+    <title>LIF Image Library</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
-
-        .upload-section {
-            margin-bottom: 20px;
-        }
-
         .grid {
             display: flex;
             flex-wrap: wrap;
-            /* Allow images to wrap to the next line if the container is too narrow */
             gap: 5px;
-            /* Gap between the images */
             justify-content: flex-start;
-            /* Align images to the left */
         }
 
         .grid img {
             height: 250px;
-            /* Fixed height */
             width: auto;
-            /* Automatically adjust width to preserve aspect ratio */
-            margin: 10px;
-            /* Add margin around the image */
+            margin: 5px;
             border-radius: 5px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: box-shadow 0.3s ease, transform 0.3s ease;
@@ -55,160 +31,15 @@
 
 <body>
     <div class="container">
-        <h1>LIF Image Uploader</h1>
+        <h1>LIF Image Library</h1>
         <div class="upload-section">
             <input type="file" id="imageInput" />
         </div>
         <div class="grid" id="imageGrid"></div>
     </div>
 
-    <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1.0/+esm';
-
-        const supabaseUrl = 'https://jcrggsguegcmuvdglifa.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjcmdnc2d1ZWdjbXV2ZGdsaWZhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNTY3MzEzMywiZXhwIjoyMDQxMjQ5MTMzfQ.V1_vSCOo7tINwWuU6PFU7fQnBCMNrAwPYG-XMtonmLA';
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        const bucketName = 'testAppImages';
-
-        document.getElementById('imageInput').addEventListener('change', uploadImage);
-
-        async function uploadImage() {
-            const fileInput = document.getElementById('imageInput');
-            const file = fileInput.files[0];
-
-            if (!file) {
-                alert('Please select an image to upload.');
-                return;
-            }
-
-            const fileName = `${file.name}`;
-
-            const { data, error } = await supabase.storage
-                .from(bucketName)
-                .upload(fileName, file);
-
-            if (error) {
-                console.error('Error uploading image:', error);
-                alert('Failed to upload image.');
-            } else {
-                alert('Image uploaded successfully!');
-                displayImages();
-            }
-        }
-
-        async function displayImages() {
-            // Get the list of files from your Supabase bucket
-            const { data, error } = await supabase.storage
-                .from(bucketName)
-                .list();  // List all objects in the bucket
-
-            if (error) {
-                console.error('Error retrieving images:', error);
-                return;
-            }
-
-            const imageGrid = document.getElementById('imageGrid');
-            imageGrid.innerHTML = '';
-
-            for (const file of data) {
-                try {
-                    console.log('Processing file:', file.name);
-
-                    const signedURL = await supabase.storage
-                        .from(bucketName)
-                        .createSignedUrl(file.name, 60*60);
-
-                    if (signedURL) {
-                        const img = document.createElement('img');
-                        img.src = signedURL.data.signedUrl;
-                        img.alt = file.name;
-
-                        // Add onclick event to each image
-                        img.onclick = () => {
-                            // if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
-                            //     deleteImage(file.name);
-                            // }
-                            sendToViz(img.src);
-                        };
-
-                        imageGrid.appendChild(img);
-                    } else {
-                        console.error('Signed URL is undefined for file:', file.name);
-                    }
-                } catch (err) {
-                    console.error('Error processing file:', file.name, err);
-                }
-            }
-        }
-
-        async function deleteImage(fileName) {
-            const { error } = await supabase.storage
-                .from(bucketName)
-                .remove([fileName]);
-
-            if (error) {
-                console.error('Error deleting file:', error);
-                alert('Failed to delete the image.');
-            } else {
-                // alert('Image deleted successfully!');
-                displayImages();  // Refresh the image grid after deletion
-            }
-        }
-
-        function arrayBufferToBinaryString(buffer) {
-            let binaryString = '';
-            const bytes = new Uint8Array(buffer);
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binaryString += String.fromCharCode(bytes[i]);
-            }
-            return binaryString;
-        }
-
-        async function sendToViz(url) {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            const binaryString = arrayBufferToBinaryString(arrayBuffer);
-            const base64String = btoa(binaryString);
-            const request = indexedDB.open("lifFileDB", 1);
-
-            request.onupgradeneeded = function (event) {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains("lifFiles")) {
-                    db.createObjectStore("lifFiles", { keyPath: "id" });
-                }
-            };
-
-            request.onsuccess = function (event) {
-                const db = event.target.result;
-                const transaction = db.transaction(["lifFiles"], "readwrite");
-                const objectStore = transaction.objectStore("lifFiles");
-                const fileData = { id: "lifFileData", data: base64String };
-
-                const requestUpdate = objectStore.put(fileData);
-
-                requestUpdate.onsuccess = function () {
-                    console.log("File saved to IndexedDB successfully!");
-                };
-
-                requestUpdate.onerror = function () {
-                    console.error("Error saving file to IndexedDB");
-                };
-            };
-
-            request.onerror = function () {
-                console.error("Error opening IndexedDB");
-            };
-
-            //window.location.href = `./newShaderLDI/index.html`;
-            window.open(`../newShaderLDI/index.html`, '_blank');
-
-        }
-
-        // Load images when the page loads
-        document.addEventListener('DOMContentLoaded', displayImages);
-    </script>
+    <!-- Reference the external JS file -->
+    <script type="module" src="index.js"></script>
 </body>
 
 </html>
