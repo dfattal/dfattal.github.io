@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Image Uploader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .upload-section {
+            margin-bottom: 20px;
+        }
+
+        .upload-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .upload-button:hover {
+            background-color: #45a049;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .grid img {
+            width: auto;
+            height: 250px;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Supabase Image Uploader</h1>
+        <div class="upload-section">
+            <input type="file" id="imageInput" />
+            <button class="upload-button" onclick="uploadImage()">Upload Image</button>
+        </div>
+        <div class="grid" id="imageGrid"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1.0/+esm';
+
+        const supabaseUrl = 'https://jcrggsguegcmuvdglifa.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjcmdnc2d1ZWdjbXV2ZGdsaWZhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNTY3MzEzMywiZXhwIjoyMDQxMjQ5MTMzfQ.V1_vSCOo7tINwWuU6PFU7fQnBCMNrAwPYG-XMtonmLA';
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        const bucketName = 'testAppImages';
+
+        window.uploadImage = async function () {
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select an image to upload.');
+                return;
+            }
+
+            const fileName = `${file.name}`;
+
+            const { data, error } = await supabase.storage
+                .from(bucketName)
+                .upload(fileName, file);
+
+            if (error) {
+                console.error('Error uploading image:', error);
+                alert('Failed to upload image.');
+            } else {
+                alert('Image uploaded successfully!');
+                displayImages();
+            }
+        }
+
+        async function displayImages() {
+            // Get the list of files from your Supabase bucket
+            const { data, error } = await supabase.storage
+                .from(bucketName)
+                .list();  // List all objects in the bucket
+
+            if (error) {
+                console.error('Error retrieving images:', error);
+                return;
+            }
+
+            // Log all files retrieved from the bucket
+            console.log('Retrieved files:', data);
+
+            const imageGrid = document.getElementById('imageGrid');
+            imageGrid.innerHTML = '';
+
+            for (const file of data) {
+                try {
+                    // Log the file name to ensure it's valid
+                    console.log('Processing file:', file.name);
+
+                    const publicURL = supabase.storage
+                        .from(bucketName)
+                        .getPublicUrl(file.name);
+
+                    console.log('Public URL:', publicURL.data.publicUrl);
+
+                    // Append the image to the grid if the signedURL exists
+                    if (publicURL) {
+                        const img = document.createElement('img');
+                        img.src = publicURL.data.publicUrl;  // Use the signed URL as the image source
+                        img.alt = file.name;
+                        imageGrid.appendChild(img);  // Append the image to the grid
+                    } else {
+                        console.error('Signed URL is undefined for file:', file.name);
+                    }
+                } catch (err) {
+                    console.error('Error processing file:', file.name, err);
+                }
+            }
+        }
+        // Load images when page loads
+        document.addEventListener('DOMContentLoaded', displayImages);
+    </script>
+</body>
+
+</html>

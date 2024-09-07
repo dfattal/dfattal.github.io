@@ -80,7 +80,8 @@ async function generateDisparityMap(accessToken, storageUrl) {
         },
         body: JSON.stringify({
             inputImageUrl: storageUrl,
-            outputBitDepth: 'uint16'
+            outputBitDepth: 'uint16',
+            dilation: 0
         })
     });
 
