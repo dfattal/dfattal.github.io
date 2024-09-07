@@ -117,7 +117,7 @@
 
                     const signedURL = await supabase.storage
                         .from(bucketName)
-                        .createSignedUrl(file.name, 60);
+                        .createSignedUrl(file.name, 60*60);
 
                     if (signedURL) {
                         const img = document.createElement('img');
