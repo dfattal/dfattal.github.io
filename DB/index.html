@@ -50,6 +50,13 @@
             border-radius: 5px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+
+        .grid img:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            /* Pronounced shadow on hover */
+            transform: scale(1.05);
+            /* Slight zoom effect on hover */
+        }
     </style>
 </head>
 
@@ -118,16 +125,14 @@
                     // Log the file name to ensure it's valid
                     console.log('Processing file:', file.name);
 
-                    const publicURL = supabase.storage
+                    const signedURL = await supabase.storage
                         .from(bucketName)
-                        .getPublicUrl(file.name);
-
-                    console.log('Public URL:', publicURL.data.publicUrl);
+                        .createSignedUrl(file.name, 60);
 
                     // Append the image to the grid if the signedURL exists
-                    if (publicURL) {
+                    if (signedURL) {
                         const img = document.createElement('img');
-                        img.src = publicURL.data.publicUrl;  // Use the signed URL as the image source
+                        img.src = signedURL.data.signedUrl;  // Use the signed URL as the image source
                         img.alt = file.name;
                         imageGrid.appendChild(img);  // Append the image to the grid
                     } else {
