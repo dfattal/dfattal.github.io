@@ -25,16 +25,25 @@
         }
 
         .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            /* Allow images to wrap to the next line if the container is too narrow */
+            gap: 5px;
+            /* Gap between the images */
+            justify-content: flex-start;
+            /* Align images to the left */
         }
 
         .grid img {
-            width: auto;
             height: 250px;
+            /* Fixed height */
+            width: auto;
+            /* Automatically adjust width to preserve aspect ratio */
+            margin: 10px;
+            /* Add margin around the image */
             border-radius: 5px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
         }
 
         .grid img:hover {
@@ -117,9 +126,10 @@
 
                         // Add onclick event to each image
                         img.onclick = () => {
-                            if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
-                                deleteImage(file.name);
-                            }
+                            // if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
+                            //     deleteImage(file.name);
+                            // }
+                            sendToViz(img.src);
                         };
 
                         imageGrid.appendChild(img);
@@ -144,6 +154,56 @@
                 // alert('Image deleted successfully!');
                 displayImages();  // Refresh the image grid after deletion
             }
+        }
+
+        function arrayBufferToBinaryString(buffer) {
+            let binaryString = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binaryString += String.fromCharCode(bytes[i]);
+            }
+            return binaryString;
+        }
+
+        async function sendToViz(url) {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            const binaryString = arrayBufferToBinaryString(arrayBuffer);
+            const base64String = btoa(binaryString);
+            const request = indexedDB.open("lifFileDB", 1);
+
+            request.onupgradeneeded = function (event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains("lifFiles")) {
+                    db.createObjectStore("lifFiles", { keyPath: "id" });
+                }
+            };
+
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+                const transaction = db.transaction(["lifFiles"], "readwrite");
+                const objectStore = transaction.objectStore("lifFiles");
+                const fileData = { id: "lifFileData", data: base64String };
+
+                const requestUpdate = objectStore.put(fileData);
+
+                requestUpdate.onsuccess = function () {
+                    console.log("File saved to IndexedDB successfully!");
+                };
+
+                requestUpdate.onerror = function () {
+                    console.error("Error saving file to IndexedDB");
+                };
+            };
+
+            request.onerror = function () {
+                console.error("Error opening IndexedDB");
+            };
+
+            //window.location.href = `./newShaderLDI/index.html`;
+            window.open(`../newShaderLDI/index.html`, '_blank');
+
         }
 
         // Load images when the page loads
