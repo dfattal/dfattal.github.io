@@ -81,7 +81,7 @@ async function uploadImage() {
         if (signedURL) {
             appendImageToGrid(fileName, signedURL.data.signedUrl);
             cacheImage(fileName, signedURL.data.signedUrl);
-            alert('Image uploaded successfully!');
+            //alert('Image uploaded successfully!');
         }
     }
 }
