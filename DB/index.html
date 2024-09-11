@@ -26,6 +26,35 @@
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
             transform: scale(1.05);
         }
+
+        .grid img.delete-hover:hover {
+            box-shadow: 0 8px 16px rgba(255, 0, 0, 0.5);
+            /* Red shadow when delete-hover class is present */
+        }
+
+        .upload-section {
+            display: flex;
+            align-items: center;
+        }
+
+        .trash-button {
+            margin-left: 10px;
+            padding: 2px 5px;
+            background-color: white;
+            border: 1px solid rgb(56, 56, 56);
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .trash-button:hover {
+            background-color: rgb(186, 95, 95);
+            /* Change the button color when active */
+        }
+
+        .trash-button.active {
+            background-color: darkred;
+            /* Change the button color when active */
+        }
     </style>
 </head>
 
@@ -34,6 +63,7 @@
         <h1>LIF Image Library</h1>
         <div class="upload-section">
             <input type="file" id="imageInput" />
+            <button id="trashButton" class="trash-button">🗑️</button>
         </div>
         <div class="grid" id="imageGrid"></div>
     </div>

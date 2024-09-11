@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1.0/+esm';
 
 const supabaseUrl = 'https://jcrggsguegcmuvdglifa.supabase.co';
@@ -5,7 +6,6 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const bucketName = 'testAppImages';
-let deleteMode = false; // Track if the user is in delete mode
 
 // IndexedDB functions for caching
 function openIndexedDB() {
@@ -74,11 +74,13 @@ async function uploadImage() {
         console.error('Error uploading image:', error);
         alert('Failed to upload image.');
     } else {
-        const publicURL = supabase.storage.from(bucketName).getPublicUrl(file.name);
+        const signedURL = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(fileName, 60);
 
-        if (publicURL) {
-            appendImageToGrid(fileName, publicURL.data.publicUrl);
-            cacheImage(fileName, publicURL.data.publicUrl);
+        if (signedURL) {
+            appendImageToGrid(fileName, signedURL.data.signedUrl);
+            cacheImage(fileName, signedURL.data.signedUrl);
             //alert('Image uploaded successfully!');
         }
     }
@@ -89,6 +91,7 @@ async function displayImages() {
     const { data, error } = await supabase.storage
         .from(bucketName)
         .list();
+
     if (error) {
         console.error('Error retrieving images:', error);
         return;
@@ -103,10 +106,13 @@ async function displayImages() {
             appendImageToGrid(file.name, cachedImage);
         } else {
             try {
-                const publicURL = supabase.storage.from(bucketName).getPublicUrl(file.name);
-                if (publicURL) {
-                    appendImageToGrid(file.name, publicURL.data.publicUrl);
-                    cacheImage(file.name, publicURL.data.publicUrl);
+                const signedURL = await supabase.storage
+                    .from(bucketName)
+                    .createSignedUrl(file.name, 60);
+
+                if (signedURL) {
+                    appendImageToGrid(file.name, signedURL.data.signedUrl);
+                    cacheImage(file.name, signedURL.data.signedUrl);
                 }
             } catch (err) {
                 console.error('Error processing file:', file.name, err);
@@ -124,43 +130,11 @@ function appendImageToGrid(id, url) {
     img.src = url;
     img.alt = id;
 
-    // Add onclick event for image deletion in delete mode
-    img.onclick = async () => {
-        if (deleteMode) {
-            const confirmDelete = confirm('Delete?');
-            if (confirmDelete) {
-                await deleteImage(id);
-                container.remove(); // Remove from DOM
-                //alert('Image deleted successfully!');
-                deleteMode = false; // Automatically unselect trash mode
-                document.getElementById('trashButton').classList.remove('active'); // Remove trash button active state
-
-                // Remove delete-hover effect after deletion
-                img.onmouseover = null;
-                img.onmouseout = null;
-                img.classList.remove('delete-hover');
-            }
-        } else {
-            sendToViz(img.src); // Regular click action when not in delete mode
-        }
-    };
+    // Add onclick event for image visualization
+    img.onclick = () => sendToViz(img.src);
 
     container.appendChild(img);
     document.getElementById('imageGrid').appendChild(container);
-}
-
-// Function to delete image from Supabase and cache
-async function deleteImage(fileName) {
-    // Remove from Supabase
-    const { error } = await supabase.storage.from(bucketName).remove([fileName]);
-    if (error) {
-        console.error('Error deleting image from Supabase:', error);
-        alert('Failed to delete image from Supabase.');
-        return;
-    }
-
-    // Remove from IndexedDB cache
-    await removeCachedImage(fileName);
 }
 
 // Function to send an image to the visualization app
@@ -211,32 +185,6 @@ function arrayBufferToBinaryString(buffer) {
     }
     return binary;
 }
-
-// Enable delete mode when trash button is clicked
-document.getElementById('trashButton').addEventListener('click', function () {
-    deleteMode = !deleteMode; // Toggle delete mode
-    if (deleteMode) {
-        this.classList.add('active'); // Add 'active' class to button when in delete mode
-
-        // Apply delete-hover effect to all images dynamically
-        const images = document.querySelectorAll('.grid img');
-        images.forEach((img) => {
-            img.onmouseover = () => img.classList.add('delete-hover'); // Add red shadow on hover
-            img.onmouseout = () => img.classList.remove('delete-hover'); // Remove red shadow on hover exit
-        });
-
-    } else {
-        this.classList.remove('active'); // Remove 'active' class when exiting delete mode
-
-        // Remove delete-hover effect from all images
-        const images = document.querySelectorAll('.grid img');
-        images.forEach((img) => {
-            img.onmouseover = null; // Disable hover effect
-            img.onmouseout = null; // Disable hover effect
-            img.classList.remove('delete-hover'); // Ensure the class is removed
-        });
-    }
-});
 
 // Event listener for image upload
 document.getElementById('imageInput').addEventListener('change', uploadImage);
