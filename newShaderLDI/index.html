@@ -70,6 +70,18 @@
     <canvas id="glCanvas"></canvas>
   </div>
   <script>
+    // Register the service worker at the end of the body
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+          console.log('Service Worker registered with scope:', registration.scope);
+        }, function(err) {
+          console.log('Service Worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+  <script>
     const stats = new Stats();
     stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
   </script>
