@@ -27,6 +27,17 @@
             transform: scale(1.05);
         }
 
+        .grid canvas {
+            border-radius: 5px; 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
+        }
+
+        .grid canvas:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            transform: scale(1.05);
+        }
+
         .grid img.delete-hover:hover {
             /* box-shadow: 0 8px 16px rgba(255, 0, 0, 0.5); */
             border: solid red 2px;
@@ -70,7 +81,7 @@
     </div>
 
     <!-- Reference the external JS file -->
-    <script type="module" src="index.js"></script>
+    <script type="module" src="index-shader.js"></script>
 </body>
 
 </html>

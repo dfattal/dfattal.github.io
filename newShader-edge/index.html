@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>newShader Test</title>
+  <title>newShaderLDI Test</title>
   <!-- Require the peer dependencies of face-landmarks-detection. -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
@@ -22,6 +23,7 @@
     #video {
       display: none;
     }
+
     /* Fullscreen container to center the canvas */
     #canvas-container {
       display: flex;
@@ -30,6 +32,7 @@
       width: 100vw;
       height: 100vh;
     }
+
     #iOSmsg {
       display: flex;
       justify-content: center;
@@ -37,24 +40,54 @@
       width: 100vw;
       height: 50vh;
     }
+
     body {
       margin: 0;
+    }
+
+    .debug-im {
+      background-color: white;
+      /* Fallback color */
+      background-image:
+        linear-gradient(45deg, #ccc 25%, transparent 25%),
+        linear-gradient(135deg, #ccc 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #ccc 75%),
+        linear-gradient(135deg, transparent 75%, #ccc 75%);
+      background-size: 30px 30px;
+      /* Size of each checkerboard square */
+      background-position: 0 0, 15px 0, 15px -15px, 0px 15px;
     }
   </style>
 
 </head>
+
 <body>
+  <div id="tmpMsg" style="margin: 5px">looking for passed file...</div>
+  <input type="file" id="filePicker" style="display: none;" />
   <video id="video" width="640" height="480" autoplay></video>
   <div id="iOSmsg"></div>
   <div id="canvas-container">
     <canvas id="glCanvas"></canvas>
   </div>
   <script>
+    // Register the service worker at the end of the body
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+          console.log('Service Worker registered with scope:', registration.scope);
+        }, function(err) {
+          console.log('Service Worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+  <script>
     const stats = new Stats();
     stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-    document.body.appendChild(stats.dom);
   </script>
-  <script  src="common.js"></script>
-  <script  src="index.js"></script>
+  <script src="common.js"></script>
+  <script src="index.js"></script>
+  <script src="../LIF/LIF.js"></script>
 </body>
+
 </html>

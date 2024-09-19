@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Shader and Image</title>
+    <style>
+        body {
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+        }
+        img, canvas {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Your image -->
+        <img id="image" src="../images/albedo.jpg" alt="Image" style="width: 300px" />
+
+        <!-- WebGL canvas -->
+        <canvas id="glCanvas"></canvas>
+    </div>
+
+    <script type="module" src="index.js"></script>
+</body>
+</html>
