@@ -321,7 +321,7 @@ class lifViewer {
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
         await this.parseObjAndCreateTextures(this.views);
-        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDI.glsl" : "../Shaders/rayCastStereoLDI.glsl";
+        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIglow.glsl" : "../Shaders/rayCastStereoLDI.glsl";
         this.vertexShaderUrl = "../Shaders/vertex.glsl";
 
         // Setup Shader
@@ -833,7 +833,7 @@ class lifViewer {
         const animTime = 4;
         const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
         const ut = Date.now() / 1000 - this.startTime;
-        const t = Math.max(ut-2,0);
+        const t = ut; //Math.max(ut-2,0);
         const st = Math.sin(2 * Math.PI * t / animTime);
         const ct = Math.cos(2 * Math.PI * t / animTime);
         // update renderCam
@@ -894,7 +894,7 @@ class lifViewer {
         this.animationFrame = requestAnimationFrame(this.render);
     }
 
-    stopAnimation(transitionTime = 0.5) { // Set a default transition time of 2 seconds
+    stopAnimation(transitionTime = 0.5) { // Set a default transition time of 0.5 seconds
         cancelAnimationFrame(this.animationFrame);
         this.startTime = Date.now() / 1000; // Start transition timer
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
