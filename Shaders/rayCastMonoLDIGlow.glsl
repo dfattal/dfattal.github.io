@@ -192,7 +192,7 @@ vec5 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 }
 
 void main(void) {
-
+    
     vec2 uv = v_texcoord;
 
     // Optional: Window at invZmin
