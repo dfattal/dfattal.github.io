@@ -299,6 +299,7 @@ class lifViewer {
 
         this.startTime = Date.now() / 1000;
         this.phase = 0;
+        this.focus = 0;
         this.animationFrame = null;
         this.render = this.render.bind(this);
 
@@ -331,34 +332,34 @@ class lifViewer {
 
         const width = dispImage.width;
         const height = dispImage.height;
-      
+
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-      
+
         // Pass { willReadFrequently: true } to optimize for frequent read operations
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      
+
         // Draw the disp image
         ctx.drawImage(dispImage, 0, 0, width, height);
         const dispData = ctx.getImageData(0, 0, width, height).data;
-      
+
         // Draw the mask image
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(maskImage, 0, 0, width, height);
         const maskData = ctx.getImageData(0, 0, width, height).data;
-      
+
         // Create a new image data object for the 4-channel image
         const combinedData = ctx.createImageData(width, height);
         for (let i = 0; i < dispData.length / 4; i++) {
-          combinedData.data[i * 4] = dispData[i * 4];
-          combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
-          combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
-          combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
+            combinedData.data[i * 4] = dispData[i * 4];
+            combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
+            combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
+            combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
         }
-      
+
         return combinedData;
-      }
+    }
 
     async parseObjAndCreateTextures(obj) {
         for (let key in obj) {
@@ -791,15 +792,24 @@ class lifViewer {
         console.log('Uniforms:', uniforms);
     }
 
+    resizeCanvasToContainer() {
+        const parent = this.canvas.parentNode;
+        const rect = parent.getBoundingClientRect();
+
+        if (this.canvas.width !== rect.width || this.canvas.height !== rect.height) {
+            this.canvas.width = rect.width;
+            this.canvas.height = rect.height;
+        }
+    }
+
     render() {
         const animTime = 4;
-        const focus = 1;
-        const invd = focus * this.views[0].layers[0].invZ.min; // set focus point
+        const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
         const t = Date.now() / 1000 - this.startTime;
         const st = Math.sin(2 * Math.PI * t / animTime);
         const ct = Math.cos(2 * Math.PI * t / animTime);
         // update renderCam
-        this.renderCam.pos = { x: 0.2 * st, y: 0, z: 0.2 * ct };
+        this.renderCam.pos = { x: 0, y: 0, z: 3 * st };
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
@@ -814,20 +824,57 @@ class lifViewer {
         this.animationFrame = requestAnimationFrame(this.render);
     }
 
+    renderOff(transitionTime) {
+        const elapsedTime = (Date.now() / 1000) - this.startTime;
+
+        const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
+        // Calculate a fade-out effect based on elapsed time and transition time
+        //const progress = Math.min(elapsedTime / transitionTime, 1); // progress goes from 0 to 1
+
+        const { x: xo, y: yo, z: zo } = this.renderCam.pos;
+        // Update some properties to create a transition effect
+        this.renderCam.pos = { x: xo/1.1, y: yo/1.1, z: zo/1.1 }; // Slow down z-axis movement
+        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
+        this.renderCam.f = this.views[0].f * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+
+
+        if (this.views.length < 2) {
+            this.drawSceneMN(elapsedTime);
+        } else {
+            this.drawSceneST(elapsedTime);
+        }
+
+        if (elapsedTime < transitionTime) {
+            // Continue rendering if transitionTime hasn't elapsed
+            this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
+        } else {
+            // Hide canvas and show image after transition
+            this.img.style.display = 'block';
+            this.canvas.style.display = 'none';
+            cancelAnimationFrame(this.animationFrame);
+        }
+    }
+
     async startAnimation() {
-        
+
         // Set up shader
         if (this.views.length < 2) {
             await this.setupWebGLMN();
         } else {
             await this.setupWebGLST();
         }
+        this.img.style.display = 'none';
+        this.canvas.style.display = 'block';
         this.startTime = Date.now() / 1000;
         //console.log(this.views);
         this.animationFrame = requestAnimationFrame(this.render);
     }
 
-    stopAnimation() {
+    stopAnimation(transitionTime = 0.5) { // Set a default transition time of 2 seconds
         cancelAnimationFrame(this.animationFrame);
+        this.startTime = Date.now() / 1000; // Start transition timer
+        this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
     }
 }

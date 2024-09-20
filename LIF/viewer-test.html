@@ -8,19 +8,31 @@
         body {
             background-color: #f0f0f0;
         }
-        .container {
-            display: flex;
-        }
-        img, canvas {
+
+        div {
+            display: inline-block;
+            overflow: hidden;
             margin: 10px;
             border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+            /* box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);  */
+        }
+
+        img {
+            display: block;
+            /* Ensures the image behaves like a block element, removing inline space */
+            margin: 0;
+            /* Remove default margins from the image */
+            padding: 0;
+            /* Remove default padding from the image */
         }
     </style>
 </head>
+
 <body>
-    <div id="container"></div>
+    <div id="container1"></div>
+    <div id="container2"></div>
     <script type="module" src="viewer-test.js"></script>
     <script src="LIF.js"></script>
 </body>
+
 </html>
