@@ -425,7 +425,8 @@ class lifViewer {
     }
 
     async loadShaderFile(url) {
-        const response = await fetch(url + '?t=' + new Date().getTime()); // Append cache-busting query parameter);
+        // const response = await fetch(url + '?t=' + new Date().getTime()); // Append cache-busting query parameter);
+        const response = await fetch(url);
         return response.text();
     }
 
