@@ -274,20 +274,19 @@ async function parseLif53(file) {
 
 // ShaderImage Class
 class lifViewer {
-    constructor(lifInfo) {
+    constructor(lifUrl,container,height = 300) {
         this.MAX_LAYERS = 4;
-        this.lifInfo = lifInfo;
-        this.views = replaceKeys(lifInfo.views,
-            ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
-            ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
-        );
-        this.parseObjAndCreateTextures(this.views);
-
+        this.lifUrl = lifUrl;
+        this.container = container;
+        
         this.img = document.createElement('img');
+        this.img.src = lifUrl;
+        this.img.height = height;
         this.canvas = document.createElement('canvas');
         this.gl = this.canvas.getContext('webgl');
-        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDI.glsl" : "../Shaders/rayCastStereoLDI.glsl"
-        this.vertexShaderUrl = "../Shaders/vertex.glsl";
+        this.canvas.style.display = 'none';
+        
+        this.init();
 
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // default
@@ -301,9 +300,36 @@ class lifViewer {
         this.phase = 0;
         this.focus = 0;
         this.animationFrame = null;
-        this.firstAnim = true;
         this.render = this.render.bind(this);
 
+    }
+
+    async init() {
+        this.img.onload = function () {
+            this.container.appendChild(this.img);
+            this.container.appendChild(this.canvas);
+            this.resizeCanvasToContainer();
+        }.bind(this);
+        this.container.addEventListener('mouseenter', () => this.startAnimation());
+        this.container.addEventListener('mouseleave', () => this.stopAnimation());
+        const response = await fetch(this.lifUrl);
+        const blob = await response.blob();
+        const file = new File([blob], 'lifImage.jpg', { type: 'image/jpeg' });
+        this.lifInfo = await parseLif53(file);
+        this.views = replaceKeys(this.lifInfo.views,
+            ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
+            ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
+        );
+        await this.parseObjAndCreateTextures(this.views);
+        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDI.glsl" : "../Shaders/rayCastStereoLDI.glsl";
+        this.vertexShaderUrl = "../Shaders/vertex.glsl";
+
+        // Setup Shader
+        if (this.views.length < 2) {
+            await this.setupWebGLMN();
+        } else {
+            await this.setupWebGLST();
+        }
     }
 
     async loadImage2(url) { // without cache busting
@@ -860,14 +886,6 @@ class lifViewer {
 
     async startAnimation() {
 
-        // Set up shader
-        if (this.firstAnim) {
-            if (this.views.length < 2) {
-                await this.setupWebGLMN();
-            } else {
-                await this.setupWebGLST();
-            }
-        }
         this.img.style.display = 'none';
         this.canvas.style.display = 'block';
         this.startTime = Date.now() / 1000;
