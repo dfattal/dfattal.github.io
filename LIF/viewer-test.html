@@ -14,17 +14,34 @@
             overflow: hidden;
             margin: 10px;
             border-radius: 5px;
-            /* box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);  */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+            transition: transform 0.5s ease;
         }
 
-        img {
+        img, canvas {
             display: block;
             /* Ensures the image behaves like a block element, removing inline space */
             margin: 0;
             /* Remove default margins from the image */
             padding: 0;
             /* Remove default padding from the image */
+            transition: transform 0.5s ease;
         }
+
+        img:hover {
+            transform: scale(1.05);
+        }
+
+        canvas:hover {
+            transform: scale(1.05);
+        }
+
+        div:hover {
+            transform: scale(1.05);
+        }
+ 
+
+
     </style>
 </head>
 

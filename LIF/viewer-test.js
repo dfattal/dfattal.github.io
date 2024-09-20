@@ -8,7 +8,8 @@ const lifUrls = ["../images/fluff_LIF52.jpg",
     "../images/fish_LIF52.jpg",
     "../images/fluff_LIF52.jpg",
     "../images/fish_LIF52.jpg",
-    "../images/fluff_LIF52.jpg"
+    "../images/fluff_LIF52.jpg",
+    "../images/fish_LIF52.jpg"
 ];
 
 async function main() {
