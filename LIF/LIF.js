@@ -301,6 +301,7 @@ class lifViewer {
         this.phase = 0;
         this.focus = 0;
         this.animationFrame = null;
+        this.firstAnim = true;
         this.render = this.render.bind(this);
 
     }
@@ -833,7 +834,7 @@ class lifViewer {
 
         const { x: xo, y: yo, z: zo } = this.renderCam.pos;
         // Update some properties to create a transition effect
-        this.renderCam.pos = { x: xo/1.1, y: yo/1.1, z: zo/1.1 }; // Slow down z-axis movement
+        this.renderCam.pos = { x: xo / 1.1, y: yo / 1.1, z: zo / 1.1 }; // Slow down z-axis movement
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
@@ -860,10 +861,12 @@ class lifViewer {
     async startAnimation() {
 
         // Set up shader
-        if (this.views.length < 2) {
-            await this.setupWebGLMN();
-        } else {
-            await this.setupWebGLST();
+        if (this.firstAnim) {
+            if (this.views.length < 2) {
+                await this.setupWebGLMN();
+            } else {
+                await this.setupWebGLST();
+            }
         }
         this.img.style.display = 'none';
         this.canvas.style.display = 'block';
