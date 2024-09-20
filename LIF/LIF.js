@@ -321,7 +321,7 @@ class lifViewer {
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
         await this.parseObjAndCreateTextures(this.views);
-        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIglow.glsl" : "../Shaders/rayCastStereoLDI.glsl";
+        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDI.glsl" : "../Shaders/rayCastStereoLDI.glsl";
         this.vertexShaderUrl = "../Shaders/vertex.glsl";
 
         // Setup Shader
@@ -425,8 +425,7 @@ class lifViewer {
     }
 
     async loadShaderFile(url) {
-        // const response = await fetch(url + '?t=' + new Date().getTime()); // Append cache-busting query parameter);
-        const response = await fetch(url);
+        const response = await fetch(url + '?t=' + new Date().getTime()); // Append cache-busting query parameter);
         return response.text();
     }
 
