@@ -243,8 +243,8 @@ void main(void) {
 
         float normInvZ = invZ / invZmin[0];
         // Calculate the contour effect based on time and depth value
-        float animTime = 4.0;
-        float phase = 1.0 - mod(uTime / animTime, 1.0);
+        float animTime = 2.0;
+        float phase = 1.0 - min(uTime / animTime, 1.0);
         float contourEffect = smoothstep(phase - 0.02, phase - 0.01, normInvZ) * (1.0 - smoothstep(phase + 0.01, phase + 0.02, normInvZ));
         // Mix the base color with the contour color based on the contour effect
         vec3 contourColor2 = vec3(0.0, 0.0, 1.0);
