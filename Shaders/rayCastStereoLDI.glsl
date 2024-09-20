@@ -1,13 +1,14 @@
 precision highp float;
 
 #ifdef GL_ES
-varying highp vec2 UV;
+varying highp vec2 v_texcoord;
 #else
-in vec2 UV;
+in vec2 v_texcoord;
 #endif
 
 uniform vec2 iResOriginal;
 
+uniform float uTime;
 // info view L
 uniform sampler2D uImageL[4]; // for LDI this is an array
 uniform sampler2D uDisparityMapL[4]; // for LDI this is an array
@@ -17,10 +18,7 @@ uniform vec2 sk1L, sl1L; // common to all layers
 uniform float roll1L; // common to all layers, f1 in px
 uniform float f1L[4]; // f per layer
 uniform vec2 iResL[4];
-uniform float writeDepthToAlpha;
-uniform bool isMultisamplePass;
-uniform bool bypassMultisampling;
-uniform sampler2D uPreviousRendering;
+
 // add originalF
 uniform int uNumLayersL;
 
@@ -136,28 +134,6 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
-bool shouldMultisample(vec4 c, vec2 xy) { // pixel-perfect, hard edges
-    float edge_proximity = 0.0;
-    const float edge_detection = 0.1; // considering making 0.05 to include more edges
-    for (float x = -3.0; x <= 3.0; x += 1.0) {
-        for (float y = -3.0; y <= 3.0; y += 1.0) {
-            vec2 offset_xy = xy + vec2(x, y) / oRes;
-            vec4 s = texture2D(uPreviousRendering, offset_xy);
-            if (c.a - s.a > edge_detection) {
-                edge_proximity += (c.a - s.a) * (5.0 - length(vec2(x,y)));
-            }
-            if (abs(x) <= 2.0 && abs(y) <= 2.0) {
-                if (s.a - c.a > edge_detection) {
-                    edge_proximity += (s.a - c.a) * (4.0 - length(vec2(x,y)));
-                }
-            }
-        }
-    }
-
-    edge_proximity = pow(clamp(edge_proximity, 0.0, 12.0) / 12.0, 1.0/2.0);
-    return edge_proximity > 0.5;
-}
-
 // Multiview weighting
 float weight2(vec3 C, vec3 C1, vec3 C2) {
 
@@ -166,9 +142,8 @@ float weight2(vec3 C, vec3 C1, vec3 C2) {
 
 }
 
-
 // Action !
-vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t, out float invZ2, out float hit_invZ) {
+vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t, out float invZ2) {
 
     // s2 is normalized xy coordinate for synthesized view, centered at 0 so values in -0.5..0.5
 
@@ -232,7 +207,6 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         invZ2 += alpha;
         if(isMaskAround(s1 + .5, iChannelDisp, iRes))
             return vec4(vec3(0.1), 0.0); // option b) original. 0.0 - masked pixel
-        hit_invZ = invZ / invZmin;
         return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
     } else {
         return vec4(vec3(0.1), 0.0);
@@ -240,8 +214,12 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     }
 }
 
-vec4 ldi(vec2 uv) {
-    // return vec4(1.0,0.0,0.0,1.0);
+void main(void) {
+
+    // gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+    // return;
+
+    vec2 uv = v_texcoord;
 
     // Optional: Window at invZmin
     float s = min(oRes.x, oRes.y) / min(iResOriginal.x, iResOriginal.y);
@@ -261,24 +239,23 @@ vec4 ldi(vec2 uv) {
         // LDI
         vec4 resultL, resultR;
         float invZL, invZR = 0.0;
-        float hit_invZL = 0.0, hit_invZR = 0.0;
 
-        vec4 layer1L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[0] / iResL[0].x, f1L[0] / iResL[0].y)) * SKR1L, C1L, uImageL[0], uDisparityMapL[0], invZminL[0], invZmaxL[0], iResL[0], 1.0, invZL, hit_invZL);
+        vec4 layer1L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[0] / iResL[0].x, f1L[0] / iResL[0].y)) * SKR1L, C1L, uImageL[0], uDisparityMapL[0], invZminL[0], invZmaxL[0], iResL[0], 1.0, invZL);
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1L.a == 1.0 || uNumLayersL == 1) {
             resultL = layer1L;
             invZL += 200.0;
         } else {
-            vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL, hit_invZL) * (1.0 - layer1L.w) + layer1L * layer1L.w;
+            vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL) * (1.0 - layer1L.w) + layer1L * layer1L.w;
             if(layer2L.a == 1.0 || uNumLayersL == 2) {
                 resultL = layer2L;
                 invZL += 100.0;
             } else {
-                vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL, hit_invZL) * (1.0 - layer2L.w) + layer2L * layer2L.w;
+                vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL) * (1.0 - layer2L.w) + layer2L * layer2L.w;
                 if(layer3L.a == 1.0 || uNumLayersL == 3) {
                     resultL = layer3L;
                 } else {
-                    vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL, hit_invZL) * (1.0 - layer3L.w) + layer3L * layer3L.w;
+                    vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL) * (1.0 - layer3L.w) + layer3L * layer3L.w;
                     if(uNumLayersL == 4) {
                         resultL = layer4L;
                     }
@@ -286,22 +263,22 @@ vec4 ldi(vec2 uv) {
             }
         }
 
-        vec4 layer1R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[0] / iResR[0].x, f1R[0] / iResR[0].y)) * SKR1R, C1R, uImageR[0], uDisparityMapR[0], invZminR[0], invZmaxR[0], iResR[0], 1.0, invZR, hit_invZR);
+        vec4 layer1R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[0] / iResR[0].x, f1R[0] / iResR[0].y)) * SKR1R, C1R, uImageR[0], uDisparityMapR[0], invZminR[0], invZmaxR[0], iResR[0], 1.0, invZR);
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1R.a == 1.0 || uNumLayersR == 1) {
             resultR = layer1R;
             invZR += 200.0;
         } else {
-            vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR, hit_invZR) * (1.0 - layer1R.w) + layer1R * layer1R.w;
+            vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR) * (1.0 - layer1R.w) + layer1R * layer1R.w;
             if(layer2R.a == 1.0 || uNumLayersR == 2) {
                 resultR = layer2R;
                 invZR += 100.0;
             } else {
-                vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR, hit_invZR) * (1.0 - layer2R.w) + layer2R * layer2R.w;
+                vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR) * (1.0 - layer2R.w) + layer2R * layer2R.w;
                 if(layer3R.a == 1.0 || uNumLayersR == 3) {
                     resultR = layer3R;
                 } else {
-                    vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR, hit_invZR) * (1.0 - layer3R.w) + layer3R * layer3R.w;
+                    vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR) * (1.0 - layer3R.w) + layer3R * layer3R.w;
                     if(uNumLayersR == 4) {
                         resultR = layer4R;
                     }
@@ -312,53 +289,21 @@ vec4 ldi(vec2 uv) {
         float wR = weight2(C2, C1L, C1R);
 
         vec4 result = (1.0 - wR) * resultL + wR * resultR;
-        float last_z = (1.0 - wR) * hit_invZL + wR * hit_invZR;
 
         // if(invZR < -50.0 || invZL > invZR + 0.01)
         //     result = resultL;
         // if(invZL < -50.0 || invZR > invZL + 0.01)
         //     result = resultR;    
 
-        if(invZL - invZR >= 50.0) {
+        if(invZL - invZR >= 50.0)
             result = resultL;
-            last_z = hit_invZL;
-        }
-
-        if(invZR - invZL >= 50.0) {
+        if(invZR - invZL >= 50.0)
             result = resultR;
-            last_z = hit_invZR;
-        }
 
-        return vec4(result.rgb, 1.0 - writeDepthToAlpha + writeDepthToAlpha * last_z);
-        //return vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
+        gl_FragColor = vec4(result.rgb, 1.0);
+        //gl_FragColor = vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
 
     } else {
-        return vec4(vec3(0.1), 1.0);
-    }
-}
-
-void main(void) {
-    if (!isMultisamplePass) {
-        gl_FragColor = ldi(UV);
-    } else {
-        vec2 uv = vec2(UV.x, 1.0 - UV.y);
-        vec4 previousColor = texture2D(uPreviousRendering, UV);
-        if (!shouldMultisample(previousColor, UV) || bypassMultisampling) {
-            gl_FragColor = previousColor;
-            return;
-        }
-
-        // 8x MSAA
-        vec2 ss = 8.0 * oRes; // implying oRes equals previousRendering size, if differs, introduce previousRendering size uniform
-        vec4 result = vec4(0.0);
-        result += ldi(uv + vec2(1,-3) / ss);
-        result += ldi(uv + vec2(-1,3) / ss);
-        result += ldi(uv + vec2(5,1) / ss);
-        result += ldi(uv + vec2(-3,-5) / ss);
-        result += ldi(uv + vec2(-5,5) / ss);
-        result += ldi(uv + vec2(-7,1) / ss);
-        result += ldi(uv + vec2(3,7) / ss);
-        result += ldi(uv + vec2(7,-7) / ss);
-        gl_FragColor = vec4((result / 8.0).rgb, previousColor.a);
+        gl_FragColor = vec4(vec3(0.1), 1.0);
     }
 }

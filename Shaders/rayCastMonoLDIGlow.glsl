@@ -1,11 +1,13 @@
 precision highp float;
 
 #ifdef GL_ES
-varying highp vec2 UV;
+varying highp vec2 v_texcoord;
 #else
-in vec2 UV;
+in vec2 v_texcoord;
 #endif
 
+uniform vec2 iResOriginal;
+uniform float uTime;
 // info views
 uniform sampler2D uImage[4]; // for LDI this is an array
 uniform sampler2D uDisparityMap[4]; // for LDI this is an array
@@ -15,13 +17,6 @@ uniform vec2 sk1, sl1; // common to all layers
 uniform float roll1; // common to all layers, f1 in px
 uniform float f1[4]; // f per layer
 uniform vec2 iRes[4];
-uniform vec2 iResOriginal;
-// add originalF
-uniform float writeDepthToAlpha;
-uniform bool isMultisamplePass;
-uniform bool bypassMultisampling;
-uniform sampler2D uPreviousRendering;
-float last_z;
 uniform int uNumLayers;
 
 // info rendering params
@@ -36,6 +31,11 @@ uniform vec2 oRes; // viewport resolution in px
     return texelFetch(iChannel, ivec, 0);
 }*/
 #define texture texture2D
+
+struct vec5 {
+    vec4 xyzw;
+    float v;
+};
 
 float taper(vec2 uv) {
     return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
@@ -120,30 +120,8 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
-bool shouldMultisample(vec4 c, vec2 xy) { // pixel-perfect, hard edges
-    float edge_proximity = 0.0;
-    const float edge_detection = 0.1; // considering making 0.05 to include more edges
-    for (float x = -3.0; x <= 3.0; x += 1.0) {
-        for (float y = -3.0; y <= 3.0; y += 1.0) {
-            vec2 offset_xy = xy + vec2(x, y) / oRes;
-            vec4 s = texture2D(uPreviousRendering, offset_xy);
-            if (c.a - s.a > edge_detection) {
-                edge_proximity += (c.a - s.a) * (5.0 - length(vec2(x,y)));
-            }
-            if (abs(x) <= 2.0 && abs(y) <= 2.0) {
-                if (s.a - c.a > edge_detection) {
-                    edge_proximity += (s.a - c.a) * (4.0 - length(vec2(x,y)));
-                }
-            }
-        }
-    }
-
-    edge_proximity = pow(clamp(edge_proximity, 0.0, 12.0) / 12.0, 1.0/2.0);
-    return edge_proximity > 0.5;
-}
-
 // Action !
-vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t) {
+vec5 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t) {
 
     // s2 is normalized xy coordinate for synthesized view, centered at 0 so values in -0.5..0.5
 
@@ -164,7 +142,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 
     vec3 nor = vec3(0.0);
 
-    mat3 P = FSKR1 * inverse(FSKR2);
+    mat3 P = FSKR1 * inverseMat(FSKR2);
     vec3 C = FSKR1 * (C2 - C1);
 
     // extract matrix blocks
@@ -202,20 +180,20 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     if((abs(s1.x) < 0.5) && (abs(s1.y) < 0.5) && (invZ2 > 0.0) && (invZ > invZminT)) {
     //if ((abs(s1.x*adjustAr(iChannelResolution[0].xy,iResolution.xy).x)<0.495)&&(abs(s1.y*adjustAr(iChannelResolution[0].xy,iResolution.xy).y)<0.495)&&(invZ2>0.0)) {
         if(uNumLayers == 0) { // non-ldi
-            return vec4(readColor(iChannelCol, s1 + .5), alpha * invZ2);
+            return vec5(vec4(readColor(iChannelCol, s1 + .5), alpha * invZ2), invZ2);
         }
 //
         if(isMaskAround(s1 + .5, iChannelDisp, iRes))
-            return vec4(0.0); // option b) original. 0.0 - masked pixel
-        last_z = invZ / invZmin;
-        return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+            return vec5(vec4(0.0), 0.0); // option b) original. 0.0 - masked pixel
+        return vec5(vec4(readColor(iChannelCol, s1 + .5), 1.0), invZ2); // 1.0 - non masked pixel
     } else {
-        return vec4(vec3(0.1), 0.0);
+        return vec5(vec4(vec3(0.1), 0.0), 0.0);
     }
 }
 
-vec4 ldi(vec2 uv) {
-    // return vec4(1.0,0.0,0.0,1.0);
+void main(void) {
+
+    vec2 uv = v_texcoord;
 
     // Optional: Window at invZmin
     float s = min(oRes.x, oRes.y) / min(iResOriginal.x, iResOriginal.y);
@@ -231,56 +209,56 @@ vec4 ldi(vec2 uv) {
 
         // LDI
         vec3 color;
-        vec4 layer1 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[0] / iRes[0].x, f1[0] / iRes[0].y)) * SKR1, C1, uImage[0], uDisparityMap[0], invZmin[0], invZmax[0], iRes[0], 1.0);
+        float invZ;
+
+        vec4 layer;
+        vec5 layer1 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[0] / iRes[0].x, f1[0] / iRes[0].y)) * SKR1, C1, uImage[0], uDisparityMap[0], invZmin[0], invZmax[0], iRes[0], 1.0);
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
-        if(layer1.a == 1.0 || uNumLayers == 1) {
-            color = layer1.rgb;
+        if(layer1.xyzw.w == 1.0 || uNumLayers == 1) {
+            layer = layer1.xyzw;
+            color = layer.xyz;
+            invZ = layer1.v;
         } else {
-            vec4 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0) * (1.0 - layer1.w) + layer1 * layer1.w;
-            if(layer2.a == 1.0 || uNumLayers == 2) {
-                color = layer2.rgb;
+            vec5 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0);
+            layer = layer2.xyzw * (1.0 - layer.w) + layer * layer.w;
+            if(layer2.xyzw.w == 1.0 || uNumLayers == 2) {
+                color = layer.xyz;
+                invZ = layer2.v;
             } else {
-                vec4 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0) * (1.0 - layer2.w) + layer2 * layer2.w;
-                if(layer3.a == 1.0 || uNumLayers == 3) {
-                    color = layer3.rgb;
+                vec5 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0);
+                layer = layer3.xyzw * (1.0 - layer.w) + layer * layer.w;
+                if(layer3.xyzw.w == 1.0 || uNumLayers == 3) {
+                    color = layer.xyz;
+                    invZ = layer3.v;
                 } else {
-                    vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
-                    if( uNumLayers == 4) {
-                        color = layer4.rgb;
+                    vec5 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0);
+                    layer = layer4.xyzw * (1.0 - layer.w) + layer * layer.w;
+                    if(uNumLayers == 4) {
+                        color = layer.xyz;
+                        invZ = layer4.v;
                     } 
                 }
             }
         }
 
-        return vec4(color, 1.0 - writeDepthToAlpha + writeDepthToAlpha * last_z);
+        float normInvZ = invZ / invZmin[0];
+        // Calculate the contour effect based on time and depth value
+        float animTime = 4.0;
+        float phase = 1.0 - mod(uTime / animTime, 1.0);
+        float contourEffect = smoothstep(phase - 0.02, phase - 0.01, normInvZ) * (1.0 - smoothstep(phase + 0.01, phase + 0.02, normInvZ));
+        // Mix the base color with the contour color based on the contour effect
+        vec3 contourColor2 = vec3(0.0, 0.0, 1.0);
+        vec3 contourColor1 = vec3(1.0, 1.0, 1.0);
+        vec4 contour = vec4(mix(contourColor2, contourColor1, contourEffect * contourEffect), 1.0);
+
+        vec4 baseColor = vec4(color, 1.0);
+        // Combine the base color with the contour effect
+        gl_FragColor = mix(baseColor, contour, contourEffect * normInvZ);
+        //gl_FragColor = contourColorEffect;
+        //gl_FragColor = vec4(color, 1.0);
+        //gl_FragColor = vec4(vec3(invZ/invZmin[0]), 1.0);
 
     } else {
-        return vec4(vec3(0.1), 1.0);
-    }
-}
-
-void main(void) {
-    if (!isMultisamplePass) {
-        gl_FragColor = ldi(UV);
-    } else {
-        vec2 uv = vec2(UV.x, 1.0 - UV.y);
-        vec4 previousColor = texture2D(uPreviousRendering, UV);
-        if (!shouldMultisample(previousColor, UV) || bypassMultisampling) {
-            gl_FragColor = previousColor;
-            return;
-        }
-
-        // 8x MSAA
-        vec2 ss = 8.0 * oRes; // implying oRes equals previousRendering size, if differs, introduce previousRendering size uniform
-        vec4 result = vec4(0.0);
-        result += ldi(uv + vec2(1,-3) / ss);
-        result += ldi(uv + vec2(-1,3) / ss);
-        result += ldi(uv + vec2(5,1) / ss);
-        result += ldi(uv + vec2(-3,-5) / ss);
-        result += ldi(uv + vec2(-5,5) / ss);
-        result += ldi(uv + vec2(-7,1) / ss);
-        result += ldi(uv + vec2(3,7) / ss);
-        result += ldi(uv + vec2(7,-7) / ss);
-        gl_FragColor = vec4((result / 8.0).rgb, previousColor.a);
+        gl_FragColor = vec4(vec3(0.1), 1.0);
     }
 }

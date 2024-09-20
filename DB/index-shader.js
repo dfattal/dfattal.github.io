@@ -273,7 +273,7 @@ async function appendImageToGrid(id, url) {
     
     // Append the container to the image grid in the DOM
     document.getElementById('imageGrid').appendChild(container);
-    const fragmentShaderSource = await loadFragmentShader('../ShaderCode/fragment-shader.glsl');
+    const fragmentShaderSource = await loadFragmentShader('../Shaders/fragment-shader.glsl');
     new ShaderImage(img, fragmentShaderSource);
 }
 

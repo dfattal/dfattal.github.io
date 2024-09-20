@@ -1,11 +1,13 @@
 precision highp float;
 
 #ifdef GL_ES
-varying highp vec2 UV;
+varying highp vec2 v_texcoord;
 #else
-in vec2 UV;
+in vec2 v_texcoord;
 #endif
 
+uniform vec2 iResOriginal;
+uniform float uTime;
 // info views
 uniform sampler2D uImage[4]; // for LDI this is an array
 uniform sampler2D uDisparityMap[4]; // for LDI this is an array
@@ -15,13 +17,6 @@ uniform vec2 sk1, sl1; // common to all layers
 uniform float roll1; // common to all layers, f1 in px
 uniform float f1[4]; // f per layer
 uniform vec2 iRes[4];
-uniform vec2 iResOriginal;
-// add originalF
-uniform float writeDepthToAlpha;
-uniform bool isMultisamplePass;
-uniform bool bypassMultisampling;
-uniform sampler2D uPreviousRendering;
-float last_z;
 uniform int uNumLayers;
 
 // info rendering params
@@ -120,28 +115,6 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
-bool shouldMultisample(vec4 c, vec2 xy) { // pixel-perfect, hard edges
-    float edge_proximity = 0.0;
-    const float edge_detection = 0.1; // considering making 0.05 to include more edges
-    for (float x = -3.0; x <= 3.0; x += 1.0) {
-        for (float y = -3.0; y <= 3.0; y += 1.0) {
-            vec2 offset_xy = xy + vec2(x, y) / oRes;
-            vec4 s = texture2D(uPreviousRendering, offset_xy);
-            if (c.a - s.a > edge_detection) {
-                edge_proximity += (c.a - s.a) * (5.0 - length(vec2(x,y)));
-            }
-            if (abs(x) <= 2.0 && abs(y) <= 2.0) {
-                if (s.a - c.a > edge_detection) {
-                    edge_proximity += (s.a - c.a) * (4.0 - length(vec2(x,y)));
-                }
-            }
-        }
-    }
-
-    edge_proximity = pow(clamp(edge_proximity, 0.0, 12.0) / 12.0, 1.0/2.0);
-    return edge_proximity > 0.5;
-}
-
 // Action !
 vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t) {
 
@@ -207,15 +180,19 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 //
         if(isMaskAround(s1 + .5, iChannelDisp, iRes))
             return vec4(0.0); // option b) original. 0.0 - masked pixel
-        last_z = invZ / invZmin;
         return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
     } else {
         return vec4(vec3(0.1), 0.0);
     }
 }
 
-vec4 ldi(vec2 uv) {
-    // return vec4(1.0,0.0,0.0,1.0);
+void main(void) {
+
+    // gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+    // gl_FragColor = texture2D(uImage[0],v_texcoord);
+    // return;
+
+    vec2 uv = v_texcoord;
 
     // Optional: Window at invZmin
     float s = min(oRes.x, oRes.y) / min(iResOriginal.x, iResOriginal.y);
@@ -252,35 +229,9 @@ vec4 ldi(vec2 uv) {
             }
         }
 
-        return vec4(color, 1.0 - writeDepthToAlpha + writeDepthToAlpha * last_z);
+        gl_FragColor = vec4(color, 1.0);
 
     } else {
-        return vec4(vec3(0.1), 1.0);
-    }
-}
-
-void main(void) {
-    if (!isMultisamplePass) {
-        gl_FragColor = ldi(UV);
-    } else {
-        vec2 uv = vec2(UV.x, 1.0 - UV.y);
-        vec4 previousColor = texture2D(uPreviousRendering, UV);
-        if (!shouldMultisample(previousColor, UV) || bypassMultisampling) {
-            gl_FragColor = previousColor;
-            return;
-        }
-
-        // 8x MSAA
-        vec2 ss = 8.0 * oRes; // implying oRes equals previousRendering size, if differs, introduce previousRendering size uniform
-        vec4 result = vec4(0.0);
-        result += ldi(uv + vec2(1,-3) / ss);
-        result += ldi(uv + vec2(-1,3) / ss);
-        result += ldi(uv + vec2(5,1) / ss);
-        result += ldi(uv + vec2(-3,-5) / ss);
-        result += ldi(uv + vec2(-5,5) / ss);
-        result += ldi(uv + vec2(-7,1) / ss);
-        result += ldi(uv + vec2(3,7) / ss);
-        result += ldi(uv + vec2(7,-7) / ss);
-        gl_FragColor = vec4((result / 8.0).rgb, previousColor.a);
+        gl_FragColor = vec4(vec3(0.1), 1.0);
     }
 }

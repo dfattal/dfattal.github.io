@@ -61,7 +61,6 @@ class Metadata {
     }
 }
 
-
 async function parseBinary(arrayBuffer) {
     const fullSize = arrayBuffer.byteLength;
     const bf = new BinaryStream(arrayBuffer);
@@ -189,8 +188,8 @@ async function parseLif53(file) {
     const lifMeta = await parseBinary(arrayBuffer);
     const lifJson = lifMeta.getJsonMeta();
     console.log(lifJson);
-    let result = replaceKeys(lifJson, 
-        ['albedo', 'disparity', 'inv_z_dist', 'max_disparity', 'min_disparity', 'inv_z_dist_min', 'inv_z_dist_max'], 
+    let result = replaceKeys(lifJson,
+        ['albedo', 'disparity', 'inv_z_dist', 'max_disparity', 'min_disparity', 'inv_z_dist_min', 'inv_z_dist_max'],
         ['image', 'inv_z_map', 'inv_z_map', 'max', 'min', 'max', 'min']
     );
 
@@ -271,4 +270,564 @@ async function parseLif53(file) {
         }
     }
     return result;
+}
+
+// ShaderImage Class
+class lifViewer {
+    constructor(lifInfo) {
+        this.MAX_LAYERS = 4;
+        this.lifInfo = lifInfo;
+        this.views = replaceKeys(lifInfo.views,
+            ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
+            ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
+        );
+        this.parseObjAndCreateTextures(this.views);
+
+        this.img = document.createElement('img');
+        this.canvas = document.createElement('canvas');
+        this.gl = this.canvas.getContext('webgl');
+        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDI.glsl" : "../Shaders/rayCastStereoLDI.glsl"
+        this.vertexShaderUrl = "../Shaders/vertex.glsl";
+
+        this.renderCam = {
+            pos: { x: 0, y: 0, z: 0 }, // default
+            sl: { x: 0, y: 0 },
+            sk: { x: 0, y: 0 },
+            roll: 0,
+            f: 0 // placeholder
+        };
+
+        this.startTime = Date.now() / 1000;
+        this.phase = 0;
+        this.animationFrame = null;
+        this.render = this.render.bind(this);
+
+    }
+
+    async loadImage2(url) { // without cache busting
+        const img = new Image();
+        img.crossorigin = "anonymous"; // Set cross-origin attribute
+        img.src = url;
+        return new Promise((resolve) => {
+            img.onload = () => resolve(img);
+        });
+    }
+
+    createTexture(image) {
+        const texture = this.gl.createTexture();
+        this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, image);
+
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+
+        return texture;
+    }
+
+    create4ChannelImage(dispImage, maskImage) {
+
+        const width = dispImage.width;
+        const height = dispImage.height;
+      
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+      
+        // Pass { willReadFrequently: true } to optimize for frequent read operations
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      
+        // Draw the disp image
+        ctx.drawImage(dispImage, 0, 0, width, height);
+        const dispData = ctx.getImageData(0, 0, width, height).data;
+      
+        // Draw the mask image
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(maskImage, 0, 0, width, height);
+        const maskData = ctx.getImageData(0, 0, width, height).data;
+      
+        // Create a new image data object for the 4-channel image
+        const combinedData = ctx.createImageData(width, height);
+        for (let i = 0; i < dispData.length / 4; i++) {
+          combinedData.data[i * 4] = dispData[i * 4];
+          combinedData.data[i * 4 + 1] = dispData[i * 4 + 1];
+          combinedData.data[i * 4 + 2] = dispData[i * 4 + 2];
+          combinedData.data[i * 4 + 3] = maskData[i * 4]; // Use the red channel of the mask image for the alpha channel
+        }
+      
+        return combinedData;
+      }
+
+    async parseObjAndCreateTextures(obj) {
+        for (let key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                if (key === 'image') {
+                    try {
+                        const img = await this.loadImage2(obj[key].url);
+                        obj[key]['texture'] = this.createTexture(img);
+                        console.log()
+                    } catch (error) {
+                        console.error('Error loading image:', error);
+                    }
+                } else if (key === 'invZ' && obj.hasOwnProperty('mask')) {
+                    try {
+                        const maskImg = await this.loadImage2(obj['mask'].url);
+                        const invzImg = await this.loadImage2(obj['invZ'].url);
+                        const maskedInvz = this.create4ChannelImage(invzImg, maskImg);
+                        obj['invZ']['texture'] = this.createTexture(maskedInvz);
+                    } catch (error) {
+                        console.error('Error loading mask or invz image:', error);
+                    }
+                } else if (key === 'invZ') { // no mask
+                    try {
+                        const invzImg = await this.loadImage2(obj['invZ'].url);
+                        obj['invZ']['texture'] = this.createTexture(invzImg);
+                    } catch (error) {
+                        console.error('Error loading invz image:', error);
+                    }
+
+                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    // Recursively parse nested objects
+                    await this.parseObjAndCreateTextures(obj[key]);
+                }
+            }
+        }
+    }
+
+    async loadShaderFile(url) {
+        const response = await fetch(url + '?t=' + new Date().getTime()); // Append cache-busting query parameter);
+        return response.text();
+    }
+
+    async loadShader(type, source) {
+        const shader = this.gl.createShader(type);
+        this.gl.shaderSource(shader, source);
+        this.gl.compileShader(shader);
+
+        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+            console.error('An error occurred compiling the shaders: ' + this.gl.getShaderInfoLog(shader));
+            this.gl.deleteShader(shader);
+            return null;
+        }
+
+        return shader;
+    }
+
+    async initShaderProgram(vsSource, fsSource) {
+        const vertexShader = await this.loadShader(this.gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = await this.loadShader(this.gl.FRAGMENT_SHADER, fsSource);
+        const shaderProgram = this.gl.createProgram();
+        this.gl.attachShader(shaderProgram, vertexShader);
+        this.gl.attachShader(shaderProgram, fragmentShader);
+        this.gl.linkProgram(shaderProgram);
+
+        if (!this.gl.getProgramParameter(shaderProgram, this.gl.LINK_STATUS)) {
+            console.error('Unable to initialize the shader program: ' + this.gl.getProgramInfoLog(shaderProgram));
+            return null;
+        }
+
+        return shaderProgram;
+    }
+
+    async setupWebGLMN() {
+
+        const vsSource = await this.loadShaderFile(this.vertexShaderUrl);
+        const fsSource = await this.loadShaderFile(this.fragmentShaderUrl);
+
+        // Initialize shaders and program
+        const shaderProgram = await this.initShaderProgram(vsSource, fsSource);
+        this.programInfo = {
+            program: shaderProgram,
+            attribLocations: {
+                vertexPosition: this.gl.getAttribLocation(shaderProgram, 'a_position'),
+                textureCoord: this.gl.getAttribLocation(shaderProgram, 'a_texcoord')
+            },
+            uniformLocations: {
+                uTime: this.gl.getUniformLocation(shaderProgram, 'uTime'),
+                //views info
+                uImage: [],
+                uDisparityMap: [],
+                uNumLayers: this.gl.getUniformLocation(shaderProgram, 'uNumLayers'),
+                invZmin: this.gl.getUniformLocation(shaderProgram, 'invZmin'), // float array
+                invZmax: this.gl.getUniformLocation(shaderProgram, 'invZmax'), // float array
+                uViewPosition: this.gl.getUniformLocation(shaderProgram, 'uViewPosition'),
+                sk1: this.gl.getUniformLocation(shaderProgram, 'sk1'),
+                sl1: this.gl.getUniformLocation(shaderProgram, 'sl1'),
+                roll1: this.gl.getUniformLocation(shaderProgram, 'roll1'),
+                f1: this.gl.getUniformLocation(shaderProgram, 'f1'),
+                iRes: this.gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
+                iResOriginal: this.gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+
+                // rendering info
+                uFacePosition: this.gl.getUniformLocation(shaderProgram, 'uFacePosition'),
+                sk2: this.gl.getUniformLocation(shaderProgram, 'sk2'),
+                sl2: this.gl.getUniformLocation(shaderProgram, 'sl2'),
+                roll2: this.gl.getUniformLocation(shaderProgram, 'roll2'),
+                f2: this.gl.getUniformLocation(shaderProgram, 'f2'),
+                oRes: this.gl.getUniformLocation(shaderProgram, 'oRes')
+            },
+        };
+
+        // Populate the uniform location arrays
+        for (let i = 0; i < this.MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+            this.programInfo.uniformLocations.uImage.push(this.gl.getUniformLocation(shaderProgram, `uImage[${i}]`));
+            this.programInfo.uniformLocations.uDisparityMap.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMap[${i}]`));
+        }
+
+        // Vertex positions and texture coordinates
+        const positions = new Float32Array([
+            -1.0, 1.0,
+            1.0, 1.0,
+            -1.0, -1.0,
+            1.0, -1.0,
+        ]);
+        const textureCoords = new Float32Array([
+            0.0, 0.0,
+            1.0, 0.0,
+            0.0, 1.0,
+            1.0, 1.0,
+        ]);
+
+        const positionBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, positions, this.gl.STATIC_DRAW);
+
+        const textureCoordBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, textureCoordBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, textureCoords, this.gl.STATIC_DRAW);
+
+        const indexBuffer = this.gl.createBuffer();
+        const indices = [0, 1, 2, 2, 1, 3];
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), this.gl.STATIC_DRAW);
+
+        this.buffers = { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer };
+    }
+
+    async setupWebGLST() {
+
+        const vsSource = await this.loadShaderFile(this.vertexShaderUrl);
+        const fsSource = await this.loadShaderFile(this.fragmentShaderUrl);
+
+        // Initialize shaders and program
+        const shaderProgram = await this.initShaderProgram(vsSource, fsSource);
+        this.programInfo = {
+            program: shaderProgram,
+            attribLocations: {
+                vertexPosition: this.gl.getAttribLocation(shaderProgram, 'a_position'),
+                textureCoord: this.gl.getAttribLocation(shaderProgram, 'a_texcoord')
+            },
+            uniformLocations: {
+                uTime: this.gl.getUniformLocation(shaderProgram, 'uTime'),
+                //view L info
+                uImageL: [],
+                uDisparityMapL: [],
+                uNumLayersL: this.gl.getUniformLocation(shaderProgram, 'uNumLayersL'),
+                invZminL: this.gl.getUniformLocation(shaderProgram, 'invZminL'), // float array
+                invZmaxL: this.gl.getUniformLocation(shaderProgram, 'invZmaxL'), // float array
+                uViewPositionL: this.gl.getUniformLocation(shaderProgram, 'uViewPositionL'),
+                sk1L: this.gl.getUniformLocation(shaderProgram, 'sk1L'),
+                sl1L: this.gl.getUniformLocation(shaderProgram, 'sl1L'),
+                roll1L: this.gl.getUniformLocation(shaderProgram, 'roll1L'),
+                f1L: this.gl.getUniformLocation(shaderProgram, 'f1L'),
+                iResL: this.gl.getUniformLocation(shaderProgram, 'iResL'), // vec2 array
+
+                //view R info
+                uImageR: [],
+                uDisparityMapR: [],
+                uNumRayersR: this.gl.getUniformLocation(shaderProgram, 'uNumLayersR'),
+                invZminR: this.gl.getUniformLocation(shaderProgram, 'invZminR'), // float array
+                invZmaxR: this.gl.getUniformLocation(shaderProgram, 'invZmaxR'), // float array
+                uViewPositionR: this.gl.getUniformLocation(shaderProgram, 'uViewPositionR'),
+                sk1R: this.gl.getUniformLocation(shaderProgram, 'sk1R'),
+                sl1R: this.gl.getUniformLocation(shaderProgram, 'sl1R'),
+                roll1R: this.gl.getUniformLocation(shaderProgram, 'roll1R'),
+                f1R: this.gl.getUniformLocation(shaderProgram, 'f1R'),
+                iResR: this.gl.getUniformLocation(shaderProgram, 'iResR'), // vec2 array
+
+                // rendering info
+                iResOriginal: this.gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+                uFacePosition: this.gl.getUniformLocation(shaderProgram, 'uFacePosition'),
+                sk2: this.gl.getUniformLocation(shaderProgram, 'sk2'),
+                sl2: this.gl.getUniformLocation(shaderProgram, 'sl2'),
+                roll2: this.gl.getUniformLocation(shaderProgram, 'roll2'),
+                f2: this.gl.getUniformLocation(shaderProgram, 'f2'),
+                oRes: this.gl.getUniformLocation(shaderProgram, 'oRes')
+            },
+        };
+
+        // Populate the uniform location arrays
+        for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+            programInfo.uniformLocations.uImageL.push(this.gl.getUniformLocation(shaderProgram, `uImageL[${i}]`));
+            programInfo.uniformLocations.uDisparityMapL.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMapL[${i}]`));
+            programInfo.uniformLocations.uImageR.push(this.gl.getUniformLocation(shaderProgram, `uImageR[${i}]`));
+            programInfo.uniformLocations.uDisparityMapR.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMapR[${i}]`));
+        }
+
+        // Vertex positions and texture coordinates
+        const positions = new Float32Array([
+            -1.0, 1.0,
+            1.0, 1.0,
+            -1.0, -1.0,
+            1.0, -1.0,
+        ]);
+        const textureCoords = new Float32Array([
+            0.0, 0.0,
+            1.0, 0.0,
+            0.0, 1.0,
+            1.0, 1.0,
+        ]);
+
+        const positionBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, positions, this.gl.STATIC_DRAW);
+
+        const textureCoordBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, textureCoordBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, textureCoords, this.gl.STATIC_DRAW);
+
+        const indexBuffer = this.gl.createBuffer();
+        const indices = [0, 1, 2, 2, 1, 3];
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), this.gl.STATIC_DRAW);
+
+        this.buffers = { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer };
+    }
+
+    drawSceneMN(t) {
+
+        this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        this.gl.useProgram(this.programInfo.program);
+
+        // Vertex positions
+        {
+            const numComponents = 2;
+            const type = this.gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+            this.gl.vertexAttribPointer(this.programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
+            this.gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
+        }
+
+        // Texture coordinates
+        {
+            const numComponents = 2;
+            const type = this.gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
+            this.gl.vertexAttribPointer(this.programInfo.attribLocations.textureCoord, numComponents, type, normalize, stride, offset);
+            this.gl.enableVertexAttribArray(this.programInfo.attribLocations.textureCoord);
+        }
+
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
+
+        const numLayers = this.views[0].layers.length;
+        // Loop through each layer and bind textures
+        for (let i = 0; i < numLayers; i++) {
+            this.gl.activeTexture(this.gl.TEXTURE0 + (2 * i));
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.views[0].layers[i].image.texture);
+            this.gl.uniform1i(this.programInfo.uniformLocations.uImage[i], 2 * i);
+
+            this.gl.activeTexture(this.gl.TEXTURE0 + (2 * i + 1));
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.views[0].layers[i].invZ.texture);
+            this.gl.uniform1i(this.programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
+        }
+        // Pass the actual number of layers to the shader
+        this.gl.uniform1i(this.gl.getUniformLocation(this.programInfo.program, 'uNumLayers'), numLayers);
+
+        this.gl.uniform1f(this.gl.getUniformLocation(this.programInfo.program, 'uTime'), t);
+        // this.views info
+        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPosition, this.views[0].position.x, this.views[0].position.y, this.views[0].position.z);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk1, this.views[0].sk.x, this.views[0].sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl1, this.views[0].rotation.sl.x, this.views[0].rotation.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll1, this.views[0].rotation.roll_degrees);
+        this.gl.uniform1fv(this.programInfo.uniformLocations.f1, this.views[0].layers.map(layer => layer.f)); // in px
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmin, this.views[0].layers.map(layer => layer.invZ.min));
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmax, this.views[0].layers.map(layer => layer.invZ.max));
+        this.gl.uniform2fv(this.programInfo.uniformLocations.iRes, this.views[0].layers.map(layer => [layer.width, layer.height]).flat());
+
+        // rendering info
+        this.gl.uniform2f(this.programInfo.uniformLocations.iResOriginal, this.views[0].width, this.views[0].height); // for window effect only
+        this.gl.uniform3f(this.programInfo.uniformLocations.uFacePosition, this.renderCam.pos.x, this.renderCam.pos.y, this.renderCam.pos.z); // normalized to camera space
+        this.gl.uniform2f(this.programInfo.uniformLocations.oRes, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk2, this.renderCam.sk.x, this.renderCam.sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl2, this.renderCam.sl.x, this.renderCam.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll2, this.renderCam.roll);
+        this.gl.uniform1f(this.programInfo.uniformLocations.f2, this.renderCam.f); // in px
+
+        const vertexCount = 6;
+        const type = this.gl.UNSIGNED_SHORT;
+        const offset = 0;
+
+        this.gl.drawElements(this.gl.TRIANGLES, vertexCount, type, offset);
+        //this.logAllUniforms()
+    }
+
+    drawSceneST(t) {
+
+        this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+        this.gl.useProgram(this.programInfo.program);
+
+        // Vertex positions
+        {
+            const numComponents = 2;
+            const type = this.gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.position);
+            this.gl.vertexAttribPointer(this.programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
+            this.gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
+        }
+
+        // Texture coordinates
+        {
+            const numComponents = 2;
+            const type = this.gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffers.textureCoord);
+            this.gl.vertexAttribPointer(this.programInfo.attribLocations.textureCoord, numComponents, type, normalize, stride, offset);
+            this.gl.enableVertexAttribArray(this.programInfo.attribLocations.textureCoord);
+        }
+
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
+
+        this.gl.uniform1f(this.gl.getUniformLocation(this.programInfo.program, 'uTime'), t);
+        // view L info
+        const numLayersL = views[0].layers.length;
+
+        // Loop through each layer and bind textures
+        for (let i = 0; i < numLayersL; i++) {
+            this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i));
+            this.gl.bindTexture(this.gl.TEXTURE_2D, views[0].layers[i].image.texture);
+            this.gl.uniform1i(this.programInfo.uniformLocations.uImageL[i], 4 * i);
+
+            this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i + 1));
+            this.gl.bindTexture(this.gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
+            this.gl.uniform1i(this.programInfo.uniformLocations.uDisparityMapL[i], 4 * i + 1);
+        }
+        // Pass the actual number of layers to the shader
+        this.gl.uniform1i(this.programInfo.uniformLocations.uNumLayersL, numLayersL);
+
+        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPositionL, views[0].position.x, views[0].position.y, views[0].position.z);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk1L, views[0].sk.x, views[0].sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl1L, views[0].rotation.sl.x, views[0].rotation.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll1L, views[0].rotation.roll_degrees);
+        this.gl.uniform1fv(this.programInfo.uniformLocations.f1L, views[0].layers.map(layer => layer.f)); // in px
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZminL, views[0].layers.map(layer => layer.invZ.min));
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmaxL, views[0].layers.map(layer => layer.invZ.max));
+        this.gl.uniform2fv(this.programInfo.uniformLocations.iResL, views[0].layers.map(layer => [layer.width, layer.height]).flat());
+
+        // view R info
+        const numLayersR = views[1].layers.length;
+
+        // Loop through each layer and bind textures
+        for (let i = 0; i < numLayersR; i++) {
+            this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i + 2));
+            this.gl.bindTexture(this.gl.TEXTURE_2D, views[1].layers[i].image.texture);
+            this.gl.uniform1i(this.programInfo.uniformLocations.uImageR[i], 4 * i + 2);
+
+            this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i + 3));
+            this.gl.bindTexture(this.gl.TEXTURE_2D, views[1].layers[i].invZ.texture);
+            this.gl.uniform1i(this.programInfo.uniformLocations.uDisparityMapR[i], 4 * i + 3);
+        }
+        // Pass the actual number of layers to the shader
+        this.gl.uniform1i(this.programInfo.uniformLocations.uNumLayersr, numLayersR);
+
+        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPositionR, views[1].position.x, views[1].position.y, views[1].position.z);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk1R, views[1].sk.x, views[1].sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl1R, views[1].rotation.sl.x, views[1].rotation.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll1R, views[1].rotation.roll_degrees);
+        this.gl.uniform1fv(this.programInfo.uniformLocations.f1R, views[1].layers.map(layer => layer.f)); // in px
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZminR, views[1].layers.map(layer => layer.invZ.min));
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmaxR, views[1].layers.map(layer => layer.invZ.max));
+        this.gl.uniform2fv(this.programInfo.uniformLocations.iResR, views[1].layers.map(layer => [layer.width, layer.height]).flat());
+
+        // rendering info
+        this.gl.uniform2f(this.programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+        this.gl.uniform3f(this.programInfo.uniformLocations.uFacePosition, this.renderCam.pos.x, this.renderCam.pos.y, this.renderCam.pos.z); // normalized to camera space
+        this.gl.uniform2f(this.programInfo.uniformLocations.oRes, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk2, this.renderCam.sk.x, this.renderCam.sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl2, this.renderCam.sl.x, this.renderCam.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll2, this.renderCam.roll);
+        this.gl.uniform1f(this.programInfo.uniformLocations.f2, this.renderCam.f); // in px
+
+        const vertexCount = 6;
+        const type = this.gl.UNSIGNED_SHORT;
+        const offset = 0;
+
+        this.gl.drawElements(this.gl.TRIANGLES, vertexCount, type, offset);
+    }
+
+    viewportScale(iRes, oRes) {
+        return Math.min(oRes.x, oRes.y) / Math.min(iRes.x, iRes.y);
+    }
+
+    // Log all uniforms
+    logAllUniforms() {
+        const numUniforms = this.gl.getProgramParameter(this.programInfo.program, this.gl.ACTIVE_UNIFORMS);
+        const uniforms = {};
+
+        for (let i = 0; i < numUniforms; ++i) {
+            const info = this.gl.getActiveUniform(this.programInfo.program, i);
+            const location = this.gl.getUniformLocation(this.programInfo.program, info.name);
+            const value = this.gl.getUniform(this.programInfo.program, location);
+            uniforms[info.name] = value;
+        }
+
+        console.log('Uniforms:', uniforms);
+    }
+
+    render() {
+        const animTime = 4;
+        const focus = 1;
+        const invd = focus * this.views[0].layers[0].invZ.min; // set focus point
+        const t = Date.now() / 1000 - this.startTime;
+        const st = Math.sin(2 * Math.PI * t / animTime);
+        const ct = Math.cos(2 * Math.PI * t / animTime);
+        // update renderCam
+        this.renderCam.pos = { x: 0.2 * st, y: 0, z: 0.2 * ct };
+        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
+        this.renderCam.f = this.views[0].f * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+
+        if (this.views.length < 2) {
+            this.drawSceneMN(t);
+        } else {
+            this.drawSceneST(t);
+        }
+
+        this.animationFrame = requestAnimationFrame(this.render);
+    }
+
+    async startAnimation() {
+        
+        // Set up shader
+        if (this.views.length < 2) {
+            await this.setupWebGLMN();
+        } else {
+            await this.setupWebGLST();
+        }
+        this.startTime = Date.now() / 1000;
+        //console.log(this.views);
+        this.animationFrame = requestAnimationFrame(this.render);
+    }
+
+    stopAnimation() {
+        cancelAnimationFrame(this.animationFrame);
+    }
 }

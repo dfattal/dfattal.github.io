@@ -37,29 +37,6 @@ const postProcessingFragmentShaderSource = `
   uniform sampler2D uTexture;
   uniform vec2 oRes;
 
-  float getEdgeProximity(vec4 c, vec2 xy) { // pixel-perfect, hard edges
-    float edge_proximity = 0.0;
-    const float edge_detection = 0.1; // considering making 0.05 to include more edges
-    for (float x = -3.0; x <= 3.0; x += 1.0) {
-        for (float y = -3.0; y <= 3.0; y += 1.0) {
-            vec2 offset_xy = xy + vec2(x, y) / oRes;
-            vec4 s = texture2D(uTexture, offset_xy);
-            if (c.a - s.a > edge_detection) {
-                edge_proximity += (c.a - s.a) * (5.0 - length(vec2(x,y)));
-            }
-            if (abs(x) <= 2.0 && abs(y) <= 2.0) {
-                if (s.a - c.a > edge_detection) {
-                    edge_proximity += (s.a - c.a) * (4.0 - length(vec2(x,y)));
-                }
-            }
-        }
-    }
-    
-    edge_proximity = pow(clamp(edge_proximity, 0.0, 12.0) / 12.0, 1.0/2.0);
-    if (edge_proximity <= 0.01) return 0.0;
-    return min(edge_proximity, 1.0);
-  }
-
   float getSoftEdgeProximity(vec4 c, vec2 xy) { // relative radius, soft edges
     float edge_proximity = 0.0;
     float radius = 1.0;
@@ -106,7 +83,7 @@ const postProcessingFragmentShaderSource = `
   }
 
   void main() {
-    gl_FragColor = edge_blur(vec2(vTextureCoord.x, 1.0 - vTextureCoord.y));
+    gl_FragColor = edge_blur(vTextureCoord);
   }
 `;
 
@@ -164,6 +141,9 @@ function setupWebGL(gl, fragmentShaderSource) {
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
       writeDepthToAlpha: gl.getUniformLocation(shaderProgram, 'writeDepthToAlpha'),
+      isMultisamplePass: gl.getUniformLocation(shaderProgram, 'isMultisamplePass'),
+      bypassMultisampling: gl.getUniformLocation(shaderProgram, 'bypassMultisampling'),
+      uPreviousRendering: gl.getUniformLocation(shaderProgram, 'uPreviousRendering'),
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -203,10 +183,11 @@ function setupWebGL(gl, fragmentShaderSource) {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 
-  const { framebuffer, texture, size } = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
+  const framebuffer1 = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
+  const framebuffer2 = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
   const postProcessingShader = setupPostProcessingShader(gl);
 
-  return { programInfo, postProcessingShader, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer }, framebuffer, texture, size };
+  return { programInfo, postProcessingShader, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer }, framebuffer1, framebuffer2 };
 }
 
 function setupWebGLST(gl, fragmentShaderSource) {
@@ -259,6 +240,9 @@ function setupWebGLST(gl, fragmentShaderSource) {
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
       writeDepthToAlpha: gl.getUniformLocation(shaderProgram, 'writeDepthToAlpha'),
+      isMultisamplePass: gl.getUniformLocation(shaderProgram, 'isMultisamplePass'),
+      bypassMultisampling: gl.getUniformLocation(shaderProgram, 'bypassMultisampling'),
+      uPreviousRendering: gl.getUniformLocation(shaderProgram, 'uPreviousRendering'),
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -300,27 +284,41 @@ function setupWebGLST(gl, fragmentShaderSource) {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 
-  const { framebuffer, texture, size } = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
+  const framebuffer1 = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
+  const framebuffer2 = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
   const postProcessingShader = setupPostProcessingShader(gl);
 
-  return { programInfo, postProcessingShader, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer }, framebuffer, texture, size };
+  return { programInfo, postProcessingShader, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer }, framebuffer1, framebuffer2 };
 }
 
-let multiPass = true;
-let lastToggleTime = Date.now();
+let multiPass = false;
+let bypassMultisampling = false;
 const toggleInterval = 1000; // 1 Second
-
-function drawScene(gl, programInfo, postProcessingShader, framebuffer, buffers, views, renderCam) {
-  const currentTime = Date.now();
-  if (currentTime - lastToggleTime >= toggleInterval) {
-    multiPass = !multiPass;
-    lastToggleTime = currentTime;
+function toggleModes() {
+  const elapsedSeconds = Math.floor(Date.now() / toggleInterval);
+  const cyclePosition = elapsedSeconds % 3;
+  if (cyclePosition == 0) { // first second no extra steps
+    multiPass = false;
+    bypassMultisampling = true;
+  } else if (cyclePosition == 1) { // second second - blur only
+    multiPass = true;
+    bypassMultisampling = true;
+  } else if (cyclePosition == 2) { // third second - multisample then blur
+    multiPass = true;
+    bypassMultisampling = false;
   }
+}
+
+function drawScene(gl, programInfo, postProcessingShader, framebuffer1, framebuffer2, buffers, views, renderCam) {
+  toggleModes();
+  // enforce rendering mode if needed
+  // multiPass = true;
+  // bypassMultisampling = true;  
 
   // First pass: Render to framebuffer
   if (multiPass) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer.framebuffer);
-    gl.viewport(0, 0, framebuffer.size.width, framebuffer.size.height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer1.framebuffer);
+    gl.viewport(0, 0, framebuffer1.size.width, framebuffer1.size.height);
   } else {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -371,6 +369,10 @@ function drawScene(gl, programInfo, postProcessingShader, framebuffer, buffers, 
   // Pass the actual number of layers to the shader
   gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
 
+  gl.activeTexture(gl.TEXTURE0 + 2 * numLayers);
+  gl.bindTexture(gl.TEXTURE_2D, views[0].layers[0].image.texture); // need to set any texture here to avoid feedback loop
+  gl.uniform1i(programInfo.uniformLocations.uPreviousRendering, 2 * numLayers);
+
   // views info
   gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].position.x, views[0].position.y, views[0].position.z);
   gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x, views[0].sk.y);
@@ -391,6 +393,8 @@ function drawScene(gl, programInfo, postProcessingShader, framebuffer, buffers, 
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.writeDepthToAlpha, multiPass ? 1.0 : 0.0);
 
+  gl.uniform1i(programInfo.uniformLocations.isMultisamplePass, false);
+
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
   const offset = 0;
@@ -398,30 +402,38 @@ function drawScene(gl, programInfo, postProcessingShader, framebuffer, buffers, 
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
    
   if (multiPass) {
-    // Second pass: Post-processing
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer2.framebuffer);
+    gl.viewport(0, 0, framebuffer2.size.width, framebuffer2.size.height);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // Second pass: multisampling by casting more rays around edges, using same shader program but with added inpus:
+    gl.uniform1i(programInfo.uniformLocations.isMultisamplePass, true);
+    gl.uniform1i(programInfo.uniformLocations.bypassMultisampling, bypassMultisampling); // for toggling
+    gl.activeTexture(gl.TEXTURE0 + 2 * numLayers);
+    gl.bindTexture(gl.TEXTURE_2D, framebuffer1.texture);
+    gl.uniform1i(programInfo.uniformLocations.uPreviousRendering, 2 * numLayers);
+    gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+
+    // Third pass: Post-processing edges with blur
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(postProcessingShader.program);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, framebuffer.texture);
+    gl.bindTexture(gl.TEXTURE_2D, framebuffer2.texture);
     gl.uniform1i(postProcessingShader.uniformLocations.uTexture, 0);
     gl.uniform2f(postProcessingShader.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
     gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
   }
 }
 
-function drawSceneST(gl, programInfo, postProcessingShader, framebuffer, buffers, views, renderCam) {
-
-  const currentTime = Date.now();
-  if (currentTime - lastToggleTime >= toggleInterval) {
-    multiPass = !multiPass;
-    lastToggleTime = currentTime;
-  }
+function drawSceneST(gl, programInfo, postProcessingShader, framebuffer1, framebuffer2, buffers, views, renderCam) {
+  toggleModes();
 
   if (multiPass) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer.framebuffer);
-    gl.viewport(0, 0, framebuffer.size.width, framebuffer.size.height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer1.framebuffer);
+    gl.viewport(0, 0, framebuffer1.size.width, framebuffer1.size.height);
   } else {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -471,6 +483,11 @@ function drawSceneST(gl, programInfo, postProcessingShader, framebuffer, buffers
     gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
     gl.uniform1i(programInfo.uniformLocations.uDisparityMapL[i], 4 * i + 1);
   }
+
+  gl.activeTexture(gl.TEXTURE0 + 4 * numLayersL);
+  gl.bindTexture(gl.TEXTURE_2D, views[0].layers[0].image.texture); // need to set any texture here to avoid feedback loop
+  gl.uniform1i(programInfo.uniformLocations.uPreviousRendering, 4 * numLayersL);
+
   // Pass the actual number of layers to the shader
   gl.uniform1i(programInfo.uniformLocations.uNumLayersL, numLayersL);
 
@@ -497,7 +514,7 @@ function drawSceneST(gl, programInfo, postProcessingShader, framebuffer, buffers
     gl.uniform1i(programInfo.uniformLocations.uDisparityMapR[i], 4 * i + 3);
   }
   // Pass the actual number of layers to the shader
-  gl.uniform1i(programInfo.uniformLocations.uNumLayersr, numLayersR);
+  gl.uniform1i(programInfo.uniformLocations.uNumLayersR, numLayersR);
 
   gl.uniform3f(programInfo.uniformLocations.uViewPositionR, views[1].position.x, views[1].position.y, views[1].position.z);
   gl.uniform2f(programInfo.uniformLocations.sk1R, views[1].sk.x, views[1].sk.y);
@@ -518,6 +535,8 @@ function drawSceneST(gl, programInfo, postProcessingShader, framebuffer, buffers
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.writeDepthToAlpha, multiPass ? 1.0 : 0.0);
 
+  gl.uniform1i(programInfo.uniformLocations.isMultisamplePass, false); // normal pass first
+
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
   const offset = 0;
@@ -525,13 +544,25 @@ function drawSceneST(gl, programInfo, postProcessingShader, framebuffer, buffers
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 
   if (multiPass) {
-    // Second pass: Post-processing
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer2.framebuffer);
+    gl.viewport(0, 0, framebuffer2.size.width, framebuffer2.size.height);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // Second pass: multisampling by casting more rays around edges, using same shader program but with added inpus:
+    gl.uniform1i(programInfo.uniformLocations.isMultisamplePass, true);
+    gl.uniform1i(programInfo.uniformLocations.bypassMultisampling, bypassMultisampling); // for toggling
+    gl.activeTexture(gl.TEXTURE0 + 4 * numLayersL);
+    gl.bindTexture(gl.TEXTURE_2D, framebuffer1.texture);
+    gl.uniform1i(programInfo.uniformLocations.uPreviousRendering, 4 * numLayersL);
+    gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+
+    // Third pass: Post-processing edges with blur
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(postProcessingShader.program);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, framebuffer.texture);
+    gl.bindTexture(gl.TEXTURE_2D, framebuffer2.texture);
     gl.uniform1i(postProcessingShader.uniformLocations.uTexture, 0);
     gl.uniform2f(postProcessingShader.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
     gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
@@ -755,10 +786,10 @@ async function main() {
       // Now that we know if mono or stereo setup webGL
       if (views.length < 2) {
         const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
-        ({ programInfo, postProcessingShader, buffers, framebuffer, texture, size } = setupWebGL(gl, fragmentShaderSource));
+        ({ programInfo, postProcessingShader, buffers, framebuffer1, framebuffer2 } = setupWebGL(gl, fragmentShaderSource));
       } else {
         const fragmentShaderSource = await loadShaderFile('./rayCastStereoLDI.glsl');
-        ({ programInfo, postProcessingShader, buffers, framebuffer, texture, size } = setupWebGLST(gl, fragmentShaderSource));
+        ({ programInfo, postProcessingShader, buffers, framebuffer1, framebuffer2 } = setupWebGLST(gl, fragmentShaderSource));
       }
 
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
@@ -826,9 +857,9 @@ async function main() {
     renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 1); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
     if (views.length < 2) {
-      drawScene(gl, programInfo, postProcessingShader, {framebuffer, texture, size}, buffers, views, renderCam);
+      drawScene(gl, programInfo, postProcessingShader, framebuffer1, framebuffer2, buffers, views, renderCam);
     } else {
-      drawSceneST(gl, programInfo, postProcessingShader, {framebuffer, texture, size}, buffers, views, renderCam);
+      drawSceneST(gl, programInfo, postProcessingShader, framebuffer1, framebuffer2, buffers, views, renderCam);
     }
     stats.end();
     requestAnimationFrame(render);
