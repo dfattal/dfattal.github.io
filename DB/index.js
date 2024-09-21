@@ -118,14 +118,16 @@ async function displayImages() {
 // Function to add an image element to the DOM grid
 function appendImageToGrid(id, url) {
     const container = document.createElement('div');
-    container.classList.add('grid-item');
+    container.id = id;
+    // img.alt = id;
+    // container.appendChild(img);
 
-    const img = document.createElement('img');
-    img.src = url;
-    img.alt = id;
+
+    document.getElementById('imageGrid').appendChild(container);
+    let lifObj = new lifViewer(url, container);
 
     // Add onclick event for image deletion in delete mode
-    img.onclick = async () => {
+    container.onclick = async () => {
         if (deleteMode) {
             const confirmDelete = confirm('Delete?');
             if (confirmDelete) {
@@ -136,16 +138,15 @@ function appendImageToGrid(id, url) {
                 document.getElementById('trashButton').classList.remove('active'); // Remove trash button active state
 
                 // Remove delete-hover effect after deletion
-                img.onmouseover = null;
-                img.onmouseout = null;
-                img.classList.remove('delete-hover');
+                container.onmouseover = null;
+                container.onmouseout = null;
+                container.classList.remove('delete-hover');
             }
         } else {
-            sendToViz(img.src); // Regular click action when not in delete mode
+            sendToViz(url); // Regular click action when not in delete mode
         }
     };
 
-    container.appendChild(img);
     document.getElementById('imageGrid').appendChild(container);
 }
 
@@ -219,7 +220,7 @@ document.getElementById('trashButton').addEventListener('click', function () {
         this.classList.add('active'); // Add 'active' class to button when in delete mode
 
         // Apply delete-hover effect to all images dynamically
-        const images = document.querySelectorAll('.grid img');
+        const images = document.querySelectorAll('.grid div');
         images.forEach((img) => {
             img.onmouseover = () => img.classList.add('delete-hover'); // Add red shadow on hover
             img.onmouseout = () => img.classList.remove('delete-hover'); // Remove red shadow on hover exit
@@ -229,7 +230,7 @@ document.getElementById('trashButton').addEventListener('click', function () {
         this.classList.remove('active'); // Remove 'active' class when exiting delete mode
 
         // Remove delete-hover effect from all images
-        const images = document.querySelectorAll('.grid img');
+        const images = document.querySelectorAll('.grid div');
         images.forEach((img) => {
             img.onmouseover = null; // Disable hover effect
             img.onmouseout = null; // Disable hover effect

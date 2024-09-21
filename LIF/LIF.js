@@ -587,11 +587,11 @@ class lifViewer {
         };
 
         // Populate the uniform location arrays
-        for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
-            programInfo.uniformLocations.uImageL.push(this.gl.getUniformLocation(shaderProgram, `uImageL[${i}]`));
-            programInfo.uniformLocations.uDisparityMapL.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMapL[${i}]`));
-            programInfo.uniformLocations.uImageR.push(this.gl.getUniformLocation(shaderProgram, `uImageR[${i}]`));
-            programInfo.uniformLocations.uDisparityMapR.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMapR[${i}]`));
+        for (let i = 0; i < this.MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+            this.programInfo.uniformLocations.uImageL.push(this.gl.getUniformLocation(shaderProgram, `uImageL[${i}]`));
+            this.programInfo.uniformLocations.uDisparityMapL.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMapL[${i}]`));
+            this.programInfo.uniformLocations.uImageR.push(this.gl.getUniformLocation(shaderProgram, `uImageR[${i}]`));
+            this.programInfo.uniformLocations.uDisparityMapR.push(this.gl.getUniformLocation(shaderProgram, `uDisparityMapR[${i}]`));
         }
 
         // Vertex positions and texture coordinates
@@ -735,57 +735,57 @@ class lifViewer {
 
         this.gl.uniform1f(this.gl.getUniformLocation(this.programInfo.program, 'uTime'), t);
         // view L info
-        const numLayersL = views[0].layers.length;
+        const numLayersL = this.views[0].layers.length;
 
         // Loop through each layer and bind textures
         for (let i = 0; i < numLayersL; i++) {
             this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i));
-            this.gl.bindTexture(this.gl.TEXTURE_2D, views[0].layers[i].image.texture);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.views[0].layers[i].image.texture);
             this.gl.uniform1i(this.programInfo.uniformLocations.uImageL[i], 4 * i);
 
             this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i + 1));
-            this.gl.bindTexture(this.gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.views[0].layers[i].invZ.texture);
             this.gl.uniform1i(this.programInfo.uniformLocations.uDisparityMapL[i], 4 * i + 1);
         }
         // Pass the actual number of layers to the shader
         this.gl.uniform1i(this.programInfo.uniformLocations.uNumLayersL, numLayersL);
 
-        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPositionL, views[0].position.x, views[0].position.y, views[0].position.z);
-        this.gl.uniform2f(this.programInfo.uniformLocations.sk1L, views[0].sk.x, views[0].sk.y);
-        this.gl.uniform2f(this.programInfo.uniformLocations.sl1L, views[0].rotation.sl.x, views[0].rotation.sl.y);
-        this.gl.uniform1f(this.programInfo.uniformLocations.roll1L, views[0].rotation.roll_degrees);
-        this.gl.uniform1fv(this.programInfo.uniformLocations.f1L, views[0].layers.map(layer => layer.f)); // in px
-        this.gl.uniform1fv(this.programInfo.uniformLocations.invZminL, views[0].layers.map(layer => layer.invZ.min));
-        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmaxL, views[0].layers.map(layer => layer.invZ.max));
-        this.gl.uniform2fv(this.programInfo.uniformLocations.iResL, views[0].layers.map(layer => [layer.width, layer.height]).flat());
+        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPositionL, this.views[0].position.x, this.views[0].position.y, this.views[0].position.z);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk1L, this.views[0].sk.x, this.views[0].sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl1L, this.views[0].rotation.sl.x, this.views[0].rotation.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll1L, this.views[0].rotation.roll_degrees);
+        this.gl.uniform1fv(this.programInfo.uniformLocations.f1L, this.views[0].layers.map(layer => layer.f)); // in px
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZminL, this.views[0].layers.map(layer => layer.invZ.min));
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmaxL, this.views[0].layers.map(layer => layer.invZ.max));
+        this.gl.uniform2fv(this.programInfo.uniformLocations.iResL, this.views[0].layers.map(layer => [layer.width, layer.height]).flat());
 
         // view R info
-        const numLayersR = views[1].layers.length;
+        const numLayersR = this.views[1].layers.length;
 
         // Loop through each layer and bind textures
         for (let i = 0; i < numLayersR; i++) {
             this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i + 2));
-            this.gl.bindTexture(this.gl.TEXTURE_2D, views[1].layers[i].image.texture);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.views[1].layers[i].image.texture);
             this.gl.uniform1i(this.programInfo.uniformLocations.uImageR[i], 4 * i + 2);
 
             this.gl.activeTexture(this.gl.TEXTURE0 + (4 * i + 3));
-            this.gl.bindTexture(this.gl.TEXTURE_2D, views[1].layers[i].invZ.texture);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.views[1].layers[i].invZ.texture);
             this.gl.uniform1i(this.programInfo.uniformLocations.uDisparityMapR[i], 4 * i + 3);
         }
         // Pass the actual number of layers to the shader
         this.gl.uniform1i(this.programInfo.uniformLocations.uNumLayersr, numLayersR);
 
-        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPositionR, views[1].position.x, views[1].position.y, views[1].position.z);
-        this.gl.uniform2f(this.programInfo.uniformLocations.sk1R, views[1].sk.x, views[1].sk.y);
-        this.gl.uniform2f(this.programInfo.uniformLocations.sl1R, views[1].rotation.sl.x, views[1].rotation.sl.y);
-        this.gl.uniform1f(this.programInfo.uniformLocations.roll1R, views[1].rotation.roll_degrees);
-        this.gl.uniform1fv(this.programInfo.uniformLocations.f1R, views[1].layers.map(layer => layer.f)); // in px
-        this.gl.uniform1fv(this.programInfo.uniformLocations.invZminR, views[1].layers.map(layer => layer.invZ.min));
-        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmaxR, views[1].layers.map(layer => layer.invZ.max));
-        this.gl.uniform2fv(this.programInfo.uniformLocations.iResR, views[1].layers.map(layer => [layer.width, layer.height]).flat());
+        this.gl.uniform3f(this.programInfo.uniformLocations.uViewPositionR, this.views[1].position.x, this.views[1].position.y, this.views[1].position.z);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sk1R, this.views[1].sk.x, this.views[1].sk.y);
+        this.gl.uniform2f(this.programInfo.uniformLocations.sl1R, this.views[1].rotation.sl.x, this.views[1].rotation.sl.y);
+        this.gl.uniform1f(this.programInfo.uniformLocations.roll1R, this.views[1].rotation.roll_degrees);
+        this.gl.uniform1fv(this.programInfo.uniformLocations.f1R, this.views[1].layers.map(layer => layer.f)); // in px
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZminR, this.views[1].layers.map(layer => layer.invZ.min));
+        this.gl.uniform1fv(this.programInfo.uniformLocations.invZmaxR, this.views[1].layers.map(layer => layer.invZ.max));
+        this.gl.uniform2fv(this.programInfo.uniformLocations.iResR, this.views[1].layers.map(layer => [layer.width, layer.height]).flat());
 
         // rendering info
-        this.gl.uniform2f(this.programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+        this.gl.uniform2f(this.programInfo.uniformLocations.iResOriginal, this.views[0].width, this.views[0].height); // for window effect only
         this.gl.uniform3f(this.programInfo.uniformLocations.uFacePosition, this.renderCam.pos.x, this.renderCam.pos.y, this.renderCam.pos.z); // normalized to camera space
         this.gl.uniform2f(this.programInfo.uniformLocations.oRes, this.gl.canvas.width, this.gl.canvas.height);
         this.gl.uniform2f(this.programInfo.uniformLocations.sk2, this.renderCam.sk.x, this.renderCam.sk.y);
@@ -837,7 +837,7 @@ class lifViewer {
         const st = Math.sin(2 * Math.PI * t / animTime);
         const ct = Math.cos(2 * Math.PI * t / animTime);
         // update renderCam
-        this.renderCam.pos = { x: 0, y: 0, z: 3 * st };
+        this.renderCam.pos = { x: this.views.length<2 ? 0 : -0.5, y: 0, z: 3 * st };
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
@@ -861,7 +861,8 @@ class lifViewer {
 
         const { x: xo, y: yo, z: zo } = this.renderCam.pos;
         // Update some properties to create a transition effect
-        this.renderCam.pos = { x: xo / 1.1, y: yo / 1.1, z: zo / 1.1 }; // Slow down z-axis movement
+        const xc = this.views.length<2 ? 0 : -0.5;
+        this.renderCam.pos = { x: xc + (xo-xc) / 1.1, y: yo / 1.1, z: zo / 1.1 }; // Slow down z-axis movement
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });

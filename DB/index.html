@@ -6,39 +6,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LIF Image Library</title>
     <style>
+        body {
+            background-color: #f0f0f0;
+        }
+        
         .grid {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
+            gap: 10px;
             justify-content: flex-start;
+            margin-top: 10px;
         }
 
-        .grid img {
-            height: 250px;
-            width: auto;
-            margin: 5px;
+        .grid div {
+            display: inline-block;
+            overflow: hidden;
+            /* margin: 10px; */
             border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: box-shadow 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+            transition: box-shadow 0.3s ease, transform 0.5s ease;
         }
 
-        .grid img:hover {
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        img, canvas {
+            display: block;
+            /* Ensures the image behaves like a block element, removing inline space */
+            margin: 0;
+            /* Remove default margins from the image */
+            padding: 0;
+            height: 250px;
+           
+        }
+
+        .grid div:hover {
             transform: scale(1.05);
-        }
-
-        .grid canvas {
-            border-radius: 5px; 
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: box-shadow 0.3s ease, transform 0.3s ease;
-        }
-
-        .grid canvas:hover {
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-            transform: scale(1.05);
         }
 
-        .grid img.delete-hover:hover {
+        .grid div.delete-hover:hover {
             /* box-shadow: 0 8px 16px rgba(255, 0, 0, 0.5); */
             border: solid red 2px;
             /* Red shadow when delete-hover class is present */
@@ -81,7 +85,8 @@
     </div>
 
     <!-- Reference the external JS file -->
-    <script type="module" src="index-shader.js"></script>
+    <script type="module" src="index.js"></script>
+    <script src="../LIF/LIF.js"></script>
 </body>
 
 </html>
