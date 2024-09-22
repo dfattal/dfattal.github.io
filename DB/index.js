@@ -119,9 +119,6 @@ async function displayImages() {
 function appendImageToGrid(id, url) {
     const container = document.createElement('div');
     container.id = id;
-    // img.alt = id;
-    // container.appendChild(img);
-
 
     document.getElementById('imageGrid').appendChild(container);
     let lifObj = new lifViewer(url, container);
@@ -133,14 +130,6 @@ function appendImageToGrid(id, url) {
             if (confirmDelete) {
                 await deleteImage(id);
                 container.remove(); // Remove from DOM
-                //alert('Image deleted successfully!');
-                deleteMode = false; // Automatically unselect trash mode
-                document.getElementById('trashButton').classList.remove('active'); // Remove trash button active state
-
-                // Remove delete-hover effect after deletion
-                container.onmouseover = null;
-                container.onmouseout = null;
-                container.classList.remove('delete-hover');
             }
         } else {
             sendToViz(url); // Regular click action when not in delete mode
@@ -151,9 +140,9 @@ function appendImageToGrid(id, url) {
 }
 
 // Function to delete image from Supabase and cache
-async function deleteImage(fileName) {
+async function deleteImage(id) {
     // Remove from Supabase
-    const { error } = await supabase.storage.from(bucketName).remove([fileName]);
+    const { error } = await supabase.storage.from(bucketName).remove([id]);
     if (error) {
         console.error('Error deleting image from Supabase:', error);
         alert('Failed to delete image from Supabase.');
@@ -161,7 +150,7 @@ async function deleteImage(fileName) {
     }
 
     // Remove from IndexedDB cache
-    await removeCachedImage(fileName);
+    await removeCachedImage(id);
 }
 
 // Function to send an image to the visualization app

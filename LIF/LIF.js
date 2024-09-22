@@ -887,7 +887,7 @@ class lifViewer {
     }
 
     async startAnimation() {
-
+        if (this.container.classList.contains('delete-hover')) return;
         this.img.style.display = 'none';
         this.canvas.style.display = 'block';
         this.startTime = Date.now() / 1000;
@@ -896,6 +896,7 @@ class lifViewer {
     }
 
     stopAnimation(transitionTime = 0.5) { // Set a default transition time of 0.5 seconds
+        if (this.container.classList.contains('delete-hover')) return;
         cancelAnimationFrame(this.animationFrame);
         this.startTime = Date.now() / 1000; // Start transition timer
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
