@@ -320,6 +320,7 @@ class lifViewer {
             ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
+        // console.log(this.views);
         await this.parseObjAndCreateTextures(this.views);
         this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
         this.vertexShaderUrl = "../Shaders/vertex.glsl";
@@ -836,8 +837,9 @@ class lifViewer {
         const t = ut; //Math.max(ut-2,0);
         const st = Math.sin(2 * Math.PI * t / animTime);
         const ct = Math.cos(2 * Math.PI * t / animTime);
+        const zAmp = 0.6/this.views[0].invZ.min;
         // update renderCam
-        this.renderCam.pos = { x: this.views.length<2 ? 0 : -0.5, y: 0, z: 2 * (1-ct) };
+        this.renderCam.pos = { x: this.views.length<2 ? 0 : -0.5, y: 0, z: zAmp * (1-ct)/2 };
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });

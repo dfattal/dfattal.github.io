@@ -313,7 +313,7 @@ document.getElementById('trashButton').addEventListener('click', function () {
 document.getElementById('downloadButton').addEventListener('click', function () {
     downloadMode = !downloadMode; // Toggle download mode
     if (downloadMode) {
-        if (deleteMode) document.getElementById('deleteButton').click();
+        if (deleteMode) document.getElementById('trashButton').click();
         this.classList.add('active'); // Add 'active' class to button when in download mode
 
         // Apply download-hover effect to all images dynamically
