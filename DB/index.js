@@ -6,6 +6,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const bucketName = 'testAppImages';
 let deleteMode = false; // Track if the user is in delete mode
+let downloadMode = false; // Track if the user is in download mode
 
 // IndexedDB functions for caching
 function openIndexedDB() {
@@ -56,12 +57,16 @@ async function removeCachedImage(id) {
 }
 
 // Function to handle image uploading
-async function uploadImage() {
-    const fileInput = document.getElementById('imageInput');
+async function uploadImage(fileInput) {
+
     const file = fileInput.files[0];
 
-    if (!file) {
-        alert('Please select an image to upload.');
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const lifInfo = await parseLif53(arrayBuffer);
+        console.log(lifInfo);
+    } catch (e) {
+        alert('Please choose a valid LIF file 🙏');
         return;
     }
 
@@ -131,6 +136,11 @@ function appendImageToGrid(id, url) {
                 await deleteImage(id);
                 container.remove(); // Remove from DOM
             }
+        } else if (downloadMode) {
+            const confirmDownload = confirm('Download?');
+            if (confirmDownload) {
+                await downloadImage(id);
+            }
         } else {
             sendToViz(url); // Regular click action when not in delete mode
         }
@@ -151,6 +161,75 @@ async function deleteImage(id) {
 
     // Remove from IndexedDB cache
     await removeCachedImage(id);
+}
+
+// Function to download image from Supabase and cache
+async function downloadImage(id) {
+    try {
+        // Check if the image is cached in the browser
+        const cachedImage = await getCachedImage(id);  // Assuming you have this function to retrieve cached images
+        let imageUrl = cachedImage;
+
+        // If not cached, retrieve the public URL from Supabase
+        if (!cachedImage) {
+            const { data, error } = await supabase.storage.from(bucketName).getPublicUrl(id);
+            if (error) {
+                console.error('Error fetching image URL from Supabase:', error);
+                return;
+            }
+            imageUrl = data.publicUrl;
+        }
+
+        // Generate the file name based on the image ID or URL
+        let fileName = id.split('.').slice(0, -1).join('.');
+
+        // Only add "_LIF5" if "LIF" is not already in the filename
+        if (!fileName.includes('LIF')) {
+            fileName += '_LIF5';
+        }
+        fileName += '.jpg';  // Add the file extension
+
+        // Fetch the image data as an ArrayBuffer (either from cache or Supabase URL)
+        const response = await fetch(imageUrl);
+        const arrayBuffer = await response.arrayBuffer();
+
+        // Check if showSaveFilePicker is supported for direct file saving
+        if (window.showSaveFilePicker) {
+            const options = {
+                suggestedName: fileName,
+                types: [{
+                    description: 'JPEG Image',
+                    accept: { 'image/jpeg': ['.jpg', '.jpeg'] }
+                }]
+            };
+
+            const handle = await window.showSaveFilePicker(options);
+
+            const writableStream = await handle.createWritable();
+            await writableStream.write(new Blob([arrayBuffer], { type: 'image/jpeg' }));
+            await writableStream.close();
+
+            console.log('File saved successfully');
+        } else {
+            // Fallback for browsers that don't support showSaveFilePicker
+            const blob = new Blob([arrayBuffer], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+
+            // Clean up and remove the link
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log('File downloaded successfully using fallback');
+        }
+    } catch (err) {
+        console.error('Error downloading the file:', err);
+    }
 }
 
 // Function to send an image to the visualization app
@@ -206,6 +285,7 @@ function arrayBufferToBinaryString(buffer) {
 document.getElementById('trashButton').addEventListener('click', function () {
     deleteMode = !deleteMode; // Toggle delete mode
     if (deleteMode) {
+        if (downloadMode) document.getElementById('downloadButton').click();
         this.classList.add('active'); // Add 'active' class to button when in delete mode
 
         // Apply delete-hover effect to all images dynamically
@@ -223,17 +303,48 @@ document.getElementById('trashButton').addEventListener('click', function () {
         images.forEach((img) => {
             img.onmouseover = null; // Disable hover effect
             img.onmouseout = null; // Disable hover effect
+            // if creates issues with onmouseenter in object need to use add/remove EventListener
             img.classList.remove('delete-hover'); // Ensure the class is removed
         });
     }
 });
 
+// Enable download mode when download button is clicked
+document.getElementById('downloadButton').addEventListener('click', function () {
+    downloadMode = !downloadMode; // Toggle download mode
+    if (downloadMode) {
+        if (deleteMode) document.getElementById('deleteButton').click();
+        this.classList.add('active'); // Add 'active' class to button when in download mode
+
+        // Apply download-hover effect to all images dynamically
+        const images = document.querySelectorAll('.grid div');
+        images.forEach((img) => {
+            img.onmouseover = () => img.classList.add('download-hover'); // Add red shadow on hover
+            img.onmouseout = () => img.classList.remove('download-hover'); // Remove red shadow on hover exit
+        });
+
+    } else {
+        this.classList.remove('active'); // Remove 'active' class when exiting download mode
+
+        // Remove download-hover effect from all images
+        const images = document.querySelectorAll('.grid div');
+        images.forEach((img) => {
+            img.onmouseover = null; // Disable hover effect
+            img.onmouseout = null; // Disable hover effect
+            // if creates issues with onmouseenter in object need to use add/remove EventListener
+            img.classList.remove('download-hover'); // Ensure the class is removed
+        });
+    }
+});
+
 // Event listener for image upload
-document.getElementById('addImageButton').addEventListener('click', function() {
+document.getElementById('addImageButton').addEventListener('click', function () {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
-    fileInput.onchange = uploadImage;
+    fileInput.onchange = function () {
+        uploadImage(fileInput); // Pass the fileInput directly to the uploadImage function
+    };
     fileInput.click();  // Simulate a click to open file selector
 });
 

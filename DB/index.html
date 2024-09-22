@@ -13,7 +13,7 @@
         .grid {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 15px;
             justify-content: flex-start;
             margin-top: 10px;
         }
@@ -44,9 +44,11 @@
         }
 
         .grid div.delete-hover:hover {
-            /* box-shadow: 0 8px 16px rgba(255, 0, 0, 0.5); */
-            border: solid red 2px;
-            /* Red shadow when delete-hover class is present */
+            border-left: solid red 4px;
+        }
+
+        .grid div.download-hover:hover {
+            border-left: solid rgb(18, 220, 18) 4px; 
         }
 
         .upload-section {
@@ -64,12 +66,12 @@
         }
 
         .trash-button:hover {
-            background-color: rgb(186, 95, 95);
+            background-color: rgb(212, 153, 153);
             /* Change the button color when active */
         }
 
         .trash-button.active {
-            background-color: darkred;
+            background-color: rgb(237, 16, 16);
             /* Change the button color when active */
         }
 
@@ -83,8 +85,27 @@
         }
 
         .add-button:hover {
-            background-color: rgb(186, 186, 95);
+            background-color: #c5d0f9;
             /* Optional hover effect for visual feedback */
+        }
+
+        .download-button {
+            margin-left: 10px;
+            padding: 2px 5px;
+            background-color: white;
+            border: 1px solid rgb(56, 56, 56);
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .download-button:hover {
+            background-color: rgb(161, 209, 161);
+            /* Change the button color when active */
+        }
+
+        .download-button.active {
+            background-color: rgb(18, 220, 18);
+            /* Change the button color when active */
         }
     </style>
 </head>
@@ -94,6 +115,7 @@
         <h1>LIF Image Library</h1>
         <div class="upload-section">
             <button id="addImageButton" class="add-button">➕</button>
+            <button id="downloadButton" class="download-button">⬇︎</button>
             <button id="trashButton" class="trash-button">🗑️</button>
         </div>
         <div class="grid" id="imageGrid"></div>

@@ -837,7 +837,7 @@ class lifViewer {
         const st = Math.sin(2 * Math.PI * t / animTime);
         const ct = Math.cos(2 * Math.PI * t / animTime);
         // update renderCam
-        this.renderCam.pos = { x: this.views.length<2 ? 0 : -0.5, y: 0, z: 3 * st };
+        this.renderCam.pos = { x: this.views.length<2 ? 0 : -0.5, y: 0, z: 2 * (1-ct) };
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
@@ -887,7 +887,7 @@ class lifViewer {
     }
 
     async startAnimation() {
-        if (this.container.classList.contains('delete-hover')) return;
+        if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
         this.img.style.display = 'none';
         this.canvas.style.display = 'block';
         this.startTime = Date.now() / 1000;
@@ -896,7 +896,7 @@ class lifViewer {
     }
 
     stopAnimation(transitionTime = 0.5) { // Set a default transition time of 0.5 seconds
-        if (this.container.classList.contains('delete-hover')) return;
+        if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
         cancelAnimationFrame(this.animationFrame);
         this.startTime = Date.now() / 1000; // Start transition timer
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
