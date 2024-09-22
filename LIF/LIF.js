@@ -321,7 +321,7 @@ class lifViewer {
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
         await this.parseObjAndCreateTextures(this.views);
-        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDI.glsl";
+        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
         this.vertexShaderUrl = "../Shaders/vertex.glsl";
 
         // Setup Shader

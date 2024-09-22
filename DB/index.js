@@ -240,7 +240,13 @@ document.getElementById('trashButton').addEventListener('click', function () {
 });
 
 // Event listener for image upload
-document.getElementById('imageInput').addEventListener('change', uploadImage);
+document.getElementById('addImageButton').addEventListener('click', function() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = uploadImage;
+    fileInput.click();  // Simulate a click to open file selector
+});
 
 // Display images when the page loads
 document.addEventListener('DOMContentLoaded', displayImages);

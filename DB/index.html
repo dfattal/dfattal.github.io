@@ -9,7 +9,7 @@
         body {
             background-color: #f0f0f0;
         }
-        
+
         .grid {
             display: flex;
             flex-wrap: wrap;
@@ -23,18 +23,19 @@
             overflow: hidden;
             /* margin: 10px; */
             border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: box-shadow 0.3s ease, transform 0.5s ease;
         }
 
-        img, canvas {
+        img,
+        canvas {
             display: block;
             /* Ensures the image behaves like a block element, removing inline space */
             margin: 0;
             /* Remove default margins from the image */
             padding: 0;
             height: 250px;
-           
+
         }
 
         .grid div:hover {
@@ -71,6 +72,20 @@
             background-color: darkred;
             /* Change the button color when active */
         }
+
+        .add-button {
+            margin-left: 10px;
+            padding: 2px 5px;
+            background-color: white;
+            border: 1px solid rgb(56, 56, 56);
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .add-button:hover {
+            background-color: rgb(186, 186, 95);
+            /* Optional hover effect for visual feedback */
+        }
     </style>
 </head>
 
@@ -78,7 +93,7 @@
     <div class="container">
         <h1>LIF Image Library</h1>
         <div class="upload-section">
-            <input type="file" id="imageInput" />
+            <button id="addImageButton" class="add-button">➕</button>
             <button id="trashButton" class="trash-button">🗑️</button>
         </div>
         <div class="grid" id="imageGrid"></div>

@@ -238,18 +238,18 @@ void main(void) {
 
         // LDI
         vec4 resultL, resultR;
-        float invZL, invZR = 0.0;
+        float invZL, invZR, invZL2, invZR2 = 0.0; // invZLR2 have extra offset to match layers
 
         vec4 layer1L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[0] / iResL[0].x, f1L[0] / iResL[0].y)) * SKR1L, C1L, uImageL[0], uDisparityMapL[0], invZminL[0], invZmaxL[0], iResL[0], 1.0, invZL);
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1L.a == 1.0 || uNumLayersL == 1) {
             resultL = layer1L;
-            invZL += 200.0;
+            invZL2 = invZL + 200.0;
         } else {
             vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL) * (1.0 - layer1L.w) + layer1L * layer1L.w;
             if(layer2L.a == 1.0 || uNumLayersL == 2) {
                 resultL = layer2L;
-                invZL += 100.0;
+                invZL2 = invZL + 100.0;
             } else {
                 vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL) * (1.0 - layer2L.w) + layer2L * layer2L.w;
                 if(layer3L.a == 1.0 || uNumLayersL == 3) {
@@ -267,12 +267,12 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1R.a == 1.0 || uNumLayersR == 1) {
             resultR = layer1R;
-            invZR += 200.0;
+            invZR2 = invZR + 200.0;
         } else {
             vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR) * (1.0 - layer1R.w) + layer1R * layer1R.w;
             if(layer2R.a == 1.0 || uNumLayersR == 2) {
                 resultR = layer2R;
-                invZR += 100.0;
+                invZR2 = invZR + 100.0;
             } else {
                 vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR) * (1.0 - layer2R.w) + layer2R * layer2R.w;
                 if(layer3R.a == 1.0 || uNumLayersR == 3) {
@@ -289,19 +289,36 @@ void main(void) {
         float wR = weight2(C2, C1L, C1R);
 
         vec4 result = (1.0 - wR) * resultL + wR * resultR;
+        float invZ = (1.0 - wR) * invZL + wR * invZR;
 
         // if(invZR < -50.0 || invZL > invZR + 0.01)
         //     result = resultL;
         // if(invZL < -50.0 || invZR > invZL + 0.01)
         //     result = resultR;    
 
-        if(invZL - invZR >= 50.0)
+        if(invZL2 - invZR2 >= 50.0) {
             result = resultL;
-        if(invZR - invZL >= 50.0)
+            invZ = invZL;
+        }
+        if(invZR2 - invZL2 >= 50.0) {
             result = resultR;
+            invZ = invZR;
+        }
+        vec3 color = result.rgb;
 
-        gl_FragColor = vec4(result.rgb, 1.0);
-        //gl_FragColor = vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
+        float normInvZ = invZ / max(invZminL[0],invZminR[0]);
+        // Calculate the contour effect based on time and depth value
+        float animTime = 2.0;
+        float phase = 1.0 - min(uTime / animTime, 1.0);
+        float contourEffect = smoothstep(phase - 0.02, phase - 0.01, normInvZ) * (1.0 - smoothstep(phase + 0.01, phase + 0.02, normInvZ));
+        // Mix the base color with the contour color based on the contour effect
+        vec3 contourColor2 = vec3(0.0, 0.0, 1.0);
+        vec3 contourColor1 = vec3(1.0, 1.0, 1.0);
+        vec4 contour = vec4(mix(contourColor2, contourColor1, contourEffect * contourEffect), 1.0);
+
+        vec4 baseColor = vec4(color, 1.0);
+        // Combine the base color with the contour effect
+        gl_FragColor = mix(baseColor, contour, contourEffect * normInvZ);
 
     } else {
         gl_FragColor = vec4(vec3(0.1), 1.0);
