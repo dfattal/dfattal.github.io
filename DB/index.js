@@ -12,10 +12,10 @@ const channel = supabase.channel('storage-changes')
   .on('postgres_changes', 
     { event: 'INSERT', schema: 'storage', table: 'objects' }, 
     payload => {
-      console.log('Payload received:', payload.new.name);
-      const { key } = payload.new;
+      console.log('Payload received:', payload);
+      //const { key } = payload.new;
       const publicURL = supabase.storage.from(bucketName).getPublicUrl(payload.new.name).data.publicUrl;
-      appendImageToGrid(key, publicURL);
+      appendImageToGrid(payload.new.name, publicURL);
     })
   .subscribe();
 
@@ -75,7 +75,7 @@ async function uploadImage(fileInput) {
     try {
         const arrayBuffer = await file.arrayBuffer();
         const lifInfo = await parseLif53(arrayBuffer);
-        console.log(lifInfo);
+        // console.log(lifInfo);
     } catch (e) {
         alert('Please choose a valid LIF file 🙏');
         return;
@@ -89,14 +89,14 @@ async function uploadImage(fileInput) {
     if (error) {
         console.error('Error uploading image:', error);
         alert('Failed to upload image.');
-    } else {
-        const publicURL = supabase.storage.from(bucketName).getPublicUrl(file.name);
+    // } else {
+    //     const publicURL = supabase.storage.from(bucketName).getPublicUrl(file.name);
 
-        if (publicURL) {
-            appendImageToGrid(fileName, publicURL.data.publicUrl);
-            cacheImage(fileName, publicURL.data.publicUrl);
-            //alert('Image uploaded successfully!');
-        }
+    //     if (publicURL) {
+    //         appendImageToGrid(fileName, publicURL.data.publicUrl);
+    //         cacheImage(fileName, publicURL.data.publicUrl);
+    //         //alert('Image uploaded successfully!');
+    //     }
     }
 }
 
