@@ -9,19 +9,19 @@ let deleteMode = false; // Track if the user is in delete mode
 let downloadMode = false; // Track if the user is in download mode
 
 // Set up a real-time subscription to listen for new image uploads
-supabase.storage
-    .from(bucketName)
-    .on('INSERT', payload => {
-        console.log('New image added', payload);
-        const newFileName = payload.new.name; // Get the new file's name
-        const publicURL = supabase.storage.from(bucketName).getPublicUrl(newFileName);
+// supabase.storage
+//     .from(bucketName)
+//     .on('INSERT', payload => {
+//         console.log('New image added', payload);
+//         const newFileName = payload.new.name; // Get the new file's name
+//         const publicURL = supabase.storage.from(bucketName).getPublicUrl(newFileName);
 
-        if (publicURL) {
-            appendImageToGrid(newFileName, publicURL.data.publicUrl);
-            cacheImage(newFileName, publicURL.data.publicUrl);
-        }
-    })
-    .subscribe();
+//         if (publicURL) {
+//             appendImageToGrid(newFileName, publicURL.data.publicUrl);
+//             cacheImage(newFileName, publicURL.data.publicUrl);
+//         }
+//     })
+//     .subscribe();
 
 // IndexedDB functions for caching
 function openIndexedDB() {
