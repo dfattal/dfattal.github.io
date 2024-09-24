@@ -7,8 +7,13 @@ class lifGenerator {
         this.formData;
         this.ldlForm = document.getElementById("image-generation-form");
         this.inpaintMethod = '';
-        this.endpointUrl = 'http://3.95.133.35:5000/v1/unified';
-        this.storageUrl;
+        this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
+        this.imUploadUrl;
+        this.imDownloadUrl;
+        this.dispUploadUrl;
+        this.dispDownloadUrl;
+        this.lifUploadUrl;
+        this.lifDownloadUrl;
         this.accessToken;
         this.lifFile;
         this.lifArrayBuffer;
@@ -20,7 +25,22 @@ class lifGenerator {
         this.ready = 0;
     }
 
-    getLdlFormData() {
+    getExecJson() {
+        const result = {
+            executionPlan: [{
+                productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+                paramsRaw: {
+                    imageUrl: this.imDownloadUrl,
+                    resultPresignedUrl: this.dispUploadUrl,
+                    outputBitDepth: 'uint16',
+                    dilation: 0
+                }
+            },
+            {
+                productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f" // LDL MONO
+            }
+            ]
+        }
         const formData = new FormData(this.ldlForm);
         const params = {};
 
@@ -28,13 +48,12 @@ class lifGenerator {
             params[key] = value;
         });
         params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
-        const fileBlob = new Blob([this.file], { type: 'image/jpeg' });
-        const blobUrl = URL.createObjectURL(fileBlob);
-        params.imageUrl = blobUrl;
-        // params.imageUrl = this.storageUrl;
-
-        console.log(params);
-        return params;
+        params.imageUrl = this.imDownloadUrl;
+        params.disparityUrl = this.dispDownloadUrl;
+        params.resultPresignedUrl = this.lifUploadUrl;
+        result.executionPlan[1].paramsRaw = params;
+        console.log(result);
+        return result;
     }
 
     async resizeImage(image) {
@@ -95,8 +114,8 @@ class lifGenerator {
         this.accessToken = tokenResponse.data.access_token;
     }
 
-    async getStorageUrl() {
-        const response = await fetch('https://api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + this.file.name + '&mediaType=image%2Fjpeg', {
+    async getPutGetUrl(filename) {
+        const responsePut = await fetch(this.endpointUrl + '/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
             method: 'GET',
             headers: {
                 authorization: `Bearer ${this.accessToken}`,
@@ -104,19 +123,31 @@ class lifGenerator {
             },
         });
 
-        const data = await response.json();
-        console.log('upload URL : ', data.url);
-        this.storageUrl = data.url;
+        const dataPut = await responsePut.json();
+        console.log('Put URL for', filename, ':', dataPut.url);
+
+        const responseGet = await fetch(this.endpointUrl + '/get-download-url?url=' + dataPut.url, {
+            method: 'GET',
+            headers: {
+                authorization: `Bearer ${this.accessToken}`,
+                accept: 'application/json'
+            },
+        });
+
+        const dataGet = await responseGet.json();
+        console.log('Get URL for', filename, ':', dataGet.url);
+
+        return [dataPut.url, dataGet.url];
     }
 
-    async uploadToStorage() {
+    async uploadToStorage(file, putUrl) {
         try {
-            const response = await fetch(this.storageUrl, {
+            const response = await fetch(putUrl, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': this.file.type
+                    'Content-Type': file.type
                 },
-                body: this.file
+                body: file
             });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -138,7 +169,7 @@ class lifGenerator {
         // Simulate the progress bar
         let progress = 0;
 
-        const totalDuration = this.inpaintingTech == 'lama' ? 30000 : 50000; // Total duration of 60 seconds
+        const totalDuration = this.inpaintMethod == 'lama' ? 30000 : 50000; // Total duration of 60 seconds
         const increment = 100 / (totalDuration / this.interval); // Calculate how much to increment each interval
 
         const progressInterval = setInterval(() => {
@@ -152,14 +183,14 @@ class lifGenerator {
         }, this.interval);
 
         try {
-            const response = await fetch(this.endpointUrl, {
+            const response = await fetch(this.endpointUrl + '/process', {
                 method: 'POST',
                 headers: {
                     accept: 'application/json',
                     authorization: `Bearer ${this.accessToken}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(this.getLdlFormData())
+                body: JSON.stringify(this.getExecJson())
             });
             // Check if the response status is OK (status 200-299)
             if (!response.ok) {
@@ -169,7 +200,6 @@ class lifGenerator {
             // Attempt to parse response as JSON
             const data = await response.json();
             console.log('Response data:', data);
-            this.lifUrl = data.result_url; // Assuming the API returns the LIF file URL in 'lifUrl' field
         } catch (error) {
             console.error('Error during fetch:', error);
         }
@@ -180,7 +210,7 @@ class lifGenerator {
         this.progressContainer.style.display = 'none'; // Hide the progress bar
         this.progressBar.style.width = '0%'; // Set to 100% when done
 
-        this.lifFile = await fetch(this.lifUrl);
+        this.lifFile = await fetch(this.lifDownloadUrl);
         this.lifArrayBuffer = await this.lifFile.arrayBuffer();
         console.log(this.lifArrayBuffer);
         this.lifInfo = await parseLif53(this.lifArrayBuffer);
@@ -279,9 +309,12 @@ class lifGenerator {
 
                         await this.getAccessToken();
                         mylog('Authenticated to IAI Cloud 🤗');
-                        await this.getStorageUrl();
-                        mylog('Got temporary storage URL on IAI Cloud 💪');
-                        await this.uploadToStorage();
+                        
+                        [this.imUploadUrl, this.imDownloadUrl] = await this.getPutGetUrl(this.file.name);
+                        [this.dispUploadUrl, this.dispDownloadUrl] = await this.getPutGetUrl('disparity.png');
+                        [this.lifUploadUrl, this.lifDownloadUrl] = await this.getPutGetUrl('lifResult.jpg');
+                        mylog('Got temporary storage URLs on IAI Cloud 💪');
+                        await this.uploadToStorage(this.file,this.imUploadUrl);
                         mylog('Uploaded Image to IAI Cloud 🚀');
                         mylog('Generating LDI File... ⏳');
                         await this.generateLif();
