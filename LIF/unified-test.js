@@ -27,8 +27,11 @@ class lifGenerator {
         formData.forEach((value, key) => {
             params[key] = value;
         });
-        params.outpaint = parseFloat(params.outpaint) + .000001 // avoid issue with 0
-        params.imageUrl = this.storageUrl;
+        params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
+        const fileBlob = new Blob([this.file], { type: 'image/jpeg' });
+        const blobUrl = URL.createObjectURL(fileBlob);
+        params.imageUrl = blobUrl;
+        // params.imageUrl = this.storageUrl;
 
         console.log(params);
         return params;
@@ -166,6 +169,7 @@ class lifGenerator {
             // Attempt to parse response as JSON
             const data = await response.json();
             console.log('Response data:', data);
+            this.lifUrl = data.result_url; // Assuming the API returns the LIF file URL in 'lifUrl' field
         } catch (error) {
             console.error('Error during fetch:', error);
         }
@@ -176,11 +180,7 @@ class lifGenerator {
         this.progressContainer.style.display = 'none'; // Hide the progress bar
         this.progressBar.style.width = '0%'; // Set to 100% when done
 
-        const data = await response.json();
-        console.log(data);
-        const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
-
-        this.lifFile = await fetch(lifUrl);
+        this.lifFile = await fetch(this.lifUrl);
         this.lifArrayBuffer = await this.lifFile.arrayBuffer();
         console.log(this.lifArrayBuffer);
         this.lifInfo = await parseLif53(this.lifArrayBuffer);
