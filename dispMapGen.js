@@ -11,20 +11,26 @@ async function uploadImage() {
     const file = imageInput.files[0];
     const accessToken = await getAccessToken();
 
-    // Step 1: Get a pre-signed URL for temporary storage
-    const uploadStorageUrl = await getUploadStorageUrl(accessToken, file.name);
+    // Step 1: Get a pre-signed URL to upload input image temporary storage
+    const uploadStorageUrl = await getPutUrl(accessToken, file.name);
 
     // Step 2: Upload the image to the pre-signed URL
     await uploadToStorage(uploadStorageUrl, file);
 
-    // Step 3: Get pre-signed URL for temporary disp map storage
-    const downloadStorageUrl = await getDownloadStorageUrl(accessToken, uploadStorageUrl);
+    // Step 3: Get pre-signed URL for downloading input image from temporary storage
+    const downloadStorageUrl = await getGetUrl(accessToken, uploadStorageUrl);
 
-    // Step 4: Generate the disparity map
-    await generateDisparityMap(accessToken, uploadStorageUrl, downloadStorageUrl);
+    // Step 4: Get a pre-signed URL to upload disparity map result to temporary storage
+    const dispUploadStorageUrl = await getPutUrl(accessToken, 'disparity.png');
+
+    // Step 5: Generate the disparity map
+    await generateDisparityMap(accessToken, downloadStorageUrl, dispUploadStorageUrl);
+
+    // Step 6: Get pre-signed URL for downloading disparity map result from temporary storage
+    const dispDownloadStorageUrl = await getGetUrl(accessToken, dispUploadStorageUrl);
 
     // Step 5: Display the generated disparity map
-    displayDisparityMap(downloadStorageUrl);
+    displayDisparityMap(dispDownloadStorageUrl);
 }
 
 async function getAccessToken() {
@@ -41,7 +47,7 @@ async function getAccessToken() {
     return tokenResponse.data.access_token;
 }
 
-async function getUploadStorageUrl(accessToken,filename) {
+async function getPutUrl(accessToken,filename) {
     const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
         method: 'GET',
         headers: {
@@ -73,8 +79,8 @@ async function uploadToStorage(url, file) {
     }
 }
 
-async function getDownloadStorageUrl(accessToken,fileUrl) {
-    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-download-url?url=' + fileUrl, {
+async function getGetUrl(accessToken,putUrl) {
+    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-download-url?url=' + putUrl, {
         method: 'GET',
         headers: {
             authorization: `Bearer ${accessToken}`,
@@ -87,8 +93,8 @@ async function getDownloadStorageUrl(accessToken,fileUrl) {
     return data.url;
 }
 
-async function generateDisparityMap(accessToken, uploadStorageUrl, downloadStorageUrl) {
-    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/disparity', {
+async function generateDisparityMap(accessToken, downloadStorageUrl, dispUploadStorageUrl) {
+    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/process', {
         method: 'POST',
         headers: {
             accept: 'application/json',
@@ -99,8 +105,8 @@ async function generateDisparityMap(accessToken, uploadStorageUrl, downloadStora
             executionPlan: [{
                 productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
                 paramsRaw: {
-                    imageUrl: uploadStorageUrl,
-                    resultPresignedUrl: downloadStorageUrl,
+                    imageUrl: downloadStorageUrl,
+                    resultPresignedUrl: dispUploadStorageUrl,
                     outputBitDepth: 'uint16',
                     dilation: 0
                 }
