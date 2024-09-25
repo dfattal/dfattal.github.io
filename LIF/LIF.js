@@ -832,7 +832,8 @@ class lifViewer {
 
     render() {
         const animTime = 4;
-        const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
+        //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
+        const invd = Math.abs(this.views[0].sk.x)/0.5 // set focus point
         const ut = Date.now() / 1000 - this.startTime;
         const t = ut; //Math.max(ut-2,0);
         const st = Math.sin(2 * Math.PI * t / animTime);
@@ -857,7 +858,8 @@ class lifViewer {
     renderOff(transitionTime) {
         const elapsedTime = (Date.now() / 1000) - this.startTime;
 
-        const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
+        //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
+        const invd = Math.abs(this.views[0].sk.x)/0.5 // set focus point
         // Calculate a fade-out effect based on elapsed time and transition time
         //const progress = Math.min(elapsedTime / transitionTime, 1); // progress goes from 0 to 1
 
@@ -889,6 +891,15 @@ class lifViewer {
     }
 
     async startAnimation() {
+        // this.gl = this.canvas.getContext('webgl');
+        // await this.parseObjAndCreateTextures(this.views);
+        // // Setup Shader
+        // if (this.views.length < 2) {
+        //     await this.setupWebGLMN();
+        // } else {
+        //     await this.setupWebGLST();
+        // }
+
         if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
         this.img.style.display = 'none';
         this.canvas.style.display = 'block';
