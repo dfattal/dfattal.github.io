@@ -2,12 +2,19 @@ class lifGenerator {
     constructor(file = null) {
         this.AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
         this.file = file ? file : null;
+        this.stLifInput = false;
         this.width = 0;
         this.height = 0;
+        this.formData;
         this.ldlForm = document.getElementById("image-generation-form");
-        this.inpaintingTech = '';
-        this.endpointUrl = 'https://api.dev.immersity.ai/api/v1/ldl';
-        this.storageUrl;
+        this.inpaintMethod = '';
+        this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
+        this.imUploadUrl;
+        this.imDownloadUrl;
+        this.dispUploadUrl;
+        this.dispDownloadUrl;
+        this.lifUploadUrl;
+        this.lifDownloadUrl;
         this.accessToken;
         this.lifFile;
         this.lifArrayBuffer;
@@ -19,17 +26,63 @@ class lifGenerator {
         this.ready = 0;
     }
 
-    getLdlFormData() {
-        const formData = new FormData(this.ldlForm);
-        const params = {};
+    getExecJson() {
+        let result;
+        if (this.stLifInput) {
+            console.log('Stereo input !');
+            result = {
+                executionPlan: [{
+                    productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
+                    paramsRaw: {
+                        inputLifImageUrl: this.imDownloadUrl,
+                        outputLifImageUrl: this.dispUploadUrl
+                    }
+                },
+                {
+                    productId: "1862b5a9-36d0-4624-ad6e-2c4b8f694d89" // LDL STEREO
+                }
+                ]
+            }
+            const formData = new FormData(this.ldlForm);
+            const params = {};
 
-        formData.forEach((value, key) => {
-            params[key] = value;
-        });
-        params.out_paint_percent = parseFloat(params.out_paint_percent) + .000001 // avoid issue with 0
+            formData.forEach((value, key) => {
+                params[key] = value;
+            });
+            params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
+            params.imageUrl = this.dispDownloadUrl;
+            params.resultPresignedUrl = this.lifUploadUrl;
+            result.executionPlan[1].paramsRaw = params;
+        } else {
+            result = {
+                executionPlan: [{
+                    productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+                    paramsRaw: {
+                        imageUrl: this.imDownloadUrl,
+                        resultPresignedUrl: this.dispUploadUrl,
+                        outputBitDepth: 'uint16',
+                        dilation: 0
+                    }
+                },
+                {
+                    productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f" // LDL MONO
+                }
+                ]
+            }
+            const formData = new FormData(this.ldlForm);
+            const params = {};
 
-        console.log(params);
-        return params;
+            formData.forEach((value, key) => {
+                params[key] = value;
+            });
+            params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
+            params.imageUrl = this.imDownloadUrl;
+            params.disparityUrl = this.dispDownloadUrl;
+            params.resultPresignedUrl = this.lifUploadUrl;
+            result.executionPlan[1].paramsRaw = params;
+        }
+        console.log(result);
+        return result;
     }
 
     async resizeImage(image) {
@@ -90,8 +143,8 @@ class lifGenerator {
         this.accessToken = tokenResponse.data.access_token;
     }
 
-    async getStorageUrl() {
-        const response = await fetch('https://api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + this.file.name + '&mediaType=image%2Fjpeg', {
+    async getPutGetUrl(filename) {
+        const responsePut = await fetch(this.endpointUrl + '/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
             method: 'GET',
             headers: {
                 authorization: `Bearer ${this.accessToken}`,
@@ -99,19 +152,31 @@ class lifGenerator {
             },
         });
 
-        const data = await response.json();
-        console.log('upload URL : ', data.url);
-        this.storageUrl = data.url;
+        const dataPut = await responsePut.json();
+        console.log('Put URL for', filename, ':', dataPut.url);
+
+        const responseGet = await fetch(this.endpointUrl + '/get-download-url?url=' + dataPut.url, {
+            method: 'GET',
+            headers: {
+                authorization: `Bearer ${this.accessToken}`,
+                accept: 'application/json'
+            },
+        });
+
+        const dataGet = await responseGet.json();
+        console.log('Get URL for', filename, ':', dataGet.url);
+
+        return [dataPut.url, dataGet.url];
     }
 
-    async uploadToStorage() {
+    async uploadToStorage(file, putUrl) {
         try {
-            const response = await fetch(this.storageUrl, {
+            const response = await fetch(putUrl, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': this.file.type
+                    'Content-Type': file.type
                 },
-                body: this.file
+                body: file
             });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -126,14 +191,14 @@ class lifGenerator {
         // Start timing the fetch
         console.time('fetchDuration');
         // Show the progress bar
-        console.log(this.width, ' - ', this.height, ' - ', this.inpaintingTech);
+        console.log(this.width, ' - ', this.height, ' - ', this.inpaintMethod);
 
         this.progressContainer.style.display = 'block';
 
         // Simulate the progress bar
         let progress = 0;
 
-        const totalDuration = this.inpaintingTech == 'lama' ? 30000 : 50000; // Total duration of 60 seconds
+        const totalDuration = this.inpaintMethod == 'lama' ? 30000 : 50000; // Total duration of 60 seconds
         const increment = 100 / (totalDuration / this.interval); // Calculate how much to increment each interval
 
         const progressInterval = setInterval(() => {
@@ -146,30 +211,37 @@ class lifGenerator {
             }
         }, this.interval);
 
-        const response = await fetch(this.endpointUrl, {
-            method: 'POST',
-            headers: {
-                accept: 'application/json',
-                authorization: `Bearer ${this.accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                inputImageUrl: this.storageUrl,
-                paramsRaw: this.getLdlFormData()
-            })
-        });
+        try {
+            const response = await fetch(this.endpointUrl + '/process', {
+                method: 'POST',
+                headers: {
+                    accept: 'application/json',
+                    authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.getExecJson())
+            });
+            // Check if the response status is OK (status 200-299)
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            // Attempt to parse response as JSON
+            const data = await response.json();
+            console.log('Response data:', data);
+        } catch (error) {
+            console.error('Error during fetch:', error);
+        }
+
 
         // Clear the progress bar when the fetch completes
         clearInterval(progressInterval);
         this.progressContainer.style.display = 'none'; // Hide the progress bar
         this.progressBar.style.width = '0%'; // Set to 100% when done
 
-        const data = await response.json();
-        const lifUrl = data.resultPresignedUrl; // Assuming the API returns the LIF file URL in 'lifUrl' field
-
-        this.lifFile = await fetch(lifUrl);
+        this.lifFile = await fetch(this.lifDownloadUrl);
         this.lifArrayBuffer = await this.lifFile.arrayBuffer();
-        console.log(this.lifArrayBuffer);
+        // console.log(this.lifArrayBuffer);
         this.lifInfo = await parseLif53(this.lifArrayBuffer);
         showLifInfo(this.lifInfo);
         addViz(this.lifArrayBuffer);
@@ -232,8 +304,8 @@ class lifGenerator {
 
         document.getElementById("ldlSubmit").onclick = async function () {
             try {
-                this.inpaintingTech = document.getElementById('inpainting_tech').value;
-                console.log('inpainting: ', this.inpaintingTech);
+                this.inpaintMethod = document.getElementById('inpaintMethod').value;
+                console.log('inpainting: ', this.inpaintMethod);
                 document.getElementById("log-container").style.display = 'block';
                 mylog(`Starting Conversion of ${this.file.name}, ${this.file.type}`);
                 //let processedFile = this.file;
@@ -255,7 +327,7 @@ class lifGenerator {
 
                         this.width = img.width;
                         this.height = img.height;
-                        if (img.width > this.maxDimension || img.height > this.maxDimension) {
+                        if ((img.width > this.maxDimension || img.height > this.maxDimension) && !this.stLifInput) {
                             const resizedObj = await this.resizeImage(img);
                             const resizedBlob = resizedObj.blob;
                             this.width = resizedObj.width;
@@ -266,9 +338,12 @@ class lifGenerator {
 
                         await this.getAccessToken();
                         mylog('Authenticated to IAI Cloud 🤗');
-                        await this.getStorageUrl();
-                        mylog('Got temporary storage URL on IAI Cloud 💪');
-                        await this.uploadToStorage();
+
+                        [this.imUploadUrl, this.imDownloadUrl] = await this.getPutGetUrl(this.file.name);
+                        [this.dispUploadUrl, this.dispDownloadUrl] = await this.getPutGetUrl('disparity.png');
+                        [this.lifUploadUrl, this.lifDownloadUrl] = await this.getPutGetUrl('lifResult.jpg');
+                        mylog('Got temporary storage URLs on IAI Cloud 💪');
+                        await this.uploadToStorage(this.file, this.imUploadUrl);
                         mylog('Uploaded Image to IAI Cloud 🚀');
                         mylog('Generating LDI File... ⏳');
                         await this.generateLif();
@@ -423,7 +498,7 @@ async function showLifInfo(lifInfo) {
         dispImg.className = 'main_img';
         dispImg.src = view.inv_z_map.url;
         const layers = view.layers_top_to_bottom;
-        const title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x} | invZ: ${view.inv_z_map.min.toFixed(4)} - ${view.inv_z_map.max.toFixed(4)} | ${layers.length} layers`;
+        const title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | invZ: ${view.inv_z_map.min.toFixed(4)} - ${view.inv_z_map.max.toFixed(4)} | ${layers.length} layer${layers.length > 1 ? 's' : ''}`;
         viewDOM.appendChild(Object.assign(document.createElement('h2'), { textContent: title }));
         viewDOM.appendChild(mainImg);
         viewDOM.appendChild(dispImg);
@@ -484,6 +559,14 @@ async function handleFileSelect(event) {
             const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
             if (userWantsToCreateLif) {
                 // const lifGen = new lifGenerator(file);
+                try {
+                const arrayBuffer = await file.arrayBuffer();
+                const lifMeta = await parseBinary(arrayBuffer);
+                const lifJson = lifMeta.getJsonMeta();
+                if (lifJson.views && (lifJson.views.length > 1)) lifGen.stLifInput = true;
+                } catch (e) {
+                    console.log("simple image");
+                }
                 lifGen.file = file;
                 await lifGen.go();
 

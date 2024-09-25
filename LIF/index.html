@@ -150,8 +150,8 @@
     <form id="image-generation-form" style="display: none;">
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="inpainting_tech">Inpainting Technique:</label>
-                <select id="inpainting_tech" name="inpainting_tech">
+                <label for="inpaintMethod">Inpainting Technique:</label>
+                <select id="inpaintMethod" name="inpaintMethod">
                     <option value="lama">Lama</option>
                     <option value="SD">Stable Diff</option>
                 </select>
@@ -162,15 +162,15 @@
         <!-- Row for LDL Dilation and LDL Depth Dilation -->
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="ldl_dilation">LDL Dilation:</label>
-                <input type="number" id="ldl_dilation" name="ldl_dilation" value="0.01" min="0" max="0.1" step="0.0001">
+                <label for="dilation">LDL Dilation:</label>
+                <input type="number" id="dilation" name="dilation" value="0.01" min="0" max="0.1" step="0.0001">
                 <span class="tooltiptext">The larger the better for ldl edges that are not crossing ldl layers. However,
                     we want to keep this small for objects that do cross as this causes discontinuity between
                     layers</span>
             </div>
             <div class="input-container tooltip">
-                <label for="ldl_depth_dilation">LDL Depth Dilation:</label>
-                <input type="number" id="ldl_depth_dilation" name="ldl_depth_dilation" value="0.0" min="0" max="1.0"
+                <label for="depthDilationPercent">LDL Depth Dilation:</label>
+                <input type="number" id="depthDilationPercent" name="depthDilationPercent" value="0.0" min="0" max="1.0"
                     step="0.1">
                 <span class="tooltiptext">Without this, we have staircase pixelation on ldl edges. Increasing this
                     creates a ticker edge (includes some of the background). The thicker edge has a very specific
@@ -181,31 +181,25 @@
         <!-- Row for Outpaint Percent and Layers -->
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="out_paint_percent">Outpaint Percent:</label>
-                <input type="number" id="out_paint_percent" name="out_paint_percent" value="0.1" min="0" max="1"
+                <label for="outpaint">Outpaint Percent:</label>
+                <input type="number" id="outpaint" name="outpaint" value="0.1" min="0" max="1"
                     step="0.01">
                 <span class="tooltiptext">How much to outpaint, per border in fraction image size.</span>
-            </div>
-            <div class="input-container tooltip">
-                <label for="layers">Max Layers:</label>
-                <input type="number" id="layers" name="layers" value="" placeholder="leave blank if not sure" min="2"
-                    max="10" step="1">
-                <span class="tooltiptext">Set maximum number of LDL layers. Default leave blank</span>
             </div>
         </div>
 
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="inpaint_prompt">Inpaint Prompt:</label>
-                <input type="text" id="inpaint_prompt" name="inpaint_prompt"
+                <label for="inpaintPrompt">Inpaint Prompt:</label>
+                <input type="text" id="inpaintPrompt" name="inpaintPrompt"
                     value="background without foreground object, seamless and natural">
                 <span class="tooltiptext">Text prompt to guide the inpainting generation process.</span>
             </div>
         </div>
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="inpaint_negative_prompt">Inpaint Negative Prompt:</label>
-                <input type="text" id="inpaint_negative_prompt" name="inpaint_negative_prompt"
+                <label for="inpaintNegativePrompt">Inpaint Negative Prompt:</label>
+                <input type="text" id="inpaintNegativePrompt" name="inpaintNegativePrompt"
                     value="text, subtitles, chair, object, people, face, human, person, animal, banner">
                 <span class="tooltiptext">Negative text prompt to avoid certain elements in the inpainting generation
                     process.</span>
@@ -213,16 +207,16 @@
         </div>
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="outpaint_prompt">Outpaint Prompt:</label>
-                <input type="text" id="outpaint_prompt" name="outpaint_prompt"
+                <label for="outpaintPrompt">Outpaint Prompt:</label>
+                <input type="text" id="outpaintPrompt" name="outpaintPrompt"
                     value="background without foreground object, seamless and natural">
                 <span class="tooltiptext">Text prompt to guide the outpainting generation process.</span>
             </div>
         </div>
         <div class="form-row">
             <div class="input-container tooltip">
-                <label for="outpaint_negative_prompt">Outpaint Negative Prompt:</label>
-                <input type="text" id="outpaint_negative_prompt" name="outpaint_negative_prompt"
+                <label for="outpaintNegativePrompt">Outpaint Negative Prompt:</label>
+                <input type="text" id="outpaintNegativePrompt" name="outpaintNegativePrompt"
                     value="photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block">
                 <span class="tooltiptext">Negative text prompt to avoid certain elements in the outpainting generation
                     process.</span>
@@ -242,18 +236,17 @@
     <div id="views_div"></div>
     <script>
         function ldlFormReset() {
-            document.getElementById('ldl_dilation').value = 0.01;
-            document.getElementById('ldl_depth_dilation').value = 0.00;
-            document.getElementById('inpaint_prompt').value = 'background without foreground object, seamless and natural';
-            document.getElementById('inpaint_negative_prompt').value = 'text, subtitles, chair, object, people, face, human, person, animal, banner';
-            document.getElementById('outpaint_prompt').value = 'background without foreground object, seamless and natural';
-            document.getElementById('outpaint_negative_prompt').value = 'photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block';
-            document.getElementById('out_paint_percent').value = 0.1;
-            document.getElementById('layers').value = '';
+            document.getElementById('dilation').value = 0.01;
+            document.getElementById('depthDilationPercent').value = 0.00;
+            document.getElementById('inpaintPrompt').value = 'background without foreground object, seamless and natural';
+            document.getElementById('inpaintNegativePrompt').value = 'text, subtitles, chair, object, people, face, human, person, animal, banner';
+            document.getElementById('outpaintPrompt').value = 'background without foreground object, seamless and natural';
+            document.getElementById('outpaintNegativePrompt').value = 'photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block';
+            document.getElementById('outpaintÒÒ').value = 0.1;
         }
-        document.getElementById('inpainting_tech').addEventListener('change', function () {
+        document.getElementById('inpaintMethod').addEventListener('change', function () {
             console.log(this.value);
-            const promptFields = document.querySelectorAll('#inpaint_prompt, #inpaint_negative_prompt, #outpaint_prompt, #outpaint_negative_prompt');
+            const promptFields = document.querySelectorAll('#inpaintPrompt, #inpaintNegativePrompt, #outpaintPrompt, #outpaintNegativePrompt');
 
             if (this.value === 'lama') {
                 promptFields.forEach(field => {
@@ -266,9 +259,9 @@
             }
         });
         // Initialize form based on default selected value
-        document.getElementById('inpainting_tech').dispatchEvent(new Event('change'));
+        document.getElementById('inpaintMethod').dispatchEvent(new Event('change'));
     </script>
-    <script src="index.js"></script>
+    <script src="unified-test.js"></script>
     <script src="LIF.js"></script>
 </body>
 

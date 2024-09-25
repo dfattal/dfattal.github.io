@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disparity Map Generator</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Upload LR Images to Generate a Stereo LIF with disparity maps</h1>
+    <input type="file" id="imageInputL" accept="image/*">
+    <input type="file" id="imageInputR" accept="image/*">
+    <button onclick="uploadImage()">Upload and Generate</button>
+    <div id="result">
+        <h2>Generated Stereo LIF:</h2>
+        <img id="stereoLif" alt="Stereo LIF file will be displayed here">
+    </div>
+    <script src="dispMapGenST.js"></script>
+</body>
+</html>
+
+

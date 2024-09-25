@@ -187,7 +187,7 @@ async function parseLif53(file) {
     const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
     const lifMeta = await parseBinary(arrayBuffer);
     const lifJson = lifMeta.getJsonMeta();
-    console.log(lifJson);
+    console.dir(lifJson, { depth: null });
     let result = replaceKeys(lifJson,
         ['albedo', 'disparity', 'inv_z_dist', 'max_disparity', 'min_disparity', 'inv_z_dist_min', 'inv_z_dist_max'],
         ['image', 'inv_z_map', 'inv_z_map', 'max', 'min', 'max', 'min']
