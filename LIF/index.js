@@ -32,13 +32,13 @@ class lifGenerator {
             console.log('Stereo input !');
             result = {
                 executionPlan: [{
-                    productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
-                    paramsRaw: {
-                        inputLifImageUrl: this.imDownloadUrl,
-                        outputLifImageUrl: this.dispUploadUrl
-                    }
-                },
-                {
+                //     productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
+                //     paramsRaw: {
+                //         inputLifImageUrl: this.imDownloadUrl,
+                //         outputLifImageUrl: this.dispUploadUrl
+                //     }
+                // },
+                // {
                     productId: "1862b5a9-36d0-4624-ad6e-2c4b8f694d89" // LDL STEREO
                 }
                 ]
@@ -50,9 +50,13 @@ class lifGenerator {
                 params[key] = value;
             });
             params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
-            params.imageUrl = this.dispDownloadUrl;
+            delete params.outpaintNegativePrompt;
+            delete params.outpaintPrompt;
+            delete params.outpaint;
+            params.imageUrl = this.imDownloadUrl;
             params.resultPresignedUrl = this.lifUploadUrl;
-            result.executionPlan[1].paramsRaw = params;
+            // result.executionPlan[1].paramsRaw = params;
+            result.executionPlan[0].paramsRaw = params;
         } else {
             result = {
                 executionPlan: [{
@@ -257,7 +261,7 @@ class lifGenerator {
         // On button click, prompt user with a file save dialog
         downloadButton.onclick = async () => {
             try {
-                const fileName = this.storageUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
+                const fileName = this.imUploadUrl.split('/').pop().split('.').slice(0, -1).join('.') + '_LIF5.jpg';
 
                 // Check if showSaveFilePicker is supported
                 if (window.showSaveFilePicker) {
