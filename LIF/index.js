@@ -53,7 +53,7 @@ class lifGenerator {
             delete params.outpaintNegativePrompt;
             delete params.outpaintPrompt;
             delete params.outpaint;
-            params.imageUrl = this.imDownloadUrl;
+            params.imageUrl = this.dispDownloadUrl;
             params.resultPresignedUrl = this.lifUploadUrl;
             result.executionPlan[1].paramsRaw = params;
             // result.executionPlan[0].paramsRaw = params;
