@@ -286,7 +286,7 @@ class lifViewer {
         this.gl = this.canvas.getContext('webgl');
         this.canvas.style.display = 'none';
 
-        this.init();
+        if (this.lifUrl) this.init();
 
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // default
@@ -1003,5 +1003,246 @@ class lifViewer {
         // }
         this.startTime = Date.now() / 1000; // Start transition timer
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
+    }
+}
+
+class monoLdiGenerator {
+    constructor(file = null) {
+        this.AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
+        this.file = file ? file : null;
+        this.width = 0;
+        this.height = 0;
+
+        this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
+        this.imUploadUrl;
+        this.imDownloadUrl;
+        this.dispUploadUrl;
+        this.dispDownloadUrl;
+        this.lifUploadUrl;
+        this.lifDownloadUrl;
+        this.accessToken;
+        this.lifFile;
+        this.maxDimension = 1600;
+
+        this.execPlan = {
+            executionPlan: [{
+                productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+                paramsRaw: {
+                    imageUrl: '',
+                    resultPresignedUrl: '',
+                    outputBitDepth: 'uint16',
+                    dilation: 0
+                }
+            },
+            {
+                productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f", // LDL MONO
+                paramsRaw: {
+                    inpaintMethod: "lama",
+                    dilation: "0.01",
+                    depthDilationPercent: "0.0",
+                    outpaint: "0.100001",
+                    inpaintPrompt: "background without foreground object, seamless and natural",
+                    inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
+                    outpaintPrompt: "background without foreground object, seamless and natural",
+                    outpaintNegativePrompt: "photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block",
+                    imageUrl: '',
+                    resultPresignedUrl: ''
+                }
+            }
+            ]
+        };
+
+        this.init();
+    }
+
+    async resizeImage(image) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = image.width;
+        let height = image.height;
+
+        if (width > height) {
+            if (width > this.maxDimension) {
+                height = Math.round((height * this.maxDimension) / width);
+                width = this.maxDimension;
+            }
+        } else {
+            if (height > this.maxDimension) {
+                width = Math.round((width * this.maxDimension) / height);
+                height = this.maxDimension;
+            }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(image, 0, 0, width, height);
+
+        // Convert canvas to blob and return it along with dimensions
+        const blob = await new Promise((resolve) => {
+            canvas.toBlob(resolve, this.file.type, 1);
+        });
+
+        return {
+            blob: blob,
+            width: width,
+            height: height
+        };
+    }
+
+    async convertHeicToJpeg() {
+        const convertedBlob = await heic2any({
+            blob: this.file,
+            toType: "image/jpeg",
+            quality: 1
+        });
+        this.file = new File([convertedBlob], this.file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
+    }
+
+    async getAccessToken() {
+        console.log('Acquiring access token from LeiaLogin...');
+
+        const tokenResponse = await axios.post(this.AWS_LAMBDA_URL, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Access-Control-Allow-Origin': '*'
+            },
+        });
+
+        console.log('Access token acquired:', tokenResponse.data);
+        this.accessToken = tokenResponse.data.access_token;
+    }
+
+    async getPutGetUrl(filename) {
+        const responsePut = await fetch(this.endpointUrl + '/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
+            method: 'GET',
+            headers: {
+                authorization: `Bearer ${this.accessToken}`,
+                accept: 'application/json'
+            },
+        });
+
+        const dataPut = await responsePut.json();
+        console.log('Put URL for', filename, ':', dataPut.url);
+
+        const responseGet = await fetch(this.endpointUrl + '/get-download-url?url=' + dataPut.url, {
+            method: 'GET',
+            headers: {
+                authorization: `Bearer ${this.accessToken}`,
+                accept: 'application/json'
+            },
+        });
+
+        const dataGet = await responseGet.json();
+        console.log('Get URL for', filename, ':', dataGet.url);
+
+        return [dataPut.url, dataGet.url];
+    }
+
+    async uploadToStorage(file, putUrl) {
+        try {
+            const response = await fetch(putUrl, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': file.type
+                },
+                body: file
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            console.log('File uploaded successfully');
+        } catch (error) {
+            console.error('Error uploading file:', error);
+        }
+    }
+
+    async generateLif() {
+        // Start timing the fetch
+        console.time('fetchDuration');
+        // Show the progress bar
+        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[1].paramsRaw.inpaintMethod);
+
+        try {
+            const response = await fetch(this.endpointUrl + '/process', {
+                method: 'POST',
+                headers: {
+                    accept: 'application/json',
+                    authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.execPlan)
+            });
+            // Check if the response status is OK (status 200-299)
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            // Attempt to parse response as JSON
+            const data = await response.json();
+            console.log('Response data:', data);
+        } catch (error) {
+            console.error('Error during fetch:', error);
+        }
+
+        this.lifFile = await fetch(this.lifDownloadUrl);
+        console.timeEnd('fetchDuration');
+
+    }
+
+    async afterLoad() {}
+
+    async init() {
+
+        if (!this.file) return;
+        console.log(`Starting Conversion of ${this.file.name}, ${this.file.type}`);
+
+        // Convert HEIC to a more usable format
+        if (this.file.type === 'image/heic' || this.file.type === 'image/heif') {
+            console.log('Converting HEIC file...');
+            await this.convertHeicToJpeg();
+        }
+
+        const img = new Image();
+        const reader = new FileReader();
+
+        reader.onload = async (readerEvent) => {
+            img.src = readerEvent.target.result;
+
+            img.onload = async () => {
+
+                this.width = img.width;
+                this.height = img.height;
+                if ((img.width > this.maxDimension || img.height > this.maxDimension) && !this.stLifInput) {
+                    const resizedObj = await this.resizeImage(img);
+                    const resizedBlob = resizedObj.blob;
+                    this.width = resizedObj.width;
+                    this.height = resizedObj.height;
+                    this.file = new File([resizedBlob], this.file.name, { type: this.file.type });
+                    console.log(`Image resized to ${this.width} x ${this.height} before upload...`);
+                }
+
+                await this.getAccessToken();
+                console.log('Authenticated to IAI Cloud 🤗');
+                [this.imUploadUrl, this.imDownloadUrl] = await this.getPutGetUrl(this.file.name);
+                [this.dispUploadUrl, this.dispDownloadUrl] = await this.getPutGetUrl('disparity.png');
+                [this.lifUploadUrl, this.lifDownloadUrl] = await this.getPutGetUrl('lifResult.jpg');
+                console.log('Got temporary storage URLs on IAI Cloud 💪');
+                await this.uploadToStorage(this.file, this.imUploadUrl);
+                console.log('Uploaded Image to IAI Cloud 🚀');
+                this.execPlan.executionPlan[0].paramsRaw.imageUrl = this.imDownloadUrl;
+                this.execPlan.executionPlan[0].paramsRaw.resultPresignedUrl = this.dispUploadUrl;
+                this.execPlan.executionPlan[1].paramsRaw.imageUrl = this.imDownloadUrl;
+                this.execPlan.executionPlan[1].paramsRaw.disparityUrl = this.dispDownloadUrl;
+                this.execPlan.executionPlan[1].paramsRaw.resultPresignedUrl = this.lifUploadUrl;
+                console.log(this.execPlan);
+                console.log('Launching LDI Generation Service... ⏳');
+                await this.generateLif();
+                this.afterLoad();
+            };
+        };
+        reader.readAsDataURL(this.file);
+
+
     }
 }

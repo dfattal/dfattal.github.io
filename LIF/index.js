@@ -544,6 +544,10 @@ async function showLifInfo(lifInfo) {
 
 }
 
+async function askToGenLDI(file) {
+
+}
+
 async function handleFileSelect(event) {
 
     const file = event.target.files[0];
@@ -557,26 +561,36 @@ async function handleFileSelect(event) {
         try {
             const arrayBuffer = await file.arrayBuffer();
             lifInfo = await parseLif53(arrayBuffer);
-            showLifInfo(lifInfo);
-            addViz(arrayBuffer);
+            if (lifInfo.views[0].layers_top_to_bottom.length < 2) { // valid LIF but no LDI
+                const userWantsToCreateLdi = confirm("This is a single layer LIF, would you like to create layers ?");
+                if (userWantsToCreateLdi) {
+
+                    if (lifInfo.views.length > 1) lifGen.stLifInput = true; // stereo LIF
+                    lifGen.file = file;
+                    await lifGen.go();
+
+                } else {
+                    showLifInfo(lifInfo);
+                    addViz(arrayBuffer);
+                }
+            } else {
+                showLifInfo(lifInfo);
+                addViz(arrayBuffer);
+            }
         } catch (e) {
             const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
             if (userWantsToCreateLif) {
-                // const lifGen = new lifGenerator(file);
+
                 try {
-                const arrayBuffer = await file.arrayBuffer();
-                const lifMeta = await parseBinary(arrayBuffer);
-                const lifJson = lifMeta.getJsonMeta();
-                if (lifJson.views && (lifJson.views.length > 1)) lifGen.stLifInput = true;
+                    const arrayBuffer = await file.arrayBuffer();
+                    const lifMeta = await parseBinary(arrayBuffer);
+                    const lifJson = lifMeta.getJsonMeta();
+                    if (lifJson.views && (lifJson.views.length > 1)) lifGen.stLifInput = true;
                 } catch (e) {
                     console.log("simple image");
                 }
                 lifGen.file = file;
                 await lifGen.go();
-
-                // lifInfo = await parseLif53(lifGen.lifFile);
-                // addViz(lifGen.lifArrayBuffer);
-
 
             } else {
                 return;
