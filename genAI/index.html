@@ -10,8 +10,11 @@
 </head>
 <body>
     <div class="container">
-        <textarea id="message-content" placeholder="Enter your prompt here...">a cute boy eating a carrot</textarea>
-        <button onclick="generateImage()">Generate Image</button>
+        <textarea id="message-content" placeholder="Enter your prompt here...">A [beautiful young] woman with [long, wavy brunette hair] rests her head on her clasped hands, she is looking in the camera. She is dressed in [a purple top] and wears [a delicate bracelet on her left wrist]. Her expression is [gentle and thoughtful], enhanced by [natural makeup and a hint of purple lipstick]. The background is [a dim and blurred office space], drawing attention to [her face and hands].</textarea>
+        <div class="button-container">
+            <button onclick="generateImage('schnell')">Generate Fast</button>
+            <button onclick="generateImage('dev')">Generate Best</button>
+        </div>
         <div id="image-preview" class="image-container"></div>
     </div>
 

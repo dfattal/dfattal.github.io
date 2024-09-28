@@ -50,7 +50,7 @@ async function sendToViz(url) {
 }
 
 // Function to generate an image from the Hugging Face API
-async function generateImage() {
+async function generateImage(mode) {
     const prompt = document.getElementById('message-content').value;
 
     if (!prompt.trim()) {
@@ -59,7 +59,7 @@ async function generateImage() {
     }
 
     showLoadingSpinner(); // Show loading spinner while waiting for image generation
-    const endpoint = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell'; // -dev
+    const endpoint = `https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-${mode}`; // -dev
 
     try {
         const response = await fetch(endpoint, {
@@ -80,22 +80,23 @@ async function generateImage() {
 
         const blob = await response.blob();
         const imageUrl = URL.createObjectURL(blob);
-
         displayImage(imageUrl); // Display the generated image in the preview area
+        imDiv.classList.add('glowing');
+        
         const imageFile = new File([blob], 'generatedImage.jpg', { type: 'image/jpeg' });
         const lifGen = new monoLdiGenerator();
         lifGen.file = imageFile;
         lifGen.afterLoad = function () {
-            imDiv.innerHTML = '';
-            const viewer = new lifViewer(lifGen.lifDownloadUrl, imDiv, height = 400);
-            // viewer.startAnimation();
+            
+            const viewer = new lifViewer(this.lifDownloadUrl, imDiv, height = 400, autoplay=true);
+            viewer.afterLoad = function() {
+                imDiv.firstElementChild.style.display = 'none';
+                imDiv.classList.remove('glowing');
+                imDiv.onclick = function() {sendToViz(lifGen.lifDownloadUrl)};
+            };
+            
         }
         await lifGen.init()
-        // while (imDiv.firstChild) {
-        //     imDiv.removeChild(imDiv.firstChild);
-        // }
-
-
 
     } catch (error) {
         console.error('Error generating image:', error);

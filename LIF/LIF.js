@@ -183,6 +183,16 @@ async function getImageDimensions(url) {
     });
 }
 
+function arrayBufferToBinaryString(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return binary;
+}
+
 async function parseLif53(file) {
     const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
     const lifMeta = await parseBinary(arrayBuffer);
@@ -274,10 +284,12 @@ async function parseLif53(file) {
 
 // ShaderImage Class
 class lifViewer {
-    constructor(lifUrl, container, height = 300) {
+    constructor(lifUrl, container, height = 300, autoplay = false) {
         this.MAX_LAYERS = 4;
         this.lifUrl = lifUrl;
         this.container = container;
+        this.autoplay = autoplay;
+        this.running = false;
 
         this.img = document.createElement('img');
         this.img.src = lifUrl;
@@ -303,13 +315,27 @@ class lifViewer {
         this.render = this.render.bind(this);
 
     }
+    // Helper to await the image load
+    async loadImage() {
+        return new Promise((resolve, reject) => {
+            this.img.onload = () => resolve();
+            this.img.onerror = () => reject(new Error('Image failed to load'));
+        });
+    }
+
+    async afterLoad() { };
 
     async init() {
-        this.img.onload = function () {
-            this.container.appendChild(this.img);
-            this.container.appendChild(this.canvas);
-            this.resizeCanvasToContainer();
-        }.bind(this);
+        // this.img.onload = function () {
+        //     this.container.appendChild(this.img);
+        //     this.container.appendChild(this.canvas);
+        //     this.resizeCanvasToContainer();
+        // }.bind(this);
+        await this.loadImage();
+        this.container.appendChild(this.img);
+        this.container.appendChild(this.canvas);
+        this.afterLoad();
+        this.resizeCanvasToContainer();
         this.container.addEventListener('mouseenter', () => this.startAnimation());
         this.container.addEventListener('mouseleave', () => this.stopAnimation());
         const response = await fetch(this.lifUrl);
@@ -330,6 +356,13 @@ class lifViewer {
             await this.setupWebGLMN();
         } else {
             await this.setupWebGLST();
+        }
+
+        if (this.autoplay) {
+            this.startAnimation();
+            // setTimeout(() => {
+            //     this.stopAnimation();
+            // }, 4000);
         }
     }
 
@@ -357,7 +390,7 @@ class lifViewer {
     }
 
     createTexture2(image) {
-        const downsampleFactor = image.height / 500;
+        const downsampleFactor = image.height / 1024;
         const width = Math.floor(image.width / downsampleFactor);
         const height = Math.floor(image.height / downsampleFactor);
 
@@ -907,7 +940,7 @@ class lifViewer {
         const t = ut; //Math.max(ut-2,0);
         const st = Math.sin(2 * Math.PI * t / animTime);
         const ct = Math.cos(2 * Math.PI * t / animTime);
-        const zAmp = 0.6 / this.views[0].invZ.min;
+        const zAmp = 0.5 / this.views[0].invZ.min;
         // update renderCam
         this.renderCam.pos = { x: this.views.length < 2 ? 0 : -0.5, y: 0, z: zAmp * (1 - ct) / 2 };
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
@@ -965,6 +998,8 @@ class lifViewer {
 
     async startAnimation() {
         if (!this.gl.isContextLost()) {
+            if (this.running) return;
+            this.running = true;
             // console.log("starting animation for", this.lifUrl.split('/').pop());
             if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
             this.img.style.display = 'none';
@@ -997,6 +1032,7 @@ class lifViewer {
     stopAnimation(transitionTime = 0.5) { // Set a default transition time of 0.5 seconds
         if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
         cancelAnimationFrame(this.animationFrame);
+        this.running = false;
         // if (this.gl.isContextLost()) {
         //     console.log("Context lost for", this.lifUrl.split('/').pop());
         //     return;
@@ -1190,7 +1226,7 @@ class monoLdiGenerator {
 
     }
 
-    async afterLoad() {}
+    async afterLoad() { }
 
     async init() {
 

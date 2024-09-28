@@ -10,7 +10,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    margin-top: 50px;
+    margin-top: 20px;
     max-width: 600px;
     margin-left: auto;
     margin-right: auto;
@@ -22,7 +22,8 @@ textarea {
     width: 100%;
     padding: 10px;
     font-size: 16px;
-    margin-bottom: 15px;
+    height: 140px;
+    margin-bottom: 20px;
     border: 1px solid #ccc;
     border-radius: 5px;
     outline: none;
@@ -31,6 +32,13 @@ textarea {
 }
 
 /* Button styling */
+.button-container {
+    display: flex;
+    gap: 10px; /* Space between buttons */
+    justify-content: center; /* Center the buttons */
+    margin-bottom: 20px; /* Optional: Space below the buttons */
+}
+
 button {
     padding: 10px 20px;
     font-size: 16px;
@@ -39,8 +47,6 @@ button {
     background-color: #007BFF;
     color: white;
     cursor: pointer;
-    transition: background-color 0.3s ease;
-    margin-bottom: 50px;
 }
 
 button:hover {
@@ -59,6 +65,7 @@ button:hover {
 .image-container:hover {
     transform: scale(1.05);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
 }
 
 img,
@@ -80,10 +87,10 @@ canvas {
     width: 50px;
     height: 50px;
     animation: spin 1s linear infinite;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    position: absolute; /* Absolute positioning to center it */
+    top: 50%; /* Move to the center vertically */
+    left: 50%; /* Move to the center horizontally */
+    transform: translate(-50%, -50%); /* Corrects the offset by half the element's size */
 }
 
 @keyframes spin {
@@ -93,5 +100,26 @@ canvas {
 
     100% {
         transform: rotate(360deg);
+    }
+}
+
+.glowing {
+    border: 2px solid white;
+    animation: glow 1s infinite alternate;
+    border-radius: 10px; /* Optional: adds rounded corners */
+}
+
+@keyframes glow {
+    0% {
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
+                    0 0 20px rgba(255, 255, 255, 0.6), 
+                    0 0 30px rgba(255, 255, 255, 0.4);
+        border-color: white;
+    }
+    100% {
+        box-shadow: 0 0 10px rgba(192, 128, 255, 0.8), 
+                    0 0 20px rgba(192, 128, 255, 0.6), 
+                    0 0 30px rgba(192, 128, 255, 0.4);
+        border-color: rgba(192, 128, 255, 0.8);
     }
 }
