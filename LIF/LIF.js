@@ -284,9 +284,13 @@ async function parseLif53(file) {
 
 // ShaderImage Class
 class lifViewer {
+    static instances = [];
+
     constructor(lifUrl, container, height = 300, autoplay = false) {
+        lifViewer.instances.push(this);
         this.MAX_LAYERS = 4;
         this.lifUrl = lifUrl;
+        this.animations = []; // will store LIF animation list
         this.container = container;
         this.autoplay = autoplay;
         this.running = false;
@@ -299,6 +303,9 @@ class lifViewer {
         this.canvas.style.display = 'none';
 
         if (this.lifUrl) this.init();
+        this.disableAnim = false;
+        this.currentAnimation;
+
 
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // default
@@ -315,6 +322,20 @@ class lifViewer {
         this.render = this.render.bind(this);
 
     }
+
+    // Static method to disable animations for all instances
+    static disableAllAnimations() {
+        lifViewer.instances.forEach(instance => {
+            instance.disableAnim = true;
+        });
+    }
+
+    static enableAllAnimations() {
+        lifViewer.instances.forEach(instance => {
+            instance.disableAnim = false;
+        });
+    }
+
     // Helper to await the image load
     async loadImage() {
         return new Promise((resolve, reject) => {
@@ -324,6 +345,27 @@ class lifViewer {
     }
 
     async afterLoad() { };
+
+    async replaceKeys(obj, oldKeys, newKeys) {
+        if (typeof obj !== 'object' || obj === null) {
+            return obj; // Return the value if it's not an object
+        }
+    
+        const newObj = {};
+    
+        for (let key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                // Find the index of the key in the oldKeys array
+                const index = oldKeys.indexOf(key);
+                // Determine the new key: replace it if found, otherwise keep the original key
+                const updatedKey = (index !== -1) ? newKeys[index] : key;
+                // Recursively apply the function to nested objects
+                newObj[updatedKey] = replaceKeys(obj[key], oldKeys, newKeys);
+            }
+        }
+    
+        return Array.isArray(obj) ? Object.values(newObj) : newObj;
+    }
 
     async init() {
         // this.img.onload = function () {
@@ -336,17 +378,39 @@ class lifViewer {
         this.container.appendChild(this.canvas);
         this.afterLoad();
         this.resizeCanvasToContainer();
-        this.container.addEventListener('mouseenter', () => this.startAnimation());
-        this.container.addEventListener('mouseleave', () => this.stopAnimation());
         const response = await fetch(this.lifUrl);
         const blob = await response.blob();
         const file = new File([blob], 'lifImage.jpg', { type: 'image/jpeg' });
         this.lifInfo = await parseLif53(file);
-        this.views = replaceKeys(this.lifInfo.views,
+        this.views = await this.replaceKeys(this.lifInfo.views,
             ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
-        // console.log(this.views);
+        
+        if (this.lifInfo.animations) this.animations = this.lifInfo.animations;
+        // for now hardcode animations[0];
+        const zAmp = 0.5 / this.views[0].invZ.min;
+        //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
+        const invd = Math.abs(this.views[0].sk.x) / 0.5 // usualy zero with no black band for pre-converged stereo
+        const xc = this.views.length > 1 ? -0.5 : 0;
+        this.animations[0] = {
+            type: "harmonic",
+            name: "Default Animation",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: invd,
+                position: {
+                    x: { amplitude: 0.0, phase: 0.0, bias: xc },
+                    y: { amplitude: 0.0, phase: 0.0, bias: 0 },
+                    z: { amplitude: zAmp / 2, phase: -0.25, bias: zAmp / 2 }
+                }
+            }
+        }
+        this.currentAnimation = this.animations[0];
+
         await this.parseObjAndCreateTextures(this.views);
         this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
         this.vertexShaderUrl = "../Shaders/vertex.glsl";
@@ -933,20 +997,21 @@ class lifViewer {
     }
 
     render() {
-        const animTime = 4;
-        //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
-        const invd = Math.abs(this.views[0].sk.x) / 0.5 // set focus point
+        // assume harmonic for now
+        const animTime = this.currentAnimation.duration_sec;
         const ut = Date.now() / 1000 - this.startTime;
         const t = ut; //Math.max(ut-2,0);
-        const st = Math.sin(2 * Math.PI * t / animTime);
-        const ct = Math.cos(2 * Math.PI * t / animTime);
-        const zAmp = 0.5 / this.views[0].invZ.min;
+        function harm(amp, ph, bias) { return amp * Math.sin(2 * Math.PI * (t / animTime + ph)) + bias };
+        const invd = this.currentAnimation.data.invd;
         // update renderCam
-        this.renderCam.pos = { x: this.views.length < 2 ? 0 : -0.5, y: 0, z: zAmp * (1 - ct) / 2 };
+        this.renderCam.pos.x = harm(this.currentAnimation.data.position.x.amplitude, this.currentAnimation.data.position.x.phase, this.currentAnimation.data.position.x.bias);
+        this.renderCam.pos.y = harm(this.currentAnimation.data.position.y.amplitude, this.currentAnimation.data.position.y.phase, this.currentAnimation.data.position.y.bias);
+        this.renderCam.pos.z = harm(this.currentAnimation.data.position.z.amplitude, this.currentAnimation.data.position.z.phase, this.currentAnimation.data.position.z.bias);
+
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
-        const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
-        this.renderCam.f = this.views[0].f * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+        const vs = this.viewportScale({ x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
+        this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
         if (this.views.length < 2) {
             this.drawSceneMN(ut);
@@ -962,6 +1027,7 @@ class lifViewer {
     }
 
     renderOff(transitionTime) {
+        if (this.running) { console.log("abort renderOFF !"); return; }
         const elapsedTime = (Date.now() / 1000) - this.startTime;
 
         //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
@@ -971,7 +1037,7 @@ class lifViewer {
 
         const { x: xo, y: yo, z: zo } = this.renderCam.pos;
         // Update some properties to create a transition effect
-        const xc = this.views.length < 2 ? 0 : -0.5;
+        const xc = this.currentAnimation.data.position.x.bias;
         this.renderCam.pos = { x: xc + (xo - xc) / 1.1, y: yo / 1.1, z: zo / 1.1 }; // Slow down z-axis movement
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
@@ -997,11 +1063,11 @@ class lifViewer {
     }
 
     async startAnimation() {
+        if (this.disableAnim) return;
         if (!this.gl.isContextLost()) {
             if (this.running) return;
             this.running = true;
             // console.log("starting animation for", this.lifUrl.split('/').pop());
-            if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
             this.img.style.display = 'none';
             this.canvas.style.display = 'block';
             this.startTime = Date.now() / 1000;
@@ -1030,7 +1096,7 @@ class lifViewer {
     }
 
     stopAnimation(transitionTime = 0.5) { // Set a default transition time of 0.5 seconds
-        if (this.container.classList.contains('delete-hover') || this.container.classList.contains('download-hover')) return;
+        if (this.disableAnim) return;
         cancelAnimationFrame(this.animationFrame);
         this.running = false;
         // if (this.gl.isContextLost()) {
@@ -1088,7 +1154,7 @@ class monoLdiGenerator {
             ]
         };
 
-        this.init();
+        //this.init();
     }
 
     async resizeImage(image) {

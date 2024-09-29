@@ -138,6 +138,10 @@ function appendImageToGrid(id, url) {
 
     document.getElementById('imageGrid').appendChild(container);
     let lifObj = new lifViewer(url, container);
+    lifObj.afterLoad = function() {
+        this.container.addEventListener('mouseenter', () => this.startAnimation());
+        this.container.addEventListener('mouseleave', () => this.stopAnimation());
+    }
 
     // Add onclick event for image deletion in delete mode
     container.onclick = async () => {
@@ -298,6 +302,7 @@ document.getElementById('trashButton').addEventListener('click', function () {
     if (deleteMode) {
         if (downloadMode) document.getElementById('downloadButton').click();
         this.classList.add('active'); // Add 'active' class to button when in delete mode
+        lifViewer.disableAllAnimations();
 
         // Apply delete-hover effect to all images dynamically
         const images = document.querySelectorAll('.grid div');
@@ -308,7 +313,7 @@ document.getElementById('trashButton').addEventListener('click', function () {
 
     } else {
         this.classList.remove('active'); // Remove 'active' class when exiting delete mode
-
+        lifViewer.enableAllAnimations();
         // Remove delete-hover effect from all images
         const images = document.querySelectorAll('.grid div');
         images.forEach((img) => {
@@ -326,7 +331,7 @@ document.getElementById('downloadButton').addEventListener('click', function () 
     if (downloadMode) {
         if (deleteMode) document.getElementById('trashButton').click();
         this.classList.add('active'); // Add 'active' class to button when in download mode
-
+        lifViewer.disableAllAnimations();
         // Apply download-hover effect to all images dynamically
         const images = document.querySelectorAll('.grid div');
         images.forEach((img) => {
@@ -336,7 +341,7 @@ document.getElementById('downloadButton').addEventListener('click', function () 
 
     } else {
         this.classList.remove('active'); // Remove 'active' class when exiting download mode
-
+        lifViewer.enableAllAnimations();
         // Remove download-hover effect from all images
         const images = document.querySelectorAll('.grid div');
         images.forEach((img) => {

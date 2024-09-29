@@ -84,15 +84,17 @@ async function generateImage(mode) {
         imDiv.classList.add('glowing');
         
         const imageFile = new File([blob], 'generatedImage.jpg', { type: 'image/jpeg' });
-        const lifGen = new monoLdiGenerator();
-        lifGen.file = imageFile;
+        const lifGen = new monoLdiGenerator(imageFile);
+    
         lifGen.afterLoad = function () {
             
             const viewer = new lifViewer(this.lifDownloadUrl, imDiv, height = 400, autoplay=true);
             viewer.afterLoad = function() {
-                imDiv.firstElementChild.style.display = 'none';
-                imDiv.classList.remove('glowing');
-                imDiv.onclick = function() {sendToViz(lifGen.lifDownloadUrl)};
+                this.container.firstElementChild.style.display = 'none';
+                this.container.classList.remove('glowing');
+                this.container.onclick = function() {sendToViz(lifGen.lifDownloadUrl)};
+                this.container.addEventListener('mouseenter', () => this.startAnimation());
+                this.container.addEventListener('mouseleave', () => this.stopAnimation());
             };
             
         }
