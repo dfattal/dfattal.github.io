@@ -1031,7 +1031,7 @@ class lifViewer {
         const elapsedTime = (Date.now() / 1000) - this.startTime;
 
         //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
-        const invd = Math.abs(this.views[0].sk.x) / 0.5 // set focus point
+        const invd = this.currentAnimation.data.invd;
         // Calculate a fade-out effect based on elapsed time and transition time
         //const progress = Math.min(elapsedTime / transitionTime, 1); // progress goes from 0 to 1
 
@@ -1041,8 +1041,8 @@ class lifViewer {
         this.renderCam.pos = { x: xc + (xo - xc) / 1.1, y: yo / 1.1, z: zo / 1.1 }; // Slow down z-axis movement
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
-        const vs = this.viewportScale({ x: this.views[0].width, y: this.views[0].height }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
-        this.renderCam.f = this.views[0].f * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+        const vs = this.viewportScale({ x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
+        this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
 
         if (this.views.length < 2) {

@@ -376,7 +376,7 @@ function mylog(msg) {
     console.log(msg);
 }
 
-const lifGen = new lifGenerator();
+
 const viewDiv = document.getElementById('views_div');
 
 function create4ChannelImage(rgbImage, maskImage) {
@@ -549,7 +549,8 @@ async function askToGenLDI(file) {
 }
 
 async function handleFileSelect(event) {
-
+    
+    const lifGen = new lifGenerator();
     const file = event.target.files[0];
     let lifInfo;
     if (file) {
