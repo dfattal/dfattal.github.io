@@ -113,3 +113,21 @@ document.getElementById('message-content').addEventListener('keydown', function 
         generateImage(); // Trigger image generation
     }
 });
+
+document.addEventListener("DOMContentLoaded", function() {
+    // List of prompts with brackets
+    const prompts = [
+        "A [beautiful young] woman with [long, wavy brunette hair] rests her head on her clasped hands, she is looking in the camera. She is dressed in [a purple top] and wears [a delicate bracelet on her left wrist]. Her expression is [gentle and thoughtful], enhanced by [natural makeup and a hint of purple lipstick]. The background is [a dim and blurred office space], drawing attention to [her face and hands].",
+        "A [handsome young] man with [short, curly blonde hair] leans against a [window sill], gazing outside with [a thoughtful expression]. He is dressed in [a light blue button-down shirt] and wears [a leather watch on his right wrist]. The background is [a brightly lit apartment], softly focusing on [his posture and expression].",
+        "A [stylish middle-aged] woman with [straight, jet-black hair] is [sitting cross-legged] on a couch, holding a book in her lap. She is dressed in [a dark green sweater] and wears [gold hoop earrings]. Her expression is [calm and peaceful], complemented by [minimal makeup and neutral lipstick]. The background is [a cozy living room], accentuating [her relaxed pose and serene demeanor].",
+        "A [young man] with [medium-length auburn hair] is [standing with arms crossed], looking confidently into the camera. He is wearing [a casual black hoodie] and has [a silver chain around his neck]. His expression is [bold and charismatic], highlighted by [sharp facial features]. The background is [a dimly lit street at night], drawing focus to [his strong stance and determined look].",
+        "A [cheerful elderly] woman with [short, silver hair] is [laughing with her head tilted back], her hands clasped together. She is wearing [a light pink cardigan] and has [a pearl necklace around her neck]. Her expression is [joyful and infectious], complemented by [bright red lipstick and soft wrinkles]. The background is [a sunny park], emphasizing [her radiant energy and warm smile].",
+        "A [confident young] man with [close-cropped black hair] is [seated on a stool], looking directly into the camera. He is dressed in [a gray turtleneck] and wears [a sleek silver ring on his left hand]. His expression is [serious and contemplative], enhanced by [a clean-shaven face and sharp cheekbones]. The background is [a minimalist office space], with the focus on [his calm yet intense expression]."
+    ];
+
+    // Select a random prompt
+    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+
+    // Set the random prompt as the value of the textarea
+    document.getElementById("message-content").value = randomPrompt;
+});
