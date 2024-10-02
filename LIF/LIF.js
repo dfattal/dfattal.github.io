@@ -1216,7 +1216,7 @@ class monoLdiGenerator {
     }
 
     async getPutGetUrl(filename) {
-        const responsePut = await fetch(this.endpointUrl + '/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
+        const responsePair = await fetch(this.endpointUrl + '/get-presigned-url-pair?fileName=' + filename + '&mediaType=image%2Fjpeg', {
             method: 'GET',
             headers: {
                 authorization: `Bearer ${this.accessToken}`,
@@ -1224,21 +1224,11 @@ class monoLdiGenerator {
             },
         });
 
-        const dataPut = await responsePut.json();
-        console.log('Put URL for', filename, ':', dataPut.url);
+        const data = await responsePair.json();
+        console.log('Put URL for', filename, ':', data.uploadUrl);
+        console.log('Get URL for', filename, ':', data.downloadUrl);
 
-        const responseGet = await fetch(this.endpointUrl + '/get-download-url?url=' + dataPut.url, {
-            method: 'GET',
-            headers: {
-                authorization: `Bearer ${this.accessToken}`,
-                accept: 'application/json'
-            },
-        });
-
-        const dataGet = await responseGet.json();
-        console.log('Get URL for', filename, ':', dataGet.url);
-
-        return [dataPut.url, dataGet.url];
+        return [data.uploadUrl, data.downloadUrl];
     }
 
     async uploadToStorage(file, putUrl) {
