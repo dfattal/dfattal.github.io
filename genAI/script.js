@@ -66,11 +66,12 @@ async function generateImage(mode) {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer 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',  // Replace with your actual Hugging Face API key
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                "x-use-cache": "false"
             },
             body: JSON.stringify({
                 inputs: prompt,
-                options: { seed: Math.floor(Math.random() * 1000000) }
+                parameters: { seed: Math.floor(Math.random() * 1000000) }
             })
         });
 

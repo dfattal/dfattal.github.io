@@ -1,5 +1,5 @@
 AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
-
+const endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
 
 async function uploadImage() {
     const imageInput = document.getElementById('imageInput');
@@ -70,7 +70,7 @@ async function getGetUrl(accessToken,putUrl) {
 }
 
 async function getPutGetUrl(accessToken,filename) {
-    const responsePut = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
+    const responsePair = await fetch(endpointUrl + '/get-presigned-url-pair?fileName=' + filename + '&mediaType=image%2Fjpeg', {
         method: 'GET',
         headers: {
             authorization: `Bearer ${accessToken}`,
@@ -78,21 +78,11 @@ async function getPutGetUrl(accessToken,filename) {
         },
     });
 
-    const dataPut = await responsePut.json();
-    console.log('Put URL for',filename,':',dataPut.url);
+    const data = await responsePair.json();
+    console.log('Put URL for', filename, ':', data.uploadUrl);
+    console.log('Get URL for', filename, ':', data.downloadUrl);
 
-    const responseGet = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-download-url?url=' + dataPut.url, {
-        method: 'GET',
-        headers: {
-            authorization: `Bearer ${accessToken}`,
-            accept: 'application/json'
-        },
-    });
-
-    const dataGet = await responseGet.json();
-    console.log('Get URL for',filename,':',dataGet.url);
-
-    return [dataPut.url, dataGet.url];
+    return [data.uploadUrl, data.downloadUrl];
 }
 
 async function uploadToStorage(url, file) {
@@ -124,7 +114,7 @@ async function generateDisparityMap(accessToken, downloadStorageUrl, dispUploadS
         body: JSON.stringify({
             executionPlan: [{
                 productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
-                paramsRaw: {
+                productParams: {
                     imageUrl: downloadStorageUrl,
                     resultPresignedUrl: dispUploadStorageUrl,
                     outputBitDepth: 'uint16',
