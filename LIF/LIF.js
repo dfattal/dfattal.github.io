@@ -386,11 +386,7 @@ class lifViewer {
     }
 
     async init() {
-        // this.img.onload = function () {
-        //     this.container.appendChild(this.img);
-        //     this.container.appendChild(this.canvas);
-        //     this.resizeCanvasToContainer();
-        // }.bind(this);
+        
         await this.loadImage();
         this.container.appendChild(this.img);
         this.container.appendChild(this.canvas);
@@ -1130,10 +1126,6 @@ class lifViewer {
         cancelAnimationFrame(this.animationFrame);
         this.running = false;
         this.mousePosOld = { x: 0, y: 0 };
-        // if (this.gl.isContextLost()) {
-        //     console.log("Context lost for", this.lifUrl.split('/').pop());
-        //     return;
-        // }
         this.startTime = Date.now() / 1000; // Start transition timer
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
     }
