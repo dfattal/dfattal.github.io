@@ -1152,16 +1152,18 @@ class monoLdiGenerator {
         this.execPlan = {
             executionPlan: [{
                 productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
-                paramsRaw: {
-                    imageUrl: '',
-                    resultPresignedUrl: '',
+                inputs: {},
+                outputs: {},
+                productParams: {
                     outputBitDepth: 'uint16',
                     dilation: 0
                 }
             },
             {
                 productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f", // LDL MONO
-                paramsRaw: {
+                inputs: {},
+                outputs: {},
+                productParams: {
                     inpaintMethod: "lama",
                     dilation: "0.01",
                     depthDilationPercent: "0.0",
@@ -1170,8 +1172,6 @@ class monoLdiGenerator {
                     inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
                     outpaintPrompt: "background without foreground object, seamless and natural",
                     outpaintNegativePrompt: "photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block",
-                    imageUrl: '',
-                    resultPresignedUrl: ''
                 }
             }
             ]
@@ -1276,7 +1276,7 @@ class monoLdiGenerator {
         // Start timing the fetch
         console.time('fetchDuration');
         // Show the progress bar
-        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[1].paramsRaw.inpaintMethod);
+        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[1].productParams.inpaintMethod);
 
         try {
             const response = await fetch(this.endpointUrl + '/process', {
@@ -1345,11 +1345,11 @@ class monoLdiGenerator {
                 console.log('Got temporary storage URLs on IAI Cloud 💪');
                 await this.uploadToStorage(this.file, this.imUploadUrl);
                 console.log('Uploaded Image to IAI Cloud 🚀');
-                this.execPlan.executionPlan[0].paramsRaw.imageUrl = this.imDownloadUrl;
-                this.execPlan.executionPlan[0].paramsRaw.resultPresignedUrl = this.dispUploadUrl;
-                this.execPlan.executionPlan[1].paramsRaw.imageUrl = this.imDownloadUrl;
-                this.execPlan.executionPlan[1].paramsRaw.disparityUrl = this.dispDownloadUrl;
-                this.execPlan.executionPlan[1].paramsRaw.resultPresignedUrl = this.lifUploadUrl;
+                this.execPlan.executionPlan[0].productParams.imageUrl = this.imDownloadUrl;
+                this.execPlan.executionPlan[0].productParams.resultPresignedUrl = this.dispUploadUrl;
+                this.execPlan.executionPlan[1].productParams.imageUrl = this.imDownloadUrl;
+                this.execPlan.executionPlan[1].productParams.disparityUrl = this.dispDownloadUrl;
+                this.execPlan.executionPlan[1].productParams.resultPresignedUrl = this.lifUploadUrl;
                 console.log(this.execPlan);
                 console.log('Launching LDI Generation Service... ⏳');
                 await this.generateLif();
