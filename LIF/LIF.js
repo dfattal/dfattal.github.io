@@ -1102,7 +1102,18 @@ class lifViewer {
             this.canvas = document.createElement('canvas');
             this.canvas.style.display = 'none';
             this.container.appendChild(this.canvas);
-            this.resizeCanvasToContainer()
+            this.resizeCanvasToContainer();
+            this.canvas.addEventListener('mousemove', function (event) {
+                const rect = this.canvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left - rect.width / 2; // Get mouse X position relative to the canvas
+                const mouseY = event.clientY - rect.top - rect.height / 2; // Get mouse Y position relative to the canvas
+    
+                // Calculate the position relative to the center, normalized between -0.5 and +0.5
+                this.mousePos.x = (mouseX / rect.width);
+                this.mousePos.y = (mouseY / rect.width);
+    
+                // console.log(`(${relativeX}, ${relativeY}`); // Outputs values between -0.5 and +0.5
+            }.bind(this));
             this.gl = this.canvas.getContext('webgl');
             await this.parseObjAndCreateTextures(this.views);
             this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
