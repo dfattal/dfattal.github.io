@@ -371,6 +371,20 @@ class lifViewer {
         return Array.isArray(obj) ? Object.values(newObj) : newObj;
     }
 
+    async initWebGLResources() {
+        // Initialize or reinitialize WebGL resources (shaders, textures, etc.)
+        await this.parseObjAndCreateTextures(this.views);
+
+        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
+        this.vertexShaderUrl = "../Shaders/vertex.glsl";
+
+        if (this.views.length < 2) {
+            await this.setupWebGLMN();  // Setup shaders and buffers for mono view
+        } else {
+            await this.setupWebGLST();  // Setup shaders and buffers for stereo view
+        }
+    }
+
     async init() {
         // this.img.onload = function () {
         //     this.container.appendChild(this.img);
@@ -426,16 +440,7 @@ class lifViewer {
         }
         this.currentAnimation = this.animations[0];
 
-        await this.parseObjAndCreateTextures(this.views);
-        this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
-        this.vertexShaderUrl = "../Shaders/vertex.glsl";
-
-        // Setup Shader
-        if (this.views.length < 2) {
-            await this.setupWebGLMN();
-        } else {
-            await this.setupWebGLST();
-        }
+        await this.initWebGLResources();
 
         if (this.autoplay) {
             this.startAnimation();
@@ -1115,16 +1120,7 @@ class lifViewer {
                 // console.log(`(${relativeX}, ${relativeY}`); // Outputs values between -0.5 and +0.5
             }.bind(this));
             this.gl = this.canvas.getContext('webgl');
-            await this.parseObjAndCreateTextures(this.views);
-            this.fragmentShaderUrl = this.views.length < 2 ? "../Shaders/rayCastMonoLDIGlow.glsl" : "../Shaders/rayCastStereoLDIGlow.glsl";
-            this.vertexShaderUrl = "../Shaders/vertex.glsl";
-
-            // Setup Shader
-            if (this.views.length < 2) {
-                await this.setupWebGLMN();
-            } else {
-                await this.setupWebGLST();
-            }
+            await this.initWebGLResources();
             this.startAnimation();
         }
     }
