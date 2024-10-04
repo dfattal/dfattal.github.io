@@ -33,7 +33,7 @@ class lifGenerator {
             result = {
                 executionPlan: [{
                     productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
-                    paramsRaw: {
+                    productParams: {
                         inputLifImageUrl: this.imDownloadUrl,
                         outputLifImageUrl: this.dispUploadUrl
                     }
@@ -55,13 +55,13 @@ class lifGenerator {
             delete params.outpaint;
             params.imageUrl = this.dispDownloadUrl;
             params.resultPresignedUrl = this.lifUploadUrl;
-            result.executionPlan[1].paramsRaw = params;
+            result.executionPlan[1].productParams = params;
             // result.executionPlan[0].paramsRaw = params;
         } else {
             result = {
                 executionPlan: [{
                     productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
-                    paramsRaw: {
+                    productParams: {
                         imageUrl: this.imDownloadUrl,
                         resultPresignedUrl: this.dispUploadUrl,
                         outputBitDepth: 'uint16',
@@ -83,7 +83,7 @@ class lifGenerator {
             params.imageUrl = this.imDownloadUrl;
             params.disparityUrl = this.dispDownloadUrl;
             params.resultPresignedUrl = this.lifUploadUrl;
-            result.executionPlan[1].paramsRaw = params;
+            result.executionPlan[1].productParams = params;
         }
         console.log(result);
         return result;
