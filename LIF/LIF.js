@@ -286,7 +286,7 @@ async function parseLif53(file) {
 class lifViewer {
     static instances = [];
 
-    constructor(lifUrl, container, height = 300, autoplay = false) {
+    constructor(lifUrl, container, height = 300, autoplay = false, mouseOver = true) {
         lifViewer.instances.push(this);
         this.MAX_LAYERS = 4;
         this.lifUrl = lifUrl;
@@ -294,6 +294,10 @@ class lifViewer {
         this.container = container;
         this.autoplay = autoplay;
         this.running = false;
+        this.mouseOver = mouseOver;
+        this.mouseOverAmplitude = 1;
+        this.mousePosOld = { x: 0, y: 0 };
+        this.mousePos = { x: 0, y: 0 };
 
         this.img = document.createElement('img');
         this.img.src = lifUrl;
@@ -350,9 +354,9 @@ class lifViewer {
         if (typeof obj !== 'object' || obj === null) {
             return obj; // Return the value if it's not an object
         }
-    
+
         const newObj = {};
-    
+
         for (let key in obj) {
             if (obj.hasOwnProperty(key)) {
                 // Find the index of the key in the oldKeys array
@@ -363,7 +367,7 @@ class lifViewer {
                 newObj[updatedKey] = replaceKeys(obj[key], oldKeys, newKeys);
             }
         }
-    
+
         return Array.isArray(obj) ? Object.values(newObj) : newObj;
     }
 
@@ -376,6 +380,17 @@ class lifViewer {
         await this.loadImage();
         this.container.appendChild(this.img);
         this.container.appendChild(this.canvas);
+        this.canvas.addEventListener('mousemove', function (event) {
+            const rect = this.canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left - rect.width / 2; // Get mouse X position relative to the canvas
+            const mouseY = event.clientY - rect.top - rect.height / 2; // Get mouse Y position relative to the canvas
+
+            // Calculate the position relative to the center, normalized between -0.5 and +0.5
+            this.mousePos.x = (mouseX / rect.width);
+            this.mousePos.y = (mouseY / rect.width);
+
+            // console.log(`(${relativeX}, ${relativeY}`); // Outputs values between -0.5 and +0.5
+        }.bind(this));
         this.afterLoad();
         this.resizeCanvasToContainer();
         const response = await fetch(this.lifUrl);
@@ -386,7 +401,7 @@ class lifViewer {
             ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
-        
+
         if (this.lifInfo.animations) this.animations = this.lifInfo.animations;
         // for now hardcode animations[0];
         const zAmp = 0.5 / this.views[0].invZ.min;
@@ -1007,11 +1022,19 @@ class lifViewer {
         this.renderCam.pos.x = harm(this.currentAnimation.data.position.x.amplitude, this.currentAnimation.data.position.x.phase, this.currentAnimation.data.position.x.bias);
         this.renderCam.pos.y = harm(this.currentAnimation.data.position.y.amplitude, this.currentAnimation.data.position.y.phase, this.currentAnimation.data.position.y.bias);
         this.renderCam.pos.z = harm(this.currentAnimation.data.position.z.amplitude, this.currentAnimation.data.position.z.phase, this.currentAnimation.data.position.z.bias);
-
+        if (this.mouseOver) {
+            const smoothMouseX = (0.1*this.mousePos.x + 0.9*this.mousePosOld.x)*this.mouseOverAmplitude;
+            const smoothMouseY = (0.1*this.mousePos.y + 0.9*this.mousePosOld.y)*this.mouseOverAmplitude;
+            this.renderCam.pos.x += smoothMouseX;
+            this.renderCam.pos.y += smoothMouseY;
+            this.mousePosOld = {x: smoothMouseX, y: smoothMouseY};
+        }
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
         this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+
+
 
         if (this.views.length < 2) {
             this.drawSceneMN(ut);
@@ -1099,6 +1122,7 @@ class lifViewer {
         if (this.disableAnim) return;
         cancelAnimationFrame(this.animationFrame);
         this.running = false;
+        this.mousePosOld = { x: 0, y: 0 };
         // if (this.gl.isContextLost()) {
         //     console.log("Context lost for", this.lifUrl.split('/').pop());
         //     return;
