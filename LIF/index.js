@@ -1,12 +1,12 @@
 class lifGenerator {
-    constructor(file = null) {
+    constructor(file = null, form = null) {
         this.AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
         this.file = file ? file : null;
         this.stLifInput = false;
         this.width = 0;
         this.height = 0;
         this.formData;
-        this.ldlForm = document.getElementById("image-generation-form");
+        this.ldlForm = form ? form : null;
         this.inpaintMethod = '';
         this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
         this.imUploadUrl;
@@ -540,7 +540,7 @@ async function askToGenLDI(file) {
 
 async function handleFileSelect(event) {
     
-    const lifGen = new lifGenerator();
+    const lifGen = new lifGenerator(document.getElementById("image-generation-form"));
     const file = event.target.files[0];
     let lifInfo;
     if (file) {
