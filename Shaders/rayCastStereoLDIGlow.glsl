@@ -296,14 +296,14 @@ void main(void) {
         // if(invZL < -50.0 || invZR > invZL + 0.01)
         //     result = resultR;    
 
-        if(invZL2 - invZR2 >= 50.0) {
-            result = resultL;
-            invZ = invZL;
-        }
-        if(invZR2 - invZL2 >= 50.0) {
-            result = resultR;
-            invZ = invZR;
-        }
+        // if(invZL2 - invZR2 >= 50.0) {
+        //     result = resultL;
+        //     invZ = invZL;
+        // }
+        // if(invZR2 - invZL2 >= 50.0) {
+        //     result = resultR;
+        //     invZ = invZR;
+        // }
         vec3 color = result.rgb;
 
         float normInvZ = invZ / max(invZminL[0],invZminR[0]);

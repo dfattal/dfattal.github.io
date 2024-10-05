@@ -6,7 +6,7 @@ class lifGenerator {
         this.width = 0;
         this.height = 0;
         this.formData;
-        this.ldlForm = form ? form : null;
+        this.ldlForm = document.getElementById("image-generation-form");
         this.inpaintMethod = '';
         this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
         this.imUploadUrl;
@@ -540,7 +540,7 @@ async function askToGenLDI(file) {
 
 async function handleFileSelect(event) {
     
-    const lifGen = new lifGenerator(document.getElementById("image-generation-form"));
+    const lifGen = new lifGenerator();
     const file = event.target.files[0];
     let lifInfo;
     if (file) {
