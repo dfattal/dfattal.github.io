@@ -289,10 +289,10 @@ void main(void) {
 
         vec4 result = (1.0 - wR) * resultL + wR * resultR;
 
-        // if(invZR < -50.0 || invZL > invZR + 0.01)
-        //     result = resultL;
-        // if(invZL < -50.0 || invZR > invZL + 0.01)
-        //     result = resultR;    
+        if(invZR < -50.0 || invZL > invZR + 0.01)
+            result = resultL;
+        if(invZL < -50.0 || invZR > invZL + 0.01)
+            result = resultR;    
 
         // if(invZL - invZR >= 50.0)
         //     result = resultL;
