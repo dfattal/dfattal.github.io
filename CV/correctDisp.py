@@ -6,10 +6,12 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 
 # Load the stereo image pair in color
 left_image_color = cv2.imread('output/albedo_0.jpg')
 right_image_color = cv2.imread('output/albedo_1.jpg')
+height, width = left_image_color.shape[:2]
 
 # Convert color images to grayscale for phase correlation
 left_image_gray = cv2.cvtColor(left_image_color, cv2.COLOR_BGR2GRAY)
@@ -61,95 +63,108 @@ plt.axis('off')
 plt.show()
 
 # %% [markdown]
-# ## Step 3: Estimating and Applying Homography for Better Image Rectification
-# Next, we will estimate the homography transformation matrix between the two grayscale images and apply it to the stereo pair for better rectification.
+# ## Step 1: Detect Keypoints and Eliminate Vertical Outliers
+# We'll start by detecting keypoints and descriptors in both the left and right images using ORB. We'll then match these keypoints and filter out any pairs that have vertical disparities greater than 3% of the image height.
 
-# %% 
-# Detect ORB keypoints and descriptors in both images
+# %%
+# Image height for filtering threshold
+image_height = left_image_color.shape[0]
+
+# Initialize ORB detector
 orb = cv2.ORB_create()
 
-keypoints_left, descriptors_left = orb.detectAndCompute(left_image_gray, None)
-keypoints_right, descriptors_right = orb.detectAndCompute(right_image_gray, None)
+# Detect keypoints and descriptors
+keypoints_left, descriptors_left = orb.detectAndCompute(left_image_color, None)
+keypoints_right, descriptors_right = orb.detectAndCompute(right_image_color, None)
 
-# Match keypoints using FLANN matcher
+# Use BFMatcher to find the best matches between the two sets of descriptors
 bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 matches = bf.match(descriptors_left, descriptors_right)
 
-# Sort matches based on distance (quality of match)
-matches = sorted(matches, key=lambda x: x.distance)
+# Filter matches by vertical disparity (y-axis difference)
+filtered_matches = []
+threshold = 0.03 * image_height  # 3% of image height
 
-# Extract matching points
-points_left = np.float32([keypoints_left[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-points_right = np.float32([keypoints_right[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+for match in matches:
+    left_point = keypoints_left[match.queryIdx].pt
+    right_point = keypoints_right[match.trainIdx].pt
+    vertical_disparity = abs(left_point[1] - right_point[1])
+    
+    if vertical_disparity <= threshold:
+        filtered_matches.append(match)
 
-# Create an image that places the left and right images side by side
-left_right_combined = np.hstack((left_image_color, right_image_color))
+# Draw and display matches for visualization purposes
+matching_result = cv2.drawMatches(left_image_color, keypoints_left, right_image_color, keypoints_right, filtered_matches, None, flags=2)
 
-# Draw matching points and connecting lines
-for i in range(len(points_left)):
-    # Get the coordinates for left and right points
-    pt_left = (int(points_left[i][0][0]), int(points_left[i][0][1]))
-    pt_right = (int(points_right[i][0][0] + width), int(points_right[i][0][1]))  # Shift right points by image width
-
-    # Draw circles at the matching points
-    cv2.circle(left_right_combined, pt_left, 5, (0, 255, 0), 2)  # Green circle for left image points
-    cv2.circle(left_right_combined, pt_right, 5, (0, 0, 255), 2) # Red circle for right image points
-
-    # Draw lines connecting matching points
-    cv2.line(left_right_combined, pt_left, pt_right, (255, 0, 0), 1)  # Blue line connecting the points
-
-# Plot the combined image with matching points
-plt.figure(figsize=(20, 10))
-plt.imshow(cv2.cvtColor(left_right_combined, cv2.COLOR_BGR2RGB))
-plt.title("Matching Points Between Left and Right Images")
-plt.axis('off')
-plt.show()
-
-# Find the Fundamental Matrix
-F, mask = cv2.findFundamentalMat(points_left, points_right, cv2.FM_RANSAC)
-
-# Step 2: Rectify the images using stereoRectifyUncalibrated
-height, width = left_image_color.shape[:2]
-_, H1, H2 = cv2.stereoRectifyUncalibrated(points_left, points_right, F, (width, height))
-
-# Step 3: Warp both images to align them
-rectified_left_image_color = cv2.warpPerspective(left_image_color, H1, (width, height))
-rectified_right_image_color = cv2.warpPerspective(right_image_color, H2, (width, height))
-
-# Step 4: Find the common overlapping area
-# Create masks for both rectified images (white where image content is valid, black elsewhere)
-mask_left = cv2.warpPerspective(np.ones_like(left_image_gray), H1, (width, height))
-mask_right = cv2.warpPerspective(np.ones_like(right_image_gray), H2, (width, height))
-
-# Step 5: Compute the common area (intersection of both masks)
-common_region_mask = cv2.bitwise_and(mask_left, mask_right)
-
-# Find bounding box of the common area
-x, y, w, h = cv2.boundingRect(common_region_mask)
-
-# Step 6: Crop both images to the common region
-cropped_left_image_color = rectified_left_image_color[y:y+h, x:x+w]
-cropped_right_image_color = rectified_right_image_color[y:y+h, x:x+w]
-
-
-# Create a new anaglyph image after rectification
-corrected_anaglyph_image_rectified = np.zeros_like(rectified_left_image_color)
-corrected_anaglyph_image_rectified[..., 0] = rectified_left_image_color[..., 0]   # Blue channel (from left image)
-corrected_anaglyph_image_rectified[..., 1] = rectified_left_image_color[..., 1]   # Green channel (from left image)
-corrected_anaglyph_image_rectified[..., 2] = rectified_right_image_color[..., 2]  # Red channel (from right image)
-
-# Plot the corrected anaglyph image (Rectification using F matrix)
-plt.figure(figsize=(10, 10))
-plt.imshow(cv2.cvtColor(corrected_anaglyph_image_rectified, cv2.COLOR_BGR2RGB))  # Convert to RGB for correct display in matplotlib
-plt.title("Corrected Anaglyph Image (Rectification using F Matrix)")
+plt.figure(figsize=(12, 6))
+plt.imshow(cv2.cvtColor(matching_result, cv2.COLOR_BGR2RGB))
+plt.title("Keypoint Matches After Filtering by Vertical Disparity")
 plt.axis('off')
 plt.show()
 
 # %% [markdown]
-# ## Saving the Rectified Images (Stereo Rectification)
-# We will now save the rectified images (based on extrinsic parameters) into the "output" folder.
+# ## Step 2: Optimize y-Translation and Scaling
+# We'll now optimize the vertical translation and uniform scaling that minimizes the RMS difference in vertical disparity between the keypoints in the left image and those in the adjusted right image.
 
-# %% 
-# Save rectified images
-cv2.imwrite('output/albedo_0_Rect.jpg', rectified_left_image_color)
-cv2.imwrite('output/albedo_1_Rect.jpg', rectified_right_image_color)
+# %%
+# Collect points from filtered matches
+left_points = np.float32([keypoints_left[m.queryIdx].pt for m in filtered_matches])
+right_points = np.float32([keypoints_right[m.trainIdx].pt for m in filtered_matches])
+
+def compute_rms_disparity(y_translation, scaling, left_points, right_points):
+    # Apply scaling and vertical translation to the right points
+    adjusted_right_points = right_points.copy()
+    adjusted_right_points[:, 0] *= scaling  # Apply uniform scaling to x
+    adjusted_right_points[:, 1] = adjusted_right_points[:, 1] * scaling + y_translation  # Apply scaling and vertical shift to y
+    
+    # Compute RMS of the vertical disparity
+    vertical_disparity = left_points[:, 1] - adjusted_right_points[:, 1]
+    rms = np.sqrt(np.mean(vertical_disparity**2))
+    return rms
+
+# Search for the best combination of y translation and scaling that minimizes the RMS
+# Initial guess: no scaling, no vertical translation
+initial_guess = [0, 1.0]
+
+# Minimize the RMS disparity
+result = minimize(lambda params: compute_rms_disparity(params[0], params[1], left_points, right_points), initial_guess, method='Powell')
+
+# Extract the optimal y translation and scaling values
+optimal_y_translation, optimal_scaling = result.x
+print(f"Optimal y-Translation: {optimal_y_translation:.2f}, Optimal Scaling: {optimal_scaling:.4f}")
+
+# %% [markdown]
+# ## Step 3: Apply Affine Transformation to Right Image
+# Using the optimal vertical translation and scaling found, we'll apply an affine transformation to the right image to align it with the left image.
+
+# %%
+# Compute affine transformation matrix
+affine_matrix = np.float32([[optimal_scaling, 0, 0], [0, optimal_scaling, optimal_y_translation]])
+
+# Apply the affine transformation to the right image
+adjusted_right_image_color = cv2.warpAffine(right_image_color, affine_matrix, (right_image_color.shape[1], right_image_color.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+
+# %% [markdown]
+# ## Step 4: Visualize the Corrected Anaglyph
+# Now we’ll plot the anaglyph superposition to visualize the result after applying the translation and scaling correction.
+
+# %%
+# Create a new anaglyph image after correction
+corrected_anaglyph_image = np.zeros_like(left_image_color)
+corrected_anaglyph_image[..., 2] = adjusted_right_image_color[..., 2]  # Red channel
+corrected_anaglyph_image[..., 1] = left_image_color[..., 1]   # Green channel
+corrected_anaglyph_image[..., 0] = left_image_color[..., 0]   # Blue channel
+
+# Plot the corrected anaglyph image
+plt.figure(figsize=(10, 10))
+plt.imshow(cv2.cvtColor(corrected_anaglyph_image, cv2.COLOR_BGR2RGB))
+plt.title("Corrected Anaglyph Image (Cyan-Red)")
+plt.axis('off')
+plt.show()
+
+# %% [markdown]
+# ## Step 5: Saving the Corrected Right Image
+# Finally, we will save the corrected right image into the "output" folder.
+
+# %%
+cv2.imwrite('output/albedo_1_cor.jpg', adjusted_right_image_color)
