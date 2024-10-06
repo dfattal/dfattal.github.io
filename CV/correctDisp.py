@@ -40,20 +40,19 @@ shift, _ = cv2.phaseCorrelate(np.float32(left_image_gray), np.float32(right_imag
 
 # Extract the vertical component of the shift (only care about vertical shift)
 vertical_shift = shift[1]
+print("Vertical Shift:", -vertical_shift)
 
 # Compute the affine transformation matrix for vertical translation
-translation_matrix_left = np.float32([[1, 0, 0], [0, 1, vertical_shift / 2]])
-translation_matrix_right = np.float32([[1, 0, 0], [0, 1, -vertical_shift / 2]])
+translation_matrix_right = np.float32([[1, 0, 0], [0, 1, -vertical_shift]])
 
 # Apply vertical translation to both color images
-shifted_left_image_color_affine = cv2.warpAffine(left_image_color, translation_matrix_left, (left_image_color.shape[1], left_image_color.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
 shifted_right_image_color_affine = cv2.warpAffine(right_image_color, translation_matrix_right, (right_image_color.shape[1], right_image_color.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
 
 # Create a new anaglyph image after affine correction
-corrected_anaglyph_image_affine = np.zeros_like(shifted_left_image_color_affine)
+corrected_anaglyph_image_affine = np.zeros_like(left_image_color)
 corrected_anaglyph_image_affine[..., 2] = shifted_right_image_color_affine[..., 2]  # Red channel
-corrected_anaglyph_image_affine[..., 1] = shifted_left_image_color_affine[..., 1]   # Green channel
-corrected_anaglyph_image_affine[..., 0] = shifted_left_image_color_affine[..., 0]   # Blue channel
+corrected_anaglyph_image_affine[..., 1] = left_image_color[..., 1]   # Green channel
+corrected_anaglyph_image_affine[..., 0] = left_image_color[..., 0]   # Blue channel
 
 # Plot the corrected anaglyph image (Affine Correction)
 plt.figure(figsize=(10, 10))
@@ -61,6 +60,9 @@ plt.imshow(cv2.cvtColor(corrected_anaglyph_image_affine, cv2.COLOR_BGR2RGB))
 plt.title("Corrected Anaglyph Image (Affine Correction)")
 plt.axis('off')
 plt.show()
+
+# %%
+cv2.imwrite('output/albedo_1_corY.jpg', shifted_right_image_color_affine)
 
 # %% [markdown]
 # ## Step 1: Detect Keypoints and Eliminate Vertical Outliers
@@ -92,6 +94,8 @@ for match in matches:
     
     if vertical_disparity <= threshold:
         filtered_matches.append(match)
+
+print("Number of matches before filtering:", len(matches), "ater filtering:", len(filtered_matches))
 
 # Draw and display matches for visualization purposes
 matching_result = cv2.drawMatches(left_image_color, keypoints_left, right_image_color, keypoints_right, filtered_matches, None, flags=2)
