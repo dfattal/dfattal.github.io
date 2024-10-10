@@ -6,9 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Immersity AI Dashboard</title>
 
-    <!-- Load the Google Identity Services Library -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- Load the Google API Client Library -->
     <script src="https://apis.google.com/js/api.js"></script>
 
     <style>
@@ -24,7 +22,9 @@
         }
 
         .stat {
-            margin: 20px 0;
+            width: 40%;
+            display: inline-block;
+            margin: 10px;
             padding: 20px;
             background-color: #f4f4f4;
             border-radius: 10px;
@@ -47,15 +47,24 @@
             max-width: 400px;
         }
 
-        #signin-button,
+        #signin-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+
         #signout-button {
-            margin: 20px;
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: transparent;
             border: none;
-            border-radius: 5px;
             cursor: pointer;
+            color: #007bff;
+            font-size: 1em;
+            text-decoration: underline;
         }
 
         #signin-button:hover,
@@ -81,7 +90,7 @@
     </div>
 
     <div class="stat">
-        <h2>Active Users in the Last Minute</h2>
+        <h2>Active Users in the Last 30 mins</h2>
         <p id="active-users-minute">0</p>
     </div>
 
@@ -91,7 +100,7 @@
     </div>
 
     <div class="stat">
-        <h2>Downloads in the Last Minute</h2>
+        <h2>Downloads in the Last 30 mins</h2>
         <p id="downloads-minute">0</p>
     </div>
 
@@ -111,11 +120,13 @@
         const API_KEY = 'AIzaSyC46hi6wzshjF7XtaoDruOm4zFXfrIb0nM'; // Replace with your API key
         const PROPERTY_ID = '406177208';  // Replace with your GA4 Property ID
         const SCOPES = "https://www.googleapis.com/auth/analytics.readonly";
+        const GA4_DISCOVERY_DOC = "https://analyticsdata.googleapis.com/$discovery/rest?version=v1beta";
+
 
         function initClient() {
             gapi.client.init({
                 apiKey: API_KEY,
-                discoveryDocs: DISCOVERY_DOCS,
+                discoveryDocs: [GA4_DISCOVERY_DOC],
             }).then(function () {
                 loadAnalyticsData();
             }, function (error) {
@@ -153,27 +164,106 @@
         function loadAnalyticsData() {
             if (!accessToken) return;
 
+            // Request Daily Active Users (not real-time, still using runReport)
             gapi.client.request({
-                path: '/v4/reports:batchGet',
+                path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runReport`,
                 method: 'POST',
                 body: {
-                    "reportRequests": [
-                        {
-                            "viewId": "YOUR_VIEW_ID", // Replace with your GA view ID
-                            "dateRanges": [{ "startDate": "today", "endDate": "today" }],
-                            "metrics": [{ "expression": "ga:activeUsers" }],
-                            "dimensions": []
-                        }
+                    "dimensions": [
+                        { "name": "eventName" }
+                    ],
+                    "metrics": [
+                        { "name": "activeUsers" }
+                    ],
+                    "dateRanges": [
+                        { "startDate": "1daysAgo", "endDate": "today" }  // For Daily Active Users
                     ]
                 }
             }).then(function (response) {
-                const data = response.result.reports[0].data.totals[0].values;
-                document.getElementById('daily-active-users').innerText = data[0];
-                // You can add more metrics and parse them similarly for active users and downloads
+                const dailyActiveUsers = response.result.rows[0].metricValues[0].value;
+                document.getElementById('daily-active-users').innerText = dailyActiveUsers;
             }, function (error) {
-                console.error('Error fetching analytics data:', error);
+                console.error('Error fetching Daily Active Users:', error);
+            });
+
+            // Request Active Users in the Last Minute using runRealtimeReport
+            gapi.client.request({
+                path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runRealtimeReport`,
+                method: 'POST',
+                body: {
+                    "metrics": [
+                        { "name": "activeUsers" }
+                    ]
+                }
+            }).then(function (response) {
+                const activeUsersLastMinute = response.result.rows[0].metricValues[0].value;
+                document.getElementById('active-users-minute').innerText = activeUsersLastMinute;
+            }, function (error) {
+                console.error('Error fetching Active Users in the Last Minute (Real-Time):', error);
+            });
+
+            // Request Daily Downloads filtered by "Export Page Download Button" event (not real-time)
+            gapi.client.request({
+                path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runReport`,
+                method: 'POST',
+                body: {
+                    "dimensions": [
+                        { "name": "eventName" }
+                    ],
+                    "metrics": [
+                        { "name": "eventCount" }
+                    ],
+                    "dateRanges": [
+                        { "startDate": "1daysAgo", "endDate": "today" }  // For Daily Downloads
+                    ],
+                    "dimensionFilter": {
+                        "filter": {
+                            "fieldName": "eventName",
+                            "stringFilter": {
+                                "matchType": "EXACT",
+                                "value": "Export Page Download Button"
+                            }
+                        }
+                    }
+                }
+            }).then(function (response) {
+                const dailyDownloads = response.result.rows[0].metricValues[0].value;
+                document.getElementById('daily-downloads').innerText = dailyDownloads;
+            }, function (error) {
+                console.error('Error fetching Daily Downloads:', error);
+            });
+
+            // Request Downloads in the Last Minute using runRealtimeReport filtered by "Export Page Download Button" event
+            gapi.client.request({
+                path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runRealtimeReport`,
+                method: 'POST',
+                body: {
+                    "dimensions": [
+                        { "name": "eventName" }
+                    ],
+                    "metrics": [
+                        { "name": "eventCount" }
+                    ],
+                    "dimensionFilter": {
+                        "filter": {
+                            "fieldName": "eventName",
+                            "stringFilter": {
+                                "matchType": "EXACT",
+                                "value": "Export Page Download Button"
+                            }
+                        }
+                    }
+                }
+            }).then(function (response) {
+                const downloadsLastMinute = response.result.rows[0].metricValues[0].value;
+                document.getElementById('downloads-minute').innerText = downloadsLastMinute;
+            }, function (error) {
+                console.error('Error fetching Downloads in the Last Minute (Real-Time):', error);
             });
         }
+
+        // Refresh the metrics every minute
+        setInterval(loadAnalyticsData, 60000);  // 60000 ms = 1 minute
 
         function initializeSignInButton() {
             google.accounts.id.initialize({
@@ -183,7 +273,7 @@
 
             google.accounts.id.renderButton(
                 document.getElementById('signin-button'),
-                { theme: 'outline', size: 'large' } // Customizations to button
+                { theme: 'outline', size: 'small' } // Customizations to button
             );
         }
 
