@@ -23,10 +23,10 @@
         }
 
         .stat {
-            width: 40%;
+            width: 25%;
             display: inline-block;
-            margin: 10px;
-            padding: 20px;
+            margin: 5px;
+            padding: 5px;
             background-color: #f4f4f4;
             border-radius: 10px;
             box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
@@ -34,18 +34,21 @@
 
         h2 {
             font-size: 1.5em;
+            margin: 10px
         }
 
         p {
             font-size: 2em;
             color: #333;
+            margin: 5px
         }
 
         video {
             border: 2px solid #333;
             border-radius: 10px;
             width: 100%;
-            max-width: 400px;
+            max-width: 320px;
+            margin-top: 5px;
         }
 
         #signin-button {
@@ -74,7 +77,8 @@
         }
 
         #latest-download-video {
-            margin-top: 30px;
+            margin-top: 20px; 
+            text-align: center;
         }
     </style>
 </head>
@@ -91,24 +95,34 @@
     </div>
 
     <div class="stat">
-        <h2>Active Users in the Last 30 mins</h2>
-        <p id="active-users-minute">0</p>
-    </div>
-
-    <div class="stat">
         <h2>Daily Downloads</h2>
         <p id="daily-downloads">0</p>
     </div>
 
     <div class="stat">
-        <h2>Downloads in the Last 30 mins</h2>
+        <h2>Daily Credit Purchases</h2>
+        <p id="daily-credits">0</p>
+    </div>
+
+    <div class="stat">
+        <h2>Active Users last Minute</h2>
+        <p id="active-users-minute">0</p>
+    </div>
+
+    <div class="stat">
+        <h2>Downloads last Minute</h2>
         <p id="downloads-minute">0</p>
+    </div>
+
+    <div class="stat">
+        <h2>Credit Purchases last 30 mins</h2>
+        <p id="credits-minute">0</p>
     </div>
 
     <!-- Video Placeholder -->
     <div id="latest-download-video">
-        <h2>Latest Downloaded Animation</h2>
-        <video width="400" autoplay loop muted>
+        <h2 style="font-style: italic;">Latest Downloaded Animation</h2>
+        <video id="video-player" loop muted>
             <source src="PixCloud_video.mp4" type="video/mp4">
             Your browser does not support the video tag.
         </video>
@@ -148,9 +162,15 @@
                     gapi.load('client', initClient);
                     document.getElementById('signin-button').style.display = 'none';
                     document.getElementById('signout-button').style.display = 'block';
+                    console.log('Token acquired:', accessToken);
+
+                    const videoPlayer = document.getElementById('video-player');
+                    // videoPlayer.style.display = 'block';  // Make the video visible
+                    videoPlayer.play();  // Start playing the video
                 },
             });
             tokenClient.requestAccessToken();
+
         }
 
         function handleSignOut() {
@@ -170,9 +190,6 @@
                 path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runReport`,
                 method: 'POST',
                 body: {
-                    "dimensions": [
-                        { "name": "eventName" }
-                    ],
                     "metrics": [
                         { "name": "activeUsers" }
                     ],
@@ -194,7 +211,12 @@
                 body: {
                     "metrics": [
                         { "name": "activeUsers" }
-                    ]
+                    ],
+                    "minuteRanges": [
+                        {
+                            "startMinutesAgo": 1,
+                            "endMinutesAgo": 0
+                        }]
                 }
             }).then(function (response) {
                 const activeUsersLastMinute = response.result.rows[0].metricValues[0].value;
@@ -253,13 +275,82 @@
                                 "value": "Export Page Download Button"
                             }
                         }
-                    }
+                    },
+                    "minuteRanges": [
+                        {
+                            "startMinutesAgo": 1,
+                            "endMinutesAgo": 0
+                        }]
                 }
             }).then(function (response) {
                 const downloadsLastMinute = response.result.rows[0].metricValues[0].value;
                 document.getElementById('downloads-minute').innerText = downloadsLastMinute;
             }, function (error) {
                 console.error('Error fetching Downloads in the Last Minute (Real-Time):', error);
+            });
+
+            // Request Daily Downloads filtered by "Export Page Download Button" event (not real-time)
+            gapi.client.request({
+                path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runReport`,
+                method: 'POST',
+                body: {
+                    "dimensions": [
+                        { "name": "eventName" }
+                    ],
+                    "metrics": [
+                        { "name": "eventCount" }
+                    ],
+                    "dateRanges": [
+                        { "startDate": "1daysAgo", "endDate": "today" }  // For Daily Downloads
+                    ],
+                    "dimensionFilter": {
+                        "filter": {
+                            "fieldName": "eventName",
+                            "stringFilter": {
+                                "matchType": "EXACT",
+                                "value": "Export Page Buy Credits Button"
+                            }
+                        }
+                    }
+                }
+            }).then(function (response) {
+                const dailyCredits = response.result.rows[0].metricValues[0].value;
+                document.getElementById('daily-credits').innerText = parseInt(dailyCredits).toLocaleString();
+            }, function (error) {
+                console.error('Error fetching Daily Credits:', error);
+            });
+
+            // Request Downloads in the Last Minute using runRealtimeReport filtered by "Export Page Download Button" event
+            gapi.client.request({
+                path: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runRealtimeReport`,
+                method: 'POST',
+                body: {
+                    "dimensions": [
+                        { "name": "eventName" }
+                    ],
+                    "metrics": [
+                        { "name": "eventCount" }
+                    ],
+                    "dimensionFilter": {
+                        "filter": {
+                            "fieldName": "eventName",
+                            "stringFilter": {
+                                "matchType": "EXACT",
+                                "value": "Export Page Buy Credits Button"
+                            }
+                        }
+                    },
+                    "minuteRanges": [
+                        {
+                            "startMinutesAgo": 29,
+                            "endMinutesAgo": 0
+                        }]
+                }
+            }).then(function (response) {
+                const creditsLast30Minutes = response.result.rows[0].metricValues[0].value;
+                document.getElementById('credits-minute').innerText = creditsLast30Minutes;
+            }, function (error) {
+                console.error('Error fetching Credit Purchases in the Last 30 Minutes (Real-Time):', error);
             });
         }
 
