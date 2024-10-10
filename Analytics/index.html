@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersity AI Dashboard</title>
+
+    <!-- Load the Google Identity Services Library -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Load the Google API Client Library -->
+    <script src="https://apis.google.com/js/api.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+            background-color: #f8f9fa;
+        }
+
+        h1 {
+            color: #007bff;
+        }
+
+        .stat {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            border-radius: 10px;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        h2 {
+            font-size: 1.5em;
+        }
+
+        p {
+            font-size: 2em;
+            color: #333;
+        }
+
+        video {
+            border: 2px solid #333;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        #signin-button,
+        #signout-button {
+            margin: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #signin-button:hover,
+        #signout-button:hover {
+            background-color: #0056b3;
+        }
+
+        #latest-download-video {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Immersity AI Dashboard</h1>
+
+    <div id="signin-button"></div>
+    <button id="signout-button" style="display:none;" onclick="handleSignOut()">Sign out</button>
+
+    <div class="stat">
+        <h2>Daily Active Users</h2>
+        <p id="daily-active-users">0</p>
+    </div>
+
+    <div class="stat">
+        <h2>Active Users in the Last Minute</h2>
+        <p id="active-users-minute">0</p>
+    </div>
+
+    <div class="stat">
+        <h2>Daily Downloads</h2>
+        <p id="daily-downloads">0</p>
+    </div>
+
+    <div class="stat">
+        <h2>Downloads in the Last Minute</h2>
+        <p id="downloads-minute">0</p>
+    </div>
+
+    <!-- Video Placeholder -->
+    <div id="latest-download-video">
+        <h2>Latest Downloaded Animation</h2>
+        <video width="400" autoplay loop muted>
+            <source src="PixCloud_video.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <script>
+        let tokenClient;
+        let accessToken = null;
+        const CLIENT_ID = '410658156818-j3om3g8t3vjopli6289lbi4ccjdm5dkc.apps.googleusercontent.com'; // Replace with your client ID
+        const API_KEY = 'AIzaSyC46hi6wzshjF7XtaoDruOm4zFXfrIb0nM'; // Replace with your API key
+        const PROPERTY_ID = '406177208';  // Replace with your GA4 Property ID
+        const SCOPES = "https://www.googleapis.com/auth/analytics.readonly";
+
+        function initClient() {
+            gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: DISCOVERY_DOCS,
+            }).then(function () {
+                loadAnalyticsData();
+            }, function (error) {
+                console.error('Error initializing API client:', JSON.stringify(error, null, 2));
+            });
+        }
+
+        function handleSignIn() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (response) => {
+                    if (response.error) {
+                        console.error(response);
+                        return;
+                    }
+                    accessToken = response.access_token;
+                    gapi.load('client', initClient);
+                    document.getElementById('signin-button').style.display = 'none';
+                    document.getElementById('signout-button').style.display = 'block';
+                },
+            });
+            tokenClient.requestAccessToken();
+        }
+
+        function handleSignOut() {
+            accessToken = null;
+            google.accounts.oauth2.revoke(accessToken, () => {
+                console.log('Token revoked');
+            });
+            document.getElementById('signin-button').style.display = 'block';
+            document.getElementById('signout-button').style.display = 'none';
+        }
+
+        function loadAnalyticsData() {
+            if (!accessToken) return;
+
+            gapi.client.request({
+                path: '/v4/reports:batchGet',
+                method: 'POST',
+                body: {
+                    "reportRequests": [
+                        {
+                            "viewId": "YOUR_VIEW_ID", // Replace with your GA view ID
+                            "dateRanges": [{ "startDate": "today", "endDate": "today" }],
+                            "metrics": [{ "expression": "ga:activeUsers" }],
+                            "dimensions": []
+                        }
+                    ]
+                }
+            }).then(function (response) {
+                const data = response.result.reports[0].data.totals[0].values;
+                document.getElementById('daily-active-users').innerText = data[0];
+                // You can add more metrics and parse them similarly for active users and downloads
+            }, function (error) {
+                console.error('Error fetching analytics data:', error);
+            });
+        }
+
+        function initializeSignInButton() {
+            google.accounts.id.initialize({
+                client_id: CLIENT_ID,
+                callback: handleSignIn,
+            });
+
+            google.accounts.id.renderButton(
+                document.getElementById('signin-button'),
+                { theme: 'outline', size: 'large' } // Customizations to button
+            );
+        }
+
+        window.onload = function () {
+            gapi.load('client', () => {
+                gapi.client.setApiKey(API_KEY);
+            });
+            initializeSignInButton();
+        };
+    </script>
+</body>
+
+</html>
