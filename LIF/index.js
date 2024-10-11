@@ -11,6 +11,8 @@ class lifGenerator {
         this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
+        this.outpaintImUploadUrl;
+        this.outpaintImDownloadUrl;
         this.dispUploadUrl;
         this.dispDownloadUrl;
         this.lifUploadUrl;
@@ -58,11 +60,35 @@ class lifGenerator {
             result.executionPlan[1].productParams = params;
             // result.executionPlan[0].paramsRaw = params;
         } else {
+            // result = {
+            //     executionPlan: [{
+            //         productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+            //         productParams: {
+            //             imageUrl: this.imDownloadUrl,
+            //             resultPresignedUrl: this.dispUploadUrl,
+            //             outputBitDepth: 'uint16',
+            //             dilation: 0
+            //         }
+            //     },
+            //     {
+            //         productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f" // LDL MONO
+            //     }
+            //     ]
+            // }
             result = {
                 executionPlan: [{
-                    productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+                    productId: "1b2e3ca8-1f71-40b6-a43d-567b35d5e05d", // OUTPAINT
                     productParams: {
                         imageUrl: this.imDownloadUrl,
+                        resultPresignedUrl: this.outpaintImUploadUrl,
+                        inpaintMethod: "lama",
+                        outpaint: "0.1"
+                    }
+                }, 
+                {
+                    productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+                    productParams: {
+                        imageUrl: this.outpaintImDownloadUrl,
                         resultPresignedUrl: this.dispUploadUrl,
                         outputBitDepth: 'uint16',
                         dilation: 0
@@ -79,11 +105,14 @@ class lifGenerator {
             formData.forEach((value, key) => {
                 params[key] = value;
             });
-            params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
-            params.imageUrl = this.imDownloadUrl;
+            result.executionPlan[0].productParams.outpaint = params.outpaint;
+            result.executionPlan[0].productParams.inpaintMethod = params.inpaintMethod;
+            params.outpaint = `${-parseFloat(params.outpaint)}`; // crop main image back to original size
+            params.imageUrl = this.outpaintImDownloadUrl;
             params.disparityUrl = this.dispDownloadUrl;
             params.resultPresignedUrl = this.lifUploadUrl;
-            result.executionPlan[1].productParams = params;
+            result.executionPlan[2].productParams = params;
+            
         }
         console.log(result);
         return result;
@@ -334,6 +363,7 @@ class lifGenerator {
                         mylog('Authenticated to IAI Cloud 🤗');
 
                         [this.imUploadUrl, this.imDownloadUrl] = await this.getPutGetUrl(this.file.name);
+                        [this.outpaintImUploadUrl, this.outpaintImDownloadUrl] = await this.getPutGetUrl('outpaintedImage.jpg');
                         [this.dispUploadUrl, this.dispDownloadUrl] = await this.getPutGetUrl('disparity.png');
                         [this.lifUploadUrl, this.lifDownloadUrl] = await this.getPutGetUrl('lifResult.jpg');
                         mylog('Got temporary storage URLs on IAI Cloud 💪');
