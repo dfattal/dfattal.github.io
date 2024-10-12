@@ -22,17 +22,22 @@
             text-align: center;
         }
 
-        #animation-video {
+        #animation-video,
+        #image-element {
             max-height: 90vh;
-            /* Video max height: 90% of viewport */
             max-width: 100%;
-            /* Ensure video does not overflow horizontally */
+            display: block;
+            margin-bottom: 10px;
+            /* Add margin to ensure space between video/image and timeAgoElement */
         }
 
         #timeAgo {
             margin-top: 10px;
             font-size: 18px;
             color: #333;
+            display: block;
+            /* Display as block to ensure it's below the media */
+            position: relative;
         }
     </style>
 </head>
@@ -127,14 +132,14 @@
                         imageElement.id = 'image-element';
                         imageElement.style.maxHeight = '90vh';
                         imageElement.style.maxWidth = '100%';
-                        videoContainer.appendChild(imageElement);
+                        videoContainer.insertBefore(imageElement, videoContainer.firstChild);
                     }
 
                     imageElement.src = currentAnimation; // Set the image source
                     imageElement.style.display = 'block'; // Show the image
 
                     // Update the time ago text for the image
-                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (Image)';
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (Img / GIF)';
 
                     // Skip to next animation after 10 seconds
                     clearTimeout(videoTimeout);
