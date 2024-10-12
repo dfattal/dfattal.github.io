@@ -132,7 +132,7 @@
                     gifImage.style.display = 'block'; // Show GIF
 
                     // Update the time ago text for the GIF
-                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]);
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (GIF)';
 
                     // Skip to next animation after 10 seconds
                     clearTimeout(videoTimeout);
