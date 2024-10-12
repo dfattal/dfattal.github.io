@@ -52,6 +52,7 @@
         // const API_URL = 'http://localhost:3000/latest-animations';
         let animationList = []; // To store the list of animation URLs
         let timeList = []; // To store the list of animation times
+        let nameList = []; // To store the list of animation names
         let currentIndex = 0; // To track the current animation being played
         let videoTimeout;
 
@@ -84,9 +85,11 @@
                     // Only update the animation list if there is a change
                     const newUrls = data.animations.map(anim => anim.resultDownloadUrl);
                     const newTimes = data.animations.map(anim => anim.endedAt);
+                    const newNames = data.animations.map(anim => anim.filename);
                     if (JSON.stringify(newUrls) !== JSON.stringify(animationList)) {
                         animationList = newUrls;
                         timeList = newTimes;
+                        nameList = newNames;
                         currentIndex = 0; // Reset the index when the list changes
                         playCurrentAnimation();
                         console.log('Loaded new animations:', animationList);
@@ -102,60 +105,97 @@
         }
 
         function playCurrentAnimation() {
-    if (animationList.length > 0) {
-        const video = document.getElementById('animation-video');
-        const source = document.getElementById('video-source');
-        const timeAgoElement = document.getElementById('timeAgo'); // Get the time ago element
+            if (animationList.length > 0) {
+                const videoContainer = document.getElementById('container');
+                const video = document.getElementById('animation-video');
+                const videoSource = document.getElementById('video-source');
+                const timeAgoElement = document.getElementById('timeAgo'); // Get the time ago element
 
-        // Set the video source to the current animation
-        source.src = animationList[currentIndex];
-        video.load(); // Load the current video
+                const currentAnimation = animationList[currentIndex]; // URL or path
+                const currentFilename = nameList[currentIndex]; // Get the filename from the server data
+                const isGif = currentFilename.toLowerCase().endsWith('.gif'); // Check if it's a GIF
 
-        // Once the video metadata is loaded, check if the video is valid
-        video.onloadedmetadata = function () {
-            if (video.duration > 0) {
-                // Valid video: Update the time ago text
-                timeAgoElement.textContent = timeAgo(timeList[currentIndex]);
-            } else {
-                console.warn('Corrupted or unreadable video, skipping...');
-                skipToNextVideo();
-            }
-        };
+                if (isGif) {
+                    // Remove the video element and replace it with an img element for GIF
+                    video.style.display = 'none'; // Hide video element if it exists
+                    let gifImage = document.getElementById('gif-image');
 
-        // Ensure the video can play by waiting for 'canplaythrough'
-        video.oncanplaythrough = function () {
-            video.play().catch(error => {
-                if (error.name === 'AbortError') {
-                    console.warn('Playback was aborted to save power.');
+                    if (!gifImage) {
+                        gifImage = document.createElement('img');
+                        gifImage.id = 'gif-image';
+                        gifImage.style.maxHeight = '90vh';
+                        gifImage.style.maxWidth = '100%';
+                        videoContainer.appendChild(gifImage);
+                    }
+
+                    gifImage.src = currentAnimation; // Set the GIF source
+                    gifImage.style.display = 'block'; // Show GIF
+
+                    // Update the time ago text for the GIF
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]);
+
+                    // Skip to next animation after 10 seconds
+                    clearTimeout(videoTimeout);
+                    videoTimeout = setTimeout(() => {
+                        skipToNextVideo(); // Skip to the next animation after 10 seconds
+                    }, 10000);
+
                 } else {
-                    console.error('Error playing video:', error);
+                    // Handle video as usual
+                    video.style.display = 'block'; // Show video element
+                    let gifImage = document.getElementById('gif-image');
+                    if (gifImage) {
+                        gifImage.style.display = 'none'; // Hide GIF if previously used
+                    }
+
+                    // Set the video source to the current animation
+                    videoSource.src = currentAnimation;
+                    video.load(); // Load the current video
+
+                    video.onloadedmetadata = function () {
+                        if (video.duration > 0) {
+                            // Valid video: Update the time ago text
+                            timeAgoElement.textContent = timeAgo(timeList[currentIndex]);
+                        } else {
+                            console.warn('Corrupted or unreadable video, skipping...');
+                            skipToNextVideo();
+                        }
+                    };
+
+                    video.oncanplaythrough = function () {
+                        video.play().catch(error => {
+                            if (error.name === 'AbortError') {
+                                console.warn('Playback was aborted to save power.');
+                            } else {
+                                console.error('Error playing video:', error);
+                            }
+                            skipToNextVideo();
+                        });
+                    };
+
+                    // Listen for any playback errors and skip the video if needed
+                    video.onerror = function () {
+                        console.error('Error loading video, skipping...');
+                        skipToNextVideo();
+                    };
+
+                    // Clear any existing timeout to avoid overlapping
+                    clearTimeout(videoTimeout);
+
+                    // Set a timeout to skip the video after 10 seconds
+                    videoTimeout = setTimeout(() => {
+                        video.pause(); // Pause the video after 10 seconds
+                        skipToNextVideo(); // Move to the next video
+                    }, 10000); // 10,000 milliseconds = 10 seconds
+
+                    // Listen for the 'ended' event to play the next video in the list
+                    video.onended = () => {
+                        clearTimeout(videoTimeout); // Clear the timeout if the video ends naturally
+                        skipToNextVideo(); // Move to the next video
+                    };
                 }
-                skipToNextVideo();
-            });
-        };
-
-        // Listen for any playback errors and skip the video if needed
-        video.onerror = function () {
-            console.error('Error loading video, skipping...');
-            skipToNextVideo();
-        };
-
-        // Clear any existing timeout to avoid overlapping
-        clearTimeout(videoTimeout);
-
-        // Set a timeout to skip the video after 10 seconds
-        videoTimeout = setTimeout(() => {
-            video.pause(); // Pause the video after 10 seconds
-            skipToNextVideo(); // Move to the next video
-        }, 10000); // 10,000 milliseconds = 10 seconds
-
-        // Listen for the 'ended' event to play the next video in the list
-        video.onended = () => {
-            clearTimeout(videoTimeout); // Clear the timeout if the video ends naturally
-            skipToNextVideo(); // Move to the next video
-        };
-    }
-}
+            }
+        }
 
         function skipToNextVideo() {
             currentIndex = (currentIndex + 1) % animationList.length; // Loop back to the first video
