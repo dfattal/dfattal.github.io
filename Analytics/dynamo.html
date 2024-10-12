@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersity AI - Latest Animation</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        video {
+            width: 100%;
+            max-width: 800px;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="animation-video" controls autoplay muted loop>
+        <source id="video-source" src="" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <script>
+        const API_URL = 'https://dashboard-endpoint.immersity.ai/latest-animation'; // Use your full Node.js server URL
+        let currentDownloadUrl = ''; // Track the currently loaded video URL
+
+        async function fetchLatestAnimation() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                if (data.resultDownloadUrl) {
+                    if (data.resultDownloadUrl !== currentDownloadUrl) {
+                        // Update the video only if the new URL is different
+                        const video = document.getElementById('animation-video');
+                        const source = document.getElementById('video-source');
+                        source.src = data.resultDownloadUrl;
+                        video.load(); // Reload the video with the new source
+
+                        // Update the currentDownloadUrl with the new URL
+                        currentDownloadUrl = data.resultDownloadUrl;
+
+                        console.log('Loaded new animation:', data.resultDownloadUrl);
+                    } else {
+                        console.log('Same animation URL, no reload needed.');
+                    }
+                } else {
+                    console.error('No new animations found.');
+                }
+            } catch (error) {
+                console.error('Error fetching animation:', error);
+            }
+        }
+
+        // Fetch animation every 30 seconds
+        setInterval(fetchLatestAnimation, 30000);
+
+        // Fetch immediately on page load
+        fetchLatestAnimation();
+    </script>
+
+</body>
+</html>
