@@ -23,5 +23,6 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
-CV/output/
-CV/input/
+output/
+input/
+package*.json
