@@ -113,26 +113,28 @@
 
                 const currentAnimation = animationList[currentIndex]; // URL or path
                 const currentFilename = nameList[currentIndex]; // Get the filename from the server data
-                const isGif = currentFilename.toLowerCase().endsWith('.gif'); // Check if it's a GIF
 
-                if (isGif) {
-                    // Remove the video element and replace it with an img element for GIF
+                // Check if the file is an image (gif, jpg, png)
+                const isImage = /\.(gif|jpg|jpeg|png)$/i.test(currentFilename);
+
+                if (isImage) {
+                    // Remove the video element and replace it with an img element for images (GIF, JPG, PNG)
                     video.style.display = 'none'; // Hide video element if it exists
-                    let gifImage = document.getElementById('gif-image');
+                    let imageElement = document.getElementById('image-element');
 
-                    if (!gifImage) {
-                        gifImage = document.createElement('img');
-                        gifImage.id = 'gif-image';
-                        gifImage.style.maxHeight = '90vh';
-                        gifImage.style.maxWidth = '100%';
-                        videoContainer.appendChild(gifImage);
+                    if (!imageElement) {
+                        imageElement = document.createElement('img');
+                        imageElement.id = 'image-element';
+                        imageElement.style.maxHeight = '90vh';
+                        imageElement.style.maxWidth = '100%';
+                        videoContainer.appendChild(imageElement);
                     }
 
-                    gifImage.src = currentAnimation; // Set the GIF source
-                    gifImage.style.display = 'block'; // Show GIF
+                    imageElement.src = currentAnimation; // Set the image source
+                    imageElement.style.display = 'block'; // Show the image
 
-                    // Update the time ago text for the GIF
-                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (GIF)';
+                    // Update the time ago text for the image
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (Image)';
 
                     // Skip to next animation after 10 seconds
                     clearTimeout(videoTimeout);
@@ -143,9 +145,9 @@
                 } else {
                     // Handle video as usual
                     video.style.display = 'block'; // Show video element
-                    let gifImage = document.getElementById('gif-image');
-                    if (gifImage) {
-                        gifImage.style.display = 'none'; // Hide GIF if previously used
+                    let imageElement = document.getElementById('image-element');
+                    if (imageElement) {
+                        imageElement.style.display = 'none'; // Hide image if previously used
                     }
 
                     // Set the video source to the current animation
