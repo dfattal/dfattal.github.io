@@ -6,45 +6,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Immersity AI - Latest Animations</title>
     <style>
-        body {
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
         }
 
-        video {
-            width: 100%;
-            max-width: 800px;
+        #container {
+            text-align: center;
+        }
+
+        #animation-video {
+            max-height: 90vh;
+            /* Video max height: 90% of viewport */
+            max-width: 100%;
+            /* Ensure video does not overflow horizontally */
+        }
+
+        #timeAgo {
+            margin-top: 10px;
+            font-size: 18px;
+            color: #333;
         }
     </style>
 </head>
 
 <body>
 
-    <video id="animation-video" controls autoplay muted>
-        <source id="video-source" src="" type="video/mp4">
-        Your browser does not support the video tag.
-    </video>
+    <div id="container">
+        <video id="animation-video" controls autoplay muted>
+            <source id="video-source" src="" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <p id="timeAgo">Loading time ago...</p> <!-- Placeholder for download time -->
+    </div>
 
     <script>
         const API_URL = 'https://dashboard-endpoint.immersity.ai/latest-animations'; // Use the provided API URL
-        //const API_URL = 'http://localhost:3000/latest-animations';
+        // const API_URL = 'http://localhost:3000/latest-animations';
         let animationList = []; // To store the list of animation URLs
+        let timeList = []; // To store the list of animation times
         let currentIndex = 0; // To track the current animation being played
         let videoTimeout;
+
+        function timeAgo(epochTime) {
+            const currentTime = Math.floor(Date.now() / 1000); // Get current time in seconds (Epoch)
+            const timeDifference = currentTime - (epochTime / 1000); // Convert epochTime from milliseconds to seconds
+
+            const minutes = Math.floor(timeDifference / 60);
+            const hours = Math.floor(timeDifference / (60 * 60));
+            const days = Math.floor(timeDifference / (60 * 60 * 24));
+
+            if (minutes < 1) {
+                return 'Just now';
+            } else if (minutes < 60) {
+                return `${minutes} mins ago`;
+            } else if (hours < 24) {
+                return `${hours}h ago`;
+            } else {
+                return `${days} days ago`;
+            }
+        }
 
         async function fetchLatestAnimations() {
             try {
                 const response = await fetch(API_URL);
                 const data = await response.json();
+                console.log(data);
 
                 if (data.animations && data.animations.length > 0) {
                     // Only update the animation list if there is a change
                     const newUrls = data.animations.map(anim => anim.resultDownloadUrl);
+                    const newTimes = data.animations.map(anim => anim.endedAt);
                     if (JSON.stringify(newUrls) !== JSON.stringify(animationList)) {
                         animationList = newUrls;
+                        timeList = newTimes;
                         currentIndex = 0; // Reset the index when the list changes
                         playCurrentAnimation();
                         console.log('Loaded new animations:', animationList);
@@ -60,33 +102,64 @@
         }
 
         function playCurrentAnimation() {
-            if (animationList.length > 0) {
-                const video = document.getElementById('animation-video');
-                const source = document.getElementById('video-source');
+    if (animationList.length > 0) {
+        const video = document.getElementById('animation-video');
+        const source = document.getElementById('video-source');
+        const timeAgoElement = document.getElementById('timeAgo'); // Get the time ago element
 
-                // Set the video source to the current animation
-                source.src = animationList[currentIndex];
-                video.load(); // Load and play the current video
+        // Set the video source to the current animation
+        source.src = animationList[currentIndex];
+        video.load(); // Load the current video
 
-                console.log('Playing animation:', animationList[currentIndex]);
-
-                // Clear any existing timeout to avoid overlapping
-                clearTimeout(videoTimeout);
-
-                // Set a timeout to skip the video after 10 seconds
-                videoTimeout = setTimeout(() => {
-                    video.pause(); // Pause the video after 10 seconds
-                    currentIndex = (currentIndex + 1) % animationList.length; // Move to the next video
-                    playCurrentAnimation(); // Play the next animation
-                }, 10000); // 10,000 milliseconds = 10 seconds
-
-                // Listen for the 'ended' event to play the next video in the list
-                video.onended = () => {
-                    clearTimeout(videoTimeout); // Clear the timeout if the video ends naturally
-                    currentIndex = (currentIndex + 1) % animationList.length; // Loop back to the first video
-                    playCurrentAnimation(); // Play the next animation
-                };
+        // Once the video metadata is loaded, check if the video is valid
+        video.onloadedmetadata = function () {
+            if (video.duration > 0) {
+                // Valid video: Update the time ago text
+                timeAgoElement.textContent = timeAgo(timeList[currentIndex]);
+            } else {
+                console.warn('Corrupted or unreadable video, skipping...');
+                skipToNextVideo();
             }
+        };
+
+        // Ensure the video can play by waiting for 'canplaythrough'
+        video.oncanplaythrough = function () {
+            video.play().catch(error => {
+                if (error.name === 'AbortError') {
+                    console.warn('Playback was aborted to save power.');
+                } else {
+                    console.error('Error playing video:', error);
+                }
+                skipToNextVideo();
+            });
+        };
+
+        // Listen for any playback errors and skip the video if needed
+        video.onerror = function () {
+            console.error('Error loading video, skipping...');
+            skipToNextVideo();
+        };
+
+        // Clear any existing timeout to avoid overlapping
+        clearTimeout(videoTimeout);
+
+        // Set a timeout to skip the video after 10 seconds
+        videoTimeout = setTimeout(() => {
+            video.pause(); // Pause the video after 10 seconds
+            skipToNextVideo(); // Move to the next video
+        }, 10000); // 10,000 milliseconds = 10 seconds
+
+        // Listen for the 'ended' event to play the next video in the list
+        video.onended = () => {
+            clearTimeout(videoTimeout); // Clear the timeout if the video ends naturally
+            skipToNextVideo(); // Move to the next video
+        };
+    }
+}
+
+        function skipToNextVideo() {
+            currentIndex = (currentIndex + 1) % animationList.length; // Loop back to the first video
+            playCurrentAnimation(); // Play the next animation
         }
 
         // Fetch the latest animations every 60 seconds

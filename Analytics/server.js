@@ -33,7 +33,7 @@ const rateLimiter = new RateLimiterMemory({
 // Configure AWS DynamoDB
 AWS.config.update({
     region: 'us-east-1',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    accessKeyId:  process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     sessionToken: process.env.AWS_SESSION_TOKEN, // Optional
 });
@@ -64,27 +64,24 @@ app.get('/latest-animations', async (req, res) => {
             ':currentTime': Math.floor(Date.now() / 1000), // Current time in seconds
           },
         };
-      
+    
         dynDbGauge.setToCurrentTime();
         const dynDbEnd = dynDbGauge.startTimer();
-      
+    
         const data = await dynamoDb.scan(params).promise(); // Use scan to fetch multiple items
-      
+    
         dynDbEnd();
-      
-        // Sort the items by endedAt in descending order (latest first)
+    
+        const currentTime = Date.now();
+    
+        // Sort the items by endedAt in descending order and calculate relative time
         const sortedItems = data.Items
           .filter(item => item.endedAt) // Ensure endedAt exists
           .sort((a, b) => b.endedAt - a.endedAt) // Sort by endedAt descending
-          .slice(0, 10); // Get the latest 10 results
-      
+          .slice(0, 10); // Get the latest 10
+    
         if (sortedItems.length > 0) {
-          const latestExports = sortedItems.map(item => ({
-            resultDownloadUrl: item.resultDownloadUrl,
-            startedAt: item.startedAt,
-            endedAt: item.endedAt,
-          }));
-          return res.json({ animations: latestExports });
+          return res.json({ animations: sortedItems });
         } else {
           return res.json({ message: 'No recent animations found' });
         }
