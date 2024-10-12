@@ -28,7 +28,8 @@
             max-width: 100%;
             display: block;
             margin-bottom: 10px;
-            /* Add margin to ensure space between video/image and timeAgoElement */
+            border-radius: 10px;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
         }
 
         #timeAgo {
@@ -45,7 +46,7 @@
 <body>
 
     <div id="container">
-        <video id="animation-video" controls autoplay muted>
+        <video id="animation-video" autoplay muted>
             <source id="video-source" src="" type="video/mp4">
             Your browser does not support the video tag.
         </video>
