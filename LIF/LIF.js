@@ -1165,7 +1165,7 @@ class monoLdiGenerator {
                 outputs: {},
                 productParams: {
                     inpaintMethod: "lama",
-                    dilation: "0.01",
+                    dilation: "0.005",
                     depthDilationPercent: "0.0",
                     outpaint: "0.100001",
                     inpaintPrompt: "background without foreground object, seamless and natural",
