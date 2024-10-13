@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Sign-In Example</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #user-info {
+            margin-top: 20px;
+            display: none;
+        }
+
+        #user-info img {
+            border-radius: 50%;
+            margin-bottom: 10px;
+        }
+
+        .google-signin-btn {
+            background-color: #4285F4;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            display: inline-block;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .google-signin-btn:hover {
+            background-color: #357ae8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Welcome to My Web App</h1>
+        <div id="user-info">
+            <img id="user-pic" src="" alt="User profile" width="100">
+            <h2 id="user-name"></h2>
+            <p id="user-email"></p>
+        </div>
+        <div id="g_id_onload" data-client_id="410658156818-j3om3g8t3vjopli6289lbi4ccjdm5dkc.apps.googleusercontent.com"
+            data-context="signin" data-ux_mode="popup" data-callback="handleCredentialResponse" data-auto_select="true"
+            data-itp_support="true">
+        </div>
+
+        <div id="google-signin-btn" class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline"
+            data-text="signin_with" data-size="large" data-logo_alignment="left">
+        </div>
+
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        function handleCredentialResponse(response) {
+            const data = jwt_decode(response.credential);
+            console.log(data);
+            document.getElementById('user-pic').src = data.picture;
+            document.getElementById('user-name').textContent = data.name;
+            document.getElementById('user-email').textContent = data.email;
+            document.getElementById('user-info').style.display = 'block';
+            document.getElementById('google-signin-btn').style.display = 'none';
+        }
+
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+</body>
+
+</html>
