@@ -84,14 +84,16 @@ class lifGenerator {
                         inpaintMethod: "lama",
                         outpaint: "0.1"
                     }
-                }, 
+                },
                 {
                     productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
                     productParams: {
-                        imageUrl: this.outpaintImDownloadUrl,
-                        resultPresignedUrl: this.dispUploadUrl,
-                        outputBitDepth: 'uint16',
-                        dilation: 0
+                        inputs: { inputImageUrl: this.outpaintImDownloadUrl },
+                        outputs: { outputDisparityUrl: this.dispUploadUrl },
+                        params: {
+                            outputType: 'uint16',
+                            dilation: 0
+                        }
                     }
                 },
                 {
@@ -112,7 +114,7 @@ class lifGenerator {
             params.disparityUrl = this.dispDownloadUrl;
             params.resultPresignedUrl = this.lifUploadUrl;
             result.executionPlan[2].productParams = params;
-            
+
         }
         console.log(result);
         return result;
@@ -569,7 +571,7 @@ async function askToGenLDI(file) {
 }
 
 async function handleFileSelect(event) {
-    
+
     const lifGen = new lifGenerator();
     const file = event.target.files[0];
     let lifInfo;

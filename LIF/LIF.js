@@ -386,7 +386,7 @@ class lifViewer {
     }
 
     async init() {
-        
+
         await this.loadImage();
         this.container.appendChild(this.img);
         this.container.appendChild(this.canvas);
@@ -1024,11 +1024,11 @@ class lifViewer {
         this.renderCam.pos.y = harm(this.currentAnimation.data.position.y.amplitude, this.currentAnimation.data.position.y.phase, this.currentAnimation.data.position.y.bias);
         this.renderCam.pos.z = harm(this.currentAnimation.data.position.z.amplitude, this.currentAnimation.data.position.z.phase, this.currentAnimation.data.position.z.bias);
         if (this.mouseOver) {
-            const smoothMouseX = (0.1*this.mousePos.x + 0.9*this.mousePosOld.x)*this.mouseOverAmplitude;
-            const smoothMouseY = (0.1*this.mousePos.y + 0.9*this.mousePosOld.y)*this.mouseOverAmplitude;
+            const smoothMouseX = (0.1 * this.mousePos.x + 0.9 * this.mousePosOld.x) * this.mouseOverAmplitude;
+            const smoothMouseY = (0.1 * this.mousePos.y + 0.9 * this.mousePosOld.y) * this.mouseOverAmplitude;
             this.renderCam.pos.x += smoothMouseX;
             this.renderCam.pos.y += smoothMouseY;
-            this.mousePosOld = {x: smoothMouseX, y: smoothMouseY};
+            this.mousePosOld = { x: smoothMouseX, y: smoothMouseY };
         }
         this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
@@ -1108,11 +1108,11 @@ class lifViewer {
                 const rect = this.canvas.getBoundingClientRect();
                 const mouseX = event.clientX - rect.left - rect.width / 2; // Get mouse X position relative to the canvas
                 const mouseY = event.clientY - rect.top - rect.height / 2; // Get mouse Y position relative to the canvas
-    
+
                 // Calculate the position relative to the center, normalized between -0.5 and +0.5
                 this.mousePos.x = (mouseX / rect.width);
                 this.mousePos.y = (mouseY / rect.width);
-    
+
                 // console.log(`(${relativeX}, ${relativeY}`); // Outputs values between -0.5 and +0.5
             }.bind(this));
             this.gl = this.canvas.getContext('webgl');
@@ -1152,11 +1152,13 @@ class monoLdiGenerator {
         this.execPlan = {
             executionPlan: [{
                 productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
-                inputs: {},
-                outputs: {},
                 productParams: {
-                    outputBitDepth: 'uint16',
-                    dilation: 0
+                    inputs: {},
+                    outputs: {},
+                    params: {
+                        outputType: 'uint16',
+                        dilation: 0
+                    }
                 }
             },
             {
@@ -1345,8 +1347,8 @@ class monoLdiGenerator {
                 console.log('Got temporary storage URLs on IAI Cloud 💪');
                 await this.uploadToStorage(this.file, this.imUploadUrl);
                 console.log('Uploaded Image to IAI Cloud 🚀');
-                this.execPlan.executionPlan[0].productParams.imageUrl = this.imDownloadUrl;
-                this.execPlan.executionPlan[0].productParams.resultPresignedUrl = this.dispUploadUrl;
+                this.execPlan.executionPlan[0].productParams.inputs.inputImageUrl = this.imDownloadUrl;
+                this.execPlan.executionPlan[0].productParams.outputs.outputDisparityUrl = this.dispUploadUrl;
                 this.execPlan.executionPlan[1].productParams.imageUrl = this.imDownloadUrl;
                 this.execPlan.executionPlan[1].productParams.disparityUrl = this.dispDownloadUrl;
                 this.execPlan.executionPlan[1].productParams.resultPresignedUrl = this.lifUploadUrl;
