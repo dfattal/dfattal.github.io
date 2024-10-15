@@ -1138,7 +1138,7 @@ class monoLdiGenerator {
         this.width = 0;
         this.height = 0;
 
-        this.endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
+        this.endpointUrl = 'https://api.dev.immersity.ai/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
         this.dispUploadUrl;
