@@ -1169,7 +1169,7 @@ class monoLdiGenerator {
                     inpaintMethod: "lama",
                     dilation: "0.005",
                     depthDilationPercent: "0.0",
-                    outpaint: "0.100001",
+                    outpaint: "0.05",
                     inpaintPrompt: "background without foreground object, seamless and natural",
                     inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
                     outpaintPrompt: "background without foreground object, seamless and natural",

@@ -36,8 +36,8 @@ class lifGenerator {
                 executionPlan: [{
                     productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
                     productParams: {
-                        inputLifImageUrl: this.imDownloadUrl,
-                        outputLifImageUrl: this.dispUploadUrl
+                        inputs: {inputLifImageUrl: this.imDownloadUrl},
+                        outputs: {outputLifImageUrl: this.dispUploadUrl}
                     }
                 },
                 {
