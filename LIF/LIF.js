@@ -1163,17 +1163,19 @@ class monoLdiGenerator {
             },
             {
                 productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f", // LDL MONO
-                inputs: {},
-                outputs: {},
                 productParams: {
-                    inpaintMethod: "lama",
-                    dilation: "0.005",
-                    depthDilationPercent: "0.0",
-                    outpaint: "0.05",
-                    inpaintPrompt: "background without foreground object, seamless and natural",
-                    inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
-                    outpaintPrompt: "background without foreground object, seamless and natural",
-                    outpaintNegativePrompt: "photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block",
+                    inputs: {},
+                    outputs: {},
+                    params: {
+                        inpaintMethod: "lama",
+                        dilation: "0.005",
+                        depthDilationPercent: "0.0",
+                        outpaint: "0.05",
+                        inpaintPrompt: "background without foreground object, seamless and natural",
+                        inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
+                        outpaintPrompt: "background without foreground object, seamless and natural",
+                        outpaintNegativePrompt: "photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block",
+                    }
                 }
             }
             ]
@@ -1278,7 +1280,7 @@ class monoLdiGenerator {
         // Start timing the fetch
         console.time('fetchDuration');
         // Show the progress bar
-        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[1].productParams.inpaintMethod);
+        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[1].productParams.params.inpaintMethod);
 
         try {
             const response = await fetch(this.endpointUrl + '/process', {
@@ -1349,9 +1351,9 @@ class monoLdiGenerator {
                 console.log('Uploaded Image to IAI Cloud 🚀');
                 this.execPlan.executionPlan[0].productParams.inputs.inputImageUrl = this.imDownloadUrl;
                 this.execPlan.executionPlan[0].productParams.outputs.outputDisparityUrl = this.dispUploadUrl;
-                this.execPlan.executionPlan[1].productParams.imageUrl = this.imDownloadUrl;
-                this.execPlan.executionPlan[1].productParams.disparityUrl = this.dispDownloadUrl;
-                this.execPlan.executionPlan[1].productParams.resultPresignedUrl = this.lifUploadUrl;
+                this.execPlan.executionPlan[1].productParams.inputs.inputImageUrl = this.imDownloadUrl;
+                this.execPlan.executionPlan[1].productParams.inputs.inputDisparityUrl = this.dispDownloadUrl;
+                this.execPlan.executionPlan[1].productParams.outputs.outputLifUrl = this.lifUploadUrl;
                 console.log(this.execPlan);
                 console.log('Launching LDI Generation Service... ⏳');
                 await this.generateLif();

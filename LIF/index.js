@@ -36,8 +36,8 @@ class lifGenerator {
                 executionPlan: [{
                     productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
                     productParams: {
-                        inputs: {inputLifImageUrl: this.imDownloadUrl},
-                        outputs: {outputLifImageUrl: this.dispUploadUrl}
+                        inputs: { inputLifImageUrl: this.imDownloadUrl },
+                        outputs: { outputLifImageUrl: this.dispUploadUrl }
                     }
                 },
                 {
@@ -79,10 +79,12 @@ class lifGenerator {
                 executionPlan: [{
                     productId: "1b2e3ca8-1f71-40b6-a43d-567b35d5e05d", // OUTPAINT
                     productParams: {
-                        imageUrl: this.imDownloadUrl,
-                        resultPresignedUrl: this.outpaintImUploadUrl,
-                        inpaintMethod: "lama",
-                        outpaint: "0.1"
+                        inputs: { inputImageUrl: this.imDownloadUrl },
+                        outputs: { outputLifUrl: this.outpaintImUploadUrl },
+                        params: {
+                            inpaintMethod: "lama",
+                            outpaint: "0.1"
+                        }
                     }
                 },
                 {
@@ -97,7 +99,12 @@ class lifGenerator {
                     }
                 },
                 {
-                    productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f" // LDL MONO
+                    productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f", // LDL MONO
+                    productParams: {
+                        inputs: {},
+                        outputs: {},
+                        params: {}
+                    }
                 }
                 ]
             }
@@ -107,13 +114,13 @@ class lifGenerator {
             formData.forEach((value, key) => {
                 params[key] = value;
             });
-            result.executionPlan[0].productParams.outpaint = params.outpaint;
-            result.executionPlan[0].productParams.inpaintMethod = params.inpaintMethod;
+            result.executionPlan[0].productParams.params.outpaint = params.outpaint;
+            result.executionPlan[0].productParams.params.inpaintMethod = params.inpaintMethod;
             params.outpaint = `${-parseFloat(params.outpaint)}`; // crop main image back to original size
-            params.imageUrl = this.outpaintImDownloadUrl;
-            params.disparityUrl = this.dispDownloadUrl;
-            params.resultPresignedUrl = this.lifUploadUrl;
-            result.executionPlan[2].productParams = params;
+            result.executionPlan[2].productParams.inputs.inputImageUrl = this.outpaintImDownloadUrl;
+            result.executionPlan[2].productParams.inputs.inputDisparityUrl = this.dispDownloadUrl;
+            result.executionPlan[2].productParams.outputs.outputLifUrl = this.lifUploadUrl;
+            result.executionPlan[2].productParams.params = params;
 
         }
         console.log(result);
