@@ -1141,6 +1141,8 @@ class monoLdiGenerator {
         this.endpointUrl = 'https://api.dev.immersity.ai/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
+        this.outpaintImUploadUrl;
+        this.outpaintImDownloadUrl;
         this.dispUploadUrl;
         this.dispDownloadUrl;
         this.lifUploadUrl;
@@ -1151,10 +1153,21 @@ class monoLdiGenerator {
 
         this.execPlan = {
             executionPlan: [{
+                productId: "1b2e3ca8-1f71-40b6-a43d-567b35d5e05d", // OUTPAINT
+                productParams: {
+                    inputs: { inputImageUrl: this.imDownloadUrl },
+                    outputs: { outputLifUrl: this.outpaintImUploadUrl },
+                    params: {
+                        inpaintMethod: "lama",
+                        outpaint: "0.1"
+                    }
+                }
+            },
+            {
                 productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
                 productParams: {
-                    inputs: {},
-                    outputs: {},
+                    inputs: { inputImageUrl: this.outpaintImDownloadUrl },
+                    outputs: { outputDisparityUrl: this.dispUploadUrl },
                     params: {
                         outputType: 'uint16',
                         dilation: 0
@@ -1170,7 +1183,7 @@ class monoLdiGenerator {
                         inpaintMethod: "lama",
                         dilation: "0.005",
                         depthDilationPercent: "0.0",
-                        outpaint: "0.05",
+                        outpaint: "0.1",
                         inpaintPrompt: "background without foreground object, seamless and natural",
                         inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
                         outpaintPrompt: "background without foreground object, seamless and natural",
@@ -1280,7 +1293,7 @@ class monoLdiGenerator {
         // Start timing the fetch
         console.time('fetchDuration');
         // Show the progress bar
-        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[1].productParams.params.inpaintMethod);
+        console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[2].productParams.params.inpaintMethod);
 
         try {
             const response = await fetch(this.endpointUrl + '/process', {
@@ -1344,16 +1357,19 @@ class monoLdiGenerator {
                 await this.getAccessToken();
                 console.log('Authenticated to IAI Cloud 🤗');
                 [this.imUploadUrl, this.imDownloadUrl] = await this.getPutGetUrl(this.file.name);
+                [this.outpaintImUploadUrl, this.outpaintImDownloadUrl] = await this.getPutGetUrl('outpaintedImage.jpg');
                 [this.dispUploadUrl, this.dispDownloadUrl] = await this.getPutGetUrl('disparity.png');
                 [this.lifUploadUrl, this.lifDownloadUrl] = await this.getPutGetUrl('lifResult.jpg');
                 console.log('Got temporary storage URLs on IAI Cloud 💪');
                 await this.uploadToStorage(this.file, this.imUploadUrl);
                 console.log('Uploaded Image to IAI Cloud 🚀');
                 this.execPlan.executionPlan[0].productParams.inputs.inputImageUrl = this.imDownloadUrl;
-                this.execPlan.executionPlan[0].productParams.outputs.outputDisparityUrl = this.dispUploadUrl;
-                this.execPlan.executionPlan[1].productParams.inputs.inputImageUrl = this.imDownloadUrl;
-                this.execPlan.executionPlan[1].productParams.inputs.inputDisparityUrl = this.dispDownloadUrl;
-                this.execPlan.executionPlan[1].productParams.outputs.outputLifUrl = this.lifUploadUrl;
+                this.execPlan.executionPlan[0].productParams.outputs.outputLifUrl = this.outpaintImUploadUrl;
+                this.execPlan.executionPlan[1].productParams.inputs.inputImageUrl = this.outpaintImDownloadUrl;
+                this.execPlan.executionPlan[1].productParams.outputs.outputDisparityUrl = this.dispUploadUrl;
+                this.execPlan.executionPlan[2].productParams.inputs.inputImageUrl = this.outpaintImDownloadUrl;
+                this.execPlan.executionPlan[2].productParams.inputs.inputDisparityUrl = this.dispDownloadUrl;
+                this.execPlan.executionPlan[2].productParams.outputs.outputLifUrl = this.lifUploadUrl;
                 console.log(this.execPlan);
                 console.log('Launching LDI Generation Service... ⏳');
                 await this.generateLif();
