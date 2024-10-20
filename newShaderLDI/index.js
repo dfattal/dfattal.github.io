@@ -573,7 +573,7 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
-      invd = 0.8 * views[0].layers[0].invZ.min; // set focus point
+      invd = 1.0 * views[0].layers[0].invZ.min; // set focus point
 
       document.getElementById("filePicker").remove();
 
@@ -632,7 +632,7 @@ async function main() {
     renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
-    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 1); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 0); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
     if (views.length < 2) {
       drawScene(gl, programInfo, buffers, views, renderCam);
