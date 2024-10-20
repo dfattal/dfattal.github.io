@@ -1,4 +1,5 @@
 imDiv = document.getElementById('image-preview');
+let lifGen = null; // Declare lifGen globally to be accessible by other functions
 
 // Function to show the loading spinner while the image is being generated
 function showLoadingSpinner() {
@@ -49,7 +50,71 @@ async function sendToViz(url) {
     window.open(`../newShaderLDI/index.html`, '_blank');
 }
 
-// Function to generate an image from the Hugging Face API
+// Function to disable the right-click download feature
+function disableDownloadOption() {
+    imDiv.removeEventListener('contextmenu', handleRightClickDownload);
+}
+
+// Function to handle the right-click download
+async function handleRightClickDownload(event) {
+    event.preventDefault(); // Prevent the default right-click menu
+
+    // Ensure lifGen is defined before trying to download
+    if (lifGen && lifGen.lifDownloadUrl) {
+        try {
+            const fileName = 'genAI_LIF.jpg'; // Default file name
+
+            // Check if showSaveFilePicker is supported
+            if (window.showSaveFilePicker) {
+                const options = {
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'JPEG Image',
+                        accept: { 'image/jpeg': ['.jpg', '.jpeg'] }
+                    }]
+                };
+
+                const handle = await window.showSaveFilePicker(options);
+
+                const writableStream = await handle.createWritable();
+                const response = await fetch(lifGen.lifDownloadUrl);
+                const arrayBuffer = await response.arrayBuffer();
+                await writableStream.write(new Blob([arrayBuffer], { type: 'image/jpeg' }));
+                await writableStream.close();
+
+                console.log('File saved successfully');
+            } else {
+                // Fallback for iOS or other browsers that do not support showSaveFilePicker
+                const response = await fetch(lifGen.lifDownloadUrl);
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+
+                // Clean up and remove the link
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                console.log('File downloaded successfully using fallback');
+            }
+        } catch (err) {
+            console.error('Error saving the file:', err);
+        }
+    } else {
+        console.error('LIF file not available for download');
+    }
+}
+
+// Function to enable the right-click download feature
+function enableDownloadOption(lifGen) {
+    imDiv.addEventListener('contextmenu', handleRightClickDownload);
+}
+
+// In the generateImage function, manage download option accordingly
 async function generateImage(mode) {
     const prompt = document.getElementById('message-content').value;
 
@@ -59,6 +124,8 @@ async function generateImage(mode) {
     }
 
     showLoadingSpinner(); // Show loading spinner while waiting for image generation
+    disableDownloadOption(); // Disable right-click download during generation
+
     const endpoint = `https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-${mode}`; // -dev
 
     try {
@@ -83,23 +150,25 @@ async function generateImage(mode) {
         const imageUrl = URL.createObjectURL(blob);
         displayImage(imageUrl); // Display the generated image in the preview area
         imDiv.classList.add('glowing');
-        
+
         const imageFile = new File([blob], 'generatedImage.jpg', { type: 'image/jpeg' });
-        const lifGen = new monoLdiGenerator(imageFile);
-    
+        lifGen = new monoLdiGenerator(imageFile);
+
         lifGen.afterLoad = function () {
-            
-            const viewer = new lifViewer(this.lifDownloadUrl, imDiv, height = 400, autoplay=true);
-            viewer.afterLoad = function() {
+            const viewer = new lifViewer(this.lifDownloadUrl, imDiv, height = 400, autoplay = true);
+            viewer.afterLoad = function () {
                 this.container.firstElementChild.style.display = 'none';
                 this.container.classList.remove('glowing');
-                this.container.onclick = function() {sendToViz(lifGen.lifDownloadUrl)};
+                this.container.onclick = function () { sendToViz(lifGen.lifDownloadUrl) };
                 this.container.addEventListener('mouseenter', () => this.startAnimation());
                 this.container.addEventListener('mouseleave', () => this.stopAnimation());
+
+                // Re-enable right-click download option after LIF generation
+                enableDownloadOption(lifGen);
             };
-            
-        }
-        await lifGen.init()
+        };
+
+        await lifGen.init();
 
     } catch (error) {
         console.error('Error generating image:', error);
@@ -115,7 +184,7 @@ document.getElementById('message-content').addEventListener('keydown', function 
     }
 });
 
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
     // List of prompts with brackets
     const prompts = [
         "A [beautiful young] woman with [long, wavy brunette hair] rests her head on her clasped hands, she is looking in the camera. She is dressed in [a purple top] and wears [a delicate bracelet on her left wrist]. Her expression is [gentle and thoughtful], enhanced by [natural makeup and a hint of purple lipstick]. The background is [a dim and blurred office space], drawing attention to [her face and hands].",
