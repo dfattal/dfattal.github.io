@@ -8,6 +8,7 @@ const SCOPES = "https://www.googleapis.com/auth/analytics.readonly";
 const GA4_DISCOVERY_DOC = "https://analyticsdata.googleapis.com/$discovery/rest?version=v1beta";
 
 const API_URL = 'https://dashboard-endpoint.immersity.ai/latest-animations';
+// const API_URL = 'http://localhost:3000/latest-animations';
 
 let animationList = []; // To store the list of animation URLs
 let timeList = []; // To store the list of animation times
