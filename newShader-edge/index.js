@@ -1,7 +1,7 @@
 
 const MAX_LAYERS = 4;
 
- 
+
 function createFramebuffer(gl, width, height) {
   const framebuffer = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
@@ -204,7 +204,7 @@ function setupWebGLST(gl, fragmentShaderSource) {
       textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
     },
     uniformLocations: {
-      
+
       //view L info
       uImageL: [],
       uDisparityMapL: [],
@@ -384,7 +384,8 @@ function drawScene(gl, programInfo, postProcessingShader, framebuffer1, framebuf
   gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width, layer.height]).flat());
 
   // rendering info
-  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  //gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height); // no window effect
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
@@ -400,7 +401,7 @@ function drawScene(gl, programInfo, postProcessingShader, framebuffer1, framebuf
   const offset = 0;
   //logAllUniforms(gl, programInfo.program);
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
-   
+
   if (multiPass) {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer2.framebuffer);
@@ -526,7 +527,8 @@ function drawSceneST(gl, programInfo, postProcessingShader, framebuffer1, frameb
   gl.uniform2fv(programInfo.uniformLocations.iResR, views[1].layers.map(layer => [layer.width, layer.height]).flat());
 
   // rendering info
-  gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  // gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height); // no window effect
   gl.uniform3f(programInfo.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z); // normalized to camera space
   gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
   gl.uniform2f(programInfo.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
@@ -795,7 +797,7 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
-      invd = 0.8 * views[0].layers[0].invZ.min; // set focus point
+      invd = 1.0 * views[0].layers[0].invZ.min; // set focus point
 
       document.getElementById("filePicker").remove();
 
@@ -854,7 +856,7 @@ async function main() {
     renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
-    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 1); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 0); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
     if (views.length < 2) {
       drawScene(gl, programInfo, postProcessingShader, framebuffer1, framebuffer2, buffers, views, renderCam);
