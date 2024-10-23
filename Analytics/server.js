@@ -81,7 +81,7 @@ async function extractSingleFrame(animationUrl, isGif = false) {
   return new Promise((resolve, reject) => {
     const ffmpegCommand = ffmpeg(animationUrl)
       .output(framePath) // Save the frame as a jpg image
-      .outputOptions(['-frames:v 1', '-vf scale=-1:224', '-q:v 2']); // Extract the first frame
+      .outputOptions(['-frames:v 1', '-q:v 2']); // Extract the first frame
 
     // If it’s a GIF, we pass additional options to treat it properly
     if (isGif) {
@@ -136,7 +136,7 @@ async function classifySingleFrame(framePath) {
   process.stdout.write(JSON.stringify(predictions, null, 2) + '\n');
 
   const indecentContent = predictions.some(
-    prediction => prediction.className === 'Porn' && prediction.probability > 0.8
+    prediction => (prediction.className === 'Porn' || prediction.className === 'Hentai') && prediction.probability > 0.8
   );
 
   return indecentContent;
@@ -159,7 +159,7 @@ async function classifyImage(imageUrl) {
   process.stdout.write(JSON.stringify(predictions, null, 2) + '\n');
 
   const indecentContent = predictions.some(
-    prediction => prediction.className === 'Porn' && prediction.probability > 0.8
+    prediction => (prediction.className === 'Porn' || prediction.className === 'Hentai') && prediction.probability > 0.8
   );
 
   // Optionally clean up the downloaded image after classification
