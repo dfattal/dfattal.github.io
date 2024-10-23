@@ -42,6 +42,12 @@ function initClient() {
     }).then(function () {
         fetchLatestAnimations(); // Start fetching videos only after authentication
         loadAnalyticsData(); // Start fetching GA4 metrics
+        // Fetch the latest animations every 60 seconds (after authentication)
+        setInterval(() => {
+            if (isAuthenticated) {
+                fetchLatestAnimations();
+            }
+        }, 60000);
     }, function (error) {
         console.error('Error initializing API client:', JSON.stringify(error, null, 2));
     });
@@ -376,13 +382,6 @@ function skipToNextVideo() {
     currentIndex = (currentIndex + 1) % animationList.length; // Loop back to the first video
     playCurrentAnimation(); // Play the next animation
 }
-
-// Fetch the latest animations every 60 seconds (after authentication)
-setInterval(() => {
-    if (isAuthenticated) {
-        fetchLatestAnimations();
-    }
-}, 60000);
 
 function initializeSignInButton() {
     google.accounts.id.initialize({
