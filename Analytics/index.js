@@ -7,12 +7,14 @@ const PROPERTY_ID = '406177208';  // Replace with your GA4 Property ID
 const SCOPES = "https://www.googleapis.com/auth/analytics.readonly";
 const GA4_DISCOVERY_DOC = "https://analyticsdata.googleapis.com/$discovery/rest?version=v1beta";
 
-const API_URL = 'https://dashboard-endpoint.immersity.ai/latest-animations';
-// const API_URL = 'http://localhost:3000/latest-animations';
+const decency = true; // Set to true to enable decency checks
+const API_URL = `https://dashboard-endpoint.immersity.ai/latest-animations?checkDecency=${decency}`; // Use the provided API URL
+//const API_URL = 'http://localhost:3000/latest-animations?checkDecency=true';
 
 let animationList = []; // To store the list of animation URLs
 let timeList = []; // To store the list of animation times
 let nameList = []; // To store the list of animation names
+let decencyList = []; // To store the list of decency values
 let currentIndex = 0; // To track the current animation being played
 let videoTimeout;
 
@@ -265,10 +267,12 @@ async function fetchLatestAnimations() {
             const newUrls = data.animations.map(anim => anim.resultDownloadUrl);
             const newTimes = data.animations.map(anim => anim.endedAt);
             const newNames = data.animations.map(anim => anim.filename);
+            const newDecency = data.animations.map(anim => anim.isIndecent);
             if (JSON.stringify(newUrls) !== JSON.stringify(animationList)) {
                 animationList = newUrls;
                 timeList = newTimes;
                 nameList = newNames;
+                decencyList = newDecency;
                 currentIndex = 0; // Reset the index when the list changes
                 playCurrentAnimation();
                 console.log('Loaded new animations:', animationList);
@@ -292,9 +296,11 @@ function playCurrentAnimation() {
 
         const currentAnimation = animationList[currentIndex]; // URL or path
         const currentFilename = nameList[currentIndex]; // Get the filename from the server data
+        const currentDecency = decencyList[currentIndex]; // Get the decency value from the server data
 
         // Check if the file is an image (gif, jpg, png)
         const isImage = /\.(gif|jpg|jpeg|png)$/i.test(currentFilename);
+        const isGIF = /\.(gif)$/i.test(currentFilename);
 
         if (isImage) {
             // Remove the video element and replace it with an img element for images (GIF, JPG, PNG)
@@ -311,9 +317,14 @@ function playCurrentAnimation() {
 
             imageElement.src = currentAnimation; // Set the image source
             imageElement.style.display = 'inline-block'; // Show the image
+            if (currentDecency) {
+                imageElement.style.filter = 'blur(20px)';
+            } else {
+                imageElement.style.filter = 'none';
+            }
 
             // Update the time ago text for the image
-            timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (Img / GIF)';
+            timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ` (${isGIF?"GIF":"IMG"}) `;
 
             // Skip to next animation after 10 seconds
             clearTimeout(videoTimeout);
@@ -332,11 +343,16 @@ function playCurrentAnimation() {
             // Set the video source to the current animation
             videoSource.src = currentAnimation;
             video.load(); // Load the current video
+            if (currentDecency) {
+                video.style.filter = 'blur(20px)';
+            } else {
+                video.style.filter = 'none';
+            }
 
             video.onloadedmetadata = function () {
                 if (video.duration > 0) {
                     // Valid video: Update the time ago text
-                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]);
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (MP4)';
                 } else {
                     console.warn('Corrupted or unreadable video, skipping...');
                     skipToNextVideo();

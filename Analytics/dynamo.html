@@ -50,12 +50,14 @@
             <source id="video-source" src="" type="video/mp4">
             Your browser does not support the video tag.
         </video>
-        <p id="timeAgo">Loading time ago...</p> <!-- Placeholder for download time -->
+        <p id="timeAgo">Decency Check...</p> <!-- Placeholder for download time -->
     </div>
 
     <script>
-        //const API_URL = 'https://dashboard-endpoint.immersity.ai/latest-animations'; // Use the provided API URL
-        const API_URL = 'http://localhost:3000/latest-animations';
+        const decency = true; // Set to true to enable decency checks
+        const API_URL = `https://dashboard-endpoint.immersity.ai/latest-animations?checkDecency=${decency}`; // Use the provided API URL
+        //const API_URL = 'http://localhost:3000/latest-animations?checkDecency=true';
+        console.log('API URL:', API_URL);
         let animationList = []; // To store the list of animation URLs
         let decencyList = []; // To store the list of decency values
         let timeList = []; // To store the list of animation times
@@ -125,6 +127,7 @@
                 const currentDecency = decencyList[currentIndex]; // Get the decency value from the server data
                 // Check if the file is an image (gif, jpg, png)
                 const isImage = /\.(gif|jpg|jpeg|png)$/i.test(currentFilename);
+                const isGIF = /\.(gif)$/i.test(currentFilename);
 
                 if (isImage) {
                     // Remove the video element and replace it with an img element for images (GIF, JPG, PNG)
@@ -148,8 +151,7 @@
                     }
 
                     // Update the time ago text for the image
-                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (Img / GIF) Indecent: ' + currentDecency ;
-
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ` (${isGIF?"GIF":"IMG"}) `;
                     // Skip to next animation after 10 seconds
                     clearTimeout(videoTimeout);
                     videoTimeout = setTimeout(() => {
@@ -176,7 +178,7 @@
                     video.onloadedmetadata = function () {
                         if (video.duration > 0) {
                             // Valid video: Update the time ago text
-                            timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (MP4) Indecent: ' + currentDecency ;
+                            timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ' (MP4)';
                         } else {
                             console.warn('Corrupted or unreadable video, skipping...');
                             skipToNextVideo();

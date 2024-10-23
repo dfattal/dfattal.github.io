@@ -8,6 +8,7 @@ const tf = require('@tensorflow/tfjs-node');
 const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 // Set up metrics collection
 promClient.collectDefaultMetrics();
@@ -45,8 +46,28 @@ AWS.config.update({
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 const tableName = 'leiapix-converter-user-exports';
 
-// Helper function to extract a single frame from a video
-async function extractSingleFrame(videoUrl) {
+// Path to the cache file
+const cacheFilePath = path.join(__dirname, 'cache.json');
+
+// Load the cache from file
+let processedAnimations = loadCacheFromFile();
+
+// Function to load cache from file
+function loadCacheFromFile() {
+  if (fs.existsSync(cacheFilePath)) {
+    const cacheData = fs.readFileSync(cacheFilePath);
+    return JSON.parse(cacheData);
+  }
+  return {};
+}
+
+// Function to save cache to file
+function saveCacheToFile() {
+  fs.writeFileSync(cacheFilePath, JSON.stringify(processedAnimations, null, 2));
+}
+
+// Helper function to extract a single frame from a video or GIF
+async function extractSingleFrame(animationUrl, isGif = false) {
   const framesDir = path.join(__dirname, 'frames');
 
   // Ensure the frames directory exists
@@ -54,24 +75,66 @@ async function extractSingleFrame(videoUrl) {
     fs.mkdirSync(framesDir);
   }
 
+  const frameFile = isGif ? 'gif-frame-001.jpg' : 'frame-001.jpg';
+  const framePath = path.join(framesDir, frameFile);
+
   return new Promise((resolve, reject) => {
-    ffmpeg(videoUrl)
-      .output(`${framesDir}/frame-001.jpg`) // Save one frame as a jpg image
-      .outputOptions(['-frames:v 1', '-vf scale=-1:180', '-q:v 2']) // Extract the first frame (-frames:v 1) with quality (-q:v 2)
-      .on('end', () => resolve(`${framesDir}/frame-001.jpg`)) // Return the path to the frame
+    const ffmpegCommand = ffmpeg(animationUrl)
+      .output(framePath) // Save the frame as a jpg image
+      .outputOptions(['-frames:v 1', '-vf scale=-1:224', '-q:v 2']); // Extract the first frame
+
+    // If it’s a GIF, we pass additional options to treat it properly
+    if (isGif) {
+      ffmpegCommand.inputOptions('-f gif'); // Specify GIF as input format
+    }
+
+    ffmpegCommand
+      .on('end', () => resolve(framePath)) // Return the path to the frame
       .on('error', reject)
       .run();
   });
 }
 
-// Helper function to classify a single frame from the video
+// Helper function to download an image from a URL and save it locally
+async function downloadImage(imageUrl, filename) {
+  const framesDir = path.join(__dirname, 'frames');
+
+  // Ensure the frames directory exists
+  if (!fs.existsSync(framesDir)) {
+    fs.mkdirSync(framesDir);
+  }
+
+  const imagePath = path.join(framesDir, filename);
+
+  const writer = fs.createWriteStream(imagePath);
+
+  const response = await axios({
+    url: imageUrl,
+    method: 'GET',
+    responseType: 'stream',
+  });
+
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', () => resolve(imagePath));
+    writer.on('error', reject);
+  });
+}
+
+// Helper function to classify a single frame (image)
 async function classifySingleFrame(framePath) {
-  const model = await nsfwjs.load();
+  const model = await nsfwjs.load("MobileNetV2");
   const imageBuffer = fs.readFileSync(framePath);
   const imageTensor = tf.node.decodeImage(imageBuffer, 3);
 
   // Classify the frame
   const predictions = await model.classify(imageTensor);
+
+  // Print the predictions to the terminal
+  process.stdout.write(`Predictions for frame: ${framePath}\n`);
+  process.stdout.write(JSON.stringify(predictions, null, 2) + '\n');
+
   const indecentContent = predictions.some(
     prediction => prediction.className === 'Porn' && prediction.probability > 0.8
   );
@@ -79,22 +142,37 @@ async function classifySingleFrame(framePath) {
   return indecentContent;
 }
 
-// Helper function to classify images directly
+// Modify classifyImage to download the image first
 async function classifyImage(imageUrl) {
-  const model = await nsfwjs.load();
-  const imageBuffer = fs.readFileSync(imageUrl);
+  const filename = path.basename(imageUrl).split('?')[0]; // Extract filename from the URL
+  const imagePath = await downloadImage(imageUrl, filename); // Download the image
+
+  const model = await nsfwjs.load("MobileNetV2");
+  const imageBuffer = fs.readFileSync(imagePath);
   const imageTensor = tf.node.decodeImage(imageBuffer, 3);
 
+  // Classify the image
   const predictions = await model.classify(imageTensor);
+
+  // Print the predictions to the terminal
+  process.stdout.write(`Predictions for image: ${imageUrl}\n`);
+  process.stdout.write(JSON.stringify(predictions, null, 2) + '\n');
+
   const indecentContent = predictions.some(
     prediction => prediction.className === 'Porn' && prediction.probability > 0.8
   );
+
+  // Optionally clean up the downloaded image after classification
+  fs.unlinkSync(imagePath);
 
   return indecentContent;
 }
 
 app.get('/latest-animations', async (req, res) => {
   reqCounter.inc({ path: '/latest-animations', status: 'total' });
+
+  const checkDecency = req.query.checkDecency === 'true';
+
   try {
     await rateLimiter.consume(req.ip);
   } catch (rateError) {
@@ -133,21 +211,40 @@ app.get('/latest-animations', async (req, res) => {
       .slice(0, 10); // Get the latest 10
 
     for (let animation of sortedItems) {
-      const isImage = /\.(gif|jpg|jpeg|png)$/i.test(animation.filename);
+      console.log('Processing animation:', animation.filename);
+
+      if (!checkDecency) {
+        console.log(`Skipping decency check for: ${animation.filename}, not requested by client.`);
+        animation.isIndecent = null;
+        continue;
+      }
+
+      // Check if animation was previously processed
+      if (processedAnimations[animation.filename]) {
+        console.log(`Skipping decency check for: ${animation.filename}, already processed: ${processedAnimations[animation.filename].isIndecent}`);
+        animation.isIndecent = processedAnimations[animation.filename].isIndecent;
+        continue;
+      }
+
+      const isGif = /\.gif$/i.test(animation.filename);
+      const isImage = /\.(jpg|jpeg|png)$/i.test(animation.filename);
 
       if (isImage) {
         // Classify an image directly
         animation.isIndecent = await classifyImage(animation.resultDownloadUrl);
-      }
-      else {
-        // Extract a single frame and classify it
-        const framePath = await extractSingleFrame(animation.resultDownloadUrl);
+      } else {
+        // Extract a single frame and classify it (from GIF or video)
+        const framePath = await extractSingleFrame(animation.resultDownloadUrl, isGif);
 
         animation.isIndecent = await classifySingleFrame(framePath);
 
+        // Store the result in cache
+        processedAnimations[animation.filename] = { isIndecent: animation.isIndecent };
+        saveCacheToFile();
+
         // Clean up the frame after classification
         //fs.unlinkSync(framePath);
-        // animation.isIndecent = false;
+
       }
     }
 

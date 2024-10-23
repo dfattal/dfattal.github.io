@@ -27,3 +27,4 @@ output/
 input/
 package*.json
 frames/
+cache.json
