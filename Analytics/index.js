@@ -61,6 +61,7 @@ function handleSignIn() {
             document.getElementById('signin-button').style.display = 'none';
             document.getElementById('signout-button').style.display = 'block';
             console.log('Token acquired:', accessToken);
+            isAuthenticated = true;
 
         },
     });
