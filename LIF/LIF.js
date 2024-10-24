@@ -1115,6 +1115,17 @@ class lifViewer {
 
                 // console.log(`(${relativeX}, ${relativeY}`); // Outputs values between -0.5 and +0.5
             }.bind(this));
+            // Device tilt listener for mobile devices
+            window.addEventListener('deviceorientation', function (event) {
+                // event.beta is the tilt in the x-axis (front-back tilting), normalized between -90 and +90
+                // event.gamma is the tilt in the y-axis (left-right tilting), normalized between -90 and +90
+
+                // Normalize beta and gamma to a value between -0.5 and +0.5
+                this.mousePos.y = event.beta / 45;  // Normalized value for front-back tilt
+                this.mousePos.x = event.gamma / 45;  // Normalized value for left-right tilt
+
+                // console.log(`Tilt X: ${this.tilt.x}, Tilt Y: ${this.tilt.y}`); // Log the tilt values
+            }.bind(this));
             this.gl = this.canvas.getContext('webgl');
             await this.initWebGLResources();
             this.startAnimation();
