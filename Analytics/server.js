@@ -9,6 +9,9 @@ const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const sharp = require('sharp');
+
+let progressCache = {};
 
 // Set up metrics collection
 promClient.collectDefaultMetrics();
@@ -26,6 +29,7 @@ const dynDbGauge = new promClient.Gauge({
 
 const app = express();
 const port = 3000;
+//const port = process.env.PORT ?? 8080;
 
 // Enable CORS for all routes
 app.use(cors());
@@ -64,6 +68,19 @@ function loadCacheFromFile() {
 // Function to save cache to file
 function saveCacheToFile() {
   fs.writeFileSync(cacheFilePath, JSON.stringify(processedAnimations, null, 2));
+}
+
+async function convertHeicToJpg(imageUrl, filename) {
+  const imagePath = await downloadImage(imageUrl, filename);
+
+  const jpgPath = path.join(__dirname, 'frames', `${path.parse(filename).name}.jpg`);
+
+  // Convert HEIC to JPG using sharp
+  await sharp(imagePath)
+    .toFormat('jpeg')
+    .toFile(jpgPath);
+
+  return jpgPath;
 }
 
 // Helper function to extract a single frame from a video or GIF
@@ -142,19 +159,25 @@ async function classifySingleFrame(framePath) {
   return indecentContent;
 }
 
-// Modify classifyImage to download the image first
+// Modify the classifyImage function
 async function classifyImage(imageUrl) {
-  const filename = path.basename(imageUrl).split('?')[0]; // Extract filename from the URL
-  const imagePath = await downloadImage(imageUrl, filename); // Download the image
+  const filename = path.basename(imageUrl).split('?')[0];
+  const isHeic = /\.heic$/i.test(filename);
+
+  let imagePath;
+
+  if (isHeic) {
+    imagePath = await convertHeicToJpg(imageUrl, filename);
+  } else {
+    imagePath = await downloadImage(imageUrl, filename);
+  }
 
   const model = await nsfwjs.load("MobileNetV2");
   const imageBuffer = fs.readFileSync(imagePath);
   const imageTensor = tf.node.decodeImage(imageBuffer, 3);
 
-  // Classify the image
   const predictions = await model.classify(imageTensor);
 
-  // Print the predictions to the terminal
   process.stdout.write(`Predictions for image: ${imageUrl}\n`);
   process.stdout.write(JSON.stringify(predictions, null, 2) + '\n');
 
@@ -162,7 +185,7 @@ async function classifyImage(imageUrl) {
     prediction => (prediction.className === 'Porn' || prediction.className === 'Hentai') && prediction.probability > 0.8
   );
 
-  // Optionally clean up the downloaded image after classification
+  // Clean up the downloaded or converted image after classification
   fs.unlinkSync(imagePath);
 
   return indecentContent;
@@ -210,24 +233,33 @@ app.get('/latest-animations', async (req, res) => {
       .sort((a, b) => b.endedAt - a.endedAt) // Sort by endedAt descending
       .slice(0, 10); // Get the latest 10
 
+    let processedCount = 0;
+    let totalItems = sortedItems.length;
+    progressCache = { processed: 0, total: totalItems };
+
     for (let animation of sortedItems) {
       console.log('Processing animation:', animation.filename);
 
       if (!checkDecency) {
         console.log(`Skipping decency check for: ${animation.filename}, not requested by client.`);
         animation.isIndecent = null;
+        processedCount++;
+        progressCache.processed = processedCount;
         continue;
+
       }
 
       // Check if animation was previously processed
       if (processedAnimations[animation.filename]) {
         console.log(`Skipping decency check for: ${animation.filename}, already processed: ${processedAnimations[animation.filename].isIndecent}`);
         animation.isIndecent = processedAnimations[animation.filename].isIndecent;
+        processedCount++;
+        progressCache.processed = processedCount;
         continue;
       }
 
       const isGif = /\.gif$/i.test(animation.filename);
-      const isImage = /\.(jpg|jpeg|png)$/i.test(animation.filename);
+      const isImage = /\.(jpg|jpeg|png|heic)$/i.test(animation.filename);
 
       if (isImage) {
         // Classify an image directly
@@ -246,6 +278,8 @@ app.get('/latest-animations', async (req, res) => {
         //fs.unlinkSync(framePath);
 
       }
+      processedCount++;
+      progressCache.processed = processedCount;
     }
 
     if (sortedItems.length > 0) {
@@ -257,6 +291,34 @@ app.get('/latest-animations', async (req, res) => {
     console.error('Error fetching animations:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+app.get('/filtering-progress', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const intervalId = setInterval(() => {
+    const progress = (progressCache.processed / progressCache.total) * 100;
+
+    res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+
+    if (progress >= 100) {
+      // Stop the interval once progress is complete
+      clearInterval(intervalId);
+
+      // Close the connection by sending a 'completed' message
+      res.write('event: close\n');
+      res.write('data: done\n\n');
+
+      // End the response to close the connection
+      res.end();
+    }
+  }, 1000); // Send progress updates every second
+
+  req.on('close', () => {
+    clearInterval(intervalId); // Clean up when connection closes
+  });
 });
 
 app.get('/metrics', async (req, res) => {

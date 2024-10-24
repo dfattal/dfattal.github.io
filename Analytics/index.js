@@ -8,8 +8,8 @@ const SCOPES = "https://www.googleapis.com/auth/analytics.readonly";
 const GA4_DISCOVERY_DOC = "https://analyticsdata.googleapis.com/$discovery/rest?version=v1beta";
 
 const decency = true; // Set to true to enable decency checks
-const API_URL = `https://dashboard-endpoint.immersity.ai/latest-animations?checkDecency=${decency}`; // Use the provided API URL
-//const API_URL = 'http://localhost:3000/latest-animations?checkDecency=true';
+const API_URL = 'https://dashboard-endpoint.immersity.ai'; // Use the provided API URL
+// const API_URL = 'http://localhost:3000';
 
 let animationList = []; // To store the list of animation URLs
 let timeList = []; // To store the list of animation times
@@ -42,6 +42,32 @@ function initClient() {
         apiKey: API_KEY,
         discoveryDocs: [GA4_DISCOVERY_DOC],
     }).then(function () {
+        const eventSource = new EventSource(API_URL + '/filtering-progress');
+
+        eventSource.onmessage = function (event) {
+            document.getElementById('progress-container').style.display = 'inline-block';
+            const progressData = JSON.parse(event.data);
+            const progress = progressData.progress;
+
+            // Update the width of the progress bar
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = progress + '%';
+
+            // Optional: Show percentage text inside the bar
+            progressBar.textContent = Math.round(progress) + '%';
+        };
+
+        // Listen for the 'close' event indicating progress is complete
+        eventSource.addEventListener('close', function (event) {
+            console.log('Decency Progress complete! Closing connection.');
+
+            // Close the EventSource connection
+            eventSource.close();
+
+            // Remove the progress bar div
+            const progressContainer = document.getElementById('progress-container');
+            progressContainer.remove();
+        });
         fetchLatestAnimations(); // Start fetching videos only after authentication
         loadAnalyticsData(); // Start fetching GA4 metrics
         // Fetch the latest animations every 60 seconds (after authentication)
@@ -258,7 +284,7 @@ function loadAnalyticsData() {
 
 async function fetchLatestAnimations() {
     try {
-        const response = await fetch(API_URL);
+        const response = await fetch(API_URL + `/latest-animations?checkDecency=${decency}`);
         const data = await response.json();
         console.log(data);
 
@@ -324,7 +350,7 @@ function playCurrentAnimation() {
             }
 
             // Update the time ago text for the image
-            timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ` (${isGIF?"GIF":"IMG"}) `;
+            timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ` (${isGIF ? "GIF" : "IMG"}) `;
 
             // Skip to next animation after 10 seconds
             clearTimeout(videoTimeout);

@@ -40,6 +40,26 @@
             /* Display as block to ensure it's below the media */
             position: relative;
         }
+
+        #progress-container {
+            width: 100%;
+            height: 30px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 30px;
+            background-color: lightblue;
+            text-align: center;
+            line-height: 30px;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -51,12 +71,15 @@
             Your browser does not support the video tag.
         </video>
         <p id="timeAgo">Decency Check...</p> <!-- Placeholder for download time -->
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
     </div>
 
     <script>
         const decency = true; // Set to true to enable decency checks
-        const API_URL = `https://dashboard-endpoint.immersity.ai/latest-animations?checkDecency=${decency}`; // Use the provided API URL
-        //const API_URL = 'http://localhost:3000/latest-animations?checkDecency=true';
+        const API_URL = `https://dashboard-endpoint.immersity.ai`; // Use the provided API URL
+        // const API_URL = 'http://localhost:3000';
         console.log('API URL:', API_URL);
         let animationList = []; // To store the list of animation URLs
         let decencyList = []; // To store the list of decency values
@@ -86,7 +109,7 @@
 
         async function fetchLatestAnimations() {
             try {
-                const response = await fetch(API_URL);
+                const response = await fetch(API_URL + `/latest-animations?checkDecency=${decency}`);
                 const data = await response.json();
                 console.log(data);
 
@@ -151,7 +174,7 @@
                     }
 
                     // Update the time ago text for the image
-                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ` (${isGIF?"GIF":"IMG"}) `;
+                    timeAgoElement.textContent = timeAgo(timeList[currentIndex]) + ` (${isGIF ? "GIF" : "IMG"}) `;
                     // Skip to next animation after 10 seconds
                     clearTimeout(videoTimeout);
                     videoTimeout = setTimeout(() => {
@@ -224,6 +247,33 @@
             currentIndex = (currentIndex + 1) % animationList.length; // Loop back to the first video
             playCurrentAnimation(); // Play the next animation
         }
+
+        const eventSource = new EventSource(API_URL + '/filtering-progress');
+
+        eventSource.onmessage = function (event) {
+            document.getElementById('progress-container').style.display = 'inline-block';
+            const progressData = JSON.parse(event.data);
+            const progress = progressData.progress;
+
+            // Update the width of the progress bar
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = progress + '%';
+
+            // Optional: Show percentage text inside the bar
+            progressBar.textContent = Math.round(progress) + '%';
+        };
+
+        // Listen for the 'close' event indicating progress is complete
+        eventSource.addEventListener('close', function (event) {
+            console.log('Decency Progress complete! Closing connection.');
+
+            // Close the EventSource connection
+            eventSource.close();
+
+            // Remove the progress bar div
+            const progressContainer = document.getElementById('progress-container');
+            progressContainer.remove();
+        });
 
         // Fetch the latest animations every 60 seconds
         setInterval(fetchLatestAnimations, 60000);
