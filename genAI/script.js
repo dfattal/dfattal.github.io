@@ -1,5 +1,6 @@
 imDiv = document.getElementById('image-preview');
 let lifGen = null; // Declare lifGen globally to be accessible by other functions
+let longPressTimer;
 
 // Function to show the loading spinner while the image is being generated
 function showLoadingSpinner() {
@@ -50,9 +51,32 @@ async function sendToViz(url) {
     window.open(`../newShaderLDI/index.html`, '_blank');
 }
 
+// Function to enable the right-click download feature
+function enableDownloadOption(lifGen) {
+    imDiv.addEventListener('contextmenu', handleRightClickDownload);
+    imDiv.addEventListener('touchstart', handleTouchStart);
+    imDiv.addEventListener('touchend', cancelLongPress);
+    imDiv.addEventListener('touchcancel', cancelLongPress);
+}
+
 // Function to disable the right-click download feature
 function disableDownloadOption() {
     imDiv.removeEventListener('contextmenu', handleRightClickDownload);
+    imDiv.removeEventListener('touchstart', handleTouchStart);
+    imDiv.removeEventListener('touchend', cancelLongPress);
+    imDiv.removeEventListener('touchcancel', cancelLongPress);
+}
+
+// Function to start the long-press timer
+function handleTouchStart(event) {
+    longPressTimer = setTimeout(async () => {
+        await handleDownload(lifGen);
+    }, 500); // 500ms long press threshold
+}
+
+// Function to cancel the long-press if the user lifts their finger too early
+function cancelLongPress() {
+    clearTimeout(longPressTimer);
 }
 
 // Function to handle the right-click download
@@ -107,11 +131,6 @@ async function handleRightClickDownload(event) {
     } else {
         console.error('LIF file not available for download');
     }
-}
-
-// Function to enable the right-click download feature
-function enableDownloadOption(lifGen) {
-    imDiv.addEventListener('contextmenu', handleRightClickDownload);
 }
 
 // In the generateImage function, manage download option accordingly
