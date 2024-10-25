@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Orientation Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .value {
+            font-size: 2em;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Device Orientation</h1>
+    <p>Rotation around each axis (in degrees):</p>
+    <div class="value">Alpha (Z axis): <span id="alpha">0</span>°</div>
+    <div class="value">Beta (X axis): <span id="beta">0</span>°</div>
+    <div class="value">Gamma (Y axis): <span id="gamma">0</span>°</div>
+
+    <script>
+        let alpha = 0, beta = 0, gamma = 0;
+        let alphaDisplay = document.getElementById('alpha');
+        let betaDisplay = document.getElementById('beta');
+        let gammaDisplay = document.getElementById('gamma');
+        let smoothingFactor = 0.1;  // How fast the values return to zero when not moving
+
+        window.addEventListener('deviceorientation', function(event) {
+            // Smoothly approach the actual orientation values
+            alpha += (event.alpha - alpha) * smoothingFactor;
+            beta += (event.beta - beta) * smoothingFactor;
+            gamma += (event.gamma - gamma) * smoothingFactor;
+
+            // Update the UI with the smoothed values
+            alphaDisplay.textContent = alpha.toFixed(1);
+            betaDisplay.textContent = beta.toFixed(1);
+            gammaDisplay.textContent = gamma.toFixed(1);
+        });
+
+        // Function to slowly bring the angles back to zero
+        function resetToZero() {
+            alpha += (0 - alpha) * smoothingFactor;
+            beta += (0 - beta) * smoothingFactor;
+            gamma += (0 - gamma) * smoothingFactor;
+
+            alphaDisplay.textContent = alpha.toFixed(1);
+            betaDisplay.textContent = beta.toFixed(1);
+            gammaDisplay.textContent = gamma.toFixed(1);
+        }
+
+        // Call the resetToZero function periodically
+        setInterval(resetToZero, 50);  // Adjust the interval as needed
+    </script>
+</body>
+</html>
