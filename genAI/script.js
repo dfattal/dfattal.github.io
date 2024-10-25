@@ -51,14 +51,27 @@ async function sendToViz(url) {
     window.open(`../newShaderLDI/index.html`, '_blank');
 }
 
-// Function to disable the right-click download feature
+let longPressTimer;
+
+// Function to disable both right-click and long-press download
 function disableDownloadOption() {
     imDiv.removeEventListener('contextmenu', handleRightClickDownload);
+    imDiv.removeEventListener('touchstart', handleTouchStart);
+    imDiv.removeEventListener('touchend', cancelLongPress);
+    imDiv.removeEventListener('touchcancel', cancelLongPress);
 }
 
-// Function to handle the right-click download
+// Function to enable both right-click and long-press download
+function enableDownloadOption(lifGen) {
+    imDiv.addEventListener('contextmenu', handleRightClickDownload);
+    imDiv.addEventListener('touchstart', handleTouchStart);
+    imDiv.addEventListener('touchend', cancelLongPress);
+    imDiv.addEventListener('touchcancel', cancelLongPress);
+}
+
+// Function to handle the right-click download and long-press download
 async function handleRightClickDownload(event) {
-    event.preventDefault(); // Prevent the default right-click menu
+    event.preventDefault(); // Prevent the default right-click menu or long press default behavior
 
     // Ensure lifGen is defined before trying to download
     if (lifGen && lifGen.lifDownloadUrl) {
@@ -76,7 +89,6 @@ async function handleRightClickDownload(event) {
                 };
 
                 const handle = await window.showSaveFilePicker(options);
-
                 const writableStream = await handle.createWritable();
                 const response = await fetch(lifGen.lifDownloadUrl);
                 const arrayBuffer = await response.arrayBuffer();
@@ -110,9 +122,16 @@ async function handleRightClickDownload(event) {
     }
 }
 
-// Function to enable the right-click download feature
-function enableDownloadOption(lifGen) {
-    imDiv.addEventListener('contextmenu', handleRightClickDownload);
+// Function to start the long-press timer
+function handleTouchStart(event) {
+    longPressTimer = setTimeout(async () => {
+        await handleRightClickDownload(event); // Reuse the right-click download function
+    }, 500); // 500ms long press threshold
+}
+
+// Function to cancel the long-press if the user lifts their finger too early
+function cancelLongPress() {
+    clearTimeout(longPressTimer);
 }
 
 // In the generateImage function, manage download option accordingly
