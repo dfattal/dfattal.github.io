@@ -14,6 +14,12 @@
             font-size: 2em;
             margin: 10px;
         }
+        #permission-button {
+            display: none;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -23,6 +29,8 @@
     <div class="value">Beta (X axis): <span id="beta">0</span>°</div>
     <div class="value">Gamma (Y axis): <span id="gamma">0</span>°</div>
 
+    <button id="permission-button">Enable Device Orientation</button>
+
     <script>
         let alpha = 0, beta = 0, gamma = 0;
         let alphaDisplay = document.getElementById('alpha');
@@ -30,19 +38,46 @@
         let gammaDisplay = document.getElementById('gamma');
         let smoothingFactor = 0.1;  // How fast the values return to zero when not moving
 
-        window.addEventListener('deviceorientation', function(event) {
-            // Smoothly approach the actual orientation values
+        // Function to handle device orientation and update the UI
+        function handleOrientation(event) {
             alpha += (event.alpha - alpha) * smoothingFactor;
             beta += (event.beta - beta) * smoothingFactor;
             gamma += (event.gamma - gamma) * smoothingFactor;
 
-            // Update the UI with the smoothed values
             alphaDisplay.textContent = alpha.toFixed(1);
             betaDisplay.textContent = beta.toFixed(1);
             gammaDisplay.textContent = gamma.toFixed(1);
-        });
+        }
 
-        // Function to slowly bring the angles back to zero
+        // Request permission for iOS devices
+        function requestDeviceOrientationPermission() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                .then(function (response) {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        document.getElementById('permission-button').style.display = 'none';
+                    } else {
+                        alert('Permission not granted');
+                    }
+                })
+                .catch(console.error);
+            } else {
+                // If not iOS, just add the listener directly
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+
+        // Check if permission is needed for iOS and display the button if necessary
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            document.getElementById('permission-button').style.display = 'block';
+            document.getElementById('permission-button').addEventListener('click', requestDeviceOrientationPermission);
+        } else {
+            // No need for permission, start the listener right away
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+
+        // Function to slowly bring the angles back to zero when the device is not moving
         function resetToZero() {
             alpha += (0 - alpha) * smoothingFactor;
             beta += (0 - beta) * smoothingFactor;
