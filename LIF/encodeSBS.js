@@ -114,19 +114,15 @@ async function uploadToServer(leftBlob, rightBlob) {
         // Step 4: Make API call to the encoder to create the LIF file
         const execPlan = {
             executionPlan: [{
-                productId: "acefa9b7-0a4b-4a1d-88fc-420c8e6295da", // LIF ENCODER
+                productId: "abaec513-8405-45ee-9ad6-c0a99ee972b5", // LIF ENCODER
                 productParams: {
                     inputs: {
-                        inputLeftImageUrl: imLDownUrl,
+                        inputImageUrl: imLDownUrl,
                         inputRightImageUrl: imRDownUrl
                     },
                     outputs: { outputLifUrl: lifUpUrl },
                     params: {
-                        dispSource: "NONE",  // Optional, modify based on your requirements
-                        gain: 0,
-                        convergence: 0,
-                        preConvergence: 0,
-                        dof: 0
+                        
                     }
                 }
             }]
