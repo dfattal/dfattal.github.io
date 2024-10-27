@@ -41,7 +41,12 @@ class lifGenerator {
                     }
                 },
                 {
-                    productId: "1862b5a9-36d0-4624-ad6e-2c4b8f694d89" // LDL STEREO
+                    productId: "1862b5a9-36d0-4624-ad6e-2c4b8f694d89", // LDL STEREO
+                    productParams: {
+                        inputs: {},
+                        outputs: {},
+                        params: {}
+                    }
                 }
                 ]
             }
@@ -55,26 +60,11 @@ class lifGenerator {
             delete params.outpaintNegativePrompt;
             delete params.outpaintPrompt;
             delete params.outpaint;
-            params.imageUrl = this.dispDownloadUrl;
-            params.resultPresignedUrl = this.lifUploadUrl;
-            result.executionPlan[1].productParams = params;
+            result.executionPlan[1].productParams.inputs.inputImageUrl = this.dispDownloadUrl;
+            result.executionPlan[1].productParams.outputs.outputLifUrl = this.lifUploadUrl;
+            result.executionPlan[1].productParams.params = params;
             // result.executionPlan[0].paramsRaw = params;
         } else {
-            // result = {
-            //     executionPlan: [{
-            //         productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
-            //         productParams: {
-            //             imageUrl: this.imDownloadUrl,
-            //             resultPresignedUrl: this.dispUploadUrl,
-            //             outputBitDepth: 'uint16',
-            //             dilation: 0
-            //         }
-            //     },
-            //     {
-            //         productId: "c95bb2e9-95d2-4d2a-ac7c-dd1b0e1c7e7f" // LDL MONO
-            //     }
-            //     ]
-            // }
             result = {
                 executionPlan: [{
                     productId: "1b2e3ca8-1f71-40b6-a43d-567b35d5e05d", // OUTPAINT
