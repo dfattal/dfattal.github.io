@@ -59,12 +59,10 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
     }
 
     const sbsImage = fileInput.files[0];
-    // define output file name
     let filename = sbsImage.name;
     filename = filename.substring(0, filename.lastIndexOf('.')); // remove extension
     filename = filename.replace(/(_2x1|sbs)$/i, ''); // remove _2x1 or sbs suffix, case insensitive
     outputFilename = filename + '_STLIF.jpg';
-    console.log('Output filename:', outputFilename);
 
     const reader = new FileReader();
 
@@ -73,70 +71,89 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
         img.src = e.target.result;
 
         img.onload = async function () {
-            // Split the SBS image into left and right
+            const halfWidth = img.width / 2;
+            const height = img.height;
+
+            // Create canvases for left and right halves
             const canvasLeft = document.createElement('canvas');
             const canvasRight = document.createElement('canvas');
+            canvasLeft.width = canvasRight.width = halfWidth;
+            canvasLeft.height = canvasRight.height = height;
+
             const contextLeft = canvasLeft.getContext('2d');
             const contextRight = canvasRight.getContext('2d');
+            contextLeft.drawImage(img, 0, 0, halfWidth, height, 0, 0, halfWidth, height);
+            contextRight.drawImage(img, halfWidth, 0, halfWidth, height, 0, 0, halfWidth, height);
 
-            const halfWidth = img.width / 2;
-
-            // Set canvas dimensions
-            canvasLeft.width = halfWidth;
-            canvasLeft.height = img.height;
-            canvasRight.width = halfWidth;
-            canvasRight.height = img.height;
-
-            // Draw left and right parts
-            contextLeft.drawImage(img, 0, 0, halfWidth, img.height, 0, 0, halfWidth, img.height);
-            contextRight.drawImage(img, halfWidth, 0, halfWidth, img.height, 0, 0, halfWidth, img.height);
-
-            // Convert canvas to blobs
-            canvasLeft.toBlob(async function (leftBlob) {
-                canvasRight.toBlob(async function (rightBlob) {
-                    // Upload to storage using pre-signed URLs
+            // Display the anaglyph while processing
+            createAnaglyph(contextLeft, contextRight, halfWidth, height);
+            
+            // Convert each half to blobs and upload
+            canvasLeft.toBlob(async (leftBlob) => {
+                canvasRight.toBlob(async (rightBlob) => {
                     await uploadToServer(leftBlob, rightBlob);
                 }, 'image/jpeg');
             }, 'image/jpeg');
-        }
+        };
     };
 
     reader.readAsDataURL(sbsImage);
 });
 
+function createAnaglyph(contextLeft, contextRight, width, height) {
+    const anaglyphCanvas = document.getElementById('anaglyphCanvas');
+    anaglyphCanvas.width = width;
+    anaglyphCanvas.height = height;
+    const anaglyphContext = anaglyphCanvas.getContext('2d');
+
+    // Get image data from both halves
+    const leftImageData = contextLeft.getImageData(0, 0, width, height);
+    const rightImageData = contextRight.getImageData(0, 0, width, height);
+    const anaglyphData = anaglyphContext.createImageData(width, height);
+
+    // Blend channels to create an anaglyph effect
+    for (let i = 0; i < leftImageData.data.length; i += 4) {
+        anaglyphData.data[i] = leftImageData.data[i];         // Red from left image
+        anaglyphData.data[i + 1] = rightImageData.data[i + 1]; // Green from right image
+        anaglyphData.data[i + 2] = rightImageData.data[i + 2]; // Blue from right image
+        anaglyphData.data[i + 3] = 255;                       // Full opacity
+    }
+
+    // Draw anaglyph and show the container
+    anaglyphContext.putImageData(anaglyphData, 0, 0);
+    document.getElementById('anaglyph-container').style.display = 'block';
+    document.getElementById('spinner').style.display = 'block';
+}
+
 async function uploadToServer(leftBlob, rightBlob) {
     try {
-        // Show the spinner
-        document.getElementById('spinner').style.display = 'block';
         document.getElementById('status').textContent = '';
 
         const accessToken = await getAccessToken();
 
-        // Step 1: Get pre-signed URLs for both left and right images
         const [imLUpUrl, imLDownUrl] = await getPutGetUrl(accessToken, 'leftImage.jpg');
         const [imRUpUrl, imRDownUrl] = await getPutGetUrl(accessToken, 'rightImage.jpg');
 
-        // Step 2: Upload left and right images to the respective URLs
-        await uploadToStorage(imLUpUrl, leftBlob);
-        await uploadToStorage(imRUpUrl, rightBlob);
+        await Promise.all([
+            uploadToStorage(imLUpUrl, leftBlob),
+            uploadToStorage(imRUpUrl, rightBlob)
+        ]);
 
-        // Step 3: Get pre-signed URLs for the LIF file
-        const [lifDispUpUrl, lifDispDownUrl] = await getPutGetUrl(accessToken, 'dispStereoLif.jpg');
+        const [lifUpUrl, lifDownUrl] = await getPutGetUrl(accessToken, 'inputStereoLif.jpg');
         const [lifOutUpUrl, lifOutDownUrl] = await getPutGetUrl(accessToken, outputFilename);
 
-        // Step 4: Make API call to the encoder to create the LIF file
         const execPlan = {
             executionPlan: [{
                 productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
                 productParams: {
                     inputs: { inputLeftImageUrl: imLDownUrl, inputRightImageUrl: imRDownUrl },
-                    outputs: { outputLifImageUrl: lifDispUpUrl }
+                    outputs: { outputLifImageUrl: lifUpUrl }
                 }
             },
             {
                 productId: "1862b5a9-36d0-4624-ad6e-2c4b8f694d89", // LDL STEREO
                 productParams: {
-                    inputs: { inputStereoLifUrl: lifDispDownUrl },
+                    inputs: { inputStereoLifUrl: lifDownUrl },
                     outputs: { outputLifUrl: lifOutUpUrl },
                     params: {
                         "depthDilationPercent": 0,
@@ -158,38 +175,38 @@ async function uploadToServer(leftBlob, rightBlob) {
 
         const data = await response.json();
 
-        // Step 5: LIF file should now be created and available at lifDownUrl
-        document.getElementById('status').textContent = `LIF file created: ${lifOutDownUrl}`;
+        // Hide the spinner and anaglyph after processing
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('anaglyph-container').style.display = 'none';
 
-        // Detect if the user is on a mobile device (basic detection)
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-        if (isMobile) {
-            // On mobile devices (iOS & Android), open the link in a new tab
-            const newWindow = window.open(lifOutDownUrl, '_blank');
-            if (!newWindow) {
-                alert('Please enable pop-ups to download the file.');
-            }
-        } else {
-            // On desktop, use the anchor element to download the file
-            const link = document.createElement('a');
-            link.href = lifOutDownUrl;  // Use the download URL of the created LIF file
-            link.download = outputFilename;  // Suggest the filename for the user to save
-
-            // Programmatically click the link to trigger the download prompt
-            document.body.appendChild(link);
-            link.click();
-
-            // Remove the link from the DOM
-            document.body.removeChild(link);
-        }
-
-        document.getElementById('spinner').style.display = 'none'; // Hide the spinner
-        document.getElementById('status').textContent = `LIF file created being downloaded as ${outputFilename}`;
+        handleDownload(lifOutDownUrl);
 
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('status').textContent = 'Error creating LIF file.';
-        document.getElementById('spinner').style.display = 'none'; // Hide the spinner on error
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('anaglyph-container').style.display = 'none';
     }
+}
+
+// Function to handle download based on device type
+function handleDownload(lifOutDownUrl) {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+        const newWindow = window.open(lifOutDownUrl, '_blank');
+        if (!newWindow) {
+            alert('Please enable pop-ups to download the file.');
+        }
+    } else {
+        const link = document.createElement('a');
+        link.href = lifOutDownUrl;
+        link.download = outputFilename;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    document.getElementById('status').textContent = `LIF file created and ready for download.`;
 }
