@@ -106,19 +106,19 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
 
 async function uploadToServer(leftBlob, rightBlob) {
     try {
+        // Show the spinner
+        document.getElementById('spinner').style.display = 'block';
+        document.getElementById('status').textContent = '';
+
         const accessToken = await getAccessToken();
 
         // Step 1: Get pre-signed URLs for both left and right images
         const [imLUpUrl, imLDownUrl] = await getPutGetUrl(accessToken, 'leftImage.jpg');
         const [imRUpUrl, imRDownUrl] = await getPutGetUrl(accessToken, 'rightImage.jpg');
 
-        // Step 2: Upload both images simultaneously using Promise.all
-        await Promise.all([
-            uploadToStorage(imLUpUrl, leftBlob),
-            uploadToStorage(imRUpUrl, rightBlob)
-        ]);
-
-        console.log('Both files uploaded successfully.');
+        // Step 2: Upload left and right images to the respective URLs
+        await uploadToStorage(imLUpUrl, leftBlob);
+        await uploadToStorage(imRUpUrl, rightBlob);
 
         // Step 3: Get pre-signed URLs for the LIF file
         const [lifDispUpUrl, lifDispDownUrl] = await getPutGetUrl(accessToken, 'dispStereoLif.jpg');
@@ -184,10 +184,12 @@ async function uploadToServer(leftBlob, rightBlob) {
             document.body.removeChild(link);
         }
 
-        document.getElementById('status').textContent = `LIF file created and ready for download.`;
+        document.getElementById('spinner').style.display = 'none'; // Hide the spinner
+        document.getElementById('status').textContent = `LIF file created being downloaded as ${outputFilename}`;
 
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('status').textContent = 'Error creating LIF file.';
+        document.getElementById('spinner').style.display = 'none'; // Hide the spinner on error
     }
 }

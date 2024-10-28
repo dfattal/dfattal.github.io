@@ -5,11 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SBS to LIF Converter</title>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    #spinner {
+      display: none;
+      border: 8px solid #f3f3f3; /* Light grey */
+      border-top: 8px solid #3498db; /* Blue */
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 50px;
+    }
+  
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
   <h1>Upload SBS JPG and Convert to LIF</h1>
   <input type="file" id="fileInput" accept="image/jpeg" />
   <button id="uploadBtn">Upload and Convert</button>
+  <div id="spinner" style="display:none;"></div>
   <p id="status"></p>
   <script src="encodeSBS.js"></script>
 </body>
