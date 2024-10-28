@@ -517,6 +517,13 @@ async function showLifInfo(lifInfo) {
         const mainImg = document.createElement('img');
         mainImg.className = 'main_img';
         mainImg.src = view.image.url;
+        if (!view.inv_z_map) {
+            const title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | No invZ`;
+            viewDOM.appendChild(Object.assign(document.createElement('h2'), { textContent: title }));
+            viewDOM.appendChild(mainImg);
+            viewDiv.appendChild(viewDOM);
+            continue;
+        }
         const dispImg = document.createElement('img');
         dispImg.className = 'main_img';
         dispImg.src = view.inv_z_map.url;
@@ -581,7 +588,7 @@ async function handleFileSelect(event) {
         try {
             const arrayBuffer = await file.arrayBuffer();
             lifInfo = await parseLif53(arrayBuffer);
-            if (lifInfo.views[0].layers_top_to_bottom.length < 2) { // valid LIF but no LDI
+            if ((!lifInfo.views[0].layers_top_to_bottom) || (lifInfo.views[0].layers_top_to_bottom.length < 2)) { // valid LIF but no LDI
                 const userWantsToCreateLdi = confirm("This is a single layer LIF, would you like to create layers ?");
                 if (userWantsToCreateLdi) {
 
@@ -598,6 +605,7 @@ async function handleFileSelect(event) {
                 addViz(arrayBuffer);
             }
         } catch (e) {
+            console.log(e);
             const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
             if (userWantsToCreateLif) {
 

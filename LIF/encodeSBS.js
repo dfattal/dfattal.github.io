@@ -1,5 +1,6 @@
 const AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
 const endpointUrl = 'https://api.dev.immersity.ai/api/v1';
+let outputFilename;
 
 async function getAccessToken() {
     console.log('Acquiring access token from LeiaLogin...');
@@ -58,6 +59,13 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
     }
 
     const sbsImage = fileInput.files[0];
+    // define output file name
+    let filename = sbsImage.name;
+    filename = filename.substring(0, filename.lastIndexOf('.')); // remove extension
+    filename = filename.replace(/(_2x1|sbs)$/i, ''); // remove _2x1 or sbs suffix, case insensitive
+    outputFilename = filename + '_STLIF.jpg';
+    console.log('Output filename:', outputFilename);
+
     const reader = new FileReader();
 
     reader.onload = function (e) {
@@ -104,25 +112,36 @@ async function uploadToServer(leftBlob, rightBlob) {
         const [imLUpUrl, imLDownUrl] = await getPutGetUrl(accessToken, 'leftImage.jpg');
         const [imRUpUrl, imRDownUrl] = await getPutGetUrl(accessToken, 'rightImage.jpg');
 
-        // Step 2: Upload left and right images to the respective URLs
-        await uploadToStorage(imLUpUrl, leftBlob);
-        await uploadToStorage(imRUpUrl, rightBlob);
+        // Step 2: Upload both images simultaneously using Promise.all
+        await Promise.all([
+            uploadToStorage(imLUpUrl, leftBlob),
+            uploadToStorage(imRUpUrl, rightBlob)
+        ]);
+
+        console.log('Both files uploaded successfully.');
 
         // Step 3: Get pre-signed URLs for the LIF file
-        const [lifUpUrl, lifDownUrl] = await getPutGetUrl(accessToken, 'stereoLif.lif');
+        const [lifDispUpUrl, lifDispDownUrl] = await getPutGetUrl(accessToken, 'dispStereoLif.jpg');
+        const [lifOutUpUrl, lifOutDownUrl] = await getPutGetUrl(accessToken, outputFilename);
 
         // Step 4: Make API call to the encoder to create the LIF file
         const execPlan = {
             executionPlan: [{
-                productId: "abaec513-8405-45ee-9ad6-c0a99ee972b5", // LIF ENCODER
+                productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
                 productParams: {
-                    inputs: {
-                        inputImageUrl: imLDownUrl,
-                        inputRightImageUrl: imRDownUrl
-                    },
-                    outputs: { outputLifUrl: lifUpUrl },
+                    inputs: { inputLeftImageUrl: imLDownUrl, inputRightImageUrl: imRDownUrl },
+                    outputs: { outputLifImageUrl: lifDispUpUrl }
+                }
+            },
+            {
+                productId: "1862b5a9-36d0-4624-ad6e-2c4b8f694d89", // LDL STEREO
+                productParams: {
+                    inputs: { inputStereoLifUrl: lifDispDownUrl },
+                    outputs: { outputLifUrl: lifOutUpUrl },
                     params: {
-                        
+                        "depthDilationPercent": 0,
+                        "dilation": 0.005,
+                        "inpaintMethod": "lama"
                     }
                 }
             }]
@@ -140,8 +159,32 @@ async function uploadToServer(leftBlob, rightBlob) {
         const data = await response.json();
 
         // Step 5: LIF file should now be created and available at lifDownUrl
-        document.getElementById('status').textContent = `LIF file created: ${lifDownUrl}`;
-        console.log('LIF file URL:', lifDownUrl);
+        document.getElementById('status').textContent = `LIF file created: ${lifOutDownUrl}`;
+
+        // Detect if the user is on a mobile device (basic detection)
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        if (isMobile) {
+            // On mobile devices (iOS & Android), open the link in a new tab
+            const newWindow = window.open(lifOutDownUrl, '_blank');
+            if (!newWindow) {
+                alert('Please enable pop-ups to download the file.');
+            }
+        } else {
+            // On desktop, use the anchor element to download the file
+            const link = document.createElement('a');
+            link.href = lifOutDownUrl;  // Use the download URL of the created LIF file
+            link.download = outputFilename;  // Suggest the filename for the user to save
+
+            // Programmatically click the link to trigger the download prompt
+            document.body.appendChild(link);
+            link.click();
+
+            // Remove the link from the DOM
+            document.body.removeChild(link);
+        }
+
+        document.getElementById('status').textContent = `LIF file created and ready for download.`;
 
     } catch (error) {
         console.error('Error:', error);
