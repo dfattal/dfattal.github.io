@@ -43,7 +43,7 @@ async function getAccessToken() {
 
 async function getPutUrl(accessToken,filename) {
     const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
-        method: 'GET',
+        method: 'POST',
         headers: {
             authorization: `Bearer ${accessToken}`,
             accept: 'application/json'

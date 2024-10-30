@@ -18,7 +18,7 @@ async function getAccessToken() {
 
 async function getPutGetUrl(accessToken, filename) {
     const responsePair = await fetch(endpointUrl + '/get-presigned-url-pair?fileName=' + filename + '&mediaType=image%2Fjpeg', {
-        method: 'GET',
+        method: 'POST',
         headers: {
             authorization: `Bearer ${accessToken}`,
             accept: 'application/json'

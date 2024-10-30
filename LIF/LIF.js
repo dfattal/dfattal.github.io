@@ -1274,7 +1274,7 @@ class monoLdiGenerator {
 
     async getPutGetUrl(filename) {
         const responsePair = await fetch(this.endpointUrl + '/get-presigned-url-pair?fileName=' + filename + '&mediaType=image%2Fjpeg', {
-            method: 'GET',
+            method: 'POST',
             headers: {
                 authorization: `Bearer ${this.accessToken}`,
                 accept: 'application/json'
