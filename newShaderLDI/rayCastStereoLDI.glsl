@@ -133,6 +133,10 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
+float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
+    return texture(tex, xy).a;
+}
+
 // Multiview weighting
 float weight2(vec3 C, vec3 C1, vec3 C2) {
 
