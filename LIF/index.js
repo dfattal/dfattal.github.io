@@ -460,7 +460,7 @@ async function addViz(arrayBuffer) {
 
     vizBut.addEventListener('click', function () {
         //document.getElementById("filePicker").value = "";
-        console.log("Attempting to open visualization at newShaderLDI");
+        console.log("Attempting to open visualization at /VIZ");
         const binaryString = arrayBufferToBinaryString(arrayBuffer);
         const base64String = btoa(binaryString);
 
@@ -500,8 +500,7 @@ async function addViz(arrayBuffer) {
             console.error("Error opening IndexedDB");
         };
 
-        //window.location.href = `./newShaderLDI/index.html`;
-        window.open(`../newShaderLDI/index.html`, '_blank');
+        window.open(`../VIZ/index.html`, '_blank');
     });
 }
 

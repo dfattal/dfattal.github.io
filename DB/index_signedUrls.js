@@ -173,7 +173,7 @@ async function sendToViz(url) {
         console.error("Error opening IndexedDB");
     };
 
-    window.open(`../newShaderLDI/index.html`, '_blank');
+    window.open(`../VIZ/index.html`, '_blank');
 }
 
 function arrayBufferToBinaryString(buffer) {
