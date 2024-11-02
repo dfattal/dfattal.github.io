@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Face Pose Estimation</title>
+  <!-- Require the peer dependencies of face-landmarks-detection. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+
+  <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+
+  <style>
+    /* Hide the video element */
+    #video {
+      display: none;
+    }
+    /* Container for the title and button */
+    .title-container {
+      display: flex;
+      align-items: center;
+    }
+
+    /* Style for the surprise button */
+    .button {
+      margin-left: 20px; /* Add some space between the title and button */
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      outline: none;
+      color: #fff;
+      background-color: #540fa8;
+      border: none;
+      border-radius: 15px;
+      box-shadow: 0 4px #999;
+    }
+
+    .button:hover {background-color: #8557bd}
+
+    .button:active {
+      background-color: #b194d4;
+      box-shadow: 0 2px #666;
+      transform: translateY(2px);
+    }
+    .button:hover {background-color: #3e8e41}
+
+    .button:active {
+      background-color: #3e8e41;
+      box-shadow: 0 5px #666;
+      transform: translateY(4px);
+    }
+
+    /* Fullscreen container to center the canvas */
+    .canvas-container {
+      display: flex;
+      justify-content: center;
+     }
+  </style>
+
+</head>
+<body>
+  <div class="title-container">
+    <h1>TensorFlow Tracking Demo</h1>
+    <a href="index3.html" class="button">Mono</a>
+    <a href="index3LDI.html" class="button">MNLDI</a>
+    <a href="index2.html" class="button">Stereo</a>
+    <a href="index2LDI.html" class="button">STLDI</a>
+  </div>
+  <div id="agent"></div>
+  <video id="video" width="640" height="480"></video>
+  <div class="canvas-container">
+    <canvas id="output" width="640" height="480"></canvas>
+  </div>
+  <script type="module" src="index.js"></script>
+</body>
+</html>

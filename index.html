@@ -1,83 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Face Pose Estimation</title>
-  <!-- Require the peer dependencies of face-landmarks-detection. -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-
-  <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
-
-  <style>
-    /* Hide the video element */
-    #video {
-      display: none;
-    }
-    /* Container for the title and button */
-    .title-container {
-      display: flex;
-      align-items: center;
-    }
-
-    /* Style for the surprise button */
-    .button {
-      margin-left: 20px; /* Add some space between the title and button */
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-      outline: none;
-      color: #fff;
-      background-color: #540fa8;
-      border: none;
-      border-radius: 15px;
-      box-shadow: 0 4px #999;
-    }
-
-    .button:hover {background-color: #8557bd}
-
-    .button:active {
-      background-color: #b194d4;
-      box-shadow: 0 2px #666;
-      transform: translateY(2px);
-    }
-    .button:hover {background-color: #3e8e41}
-
-    .button:active {
-      background-color: #3e8e41;
-      box-shadow: 0 5px #666;
-      transform: translateY(4px);
-    }
-
-    /* Fullscreen container to center the canvas */
-    .canvas-container {
-      display: flex;
-      justify-content: center;
-     }
-  </style>
-
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersity AI Sandbox</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 20px;
+        }
+        .logo {
+            margin-bottom: 30px;
+        }
+        .logo img {
+            width: 287px;
+            height: auto;
+        }
+        .container {
+            max-width: 800px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            color: #bbbbbb;
+        }
+        .link-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .link {
+            background-color: #1f1f1f;
+            color: #00bcd4;
+            text-decoration: none;
+            padding: 15px 20px;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            transition: background-color 0.3s;
+        }
+        .link:hover {
+            background-color: #2c2c2c;
+        }
+    </style>
 </head>
 <body>
-  <div class="title-container">
-    <h1>TensorFlow Tracking Demo</h1>
-    <a href="index3.html" class="button">Mono</a>
-    <a href="index3LDI.html" class="button">MNLDI</a>
-    <a href="index2.html" class="button">Stereo</a>
-    <a href="index2LDI.html" class="button">STLDI</a>
-  </div>
-  <div id="agent"></div>
-  <video id="video" width="640" height="480"></video>
-  <div class="canvas-container">
-    <canvas id="output" width="640" height="480"></canvas>
-  </div>
-  <script type="module" src="index.js"></script>
+    <div class="logo">
+        <img src="images/IAI_logo.png" alt="Immersity AI Logo">
+    </div>
+    <div class="container">
+        <h1>Sandbox</h1>
+        <p>Explore our suite of interactive tools for creating and visualizing immersive 3D content.</p>
+        <div class="link-container">
+            <a class="link" href="/LIF/index.html">/LIF: Inspect and create LIF files</a>
+            <a class="link" href="/genAI/index.html">/genAI: Create LIF files from prompt</a>
+            <a class="link" href="/newShaderLDI/index.html">/newShaderLDI: Visualize LIF with camera tracking</a>
+            <a class="link" href="/newShaderLDI/preset.html">/preset: Test presets and save generated videos</a>
+            <a class="link" href="/DB/index.html">/DB: Interactive wall of LIF thumbnails</a>
+            <a class="link" href="/Analytics/index.html">/Analytics: Immersity AI Analytics (Requires Leia credentials)</a>
+            <a class="link" href="/TrackingTest/index.html">/TrackingTest: Test for face tracking from webcam</a>
+        </div>
+    </div>
 </body>
 </html>
