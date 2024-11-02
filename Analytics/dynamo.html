@@ -77,7 +77,11 @@
     </div>
 
     <script>
-        const decency = true; // Set to true to enable decency checks
+        // Get the full URL
+        const urlParams = new URLSearchParams(window.location.search);
+
+        const decency = urlParams.get('decency')? urlParams.get('decency') : true; // Set to true to enable decency checks
+      
         const API_URL = `https://dashboard-endpoint.immersity.ai`; // Use the provided API URL
         // const API_URL = 'http://localhost:3000';
         console.log('API URL:', API_URL);

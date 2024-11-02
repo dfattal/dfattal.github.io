@@ -7,7 +7,10 @@ const PROPERTY_ID = '406177208';  // Replace with your GA4 Property ID
 const SCOPES = "https://www.googleapis.com/auth/analytics.readonly";
 const GA4_DISCOVERY_DOC = "https://analyticsdata.googleapis.com/$discovery/rest?version=v1beta";
 
-const decency = true; // Set to true to enable decency checks
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+
+const decency = urlParams.get('decency')? urlParams.get('decency') : true; // Set to true to enable decency checks
 const API_URL = 'https://dashboard-endpoint.immersity.ai'; // Use the provided API URL
 // const API_URL = 'http://localhost:3000';
 
