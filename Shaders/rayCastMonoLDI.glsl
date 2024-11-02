@@ -115,6 +115,10 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
+float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
+    return texture(tex, xy).a;
+}
+
 // Action !
 vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t) {
 
@@ -178,9 +182,10 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
             return vec4(readColor(iChannelCol, s1 + .5), alpha * invZ2);
         }
 //
-        if(isMaskAround(s1 + .5, iChannelDisp, iRes))
-            return vec4(0.0); // option b) original. 0.0 - masked pixel
-        return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+        // if(isMaskAround(s1 + .5, iChannelDisp, iRes))
+        //     return vec4(0.0); // option b) original. 0.0 - masked pixel
+        // return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+        return vec4(readColor(iChannelCol, s1 + .5), isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
     } else {
         return vec4(vec3(0.1), 0.0);
     }

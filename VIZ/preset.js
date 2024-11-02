@@ -479,10 +479,10 @@ async function main() {
 
       // Now that we know if mono or stereo setup webGL
       if (views.length < 2) {
-        const fragmentShaderSource = await loadShaderFile('./rayCastMonoLDI.glsl');
+        const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI.glsl');
         ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
       } else {
-        const fragmentShaderSource = await loadShaderFile('./rayCastStereoLDI.glsl');
+        const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI.glsl');
         ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
       }
 

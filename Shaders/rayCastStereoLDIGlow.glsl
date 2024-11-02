@@ -134,6 +134,10 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
+float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
+    return texture(tex, xy).a;
+}
+
 // Multiview weighting
 float weight2(vec3 C, vec3 C1, vec3 C2) {
 
@@ -208,6 +212,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         if(isMaskAround(s1 + .5, iChannelDisp, iRes))
             return vec4(vec3(0.1), 0.0); // option b) original. 0.0 - masked pixel
         return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+        // return vec4(readColor(iChannelCol, s1 + .5), isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
     } else {
         return vec4(vec3(0.1), 0.0);
         invZ2 = -100.0;

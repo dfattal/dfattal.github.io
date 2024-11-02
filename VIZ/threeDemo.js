@@ -101,14 +101,14 @@ async function main() {
 
     //Load the shader material
     const vertexShader = `
-    varying vec2 UV;
+    varying vec2 v_texcoord;
     void main() {
-      UV = uv;
+      v_texcoord = uv;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`;
 
-    const fragmentShaderMN = await loadShaderFile('./rayCastMonoLDI.glsl');
-    const fragmentShaderST = await loadShaderFile('./rayCastStereoLDI.glsl');
+    const fragmentShaderMN = await loadShaderFile('../Shaders/rayCastMonoLDI.glsl');
+    const fragmentShaderST = await loadShaderFile('../Shaders/rayCastStereoLDI.glsl');
 
     // Set up the uniforms with preliminary values
     const uniformsMN = {

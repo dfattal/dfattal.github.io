@@ -4,11 +4,11 @@ const restPos = 600; // rest distance for viewing
 const vertexShaderSource = `
     attribute vec4 aVertexPosition;
     attribute vec2 aTextureCoord;
-    varying highp vec2 UV;
+    varying highp vec2 v_texcoord;
 
     void main(void) {
       gl_Position = aVertexPosition;
-      UV = aTextureCoord;
+      v_texcoord = aTextureCoord;
     }
   `;
 

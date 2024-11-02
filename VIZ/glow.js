@@ -34,7 +34,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
     },
     uniformLocations: {
-      time: gl.getUniformLocation(shaderProgram, 'time'),
+      uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
       //views info
       uImage: [],
       uDisparityMap: [],
@@ -132,7 +132,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
   
-  gl.uniform1f(programInfo.uniformLocations.time, Date.now()/1000-startTime);
+  gl.uniform1f(programInfo.uniformLocations.uTime, Date.now()/1000-startTime);
   const numLayers = views[0].layers.length;
   // Loop through each layer and bind textures
   for (let i = 0; i < numLayers; i++) {
