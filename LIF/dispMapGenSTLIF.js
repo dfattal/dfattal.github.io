@@ -1,5 +1,5 @@
 AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
-const endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
+const endpointUrl = 'https://api.dev.immersity.ai/api/v1';
 
 async function uploadImage() {
     const imageInput = document.getElementById('imageInput');
@@ -41,37 +41,9 @@ async function getAccessToken() {
     return tokenResponse.data.access_token;
 }
 
-async function getPutUrl(accessToken,filename) {
-    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-upload-url?fileName=' + filename + '&mediaType=image%2Fjpeg', {
-        method: 'GET',
-        headers: {
-            authorization: `Bearer ${accessToken}`,
-            accept: 'application/json'
-        },
-    });
-
-    const data = await response.json();
-    console.log('upload URL : ', data.url);
-    return data.url;
-}
-
-async function getGetUrl(accessToken,putUrl) {
-    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/get-download-url?url=' + putUrl, {
-        method: 'GET',
-        headers: {
-            authorization: `Bearer ${accessToken}`,
-            accept: 'application/json'
-        },
-    });
-
-    const data = await response.json();
-    console.log('download URL : ', data.url);
-    return data.url;
-}
-
 async function getPutGetUrl(accessToken,filename) {
     const responsePair = await fetch(endpointUrl + '/get-presigned-url-pair?fileName=' + filename + '&mediaType=image%2Fjpeg', {
-        method: 'GET',
+        method: 'POST',
         headers: {
             authorization: `Bearer ${accessToken}`,
             accept: 'application/json'
@@ -104,7 +76,7 @@ async function uploadToStorage(url, file) {
 }
 
 async function generateDisparityMap(accessToken, imDownUrl, lifUpUrl) {
-    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/process', {
+    const response = await fetch(endpointUrl + '/process', {
         method: 'POST',
         headers: {
             accept: 'application/json',
@@ -115,8 +87,8 @@ async function generateDisparityMap(accessToken, imDownUrl, lifUpUrl) {
             executionPlan: [{
                 productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
                 productParams: {
-                    inputLifImageUrl: imDownUrl,
-                    outputLifImageUrl: lifUpUrl
+                    inputs: { inputLifImageUrl: imDownUrl },
+                    outputs: { outputLifImageUrl: lifUpUrl }
                 }
             }]
 

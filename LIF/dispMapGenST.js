@@ -1,5 +1,5 @@
 AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
-const endpointUrl = 'https://mts-525-api.dev.immersity.ai/api/v1';
+const endpointUrl = 'https://api.dev.immersity.ai/api/v1';
 
 async function uploadImage() {
     const imageInputL = document.getElementById('imageInputL');
@@ -83,7 +83,7 @@ async function uploadToStorage(url, file) {
 }
 
 async function generateDisparityMap(accessToken, imLDownUrl, imRDownUrl, lifUpUrl) {
-    const response = await fetch('https://mts-525-api.dev.immersity.ai/api/v1/process', {
+    const response = await fetch(endpointUrl + '/process', {
         method: 'POST',
         headers: {
             accept: 'application/json',
@@ -94,9 +94,8 @@ async function generateDisparityMap(accessToken, imLDownUrl, imRDownUrl, lifUpUr
             executionPlan: [{
                 productId: "f60f2155-3383-4456-88dc-9d5160aa81b5", // generate stereo disparity
                 productParams: {
-                    limageUrl: imLDownUrl,
-                    rimageUrl: imRDownUrl,
-                    outputLifImageUrl: lifUpUrl
+                    inputs: { inputLeftImageUrl: imLDownUrl, inputRightImageUrl: imRDownUrl },
+                    outputs: { outputLifImageUrl: lifUpUrl }
                 }
             }]
 
