@@ -85,18 +85,21 @@ async function generateDisparityMap(accessToken, downloadStorageUrl, dispUploadS
         },
         body: JSON.stringify({
             executionPlan: [{
-                productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
+                productId: "b109355d-12a9-41fe-bd36-94bde1634da0", // Gateway
                 productParams: {
-                    inputs: { inputImageUrl: downloadStorageUrl },
-                    outputs: { outputDisparityUrl: dispUploadStorageUrl },
-                    params: {
-                        outputType: 'uint16',
-                        dilation: 0,
-                        useBoosting: "true"
+                    url: "http://3.95.133.35:8080/v1/depth-map-refined", // Apple Depth Pro
+                    method: "POST",
+                    body: {
+                        inputs: {"inputImageUrl": downloadStorageUrl},
+                        outputs: {"outputDisparityUrl": dispUploadStorageUrl},
+                        params: {
+                            outputFormat: "disparity",
+                            outputType: "uint16",
+                            dilation: 0
+                        }
                     }
                 }
             }]
-
         })
     });
 
