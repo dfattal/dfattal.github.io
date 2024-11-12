@@ -1,3 +1,7 @@
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const dispModel = urlParams.get('dispModel') ? urlParams.get('dispModel') : "Leia"; // Set to true to enable decency checks
+
 class lifGenerator {
     constructor(file = null, form = null) {
         this.AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
@@ -78,21 +82,21 @@ class lifGenerator {
                     }
                 },
                 // {
-            //     productId: "b109355d-12a9-41fe-bd36-94bde1634da0", // Gateway
-            //     productParams: {
-            //         url: "http://3.95.133.35:8080/v1/depth-map-refined", // Apple Depth Pro
-            //         method: "POST",
-            //         body: {
-            //             inputs: {"inputImageUrl": this.outpaintImDownloadUrl},
-            //             outputs: {"outputDisparityUrl": this.dispUploadUrl},
-            //             params: {
-            //                 outputFormat: "disparity",
-            //                 outputType: "uint16",
-            //                 dilation: 0
-            //             }
-            //         }
-            //     }
-            // },
+                //     productId: "b109355d-12a9-41fe-bd36-94bde1634da0", // Gateway
+                //     productParams: {
+                //         url: "http://3.95.133.35:8080/v1/depth-map-refined", // Apple Depth Pro
+                //         method: "POST",
+                //         body: {
+                //             inputs: {"inputImageUrl": this.outpaintImDownloadUrl},
+                //             outputs: {"outputDisparityUrl": this.dispUploadUrl},
+                //             params: {
+                //                 outputFormat: "disparity",
+                //                 outputType: "uint16",
+                //                 dilation: 0
+                //             }
+                //         }
+                //     }
+                // },
                 {
                     productId: "4d50354b-466d-49e1-a95d-0c7f320849c6", // generate disparity
                     productParams: {
@@ -127,6 +131,25 @@ class lifGenerator {
             result.executionPlan[2].productParams.inputs.inputDisparityUrl = this.dispDownloadUrl;
             result.executionPlan[2].productParams.outputs.outputLifUrl = this.lifUploadUrl;
             result.executionPlan[2].productParams.params = params;
+
+            if (dispModel == "DP") {
+                result.executionPlan[1] = {
+                    productId: "b109355d-12a9-41fe-bd36-94bde1634da0", // Gateway
+                    productParams: {
+                        url: "http://3.95.133.35:8080/v1/depth-map-refined", // Apple Depth Pro
+                        method: "POST",
+                        body: {
+                            inputs: { "inputImageUrl": this.outpaintImDownloadUrl },
+                            outputs: { "outputDisparityUrl": this.dispUploadUrl },
+                            params: {
+                                outputFormat: "disparity",
+                                outputType: "uint16",
+                                dilation: 0
+                            }
+                        }
+                    }
+                };
+            }
 
         }
         console.log(result);
