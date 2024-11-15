@@ -579,7 +579,7 @@ async function main() {
 
       const video = await setupCamera();
       trackingFocal = Math.max(video.videoWidth, video.videoHeight); // for tracking
-      trackingFocal *= isMobileDevice() ? 0.8 : 1.0; // modify focal if mobile, likely wider angle
+      trackingFocal *= isMobileDevice() ? 1.2 : 1.0; // modify focal if mobile, likely wider angle
       console.log("using focal " + trackingFocal);
       OVD = isMobileDevice() ? 0.7 * restPos : restPos; // defined in common.js
       console.log("using OVD " + OVD);
