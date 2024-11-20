@@ -1,5 +1,6 @@
 
 const MAX_LAYERS = 4;
+let focus = 1.0; // Global variable
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -444,6 +445,18 @@ async function main() {
   };
   const detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
 
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'f') {
+      slider.style.display = slider.style.display === 'none' ? 'block' : 'none';
+    }
+  });
+
+  const slider = document.getElementById('focusSlider');
+  slider.addEventListener('input', (event) => {
+    focus = parseFloat(event.target.value);
+    console.log('Focus updated:', focus);
+  });
+
   const filePicker = document.getElementById('filePicker');
   //const base64String = localStorage.getItem('lifFileData');
 
@@ -573,7 +586,7 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
-      invd = 1.0 * views[0].layers[0].invZ.min; // set focus point
+      invd0 = views[0].layers[0].invZ.min; // set focus point
 
       document.getElementById("filePicker").remove();
 
@@ -628,6 +641,7 @@ async function main() {
     }
 
     // update renderCam
+    const invd = focus * invd0;
     renderCam.pos = normFacePosition(facePosition); // normalize to camera space
     renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
@@ -664,7 +678,7 @@ async function main() {
     roll: 0,
     f: 0 // placeholder
   }
-  let invd;
+  let invd0;
 
   // Setup gl context + Shaders
   const canvas = document.getElementById('glCanvas');
