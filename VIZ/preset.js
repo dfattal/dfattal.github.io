@@ -372,6 +372,7 @@ async function main() {
 
   let saving = 0;
   updateSliderValue('animTime', 'animTval');
+  updateSliderValue('focus', 'focusval');
   updateSliderValue('x0', 'x0val');
   updateSliderValue('x1', 'x1val');
   updateSliderValue('x2', 'x2val');
@@ -567,11 +568,12 @@ async function main() {
         z: (1 - u) * (1 - u) * z0 + 2 * (1 - u) * u * z1 + u2 * z2
       };
     }
-
+    const focus = parseFloat(document.getElementById('focus').value);
+    invd = focus * views[0].layers[0].invZ.min; // set focus point
     renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd);
     renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd);
     const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
-    renderCam.f = views[0].f * vs;
+    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 0);
   }
 
   document.getElementById('createVideoButton').addEventListener('click', async () => {
