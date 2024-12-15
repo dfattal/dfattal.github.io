@@ -387,6 +387,9 @@ async function main() {
   updateSliderValue('phaseY', 'phYval');
   updateSliderValue('ampZ', 'ampZval');
   updateSliderValue('phaseZ', 'phZval');
+  updateSliderValue('dcX', 'dcXval');
+  updateSliderValue('dcY', 'dcYval');
+  updateSliderValue('dcZ', 'dcZval');
 
   let views;
 
@@ -532,19 +535,22 @@ async function main() {
 
     if (motionType === 'harmonic') {
       const ampX = parseFloat(document.getElementById('ampX').value);
+      const dcX = parseFloat(document.getElementById('dcX').value);
       const phaseX = 0;
 
       const ampY = parseFloat(document.getElementById('ampY').value);
+      const dcY = parseFloat(document.getElementById('dcY').value);
       const phaseY = parseFloat(document.getElementById('phaseY').value);
 
       const ampZ = parseFloat(document.getElementById('ampZ').value);
+      const dcZ = parseFloat(document.getElementById('dcZ').value);
       const phaseZ = parseFloat(document.getElementById('phaseZ').value);
 
       // Harmonic motion calculations
       renderCam.pos = {
-        x: ampX * Math.cos(2 * Math.PI * (phase + phaseX)),
-        y: ampY * Math.cos(2 * Math.PI * (phase + phaseY)),
-        z: ampZ * Math.cos(2 * Math.PI * (phase + phaseZ))
+        x: dcX + ampX * Math.cos(2 * Math.PI * (phase + phaseX)),
+        y: dcY + ampY * Math.cos(2 * Math.PI * (phase + phaseY)),
+        z: dcZ + ampZ * Math.cos(2 * Math.PI * (phase + phaseZ))
       };
     } else if (motionType === 'arc') {
       const x0 = parseFloat(document.getElementById('x0').value);
