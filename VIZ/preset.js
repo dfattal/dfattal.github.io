@@ -539,7 +539,7 @@ async function main() {
       const phaseX = 0;
 
       const ampY = parseFloat(document.getElementById('ampY').value);
-      const dcY = parseFloat(document.getElementById('dcY').value);
+      const dcY = -parseFloat(document.getElementById('dcY').value);
       const phaseY = parseFloat(document.getElementById('phaseY').value);
 
       const ampZ = parseFloat(document.getElementById('ampZ').value);
