@@ -32,14 +32,17 @@ uniform vec2 oRes; // viewport resolution in px
 }*/
 #define texture texture2D
 
+float edge = 0.05;
+float background = 0.1;
 float taper(vec2 uv) {
-    return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+    return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0-edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0-edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
     //return 1.0-smoothstep(0.64,1.0,r2);
 }
 
 vec3 readColor(sampler2D iChannel, vec2 uv) {
-    return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
+    // return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
+    return texture(iChannel, uv).rgb;
 }
 float readDisp(sampler2D iChannel, vec2 uv, float vMin, float vMax, vec2 iRes) {
     return texture(iChannel, vec2(clamp(uv.x, 2.0 / iRes.x, 1.0 - 2.0 / iRes.x), clamp(uv.y, 2.0 / iRes.y, 1.0 - 2.0 / iRes.y))).x * (vMin - vMax) + vMax;
@@ -185,9 +188,9 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         // if(isMaskAround(s1 + .5, iChannelDisp, iRes))
         //     return vec4(0.0); // option b) original. 0.0 - masked pixel
         // return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
-        return vec4(readColor(iChannelCol, s1 + .5), isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
+        return vec4(readColor(iChannelCol, s1 + .5), taper(s1+.5) * isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
     } else {
-        return vec4(vec3(0.1), 0.0);
+        return vec4(vec3(background), 0.0);
     }
 }
 
@@ -210,6 +213,7 @@ void main(void) {
 
         vec3 C2 = uFacePosition;
         mat3 FSKR2 = matFromFocal(vec2(f2 / oRes.x, f2 / oRes.y)) * matFromSkew(sk2) * matFromRoll(roll2) * matFromSlant(sl2);
+        float alpha;
 
         // LDI
         vec3 color;
@@ -217,26 +221,30 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1.a == 1.0 || uNumLayers == 1) {
             color = layer1.rgb;
+            alpha = layer1.a;
         } else {
-            vec4 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0) * (1.0 - layer1.w) + layer1 * layer1.w;
+            vec4 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0) * (1.0 - layer1.w) + vec4(layer1.rgb,1.0) * layer1.w;
             if(layer2.a == 1.0 || uNumLayers == 2) {
                 color = layer2.rgb;
+                alpha = layer2.a;
             } else {
-                vec4 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0) * (1.0 - layer2.w) + layer2 * layer2.w;
+                vec4 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0) * (1.0 - layer2.w) + vec4(layer2.rgb,1.0) * layer2.w;
                 if(layer3.a == 1.0 || uNumLayers == 3) {
                     color = layer3.rgb;
+                    alpha = layer3.a;
                 } else {
-                    vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + layer3 * layer3.w;
+                    vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + vec4(layer3.rgb,1.0) * layer3.w;
                     if( uNumLayers == 4) {
                         color = layer4.rgb;
+                        alpha = layer4.a;
                     } 
                 }
             }
         }
-
-        gl_FragColor = vec4(color, 1.0);
+        
+        gl_FragColor = vec4(alpha*color + (1.0-alpha)*vec3(background), 1.0);
 
     } else {
-        gl_FragColor = vec4(vec3(0.1), 1.0);
+        gl_FragColor = vec4(vec3(background), 1.0);
     }
 }
