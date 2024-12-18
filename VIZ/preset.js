@@ -583,22 +583,20 @@ async function main() {
   }
 
   document.getElementById('createVideoButton').addEventListener('click', async () => {
-    // Get the current canvas dimensions as default values
     saving = 1;
+
     const defaultWidth = canvas.width;
     const defaultHeight = canvas.height;
     const defaultFps = 30;
 
-    // Prompt the user for video settings
     const videoWidth = parseInt(prompt("Enter video width:", defaultWidth), 10) || defaultWidth;
     const videoHeight = parseInt(prompt("Enter video height:", defaultHeight), 10) || defaultHeight;
     const videoFps = parseInt(prompt("Enter video fps:", defaultFps), 10) || defaultFps;
 
     const animTime = parseFloat(document.getElementById('animTime').value);
     const numFrames = Math.ceil(animTime * videoFps);
-    const frameDuration = 1000 / videoFps; // Duration of each frame in milliseconds
+    const frameDuration = 1000 / videoFps;
 
-    // Create an off-screen canvas to render the frames
     const offscreenCanvas = document.createElement('canvas');
     const offscreenCtx = offscreenCanvas.getContext('2d');
 
@@ -608,71 +606,53 @@ async function main() {
     offscreenCanvas.height = videoHeight;
 
     const stream = offscreenCanvas.captureStream(videoFps);
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/mp4' });
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
     const chunks = [];
 
     recorder.ondataavailable = (e) => chunks.push(e.data);
 
-    // Force re-rendering and copy of the first frame twice before starting the recording
-    let accumulatedPhase = 0;
-    updateRenderCamPosition(accumulatedPhase);
-    drawScene(gl, programInfo, buffers, views, renderCam);
-
-    // Copy the WebGL canvas content to the off-screen canvas twice to ensure stability
-    for (let j = 0; j < 2; j++) {
-      offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-      offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-    }
-
-    // Wait for a short moment to stabilize
-    await new Promise(resolve => setTimeout(resolve, 100));
-
     recorder.start();
 
     for (let i = 0; i < numFrames; i++) {
-      accumulatedPhase = (i / numFrames);
+        const accumulatedPhase = i / numFrames;
 
-      // Update renderCam position based on the motion type and current phase
-      updateRenderCamPosition(accumulatedPhase);
+        updateRenderCamPosition(accumulatedPhase);
+        drawScene(gl, programInfo, buffers, views, renderCam);
 
-      drawScene(gl, programInfo, buffers, views, renderCam);
+        offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+        offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
-      // Copy the WebGL canvas content to the off-screen canvas
-      offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-      offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-      //await new Promise(requestAnimationFrame);
-      await new Promise(resolve => setTimeout(resolve, frameDuration)); // Wait for the duration of each frame
+        await new Promise(resolve => setTimeout(resolve, frameDuration));
     }
 
     recorder.stop();
 
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/mp4' });
-      const url = URL.createObjectURL(blob);
-      saving = 0;
-      resizeCanvasToContainer();
+    recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
 
-      // Extract the original file name from the file picker
-      let originalFileName = fname.split('.').slice(0, -1).join('.');
+        // Extract the original file name and modify it
+        let originalFileName = fname.split('.').slice(0, -1).join('.');
+        originalFileName = originalFileName.replace('_LIF5', '');
+        const outputFileName = `${originalFileName}.webm`;
 
-      // Remove "_LIF5" if it exists
-      originalFileName = originalFileName.replace('_LIF5', '');
+        // Create a download link
+        const videoFile = new File([blob], outputFileName, { type: 'video/webm' });
+        const url = URL.createObjectURL(videoFile);
 
-      const outputFileName = `${originalFileName}.mp4`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = outputFileName;
+        document.body.appendChild(a);
+        a.click();
 
-      // Create a temporary download link and click it
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = outputFileName;
-      document.body.appendChild(a);
-      a.click();
+        // Clean up
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
 
-      // Clean up
-      URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+        saving = 0;
+        resizeCanvasToContainer();
     };
-  });
+});
 
   async function render() {
     if (!saving) {
