@@ -25,7 +25,7 @@ class lifGenerator {
         this.lifFile;
         this.lifArrayBuffer;
         this.lifInfo;
-        this.maxDimension = 1600;
+        this.maxDimension = 2560;
         this.progressBar = document.getElementById('progress-bar');
         this.progressContainer = document.getElementById('progress-container');
         this.interval = 500; // Update progress every 500ms
