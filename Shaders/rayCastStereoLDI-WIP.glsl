@@ -47,19 +47,26 @@ uniform float feathering;
 }*/
 #define texture texture2D
 
+// float taper(vec2 uv) {
+//     //return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+//     return smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+//     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
+//     //return 1.0-smoothstep(0.64,1.0,r2);
+// }
+
+float edge = feathering;
+float background = 0.1;
 float taper(vec2 uv) {
-    //return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
-    return smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+    return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0-edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0-edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
     //return 1.0-smoothstep(0.64,1.0,r2);
 }
 
 vec3 readColor(sampler2D iChannel, vec2 uv) {
-    return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
+    // return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
+    return texture(iChannel, uv).rgb;
 }
-// vec3 readColor(sampler2D iChannel, vec2 uv) {
-//     return texture(iChannel, uv).rgb;
-// }
+
 float readDisp(sampler2D iChannel, vec2 uv, float vMin, float vMax, vec2 iRes) {
     return texture(iChannel, vec2(clamp(uv.x, 2.0 / iRes.x, 1.0 - 2.0 / iRes.x), clamp(uv.y, 2.0 / iRes.y, 1.0 - 2.0 / iRes.y))).x * (vMin - vMax) + vMax;
 }
@@ -134,6 +141,10 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
+float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
+    return texture(tex, xy).a;
+}
+
 // Multiview weighting
 float weight2(vec3 C, vec3 C1, vec3 C2) {
 
@@ -205,11 +216,12 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         //     return vec4(readColor(iChannelCol, s1 + .5), alpha * invZ2);
         // }
         // invZ2 += alpha;
-        if(isMaskAround(s1 + .5, iChannelDisp, iRes))
-            return vec4(vec3(0.1), 0.0); // option b) original. 0.0 - masked pixel
-        return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+        // if(isMaskAround(s1 + .5, iChannelDisp, iRes))
+        //     return vec4(vec3(0.1), 0.0); // option b) original. 0.0 - masked pixel
+        // return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+        return vec4(readColor(iChannelCol, s1 + .5), taper(s1+.5) * isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
     } else {
-        return vec4(vec3(0.1), 0.0);
+        return vec4(vec3(background), 0.0);
         invZ2 = 0.0;
     }
 }
@@ -240,23 +252,28 @@ void main(void) {
         vec4 resultL, resultR;
         float invZL, invZR = 0.0;
         float aL, aR = 1.0;
+        float alphaL, alphaR;
 
         vec4 layer1L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[0] / iResL[0].x, f1L[0] / iResL[0].y)) * SKR1L, C1L, uImageL[0], uDisparityMapL[0], invZminL[0], invZmaxL[0], iResL[0], 1.0, invZL, aL);
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1L.a == 1.0 || uNumLayersL == 1) {
             resultL = layer1L;
+            alphaL = layer1L.a;
         } else {
-            vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL, aL) * (1.0 - layer1L.w) + layer1L * layer1L.w;
+            vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL, aL) * (1.0 - layer1L.w) + vec4(layer1L.rgb,1.0) * layer1L.w;
             if(layer2L.a == 1.0 || uNumLayersL == 2) {
                 resultL = layer2L;
+                alphaL = layer2L.a;
             } else {
-                vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL, aL) * (1.0 - layer2L.w) + layer2L * layer2L.w;
+                vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL, aL) * (1.0 - layer2L.w) + vec4(layer2L.rgb,1.0) * layer2L.w;
                 if(layer3L.a == 1.0 || uNumLayersL == 3) {
                     resultL = layer3L;
+                    alphaL = layer3L.a;
                 } else {
-                    vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL, aL) * (1.0 - layer3L.w) + layer3L * layer3L.w;
+                    vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL, aL) * (1.0 - layer3L.w) + vec4(layer3L.rgb,1.0) * layer3L.w;
                     if(uNumLayersL == 4) {
                         resultL = layer4L;
+                        alphaL = layer4L.a;
                     }
                 }
             }
@@ -266,18 +283,22 @@ void main(void) {
         //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
         if(layer1R.a == 1.0 || uNumLayersR == 1) {
             resultR = layer1R;
+            alphaR = layer1R.a;
         } else {
-            vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR, aR) * (1.0 - layer1R.w) + layer1R * layer1R.w;
+            vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR, aR) * (1.0 - layer1R.w) + vec4(layer1R.rgb,1.0) * layer1R.w;
             if(layer2R.a == 1.0 || uNumLayersR == 2) {
                 resultR = layer2R;
+                alphaR = layer2R.a;
             } else {
-                vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR, aR) * (1.0 - layer2R.w) + layer2R * layer2R.w;
+                vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR, aR) * (1.0 - layer2R.w) + vec4(layer2R.rgb,1.0) * layer2R.w;
                 if(layer3R.a == 1.0 || uNumLayersR == 3) {
                     resultR = layer3R;
+                    alphaR = layer3R.a;
                 } else {
-                    vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR, aR) * (1.0 - layer3R.w) + layer3R * layer3R.w;
+                    vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR, aR) * (1.0 - layer3R.w) + vec4(layer3R.rgb,1.0) * layer3R.w;
                     if(uNumLayersR == 4) {
                         resultR = layer4R;
+                        alphaR = layer4R.a;
                     }
                 }
             }
@@ -285,31 +306,37 @@ void main(void) {
 
         float wR = weight2(C2, C1L, C1R);
 
-        if ((aL == 0.0)&&(aR == 1.0)) {
-            resultL = resultR;
-            invZL = invZR;
-        }
-        if ((aR == 0.0)&&(aL == 1.0)) {
-            resultR = resultL;
-            invZR = invZL;
-        }
+        // if ((aL == 0.0)&&(aR == 1.0)) {
+        //     resultL = resultR;
+        //     alphaL = alphaR;
+        //     invZL = invZR;
+        // }
+        // if ((aR == 0.0)&&(aL == 1.0)) {
+        //     resultR = resultL;
+        //     alphaR = alphaL;
+        //     invZR = invZL;
+        // }
 
         vec4 result = (1.0 - wR) * resultL + wR * resultR;
+        float alpha = (1.0 - wR) * alphaL + wR * alphaR;
 
-        if(invZL > invZR + 0.01)
-            result = resultL;
-        if(invZR > invZL + 0.01)
-            result = resultR;    
+        // if(invZL > invZR + 0.01)
+        //     result = resultL;
+        //     alpha = alphaL;
+        // if(invZR > invZL + 0.01)
+        //     result = resultR;    
+        //     alpha = alphaR;
 
         // if(invZL - invZR >= 50.0)
         //     result = resultL;
         // if(invZR - invZL >= 50.0)
         //     result = resultR;
 
-        gl_FragColor = vec4(result.rgb, 1.0);
+        // gl_FragColor = vec4(result.rgb, 1.0);
+        gl_FragColor = vec4(alpha*result.rgb + (1.0-alpha)*vec3(background), 1.0);
         //gl_FragColor = vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
 
     } else {
-        gl_FragColor = vec4(vec3(0.1), 1.0);
+        gl_FragColor = vec4(vec3(background), 1.0);
     }
 }
