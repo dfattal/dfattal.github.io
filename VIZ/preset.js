@@ -1,6 +1,7 @@
 
 const MAX_LAYERS = 4;
 let fname;
+let focus = 0;
 
 function toggleControls() {
   const motionType = document.querySelector('input[name="motionType"]:checked').value;
@@ -479,7 +480,8 @@ async function main() {
         ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
       );
       await parseObjectAndCreateTextures(views);
-      console.log(views);
+      console.log('views', views);
+      console.log('stereo render data', lifInfo.stereo_render_data);
 
       // Now that we know if mono or stereo setup webGL
       if (views.length < 2) {
@@ -493,8 +495,10 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
-      invd = 0.0 * views[0].layers[0].invZ.min; // set focus point
-
+      focus = lifInfo.stereo_render_data.inv_convergence_distance ? lifInfo.stereo_render_data.inv_convergence_distance/views[0].layers[0].invZ.min : 0.0; // set focus point
+      invd = focus * views[0].layers[0].invZ.min; // set focus point
+      document.getElementById('focus').value = focus;  
+      document.getElementById('focus').dispatchEvent(new Event('input')); // triggers input event
       document.getElementById("filePicker").remove();
 
       document.body.appendChild(stats.dom);
@@ -574,7 +578,7 @@ async function main() {
         z: (1 - u) * (1 - u) * z0 + 2 * (1 - u) * u * z1 + u2 * z2
       };
     }
-    const focus = parseFloat(document.getElementById('focus').value);
+    focus = parseFloat(document.getElementById('focus').value);
     invd = focus * views[0].layers[0].invZ.min; // set focus point
     renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd);
     renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd);

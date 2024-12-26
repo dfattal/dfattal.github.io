@@ -597,6 +597,8 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
+      focus = lifInfo.stereo_render_data.inv_convergence_distance ? lifInfo.stereo_render_data.inv_convergence_distance / views[0].layers[0].invZ.min : 1.0; // set focus point
+      slider.value = focus;
       invd0 = views[0].layers[0].invZ.min; // set focus point
 
       document.getElementById("filePicker").remove();
