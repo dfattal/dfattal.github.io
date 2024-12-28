@@ -47,19 +47,19 @@ uniform float feathering;
 }*/
 #define texture texture2D
 
+float edge = feathering;
+float background = 0.1;
 float taper(vec2 uv) {
-    //return smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
-    return smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+    return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
     //return 1.0-smoothstep(0.64,1.0,r2);
 }
 
 vec3 readColor(sampler2D iChannel, vec2 uv) {
-    return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
+    // return texture(iChannel, uv).rgb * taper(uv) + 0.1 * (1.0 - taper(uv));
+    return texture(iChannel, uv).rgb;
 }
-// vec3 readColor(sampler2D iChannel, vec2 uv) {
-//     return texture(iChannel, uv).rgb;
-// }
+
 float readDisp(sampler2D iChannel, vec2 uv, float vMin, float vMax, vec2 iRes) {
     return texture(iChannel, vec2(clamp(uv.x, 2.0 / iRes.x, 1.0 - 2.0 / iRes.x), clamp(uv.y, 2.0 / iRes.y, 1.0 - 2.0 / iRes.y))).x * (vMin - vMax) + vMax;
 }
@@ -134,6 +134,10 @@ bool isMaskAround(vec2 xy, sampler2D tex, vec2 iRes) {
     return false;
 }
 
+float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
+    return texture(tex, xy).a;
+}
+
 // Multiview weighting
 float weight2(vec3 C, vec3 C1, vec3 C2) {
 
@@ -206,10 +210,10 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         // }
         // invZ2 += alpha;
         if(isMaskAround(s1 + .5, iChannelDisp, iRes))
-            return vec4(vec3(0.1), 0.0); // option b) original. 0.0 - masked pixel
-        return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
+            return vec4(vec3(background), 0.0); // option b) original. 0.0 - masked pixel
+        return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel // taper(s1 + .5)
     } else {
-        return vec4(vec3(0.1), 0.0);
+        return vec4(vec3(background), 0.0);
         invZ2 = 0.0;
     }
 }
@@ -310,6 +314,6 @@ void main(void) {
         //gl_FragColor = vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
 
     } else {
-        gl_FragColor = vec4(vec3(0.1), 1.0);
+        gl_FragColor = vec4(vec3(background), 1.0);
     }
 }
