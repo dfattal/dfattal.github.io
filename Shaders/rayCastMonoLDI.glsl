@@ -24,7 +24,7 @@ uniform vec3 uFacePosition; // in normalized camera space
 uniform vec2 sk2, sl2;
 uniform float roll2, f2; // f2 in px
 uniform vec2 oRes; // viewport resolution in px
-uniform float feathering;
+uniform float feathering; // Feathering factor for smooth transitions at the edges
 
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {
     ivec2 ivec = ivec2(int(coord.x * iRes.x),  // asssuming all input textures are of same size
@@ -36,7 +36,7 @@ uniform float feathering;
 float edge = feathering;
 float background = 0.1;
 float taper(vec2 uv) {
-    return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0-edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0-edge, 1.0, uv.y));
+    return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
     //return 1.0-smoothstep(0.64,1.0,r2);
 }
@@ -189,7 +189,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         // if(isMaskAround(s1 + .5, iChannelDisp, iRes))
         //     return vec4(0.0); // option b) original. 0.0 - masked pixel
         // return vec4(readColor(iChannelCol, s1 + .5), 1.0); // 1.0 - non masked pixel
-        return vec4(readColor(iChannelCol, s1 + .5), taper(s1+.5) * isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
+        return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5) * isMaskAround_get_val(s1 + .5, iChannelDisp, iRes));
     } else {
         return vec4(vec3(background), 0.0);
     }
@@ -217,33 +217,31 @@ void main(void) {
         float alpha;
 
         // LDI
-        vec3 color;
+        vec4 result;
+        // vec3 color;
         vec4 layer1 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[0] / iRes[0].x, f1[0] / iRes[0].y)) * SKR1, C1, uImage[0], uDisparityMap[0], invZmin[0], invZmax[0], iRes[0], 1.0);
-        //fragColor = vec4(layer1.a); return; // to debug alpha of top layer
-        if(layer1.a == 1.0 || uNumLayers == 1) {
-            color = layer1.rgb;
-            alpha = layer1.a;
-        } else {
-            vec4 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0) * (1.0 - layer1.w) + vec4(layer1.rgb,1.0) * layer1.w;
-            if(layer2.a == 1.0 || uNumLayers == 2) {
-                color = layer2.rgb;
-                alpha = layer2.a;
-            } else {
-                vec4 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0) * (1.0 - layer2.w) + vec4(layer2.rgb,1.0) * layer2.w;
-                if(layer3.a == 1.0 || uNumLayers == 3) {
-                    color = layer3.rgb;
-                    alpha = layer3.a;
-                } else {
-                    vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0) * (1.0 - layer3.w) + vec4(layer3.rgb,1.0) * layer3.w;
-                    if( uNumLayers == 4) {
-                        color = layer4.rgb;
-                        alpha = layer4.a;
-                    } 
+        result = layer1;
+        if(!(result.a == 1.0 || uNumLayers == 1)) {
+            vec4 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0);
+            result.rgb = result.rgb * result.a + (1.0-result.a)*layer2.a*layer2.rgb; // Blend background with with layer2
+            result.a = layer2.a + result.a * (1.0 - layer2.a); // Blend alpha
+            if(!(result.a == 1.0 || uNumLayers == 2)) {
+                vec4 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0);
+                result.rgb = result.rgb * result.a + (1.0 - result.a)*layer3.a * layer3.rgb; // Blend background with with layer3
+                result.a = layer3.a + result.a * (1.0 - layer3.a); // Blend alpha
+                if(!(result.a == 1.0 || uNumLayers == 3)) {
+                    vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0);
+                    result.rgb = result.rgb * result.a + (1.0 - result.a) * layer4.a * layer4.rgb; // Blend background with with layer4
+                    result.a = layer4.a + result.a * (1.0 - layer4.a); // Blend alpha
                 }
             }
         }
-        
-        gl_FragColor = vec4(alpha*color + (1.0-alpha)*vec3(background), 1.0);
+
+        // Blend with the background
+        result.rgb = vec3(background) * (1.0 - result.a) + result.rgb*result.a;
+        result.a = 1.0; // Ensure full opacity after blending with the background
+        // Output the final color
+        gl_FragColor = result;
 
     } else {
         gl_FragColor = vec4(vec3(background), 1.0);
