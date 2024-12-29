@@ -579,9 +579,9 @@ async function main() {
       const lifInfo = await parseLif53(file);
       //console.log(lifInfo);
       views = replaceKeys(lifInfo.views,
-        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
-        ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
-      );
+        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant', 'render_data'],
+        ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl', 'stereo_render_data']);
+
       await parseObjectAndCreateTextures(views);
       console.log(views);
 
@@ -597,7 +597,11 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
-      focus = lifInfo.stereo_render_data.inv_convergence_distance ? lifInfo.stereo_render_data.inv_convergence_distance / views[0].layers[0].invZ.min : 1.0; // set focus point
+      if (lifInfo.stereo_render_data) {
+        focus = lifInfo.stereo_render_data.inv_convergence_distance ? lifInfo.stereo_render_data.inv_convergence_distance / views[0].layers[0].invZ.min : 1.0; // set focus point
+      } else {
+        focus = 1.0;
+      }
       slider.value = focus;
       invd0 = views[0].layers[0].invZ.min; // set focus point
 
