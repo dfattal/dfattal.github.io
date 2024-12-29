@@ -476,8 +476,8 @@ async function main() {
       const lifInfo = await parseLif53(file);
       //console.log(lifInfo);
       views = replaceKeys(lifInfo.views,
-        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
-        ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
+        ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant', 'render_data'],
+        ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl', 'stereo_render_data']
       );
       await parseObjectAndCreateTextures(views);
       console.log('views', views);
