@@ -495,7 +495,11 @@ async function main() {
       renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
       //console.log(renderCam);
 
-      focus = lifInfo.stereo_render_data.inv_convergence_distance ? lifInfo.stereo_render_data.inv_convergence_distance/views[0].layers[0].invZ.min : 0.0; // set focus point
+      if (lifInfo.stereo_render_data) {
+        focus = lifInfo.stereo_render_data.inv_convergence_distance ? lifInfo.stereo_render_data.inv_convergence_distance / views[0].layers[0].invZ.min : 1.0; // set focus point
+      } else {
+        focus = 0.0;
+      }
       invd = focus * views[0].layers[0].invZ.min; // set focus point
       document.getElementById('focus').value = focus;  
       document.getElementById('focus').dispatchEvent(new Event('input')); // triggers input event
