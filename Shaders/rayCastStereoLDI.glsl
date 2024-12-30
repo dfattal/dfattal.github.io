@@ -51,6 +51,7 @@ float edge = feathering;
 vec3 background = vec3(0.1);
 float taper(vec2 uv) {
     return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.y));
+    // return smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
     //return 1.0-smoothstep(0.64,1.0,r2);
 }
@@ -203,7 +204,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         }
 
     }
-    if((abs(s1.x) < 0.5) && (abs(s1.y) < 0.5) && (invZ2 >=   0.0) && (invZ > invZminT)) {
+    if((abs(s1.x) < 0.5) && (abs(s1.y) < 0.5) && (invZ2 >= 0.0) && (invZ > invZminT)) {
     //if ((abs(s1.x*adjustAr(iChannelResolution[0].xy,iResolution.xy).x)<0.495)&&(abs(s1.y*adjustAr(iChannelResolution[0].xy,iResolution.xy).y)<0.495)&&(invZ2>0.0)) {
         // if(uNumLayers == 0) { // non-ldi
         //     return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5));
@@ -216,7 +217,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     } else {
         invZ2 = 0.0;
         // confidence = 0.0;
-        return vec4(background, 0.0); 
+        return vec4(background, 0.0);
     }
 }
 
@@ -243,93 +244,85 @@ void main(void) {
         mat3 FSKR2 = matFromFocal(vec2(f2 / oRes.x, f2 / oRes.y)) * matFromSkew(sk2) * matFromRoll(roll2) * matFromSlant(sl2);
 
         // LDI
-        vec4 resultL, resultR;
-        float invZL=0.0;
-        float invZR=0.0;
+        vec4 resultL, resultR, result, layer;
+        float invZL = 0.0;
+        float invZR = 0.0;
+        float invZ = 0.0;
         float aL, aR;
-
-        vec4 layer1L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[0] / iResL[0].x, f1L[0] / iResL[0].y)) * SKR1L, C1L, uImageL[0], uDisparityMapL[0], invZminL[0], invZmaxL[0], iResL[0], 1.0, invZL, aL);
-        resultL = layer1L;
-        if(!(resultL.a == 1.0 || uNumLayersL == 1 || invZL == 0.0)) {
-            vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL, aL);
-            resultL.rgb = resultL.rgb * resultL.a + (1.0 - resultL.a) * layer2L.a * layer2L.rgb; // Blend background with with layer2L
-            resultL.a = layer2L.a + resultL.a * (1.0 - layer2L.a); // Blend alpha
-            if(!(resultL.a == 1.0 || uNumLayersL == 2 || invZL == 0.0)) {
-                vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL, aL);
-                resultL.rgb = resultL.rgb * resultL.a + (1.0 - resultL.a) * layer3L.a * layer3L.rgb; // Blend background with with layer3L
-                resultL.a = layer3L.a + resultL.a * (1.0 - layer3L.a); // Blend alpha
-                if(!(resultL.a == 1.0 || uNumLayersL == 3 || invZL == 0.0)) {
-                    vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL, aL);
-                    resultL.rgb = resultL.rgb * resultL.a + (1.0 - resultL.a) * layer4L.a * layer4L.rgb; // Blend background with with layer4L
-                    resultL.a = layer4L.a + resultL.a * (1.0 - layer4L.a); // Blend alpha
-                }
-            }
-        }
-
-        // Blend with the background
-        resultL.rgb = background * (1.0 - resultL.a) + resultL.rgb * resultL.a;
-        resultL.a = 1.0; // Ensure full opacity after blending with the background
-
-        vec4 layer1R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[0] / iResR[0].x, f1R[0] / iResR[0].y)) * SKR1R, C1R, uImageR[0], uDisparityMapR[0], invZminR[0], invZmaxR[0], iResR[0], 1.0, invZR, aR);
-        resultR = layer1R;
-        if(!(resultR.a == 1.0 || uNumLayersR == 1 || invZR == 0.0)) {
-            vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR, aR);
-            resultR.rgb = resultR.rgb * resultR.a + (1.0 - resultR.a) * layer2R.a * layer2R.rgb; // Blend background with with layer2R
-            resultR.a = layer2R.a + resultR.a * (1.0 - layer2R.a); // Blend alpha
-            if(!(resultR.a == 1.0 || uNumLayersR == 2 || invZR == 0.0)) {
-                vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR, aR);
-                resultR.rgb = resultR.rgb * resultR.a + (1.0 - resultR.a) * layer3R.a * layer3R.rgb; // Blend background with with layer3R
-                resultR.a = layer3R.a + resultR.a * (1.0 - layer3R.a); // Blend alpha
-                if(!(resultR.a == 1.0 || uNumLayersR == 3 || invZR == 0.0)) {
-                    vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR, aR);
-                    resultR.rgb = resultR.rgb * resultR.a + (1.0 - resultR.a) * layer4R.a * layer4R.rgb; // Blend background with with layer4R
-                    resultR.a = layer4R.a + resultR.a * (1.0 - layer4R.a); // Blend alpha
-                }
-            }
-        }
-
-        // Blend with the background
-        resultR.rgb = background * (1.0 - resultR.a) + resultR.rgb * resultR.a;
-        resultR.a = 1.0; // Ensure full opacity after blending with the background
 
         float wR = weight2(C2, C1L, C1R);
 
-        if ((aL == 0.0)&&(aR == 1.0)) {
-            resultL = resultR;
-            // resultL.r = 1.0;
-            invZL = invZR;
+        vec4 layer1L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[0] / iResL[0].x, f1L[0] / iResL[0].y)) * SKR1L, C1L, uImageL[0], uDisparityMapL[0], invZminL[0], invZmaxL[0], iResL[0], 1.0, invZL, aL);
+        vec4 layer1R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[0] / iResR[0].x, f1R[0] / iResR[0].y)) * SKR1R, C1R, uImageR[0], uDisparityMapR[0], invZminR[0], invZmaxR[0], iResR[0], 1.0, invZR, aR);
+        if((aL == 0.0) && (aR == 1.0) || (layer1L.a < layer1R.a)) {
+            layer1L = layer1R;
+            // layer1L.r = 1.0;
+            invZ = invZR;
         }
-        if ((aR == 0.0)&&(aL == 1.0)) {
-            resultR = resultL;
-            // resultR.b = 1.0;
-            invZR = invZL;
+        if((aR == 0.0) && (aL == 1.0) || (layer1R.a < layer1L.a)) {
+            layer1R = layer1L;
+            // layer1R.b = 1.0;
+            invZ = invZL;
+        }
+        layer = (1.0 - wR) * layer1L + wR * layer1R;
+        result = layer;
+        if(!(result.a == 1.0 || uNumLayersL == 1)) {
+            vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL, aL);
+            vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR, aR);
+            if((aL == 0.0) && (aR == 1.0) || (layer2L.a < layer2R.a)) {
+                layer2L = layer2R;
+                // layer2L.r = 1.0;
+                invZ = invZR;
+            }
+            if((aR == 0.0) && (aL == 1.0) || (layer2R.a < layer2L.a)) {
+                layer2R = layer2L;
+                // layer2R.b = 1.0;
+                invZ = invZL;
+            }
+            layer = (1.0 - wR) * layer2L + wR * layer2R;
+            result.rgb = result.rgb * result.a + (1.0 - result.a) * layer.a * layer.rgb; // Blend background with with layer2
+            result.a = layer.a + result.a * (1.0 - layer.a); // Blend alpha
+            if(!(result.a == 1.0 || uNumLayersL == 2)) {
+                vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL, aL);
+                vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR, aR);
+                if((aL == 0.0) && (aR == 1.0) || (layer3L.a < layer3R.a)) {
+                    layer3L = layer3R;
+                    // layer3L.r = 1.0;
+                    invZ = invZR;
+                }
+                if((aR == 0.0) && (aL == 1.0) || (layer3R.a < layer3L.a)) {
+                    layer3R = layer3L;
+                    // layer3R.b = 1.0;
+                    invZ = invZL;
+                }
+                layer = (1.0 - wR) * layer3L + wR * layer3R;
+                result.rgb = result.rgb * result.a + (1.0 - result.a) * layer.a * layer.rgb; // Blend background with with layer3
+                result.a = layer.a + result.a * (1.0 - layer.a); // Blend alpha
+                if(!(result.a == 1.0 || uNumLayersL == 3)) {
+                    vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL, aL);
+                    vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR, aR);
+                    if((aL == 0.0) && (aR == 1.0) || (layer4L.a < layer4R.a)) {
+                        layer4L = layer4R;
+                        // layer4L.r = 1.0;
+                        invZ = invZR;
+                    }
+                    if((aR == 0.0) && (aL == 1.0) || (layer4R.a < layer4L.a)) {
+                        layer4R = layer4L;
+                        // layer4R.b = 1.0;
+                        invZ = invZL;
+                    }
+                    layer = (1.0 - wR) * layer4L + wR * layer4R;
+                    result.rgb = result.rgb * result.a + (1.0 - result.a) * layer.a * layer.rgb; // Blend background with with layer4
+                    result.a = layer.a + result.a * (1.0 - layer.a); // Blend alpha
+                }
+
+            }
         }
 
-        // if(invZL > invZR + 1.0)
-        //     resultR = resultL;
-        // if(invZR > invZL + 1.0)
-        //     resultL = resultR;
+        // Blend with the background
+        result.rgb = background * (1.0 - result.a) + result.rgb * result.a;
+        result.a = 1.0; // Ensure full opacity after blending with the background
 
-        vec4 result = (1.0 - wR) * resultL + wR * resultR;
-
-        // if(invZL > invZR + 0.01)
-        //     result = resultL;
-        // if(invZR > invZL + 0.01)
-        //     result = resultR;    
-
-        // if(invZL - invZR >= 50.0)
-        //     result = resultL;
-        // if(invZR - invZL >= 50.0)
-        //     result = resultR;
-
-        // Optionally, show low confidence ("stretch marks") pixels in red (for debugging)
-        // if (aL == 0.0) {
-        //     result.r = 1.0;
-        // }
-        // if (aR == 0.0) {
-        //     result.b = 1.0;
-        // }
-        
         gl_FragColor = vec4(result.rgb, 1.0);
         //gl_FragColor = vec4(vec3(invZL,invZR,invZL)/.15, 1.0);
 
