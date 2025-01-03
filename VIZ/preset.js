@@ -2,6 +2,7 @@
 const MAX_LAYERS = 4;
 let fname;
 let focus = 0;
+let feathering = 0.1; // Global variable
 
 function toggleControls() {
   const motionType = document.querySelector('input[name="motionType"]:checked').value;
@@ -55,7 +56,8 @@ function setupWebGL(gl, fragmentShaderSource) {
       sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
-      oRes: gl.getUniformLocation(shaderProgram, 'oRes')
+      oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -146,7 +148,8 @@ function setupWebGLST(gl, fragmentShaderSource) {
       sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
-      oRes: gl.getUniformLocation(shaderProgram, 'oRes')
+      oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -257,6 +260,8 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform2f(programInfo.uniformLocations.sl2, renderCam.sl.x, renderCam.sl.y);
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
+  gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -357,6 +362,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.uniform2f(programInfo.uniformLocations.sl2, renderCam.sl.x, renderCam.sl.y);
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
+  gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
