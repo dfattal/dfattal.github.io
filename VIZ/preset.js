@@ -507,7 +507,7 @@ async function main() {
         focus = 0.0;
       }
       invd = focus * views[0].layers[0].invZ.min; // set focus point
-      document.getElementById('focus').value = focus;  
+      document.getElementById('focus').value = focus;
       document.getElementById('focus').dispatchEvent(new Event('input')); // triggers input event
       document.getElementById("filePicker").remove();
 
@@ -619,8 +619,15 @@ async function main() {
     offscreenCanvas.width = videoWidth;
     offscreenCanvas.height = videoHeight;
 
+    // Calculate total pixels and set proportional bitrate (e.g., 1M pixels at 30 fps = 3 Mbps)
+    const totalPixels = videoWidth * videoHeight;
+    const targetBitrate = Math.floor((totalPixels * videoFps) * 0.1); // 0.1 bits per pixel
+
     const stream = offscreenCanvas.captureStream(videoFps);
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    const recorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm',
+      videoBitsPerSecond: targetBitrate, // Set the target bitrate
+    });
     const chunks = [];
 
     recorder.ondataavailable = (e) => chunks.push(e.data);
@@ -628,45 +635,45 @@ async function main() {
     recorder.start();
 
     for (let i = 0; i < numFrames; i++) {
-        const accumulatedPhase = i / numFrames;
+      const accumulatedPhase = i / numFrames;
 
-        updateRenderCamPosition(accumulatedPhase);
-        drawScene(gl, programInfo, buffers, views, renderCam);
+      updateRenderCamPosition(accumulatedPhase);
+      drawScene(gl, programInfo, buffers, views, renderCam);
 
-        offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-        offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+      offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+      offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
-        await new Promise(resolve => setTimeout(resolve, frameDuration));
+      await new Promise(resolve => setTimeout(resolve, frameDuration));
     }
 
     recorder.stop();
 
     recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
+      const blob = new Blob(chunks, { type: 'video/webm' });
 
-        // Extract the original file name and modify it
-        let originalFileName = fname.split('.').slice(0, -1).join('.');
-        originalFileName = originalFileName.replace('_LIF5', '');
-        const outputFileName = `${originalFileName}.webm`;
+      // Extract the original file name and modify it
+      let originalFileName = fname.split('.').slice(0, -1).join('.');
+      originalFileName = originalFileName.replace('_LIF5', '');
+      const outputFileName = `${originalFileName}.webm`;
 
-        // Create a download link
-        const videoFile = new File([blob], outputFileName, { type: 'video/webm' });
-        const url = URL.createObjectURL(videoFile);
+      // Create a download link
+      const videoFile = new File([blob], outputFileName, { type: 'video/webm' });
+      const url = URL.createObjectURL(videoFile);
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = outputFileName;
-        document.body.appendChild(a);
-        a.click();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = outputFileName;
+      document.body.appendChild(a);
+      a.click();
 
-        // Clean up
-        URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+      // Clean up
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
 
-        saving = 0;
-        resizeCanvasToContainer();
+      saving = 0;
+      resizeCanvasToContainer();
     };
-});
+  });
 
   async function render() {
     if (!saving) {
