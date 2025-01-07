@@ -34,7 +34,7 @@ uniform float feathering; // Feathering factor for smooth transitions at the edg
 #define texture texture2D
 
 float edge = feathering;
-vec3 background = vec3(1.0, .0, .0);
+vec3 background = vec3(0.1);
 float taper(vec2 uv) {
     return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
