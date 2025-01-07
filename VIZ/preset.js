@@ -4,6 +4,10 @@ let fname;
 let focus = 0;
 let feathering = 0.1; // Global variable
 
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const multiplier = urlParams.get('multiplier')? urlParams.get('multiplier') : 1.0; // Default multiplier is 1.0
+
 function toggleControls() {
   const motionType = document.querySelector('input[name="motionType"]:checked').value;
   document.querySelector('.harmonic-controls').style.display = motionType === 'harmonic' ? 'block' : 'none';
@@ -548,13 +552,13 @@ async function main() {
     const motionType = document.querySelector('input[name="motionType"]:checked').value;
 
     if (motionType === 'harmonic') {
-      const ampX = parseFloat(document.getElementById('ampX').value);
-      const dcX = parseFloat(document.getElementById('dcX').value);
+      const ampX = multiplier * parseFloat(document.getElementById('ampX').value);
+      const dcX = multiplier * parseFloat(document.getElementById('dcX').value);
       const phaseX = 0;
 
-      const ampY = parseFloat(document.getElementById('ampY').value);
-      const dcY = -parseFloat(document.getElementById('dcY').value);
-      const phaseY = parseFloat(document.getElementById('phaseY').value);
+      const ampY = multiplier * parseFloat(document.getElementById('ampY').value);
+      const dcY = multiplier * -parseFloat(document.getElementById('dcY').value);
+      const phaseY = multiplier * parseFloat(document.getElementById('phaseY').value);
 
       const ampZ = parseFloat(document.getElementById('ampZ').value);
       const dcZ = parseFloat(document.getElementById('dcZ').value);
@@ -567,17 +571,17 @@ async function main() {
         z: dcZ + ampZ * Math.cos(2 * Math.PI * (phase + phaseZ))
       };
     } else if (motionType === 'arc') {
-      const x0 = parseFloat(document.getElementById('x0').value);
-      const x1 = parseFloat(document.getElementById('x1').value);
-      const x2 = parseFloat(document.getElementById('x2').value);
+      const x0 = multiplier * parseFloat(document.getElementById('x0').value);
+      const x1 = multiplier * parseFloat(document.getElementById('x1').value);
+      const x2 = multiplier * parseFloat(document.getElementById('x2').value);
 
-      const y0 = -parseFloat(document.getElementById('y0').value);
-      const y1 = -parseFloat(document.getElementById('y1').value);
-      const y2 = -parseFloat(document.getElementById('y2').value);
+      const y0 = multiplier * -parseFloat(document.getElementById('y0').value);
+      const y1 = multiplier * -parseFloat(document.getElementById('y1').value);
+      const y2 = multiplier * -parseFloat(document.getElementById('y2').value);
 
-      const z0 = parseFloat(document.getElementById('z0').value);
-      const z1 = parseFloat(document.getElementById('z1').value);
-      const z2 = parseFloat(document.getElementById('z2').value);
+      const z0 = multiplier * parseFloat(document.getElementById('z0').value);
+      const z1 = multiplier * parseFloat(document.getElementById('z1').value);
+      const z2 = multiplier * parseFloat(document.getElementById('z2').value);
 
       // Arc motion interpolation
       const u = (phase) % 1;
