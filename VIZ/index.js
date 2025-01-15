@@ -2,6 +2,11 @@
 const MAX_LAYERS = 4;
 let focus = 1.0; // Global variable
 let feathering = 0.1; // Global variable
+let baseline = 1.0; // Global variable
+
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // default to mono rendering
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -129,6 +134,188 @@ function setupWebGLST(gl, fragmentShaderSource) {
       sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
+      oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      //vd: gl.getUniformLocation(shaderProgram, 'vd'),
+      //IO: gl.getUniformLocation(shaderProgram, 'IO'),
+      //f: gl.getUniformLocation(shaderProgram, 'f')
+    },
+  };
+
+  // Populate the uniform location arrays
+  for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+    programInfo.uniformLocations.uImageL.push(gl.getUniformLocation(shaderProgram, `uImageL[${i}]`));
+    programInfo.uniformLocations.uDisparityMapL.push(gl.getUniformLocation(shaderProgram, `uDisparityMapL[${i}]`));
+    programInfo.uniformLocations.uImageR.push(gl.getUniformLocation(shaderProgram, `uImageR[${i}]`));
+    programInfo.uniformLocations.uDisparityMapR.push(gl.getUniformLocation(shaderProgram, `uDisparityMapR[${i}]`));
+  }
+
+  // Vertex positions and texture coordinates
+  const positions = new Float32Array([
+    -1.0, 1.0,
+    1.0, 1.0,
+    -1.0, -1.0,
+    1.0, -1.0,
+  ]);
+  const textureCoords = new Float32Array([
+    0.0, 0.0,
+    1.0, 0.0,
+    0.0, 1.0,
+    1.0, 1.0,
+  ]);
+
+  const positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+  const textureCoordBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
+
+  const indexBuffer = gl.createBuffer();
+  const indices = [0, 1, 2, 2, 1, 3];
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+  return { programInfo, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer } };
+}
+
+function setupWebGL2ST(gl, fragmentShaderSource) {
+
+  const vsSource = vertexShaderSource;
+  const fsSource = fragmentShaderSource;
+
+  // Initialize shaders and program
+  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+  const programInfo = {
+    program: shaderProgram,
+    attribLocations: {
+      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+      textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
+    },
+    uniformLocations: {
+      //views info
+      uImage: [],
+      uDisparityMap: [],
+      uNumLayers: gl.getUniformLocation(shaderProgram, 'uNumLayers'),
+      invZmin: gl.getUniformLocation(shaderProgram, 'invZmin'), // float array
+      invZmax: gl.getUniformLocation(shaderProgram, 'invZmax'), // float array
+      uViewPosition: gl.getUniformLocation(shaderProgram, 'uViewPosition'),
+      sk1: gl.getUniformLocation(shaderProgram, 'sk1'),
+      sl1: gl.getUniformLocation(shaderProgram, 'sl1'),
+      roll1: gl.getUniformLocation(shaderProgram, 'roll1'),
+      f1: gl.getUniformLocation(shaderProgram, 'f1'),
+      iRes: gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
+      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+
+      // rendering info
+      uFacePositionL: gl.getUniformLocation(shaderProgram, 'uFacePositionL'),
+      sk2L: gl.getUniformLocation(shaderProgram, 'sk2L'),
+      sl2L: gl.getUniformLocation(shaderProgram, 'sl2L'),
+      roll2L: gl.getUniformLocation(shaderProgram, 'roll2L'),
+      f2L: gl.getUniformLocation(shaderProgram, 'f2L'),
+      uFacePositionR: gl.getUniformLocation(shaderProgram, 'uFacePositionR'),
+      sk2R: gl.getUniformLocation(shaderProgram, 'sk2R'),
+      sl2R: gl.getUniformLocation(shaderProgram, 'sl2R'),
+      roll2R: gl.getUniformLocation(shaderProgram, 'roll2R'),
+      f2R: gl.getUniformLocation(shaderProgram, 'f2R'),
+      oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      //vd: gl.getUniformLocation(shaderProgram, 'vd'),
+      //IO: gl.getUniformLocation(shaderProgram, 'IO'),
+      //f: gl.getUniformLocation(shaderProgram, 'f')
+    },
+  };
+
+  // Populate the uniform location arrays
+  for (let i = 0; i < MAX_LAYERS; i++) { // looks like it works with numLayers instead of MAX_LAYERS...
+    programInfo.uniformLocations.uImage.push(gl.getUniformLocation(shaderProgram, `uImage[${i}]`));
+    programInfo.uniformLocations.uDisparityMap.push(gl.getUniformLocation(shaderProgram, `uDisparityMap[${i}]`));
+  }
+
+  // Vertex positions and texture coordinates
+  const positions = new Float32Array([
+    -1.0, 1.0,
+    1.0, 1.0,
+    -1.0, -1.0,
+    1.0, -1.0,
+  ]);
+  const textureCoords = new Float32Array([
+    0.0, 0.0,
+    1.0, 0.0,
+    0.0, 1.0,
+    1.0, 1.0,
+  ]);
+
+  const positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+  const textureCoordBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
+
+  const indexBuffer = gl.createBuffer();
+  const indices = [0, 1, 2, 2, 1, 3];
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+  return { programInfo, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer } };
+}
+
+function setupWebGLST2ST(gl, fragmentShaderSource) {
+
+  const vsSource = vertexShaderSource;
+  const fsSource = fragmentShaderSource;
+
+  // Initialize shaders and program
+  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+  const programInfo = {
+    program: shaderProgram,
+    attribLocations: {
+      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+      textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
+    },
+    uniformLocations: {
+
+      //view L info
+      uImageL: [],
+      uDisparityMapL: [],
+      uNumLayersL: gl.getUniformLocation(shaderProgram, 'uNumLayersL'),
+      invZminL: gl.getUniformLocation(shaderProgram, 'invZminL'), // float array
+      invZmaxL: gl.getUniformLocation(shaderProgram, 'invZmaxL'), // float array
+      uViewPositionL: gl.getUniformLocation(shaderProgram, 'uViewPositionL'),
+      sk1L: gl.getUniformLocation(shaderProgram, 'sk1L'),
+      sl1L: gl.getUniformLocation(shaderProgram, 'sl1L'),
+      roll1L: gl.getUniformLocation(shaderProgram, 'roll1L'),
+      f1L: gl.getUniformLocation(shaderProgram, 'f1L'),
+      iResL: gl.getUniformLocation(shaderProgram, 'iResL'), // vec2 array
+
+      //view R info
+      uImageR: [],
+      uDisparityMapR: [],
+      uNumRayersR: gl.getUniformLocation(shaderProgram, 'uNumLayersR'),
+      invZminR: gl.getUniformLocation(shaderProgram, 'invZminR'), // float array
+      invZmaxR: gl.getUniformLocation(shaderProgram, 'invZmaxR'), // float array
+      uViewPositionR: gl.getUniformLocation(shaderProgram, 'uViewPositionR'),
+      sk1R: gl.getUniformLocation(shaderProgram, 'sk1R'),
+      sl1R: gl.getUniformLocation(shaderProgram, 'sl1R'),
+      roll1R: gl.getUniformLocation(shaderProgram, 'roll1R'),
+      f1R: gl.getUniformLocation(shaderProgram, 'f1R'),
+      iResR: gl.getUniformLocation(shaderProgram, 'iResR'), // vec2 array
+
+      // rendering info
+      iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      uFacePositionL: gl.getUniformLocation(shaderProgram, 'uFacePositionL'),
+      sk2L: gl.getUniformLocation(shaderProgram, 'sk2L'),
+      sl2L: gl.getUniformLocation(shaderProgram, 'sl2L'),
+      roll2L: gl.getUniformLocation(shaderProgram, 'roll2L'),
+      f2L: gl.getUniformLocation(shaderProgram, 'f2L'),
+      uFacePositionR: gl.getUniformLocation(shaderProgram, 'uFacePositionR'),
+      sk2R: gl.getUniformLocation(shaderProgram, 'sk2R'),
+      sl2R: gl.getUniformLocation(shaderProgram, 'sl2R'),
+      roll2R: gl.getUniformLocation(shaderProgram, 'roll2R'),
+      f2R: gl.getUniformLocation(shaderProgram, 'f2R'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
       feathering: gl.getUniformLocation(shaderProgram, 'feathering')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
@@ -353,6 +540,198 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
+function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
+
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.useProgram(programInfo.program);
+
+  // Vertex positions
+  {
+    const numComponents = 2;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+    gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
+    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+  }
+
+  // Texture coordinates
+  {
+    const numComponents = 2;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+    gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, numComponents, type, normalize, stride, offset);
+    gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+  }
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+  const numLayers = views[0].layers.length;
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayers; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (2 * i));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].image.texture);
+    gl.uniform1i(programInfo.uniformLocations.uImage[i], 2 * i);
+
+    gl.activeTexture(gl.TEXTURE0 + (2 * i + 1));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMap[i], 2 * i + 1);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(gl.getUniformLocation(programInfo.program, 'uNumLayers'), numLayers);
+
+  // views info
+  gl.uniform3f(programInfo.uniformLocations.uViewPosition, views[0].position.x, views[0].position.y, views[0].position.z);
+  gl.uniform2f(programInfo.uniformLocations.sk1, views[0].sk.x, views[0].sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl1, views[0].rotation.sl.x, views[0].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1, views[0].rotation.roll_degrees);
+  gl.uniform1fv(programInfo.uniformLocations.f1, views[0].layers.map(layer => layer.f)); // in px
+  gl.uniform1fv(programInfo.uniformLocations.invZmin, views[0].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmax, views[0].layers.map(layer => layer.invZ.max));
+  gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width, layer.height]).flat());
+
+  // rendering info
+  //gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height); // no window effect
+
+  gl.uniform3f(programInfo.uniformLocations.uFacePositionL, renderCamL.pos.x, renderCamL.pos.y, renderCamL.pos.z); // normalized to camera space
+  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
+  gl.uniform2f(programInfo.uniformLocations.sk2L, renderCamL.sk.x, renderCamL.sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl2L, renderCamL.sl.x, renderCamL.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll2L, renderCamL.roll);
+  gl.uniform1f(programInfo.uniformLocations.f2L, renderCamL.f); // in px
+  gl.uniform3f(programInfo.uniformLocations.uFacePositionR, renderCamR.pos.x, renderCamR.pos.y, renderCamR.pos.z); // normalized to camera space
+  gl.uniform2f(programInfo.uniformLocations.sk2R, renderCamR.sk.x, renderCamR.sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl2R, renderCamR.sl.x, renderCamR.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll2R, renderCamR.roll);
+  gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
+
+  gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+
+  const vertexCount = 6;
+  const type = gl.UNSIGNED_SHORT;
+  const offset = 0;
+  //logAllUniforms(gl, programInfo.program);
+  gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+}
+
+function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
+
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.useProgram(programInfo.program);
+
+  // Vertex positions
+  {
+    const numComponents = 2;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+    gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
+    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+  }
+
+  // Texture coordinates
+  {
+    const numComponents = 2;
+    const type = gl.FLOAT;
+    const normalize = false;
+    const stride = 0;
+    const offset = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+    gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, numComponents, type, normalize, stride, offset);
+    gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+  }
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+  // view L info
+  const numLayersL = views[0].layers.length;
+
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayersL; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (4 * i));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].image.texture);
+    gl.uniform1i(programInfo.uniformLocations.uImageL[i], 4 * i);
+
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 1));
+    gl.bindTexture(gl.TEXTURE_2D, views[0].layers[i].invZ.texture);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMapL[i], 4 * i + 1);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(programInfo.uniformLocations.uNumLayersL, numLayersL);
+
+  gl.uniform3f(programInfo.uniformLocations.uViewPositionL, views[0].position.x, views[0].position.y, views[0].position.z);
+  gl.uniform2f(programInfo.uniformLocations.sk1L, views[0].sk.x, views[0].sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl1L, views[0].rotation.sl.x, views[0].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1L, views[0].rotation.roll_degrees);
+  gl.uniform1fv(programInfo.uniformLocations.f1L, views[0].layers.map(layer => layer.f)); // in px
+  gl.uniform1fv(programInfo.uniformLocations.invZminL, views[0].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmaxL, views[0].layers.map(layer => layer.invZ.max));
+  gl.uniform2fv(programInfo.uniformLocations.iResL, views[0].layers.map(layer => [layer.width, layer.height]).flat());
+
+  // view R info
+  const numLayersR = views[1].layers.length;
+
+  // Loop through each layer and bind textures
+  for (let i = 0; i < numLayersR; i++) {
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 2));
+    gl.bindTexture(gl.TEXTURE_2D, views[1].layers[i].image.texture);
+    gl.uniform1i(programInfo.uniformLocations.uImageR[i], 4 * i + 2);
+
+    gl.activeTexture(gl.TEXTURE0 + (4 * i + 3));
+    gl.bindTexture(gl.TEXTURE_2D, views[1].layers[i].invZ.texture);
+    gl.uniform1i(programInfo.uniformLocations.uDisparityMapR[i], 4 * i + 3);
+  }
+  // Pass the actual number of layers to the shader
+  gl.uniform1i(programInfo.uniformLocations.uNumLayersr, numLayersR);
+
+  gl.uniform3f(programInfo.uniformLocations.uViewPositionR, views[1].position.x, views[1].position.y, views[1].position.z);
+  gl.uniform2f(programInfo.uniformLocations.sk1R, views[1].sk.x, views[1].sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl1R, views[1].rotation.sl.x, views[1].rotation.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll1R, views[1].rotation.roll_degrees);
+  gl.uniform1fv(programInfo.uniformLocations.f1R, views[1].layers.map(layer => layer.f)); // in px
+  gl.uniform1fv(programInfo.uniformLocations.invZminR, views[1].layers.map(layer => layer.invZ.min));
+  gl.uniform1fv(programInfo.uniformLocations.invZmaxR, views[1].layers.map(layer => layer.invZ.max));
+  gl.uniform2fv(programInfo.uniformLocations.iResR, views[1].layers.map(layer => [layer.width, layer.height]).flat());
+
+  // rendering info
+  // gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  gl.uniform2f(programInfo.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height); // no window effect
+
+  gl.uniform3f(programInfo.uniformLocations.uFacePositionL, renderCamL.pos.x, renderCamL.pos.y, renderCamL.pos.z); // normalized to camera space
+  gl.uniform2f(programInfo.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
+  gl.uniform2f(programInfo.uniformLocations.sk2L, renderCamL.sk.x, renderCamL.sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl2L, renderCamL.sl.x, renderCamL.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll2L, renderCamL.roll);
+  gl.uniform1f(programInfo.uniformLocations.f2L, renderCamL.f); // in px
+  gl.uniform3f(programInfo.uniformLocations.uFacePositionR, renderCamR.pos.x, renderCamR.pos.y, renderCamR.pos.z); // normalized to camera space
+  gl.uniform2f(programInfo.uniformLocations.sk2R, renderCamR.sk.x, renderCamR.sk.y);
+  gl.uniform2f(programInfo.uniformLocations.sl2R, renderCamR.sl.x, renderCamR.sl.y);
+  gl.uniform1f(programInfo.uniformLocations.roll2R, renderCamR.roll);
+  gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
+
+  gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+
+  const vertexCount = 6;
+  const type = gl.UNSIGNED_SHORT;
+  const offset = 0;
+  //logAllUniforms(gl, programInfo.program);
+  gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+}
+
 // Retrieve the base64 string from localStorage
 async function getFromIndexedDB() {
   return new Promise((resolve, reject) => {
@@ -435,11 +814,15 @@ async function main() {
   function normFacePosition(pos) {
     const IO = 63;
     const vd = OVD;
-    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO }
+    const plx = pos.x + baseline * (pos.lx - pos.x);
+    const prx = pos.x + baseline * (pos.rx - pos.x);
+    const ply = pos.y + baseline * (pos.ly - pos.y);
+    const pry = pos.y + baseline * (pos.ry - pos.y);
+    return { x: pos.x / IO, y: -pos.y / IO, z: (vd - pos.z) / IO, lx: plx / IO, ly: -ply / IO, rx: prx / IO, ry: -pry / IO };
   }
 
-  let facePosition = { x: 0, y: 0, z: 600 };
-  let oldFacePosition = { x: 0, y: 0, z: 600 };
+  let facePosition = { x: 0, y: 0, z: 600, lx: 0, ly: 0, rx: 0, ry: 0 }; // default
+  let oldFacePosition = { x: 0, y: 0, z: 600, lx: 0, ly: 0, rx: 0, ry: 0 };
 
   const axy = 0.5; // exponential smoothing
   const az = 0.1; // exponential smoothing
@@ -454,6 +837,9 @@ async function main() {
     if (event.key === 'f') {
       slider.style.display = slider.style.display === 'none' ? 'block' : 'none';
       slider2.style.display = slider2.style.display === 'none' ? 'block' : 'none';
+      if (stereo) {
+        slider3.style.display = slider3.style.display === 'none' ? 'block' : 'none';
+      }
     }
   });
 
@@ -466,6 +852,11 @@ async function main() {
   slider2.addEventListener('input', (event) => {
     feathering = parseFloat(event.target.value);
     console.log('Feathering updated:', feathering);
+  });
+  const slider3 = document.getElementById('baselineSlider');
+  slider3.addEventListener('input', (event) => {
+    baseline = parseFloat(event.target.value);
+    console.log('Baseline updated:', baseline);
   });
 
   const filePicker = document.getElementById('filePicker');
@@ -577,7 +968,7 @@ async function main() {
     //const file = event.target.files[0];
     if (file) {
       const lifInfo = await parseLif53(file);
-      //console.log(lifInfo);
+      console.log(lifInfo);
       views = replaceKeys(lifInfo.views,
         ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant', 'render_data'],
         ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl', 'stereo_render_data']);
@@ -587,14 +978,26 @@ async function main() {
 
       // Now that we know if mono or stereo setup webGL
       if (views.length < 2) {
-        const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI.glsl');
-        ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
+        if (stereo) {
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI.glsl');
+          ({ programInfo, buffers } = setupWebGL2ST(gl, fragmentShaderSource));
+        } else {
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI.glsl');
+          ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
+        }
       } else {
-        const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI.glsl');
-        ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
+        if (stereo) {
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI.glsl');
+          ({ programInfo, buffers } = setupWebGLST2ST(gl, fragmentShaderSource));
+        } else {
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI.glsl');
+          ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
+        }
       }
 
-      renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height })
+      renderCam.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
+      renderCamL.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
+      renderCamR.f = views[0].f * viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
       //console.log(renderCam);
 
       if (lifInfo.stereo_render_data) {
@@ -651,6 +1054,10 @@ async function main() {
     if (newFacePosition) {
       facePosition.x = (1 - axy) * oldFacePosition.x + axy * newFacePosition.x;
       facePosition.y = (1 - axy) * oldFacePosition.y + axy * newFacePosition.y;
+      facePosition.lx = (1 - axy) * oldFacePosition.lx + axy * newFacePosition.lx;
+      facePosition.ly = (1 - axy) * oldFacePosition.ly + axy * newFacePosition.ly;
+      facePosition.rx = (1 - axy) * oldFacePosition.rx + axy * newFacePosition.rx;
+      facePosition.ry = (1 - axy) * oldFacePosition.ry + axy * newFacePosition.ry;
       facePosition.z = (1 - az) * oldFacePosition.z + az * newFacePosition.z;
       oldFacePosition = facePosition;
     } else {
@@ -659,16 +1066,37 @@ async function main() {
 
     // update renderCam
     const invd = focus * invd0;
-    renderCam.pos = normFacePosition(facePosition); // normalize to camera space
+    const normPos = normFacePosition(facePosition);
+
+    renderCam.pos = { x: normPos.x, y: normPos.y, z: normPos.z }; // normalize to camera space
     renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
     const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
     renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 0); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
+    renderCamL.pos = { x: normPos.lx, y: normPos.ly, z: normPos.z }; // normalize to camera space
+    renderCamL.sk.x = -renderCamL.pos.x * invd / (1 - renderCamL.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+    renderCamL.sk.y = -renderCamL.pos.y * invd / (1 - renderCamL.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+    renderCamL.f = views[0].f * vs * Math.max(1 - renderCamL.pos.z * invd, 0); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+
+    renderCamR.pos = { x: normPos.rx, y: normPos.ry, z: normPos.z }; // normalize to camera space
+    renderCamR.sk.x = -renderCamR.pos.x * invd / (1 - renderCamR.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+    renderCamR.sk.y = -renderCamR.pos.y * invd / (1 - renderCamR.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+    renderCamR.f = views[0].f * vs * Math.max(1 - renderCamR.pos.z * invd, 0); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
+
+
     if (views.length < 2) {
-      drawScene(gl, programInfo, buffers, views, renderCam);
+      if (stereo) {
+        drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
+      } else {
+        drawScene(gl, programInfo, buffers, views, renderCam);
+      }
     } else {
-      drawSceneST(gl, programInfo, buffers, views, renderCam);
+      if (stereo) {
+        drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
+      } else {
+        drawSceneST(gl, programInfo, buffers, views, renderCam);
+      }
     }
     stats.end();
     requestAnimationFrame(render);
@@ -689,6 +1117,20 @@ async function main() {
   }
 
   const renderCam = {
+    pos: { x: 0, y: 0, z: 0 }, // default
+    sl: { x: 0, y: 0 },
+    sk: { x: 0, y: 0 },
+    roll: 0,
+    f: 0 // placeholder
+  }
+  const renderCamL = {
+    pos: { x: 0, y: 0, z: 0 }, // default
+    sl: { x: 0, y: 0 },
+    sk: { x: 0, y: 0 },
+    roll: 0,
+    f: 0 // placeholder
+  }
+  const renderCamR = {
     pos: { x: 0, y: 0, z: 0 }, // default
     sl: { x: 0, y: 0 },
     sk: { x: 0, y: 0 },

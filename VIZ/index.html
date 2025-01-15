@@ -76,6 +76,16 @@
       z-index: 1000;
       display: none;
     }
+
+    #baselineSlider {
+      position: absolute;
+      top: 90px;
+      left: 2px;
+      width: 80px;
+      z-index: 1000;
+      display: none;
+    }
+
   </style>
 
 </head>
@@ -88,6 +98,7 @@
   <div id="canvas-container">
     <input type="range" id="focusSlider" min="0" max="1" step="0.01" value="1.0" />
     <input type="range" id="featherSlider" min="0" max="0.2" step="0.01" value="0.1" />
+    <input type="range" id="baselineSlider" min="0" max="1.0" step="0.01" value="1.0" />
     <canvas id="glCanvas"></canvas>
   </div>
   
