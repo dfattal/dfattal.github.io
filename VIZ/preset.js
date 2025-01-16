@@ -39,6 +39,14 @@ if (stereo) {
     // Update the cloned div's id to avoid duplicate IDs
     clonedDiv.id = 'slider-container-clone';
 
+    // Apply horizontal scaling to counteract the stereo stretching
+    [originalDiv, clonedDiv].forEach(container => {
+      if (container) {
+        container.style.transform = 'scaleX(0.5)'; // Scale horizontally
+        container.style.transformOrigin = 'left center'; // Maintain alignment
+      }
+    });
+
     // // Calculate half the screen width
     // const halfScreenWidth = window.innerWidth / 2;
 
