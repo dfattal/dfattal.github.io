@@ -907,6 +907,7 @@ async function main() {
 
   let c = 0;
   function debugTexture(imgData) {
+    if (stereo) return;
     const img = document.createElement('img');
     img.style.width = '50%';
     img.id = `debug-im${c}`;
