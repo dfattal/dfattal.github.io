@@ -14,8 +14,8 @@ const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // def
 function updateClonedElementIDs(originalElement, clonedElement) {
   // Check if the original element has an ID
   if (originalElement.id) {
-      // Update the cloned element's ID
-      clonedElement.id = `${originalElement.id}-clone`;
+    // Update the cloned element's ID
+    clonedElement.id = `${originalElement.id}-clone`;
   }
 
   // Recursively process child elements
@@ -23,7 +23,7 @@ function updateClonedElementIDs(originalElement, clonedElement) {
   const clonedChildren = clonedElement.children;
 
   for (let i = 0; i < originalChildren.length; i++) {
-      updateClonedElementIDs(originalChildren[i], clonedChildren[i]);
+    updateClonedElementIDs(originalChildren[i], clonedChildren[i]);
   }
 }
 
@@ -31,55 +31,88 @@ function updateClonedElementIDs(originalElement, clonedElement) {
 if (stereo) {
   // Get the original div
   const originalDiv = document.getElementById('slider-container');
-  
+
   if (originalDiv) {
-      // Clone the div
-      const clonedDiv = originalDiv.cloneNode(true);
-      
-      // Update the cloned div's id to avoid duplicate IDs
-      clonedDiv.id = 'slider-container-clone';
-      
-      // // Calculate half the screen width
-      // const halfScreenWidth = window.innerWidth / 2;
+    // Clone the div
+    const clonedDiv = originalDiv.cloneNode(true);
 
-      // // Adjust the left position of the cloned div
-      // clonedDiv.style.left = `${10 + halfScreenWidth}px`; // Original left + half the screen width
+    // Update the cloned div's id to avoid duplicate IDs
+    clonedDiv.id = 'slider-container-clone';
 
-      // Recursively update IDs of all elements in the cloned div
-      updateClonedElementIDs(originalDiv, clonedDiv);
-      
-      // Append the cloned div to the body
-      document.getElementById('canvas-container').appendChild(clonedDiv);
-      stats.dom.style.display = 'none';
+    // // Calculate half the screen width
+    // const halfScreenWidth = window.innerWidth / 2;
+
+    // // Adjust the left position of the cloned div
+    // clonedDiv.style.left = `${10 + halfScreenWidth}px`; // Original left + half the screen width
+
+    // Recursively update IDs of all elements in the cloned div
+    updateClonedElementIDs(originalDiv, clonedDiv);
+
+    // Append the cloned div to the body
+    document.getElementById('canvas-container').appendChild(clonedDiv);
+    stats.dom.style.display = 'none';
   }
 }
 
 function toggleControls() {
-  const motionType = document.querySelector('input[name="motionType"]:checked').value;
-  document.querySelector('.harmonic-controls').style.display = motionType === 'harmonic' ? 'block' : 'none';
-  document.querySelector('.arc-controls').style.display = motionType === 'arc' ? 'block' : 'none';
+  const selectedValue = document.querySelector('input[name="motionType"]:checked')?.value;
+
+  // Update display for the original and cloned containers
+  document.querySelectorAll('.harmonic-controls').forEach(control => {
+    control.style.display = selectedValue === 'harmonic' ? 'block' : 'none';
+  });
+  document.querySelectorAll('.arc-controls').forEach(control => {
+    control.style.display = selectedValue === 'arc' ? 'block' : 'none';
+  });
+
+  // Manually synchronize radio buttons in the cloned group
+  document.querySelectorAll('input[name="motionType"]').forEach(radio => {
+    const cloneRadio = document.getElementById(`${radio.id}-clone`);
+    if (radio.checked && cloneRadio) {
+      cloneRadio.checked = true;
+    }
+  });
+
+  // Synchronize from cloned back to original
+  document.querySelectorAll('input[name="motionType-clone"]').forEach(cloneRadio => {
+    const originalRadio = document.getElementById(cloneRadio.id.replace('-clone', ''));
+    if (cloneRadio.checked && originalRadio) {
+      originalRadio.checked = true;
+    }
+  });
 }
+
+// Add event listeners for both original and cloned radio buttons
+document.querySelectorAll('input[name="motionType"]').forEach(radio => {
+  radio.addEventListener('change', toggleControls);
+});
+document.querySelectorAll('input[name="motionType-clone"]').forEach(radio => {
+  radio.addEventListener('change', toggleControls);
+});
 
 function updateSliderValue(sliderId, valueId) {
   const slider = document.getElementById(sliderId);
   const valueDisplay = document.getElementById(valueId);
-  const sliderClone = document.getElementById(`${sliderId}-clone`);
-  const valueDisplayClone = document.getElementById(`${valueId}-clone`);
+  let sliderClone, valueDisplayClone;
+  if (stereo) {
+    sliderClone = document.getElementById(`${sliderId}-clone`);
+    valueDisplayClone = document.getElementById(`${valueId}-clone`);
+  }
   slider.addEventListener('input', () => {
     valueDisplay.textContent = slider.value;
-    sliderClone.value = slider.value;
-    valueDisplayClone.textContent = sliderClone.value;
+    if (stereo) {
+      sliderClone.value = slider.value;
+      valueDisplayClone.textContent = sliderClone.value;
+    }
   });
-  sliderClone.addEventListener('input', () => {
-    valueDisplay.textContent = sliderClone.value;
-    slider.value = sliderClone.value;
-    valueDisplayClone.textContent = sliderClone.value;
-  });
+  if (stereo) {
+    sliderClone.addEventListener('input', () => {
+      valueDisplay.textContent = sliderClone.value;
+      slider.value = sliderClone.value;
+      if (stereo) valueDisplayClone.textContent = sliderClone.value;
+    });
+  }
 }
-
-document.querySelectorAll('input[name="motionType"]').forEach(radio => {
-  radio.addEventListener('change', toggleControls);
-});
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -969,8 +1002,10 @@ async function main() {
       invd = focus * views[0].layers[0].invZ.min; // set focus point
       document.getElementById('focus').value = focus;
       document.getElementById('focus').dispatchEvent(new Event('input')); // triggers input event
-      document.getElementById('focus-clone').value = focus;
-      document.getElementById('focus-clone').dispatchEvent(new Event('input')); // triggers input event
+      if (stereo) {
+        document.getElementById('focus-clone').value = focus;
+        document.getElementById('focus-clone').dispatchEvent(new Event('input')); // triggers input event
+      }
       document.getElementById("filePicker").remove();
 
       document.body.appendChild(stats.dom);
@@ -1071,6 +1106,22 @@ async function main() {
     renderCamR.f = views[0].f * vs * Math.max(1 - renderCamR.pos.z * invd, 0);
   }
 
+  function drawAllCases() {
+    if (views.length < 2) {
+      if (stereo) {
+        drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
+      } else {
+        drawScene(gl, programInfo, buffers, views, renderCam);
+      }
+    } else {
+      if (stereo) {
+        drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
+      } else {
+        drawSceneST(gl, programInfo, buffers, views, renderCam);
+      }
+    }
+  }
+
   document.getElementById('createVideoButton').addEventListener('click', async () => {
     saving = 1;
 
@@ -1106,7 +1157,8 @@ async function main() {
     // Warm-Up Phase: Render a few frames before starting recording
     for (let i = 0; i < 5; i++) {
       updateRenderCamPosition(0); // Keep the camera static
-      drawScene(gl, programInfo, buffers, views, renderCam);
+      // drawScene(gl, programInfo, buffers, views, renderCam);
+      drawAllCases();
       offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
       offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
@@ -1120,19 +1172,7 @@ async function main() {
 
       updateRenderCamPosition(accumulatedPhase);
       // drawScene(gl, programInfo, buffers, views, renderCam);
-      if (views.length < 2) {
-        if (stereo) {
-          drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
-        } else {
-          drawScene(gl, programInfo, buffers, views, renderCam);
-        }
-      } else {
-        if (stereo) {
-          drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
-        } else {
-          drawSceneST(gl, programInfo, buffers, views, renderCam);
-        }
-      }
+      drawAllCases();
 
       offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
       offscreenCtx.drawImage(canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
@@ -1181,19 +1221,7 @@ async function main() {
 
       updateRenderCamPosition(accumulatedPhase);
 
-      if (views.length < 2) {
-        if (stereo) {
-          drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
-        } else {
-          drawScene(gl, programInfo, buffers, views, renderCam);
-        }
-      } else {
-        if (stereo) {
-          drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
-        } else {
-          drawSceneST(gl, programInfo, buffers, views, renderCam);
-        }
-      }
+      drawAllCases();
       stats.end();
     }
     requestAnimationFrame(render);
