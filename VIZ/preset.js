@@ -10,6 +10,23 @@ const urlParams = new URLSearchParams(window.location.search);
 const multiplier = urlParams.get('multiplier') ? urlParams.get('multiplier') : 1.0; // Default multiplier is 1.0
 const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // default to mono rendering
 
+// Function to recursively update IDs of cloned elements
+function updateClonedElementIDs(originalElement, clonedElement) {
+  // Check if the original element has an ID
+  if (originalElement.id) {
+      // Update the cloned element's ID
+      clonedElement.id = `${originalElement.id}-clone`;
+  }
+
+  // Recursively process child elements
+  const originalChildren = originalElement.children;
+  const clonedChildren = clonedElement.children;
+
+  for (let i = 0; i < originalChildren.length; i++) {
+      updateClonedElementIDs(originalChildren[i], clonedChildren[i]);
+  }
+}
+
 // Check if stereo is true
 if (stereo) {
   // Get the original div
@@ -27,6 +44,9 @@ if (stereo) {
 
       // // Adjust the left position of the cloned div
       // clonedDiv.style.left = `${10 + halfScreenWidth}px`; // Original left + half the screen width
+
+      // Recursively update IDs of all elements in the cloned div
+      updateClonedElementIDs(originalDiv, clonedDiv);
       
       // Append the cloned div to the body
       document.getElementById('canvas-container').appendChild(clonedDiv);
@@ -43,8 +63,17 @@ function toggleControls() {
 function updateSliderValue(sliderId, valueId) {
   const slider = document.getElementById(sliderId);
   const valueDisplay = document.getElementById(valueId);
+  const sliderClone = document.getElementById(`${sliderId}-clone`);
+  const valueDisplayClone = document.getElementById(`${valueId}-clone`);
   slider.addEventListener('input', () => {
     valueDisplay.textContent = slider.value;
+    sliderClone.value = slider.value;
+    valueDisplayClone.textContent = sliderClone.value;
+  });
+  sliderClone.addEventListener('input', () => {
+    valueDisplay.textContent = sliderClone.value;
+    slider.value = sliderClone.value;
+    valueDisplayClone.textContent = sliderClone.value;
   });
 }
 
@@ -940,6 +969,8 @@ async function main() {
       invd = focus * views[0].layers[0].invZ.min; // set focus point
       document.getElementById('focus').value = focus;
       document.getElementById('focus').dispatchEvent(new Event('input')); // triggers input event
+      document.getElementById('focus-clone').value = focus;
+      document.getElementById('focus-clone').dispatchEvent(new Event('input')); // triggers input event
       document.getElementById("filePicker").remove();
 
       document.body.appendChild(stats.dom);
