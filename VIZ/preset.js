@@ -985,17 +985,24 @@ async function main() {
     setTimeout(() => (lastTap = 0), 100); // Ensures double-click works right after dragging
   });
 
-  // Touch & Drag to update offset.x and offset.y (mobile)
+  // Handle touch start (detect drag & pinch)
   canvas.addEventListener("touchstart", (event) => {
     if (event.touches.length === 1) {
+      // Single finger -> Dragging
       isDragging = true;
       lastX = event.touches[0].clientX;
       lastY = event.touches[0].clientY;
+    } else if (event.touches.length === 2) {
+      // Two fingers -> Pinch Zoom
+      initialDistance = getTouchDistance(event.touches);
+      isPinching = true;
     }
   });
 
+  // Handle touch move (drag or pinch)
   canvas.addEventListener("touchmove", (event) => {
-    if (isDragging && event.touches.length === 1) {
+    if (event.touches.length === 1 && isDragging && !isPinching) {
+      // Dragging (one finger)
       event.preventDefault();
       let dx = event.touches[0].clientX - lastX;
       let dy = event.touches[0].clientY - lastY;
@@ -1003,13 +1010,28 @@ async function main() {
       offset.y += 2 * dy / gl.canvas.height / zoom;
       lastX = event.touches[0].clientX;
       lastY = event.touches[0].clientY;
-      lastTap = 0; // Prevents interference with double-tap detection
       console.log("Offset:", offset);
+    } else if (event.touches.length === 2 && isPinching) {
+      // Pinch-zoom (two fingers)
+      event.preventDefault();
+      let currentDistance = getTouchDistance(event.touches);
+      if (initialDistance) {
+        let scaleFactor = currentDistance / initialDistance;
+        zoom *= scaleFactor;
+        initialDistance = currentDistance; // Keep updating to accumulate zoom
+        console.log("Zoom:", zoom);
+      }
     }
   });
 
-  canvas.addEventListener("touchend", () => {
-    isDragging = false;
+  // Handle touch end (reset state properly)
+  canvas.addEventListener("touchend", (event) => {
+    if (event.touches.length === 0) {
+      // Reset only when all fingers are lifted
+      isDragging = false;
+      isPinching = false;
+      initialDistance = null;
+    }
   });
 
   // Helper function to calculate distance between two touch points
@@ -1220,8 +1242,8 @@ async function main() {
     renderCamR.pos = { x: renderCam.pos.x + 0.5, y: renderCam.pos.y, z: renderCam.pos.z };
     focus = parseFloat(document.getElementById('focus').value);
     invd = focus * views[0].layers[0].invZ.min; // set focus point
-    renderCam.sk.x =  - (renderCam.pos.x * invd + offset.x) / (1 - renderCam.pos.z * invd);
-    renderCam.sk.y =  - (renderCam.pos.y * invd + offset.y) / (1 - renderCam.pos.z * invd);
+    renderCam.sk.x = - (renderCam.pos.x * invd + offset.x) / (1 - renderCam.pos.z * invd);
+    renderCam.sk.y = - (renderCam.pos.y * invd + offset.y) / (1 - renderCam.pos.z * invd);
     renderCamL.sk.x = - (renderCamL.pos.x * invd + offset.x) / (1 - renderCamL.pos.z * invd);
     renderCamL.sk.y = - (renderCamL.pos.y * invd + offset.y) / (1 - renderCamL.pos.z * invd);
     renderCamR.sk.x = - (renderCamR.pos.x * invd + offset.x) / (1 - renderCamR.pos.z * invd);
