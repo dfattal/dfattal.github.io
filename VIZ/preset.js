@@ -999,8 +999,8 @@ async function main() {
       event.preventDefault();
       let dx = event.touches[0].clientX - lastX;
       let dy = event.touches[0].clientY - lastY;
-      offset.x += dx;
-      offset.y += dy;
+      offset.x += 2 * dx / gl.canvas.height / zoom;
+      offset.y += 2 * dy / gl.canvas.height / zoom;
       lastX = event.touches[0].clientX;
       lastY = event.touches[0].clientY;
       lastTap = 0; // Prevents interference with double-tap detection
