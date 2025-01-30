@@ -4,6 +4,11 @@ let fname;
 let focus = 0;
 let feathering = 0.1; // Global variable
 let baseline = 1.0; // Global variable
+let zoom = 1.0; // Initial zoom level
+let offset = { x: 0, y: 0 }; // Pan offsets
+
+let isDragging = false;
+let lastX = 0, lastY = 0;
 
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -902,6 +907,118 @@ async function main() {
   const gl = canvas.getContext('webgl');
   const container = document.getElementById('canvas-container');
 
+  // For laptop touchpad pinch zoom
+  canvas.addEventListener("wheel", (event) => {
+    if (event.ctrlKey) { // Detect pinch gesture on a touchpad (usually requires Ctrl key)
+      event.preventDefault();
+      let scaleFactor = event.deltaY > 0 ? 0.95 : 1.05; // Zoom in or out
+      zoom *= scaleFactor;
+      console.log("Zoom:", zoom);
+    }
+  });
+
+  // For mobile pinch-to-zoom
+  let initialDistance = null;
+
+  canvas.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      initialDistance = getTouchDistance(event.touches);
+    }
+  });
+
+  canvas.addEventListener("touchmove", (event) => {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      let currentDistance = getTouchDistance(event.touches);
+      if (initialDistance) {
+        let scaleFactor = currentDistance / initialDistance;
+        zoom *= scaleFactor;
+        initialDistance = currentDistance; // Update for next move event
+        console.log("Zoom:", zoom);
+      }
+    }
+  });
+
+  // Double click (desktop) to reset zoom
+  canvas.addEventListener("dblclick", () => {
+    zoom = 1.0;
+    offset = { x: 0, y: 0 };
+  });
+
+  // Double tap (mobile) to reset zoom
+  let lastTap = 0;
+
+  canvas.addEventListener("touchend", (event) => {
+    let currentTime = new Date().getTime();
+    let tapLength = currentTime - lastTap;
+
+    if (tapLength < 300 && tapLength > 0) { // Detect double tap
+      zoom = 1.0;
+      offset = { x: 0, y: 0 };
+    }
+
+    lastTap = currentTime;
+  });
+
+  // Click & Drag to update offset.x and offset.y (desktop)
+  canvas.addEventListener("mousedown", (event) => {
+    isDragging = true;
+    lastX = event.clientX;
+    lastY = event.clientY;
+  });
+
+  canvas.addEventListener("mousemove", (event) => {
+    if (isDragging) {
+      let dx = event.clientX - lastX;
+      let dy = event.clientY - lastY;
+      offset.x += 2 * dx / gl.canvas.height / zoom;
+      offset.y += 2 * dy / gl.canvas.height / zoom;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      lastTap = 0; // Prevents interference with double-tap detection
+      console.log("Offset:", offset);
+    }
+  });
+
+  canvas.addEventListener("mouseup", () => {
+    isDragging = false;
+    setTimeout(() => (lastTap = 0), 100); // Ensures double-click works right after dragging
+  });
+
+  // Touch & Drag to update offset.x and offset.y (mobile)
+  canvas.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 1) {
+      isDragging = true;
+      lastX = event.touches[0].clientX;
+      lastY = event.touches[0].clientY;
+    }
+  });
+
+  canvas.addEventListener("touchmove", (event) => {
+    if (isDragging && event.touches.length === 1) {
+      event.preventDefault();
+      let dx = event.touches[0].clientX - lastX;
+      let dy = event.touches[0].clientY - lastY;
+      offset.x += dx;
+      offset.y += dy;
+      lastX = event.touches[0].clientX;
+      lastY = event.touches[0].clientY;
+      lastTap = 0; // Prevents interference with double-tap detection
+      console.log("Offset:", offset);
+    }
+  });
+
+  canvas.addEventListener("touchend", () => {
+    isDragging = false;
+  });
+
+  // Helper function to calculate distance between two touch points
+  function getTouchDistance(touches) {
+    let dx = touches[0].clientX - touches[1].clientX;
+    let dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   if (!gl) {
     console.error('Unable to initialize WebGL. Your browser or machine may not support it.');
     return;
@@ -1103,16 +1220,16 @@ async function main() {
     renderCamR.pos = { x: renderCam.pos.x + 0.5, y: renderCam.pos.y, z: renderCam.pos.z };
     focus = parseFloat(document.getElementById('focus').value);
     invd = focus * views[0].layers[0].invZ.min; // set focus point
-    renderCam.sk.x = -renderCam.pos.x * invd / (1 - renderCam.pos.z * invd);
-    renderCam.sk.y = -renderCam.pos.y * invd / (1 - renderCam.pos.z * invd);
+    renderCam.sk.x = -offset.x - renderCam.pos.x * invd / (1 - renderCam.pos.z * invd);
+    renderCam.sk.y = -offset.y - renderCam.pos.y * invd / (1 - renderCam.pos.z * invd);
     renderCamL.sk.x = -renderCamL.pos.x * invd / (1 - renderCamL.pos.z * invd);
     renderCamL.sk.y = -renderCamL.pos.y * invd / (1 - renderCamL.pos.z * invd);
     renderCamR.sk.x = -renderCamR.pos.x * invd / (1 - renderCamR.pos.z * invd);
     renderCamR.sk.y = -renderCamR.pos.y * invd / (1 - renderCamR.pos.z * invd);
     const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
-    renderCam.f = views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 0);
-    renderCamL.f = views[0].f * vs * Math.max(1 - renderCamL.pos.z * invd, 0);
-    renderCamR.f = views[0].f * vs * Math.max(1 - renderCamR.pos.z * invd, 0);
+    renderCam.f = zoom * views[0].f * vs * Math.max(1 - renderCam.pos.z * invd, 0);
+    renderCamL.f = zoom * views[0].f * vs * Math.max(1 - renderCamL.pos.z * invd, 0);
+    renderCamR.f = zoom * views[0].f * vs * Math.max(1 - renderCamR.pos.z * invd, 0);
   }
 
   function drawAllCases() {
