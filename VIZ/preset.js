@@ -911,7 +911,7 @@ async function main() {
   canvas.addEventListener("wheel", (event) => {
     if (event.ctrlKey) { // Detect pinch gesture on a touchpad (usually requires Ctrl key)
       event.preventDefault();
-      let scaleFactor = event.deltaY > 0 ? 0.95 : 1.05; // Zoom in or out
+      let scaleFactor = event.deltaY > 0 ? 0.98 : 1.02; // Zoom in or out
       zoom *= scaleFactor;
       console.log("Zoom:", zoom);
     }
