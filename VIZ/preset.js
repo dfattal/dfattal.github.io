@@ -9,6 +9,7 @@ let offset = { x: 0, y: 0 }; // Pan offsets
 
 let isDragging = false;
 let lastX = 0, lastY = 0;
+let isPinching = false;
 
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
