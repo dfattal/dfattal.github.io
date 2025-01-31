@@ -15,6 +15,7 @@ let isPinching = false;
 const urlParams = new URLSearchParams(window.location.search);
 const multiplier = urlParams.get('multiplier') ? urlParams.get('multiplier') : 1.0; // Default multiplier is 1.0
 const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // default to mono rendering
+let background = urlParams.get('background') ? urlParams.get('background').split(',').map(Number) : [0.1, 0.1, 0.1]; // default to black background
 
 // Function to recursively update IDs of cloned elements
 function updateClonedElementIDs(originalElement, clonedElement) {
@@ -163,7 +164,8 @@ function setupWebGL(gl, fragmentShaderSource) {
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -255,7 +257,8 @@ function setupWebGLST(gl, fragmentShaderSource) {
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -340,7 +343,8 @@ function setupWebGL2ST(gl, fragmentShaderSource) {
       roll2R: gl.getUniformLocation(shaderProgram, 'roll2R'),
       f2R: gl.getUniformLocation(shaderProgram, 'f2R'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -437,7 +441,8 @@ function setupWebGLST2ST(gl, fragmentShaderSource) {
       roll2R: gl.getUniformLocation(shaderProgram, 'roll2R'),
       f2R: gl.getUniformLocation(shaderProgram, 'f2R'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -550,6 +555,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -652,6 +658,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -735,6 +742,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
   gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -844,6 +852,7 @@ function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR)
   gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;

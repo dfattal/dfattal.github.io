@@ -26,6 +26,7 @@ uniform float roll2, f2; // f2 in px
 uniform vec2 oRes; // viewport resolution in px
 uniform float feathering; // Feathering factor for smooth transitions at the edges
 
+uniform vec3 background; // background color
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {
     ivec2 ivec = ivec2(int(coord.x * iRes.x),  // asssuming all input textures are of same size
                        int(coord.y * iRes.y));
@@ -34,7 +35,7 @@ uniform float feathering; // Feathering factor for smooth transitions at the edg
 #define texture texture2D
 
 float edge = feathering;
-vec3 background = vec3(0.1);
+// vec3 background = vec3(1.0);
 float taper(vec2 uv) {
     return smoothstep(0.0, edge, uv.x) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.x)) * smoothstep(0.0, edge, uv.y) * (1.0 - smoothstep(1.0 - edge, 1.0, uv.y));
     //float r2 = pow(2.0*uv.x-1.0,2.0)+pow(2.0*uv.y-1.0,2.0);
