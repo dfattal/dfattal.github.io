@@ -971,8 +971,9 @@ async function main() {
     if (isDragging) {
       let dx = event.clientX - lastX;
       let dy = event.clientY - lastY;
-      offset.x += 2 * dx / gl.canvas.height / zoom;
-      offset.y += 2 * dy / gl.canvas.height / zoom;
+      const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
+      offset.x += dx / views[0].f / zoom / vs;
+      offset.y += dy / views[0].f / zoom / vs;
       lastX = event.clientX;
       lastY = event.clientY;
       lastTap = 0; // Prevents interference with double-tap detection
@@ -1006,8 +1007,9 @@ async function main() {
       event.preventDefault();
       let dx = event.touches[0].clientX - lastX;
       let dy = event.touches[0].clientY - lastY;
-      offset.x += 2 * dx / gl.canvas.height / zoom;
-      offset.y += 2 * dy / gl.canvas.height / zoom;
+      const vs = viewportScale({ x: views[0].width, y: views[0].height }, { x: gl.canvas.width, y: gl.canvas.height });
+      offset.x += dx / views[0].f / zoom / vs;
+      offset.y += dy / views[0].f / zoom / vs;
       lastX = event.touches[0].clientX;
       lastY = event.touches[0].clientY;
       console.log("Offset:", offset);
@@ -1243,7 +1245,7 @@ async function main() {
     focus = parseFloat(document.getElementById('focus').value);
     invd = focus * views[0].layers[0].invZ.min; // set focus point
     renderCam.sk.x = - (renderCam.pos.x * invd + offset.x) / (1 - renderCam.pos.z * invd);
-    renderCam.sk.y = - (renderCam.pos.y * invd + offset.y) / (1 - renderCam.pos.z * invd);
+    renderCam.sk.y = - (renderCamL.pos.y * invd + offset.y) / (1 - renderCamL.pos.z * invd);
     renderCamL.sk.x = - (renderCamL.pos.x * invd + offset.x) / (1 - renderCamL.pos.z * invd);
     renderCamL.sk.y = - (renderCamL.pos.y * invd + offset.y) / (1 - renderCamL.pos.z * invd);
     renderCamR.sk.x = - (renderCamR.pos.x * invd + offset.x) / (1 - renderCamR.pos.z * invd);
