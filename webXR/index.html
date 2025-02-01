@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WebXR: No-Crop SBS per Eye with sRGB</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+        let scene, camera, renderer;
+        let planeLeft = null, planeRight = null;
+        let sbsTexture = null;  // the loaded side-by-side texture
+        const DISTANCE = 2;     // how far from each eye to place plane
+        const tmpPos = new THREE.Vector3();
+        const tmpQuat = new THREE.Quaternion();
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+
+            // Non-VR camera (in VR, Three.js uses an ArrayCamera under the hood).
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+            scene.add(camera);
+
+            // Renderer + color space
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.NoToneMapping;
+            document.body.appendChild(renderer.domElement);
+
+            // WebXR button
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            // Load SBS texture
+            const loader = new THREE.TextureLoader();
+            loader.load('assets/Seagull_2x1.jpg', (tex) => {
+                tex.encoding = THREE.sRGBEncoding;
+                sbsTexture = tex;
+                console.log('Loaded SBS texture:', tex.image.width, 'x', tex.image.height);
+            });
+
+            // On resize
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * Main render loop (WebXR).
+         */
+        function animate() {
+            renderer.setAnimationLoop(() => {
+                const xrCam = renderer.xr.getCamera(camera);
+
+                // If in VR (ArrayCamera with 2 sub-cameras) and we have our SBS texture loaded...
+                if (sbsTexture && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+
+                    // Create planes if not already
+                    if (!planeLeft || !planeRight) {
+                        createPlanes();
+                    }
+
+                    // Each frame, position + scale each plane based on the sub-cam's actual FOV
+                    const leftCam = xrCam.cameras[0];
+                    const rightCam = xrCam.cameras[1];
+
+                    // Fit + position the left plane
+                    fitAndPositionPlane(planeLeft, leftCam, 0, 0, 0);
+
+                    // Fit + position the right plane
+                    fitAndPositionPlane(planeRight, rightCam, 0, 0, 0);
+
+                    // Enable each plane's layer for the matching eye sub-camera
+                    leftCam.layers.enable(1);   // planeLeft
+                    rightCam.layers.enable(2);  // planeRight
+                }
+
+                renderer.render(scene, camera);
+            });
+        }
+
+        /**
+         * createPlanes():
+         *   Creates two planes, each with half of the SBS texture.
+         *   We'll later place/scale them every frame in fitAndPositionPlane().
+         */
+        function createPlanes() {
+            console.log('Creating planeLeft & planeRight...');
+            // Clone the SBS texture for left half:
+            const texLeft = sbsTexture.clone();
+            texLeft.encoding = THREE.sRGBEncoding;
+            texLeft.offset.set(0, 0);
+            texLeft.repeat.set(0.5, 1);
+
+            const matLeft = new THREE.MeshBasicMaterial({ map: texLeft });
+
+            // Clone again for right half
+            const texRight = sbsTexture.clone();
+            texRight.encoding = THREE.sRGBEncoding;
+            texRight.offset.set(0.5, 0);
+            texRight.repeat.set(0.5, 1);
+
+            const matRight = new THREE.MeshBasicMaterial({ map: texRight });
+
+            // Start with a 1x1 plane geometry; we’ll scale it later to fit FOV.
+            const planeGeom = new THREE.PlaneGeometry(1, 1);
+
+            planeLeft = new THREE.Mesh(planeGeom, matLeft);
+            planeLeft.layers.set(1); // visible to left sub-cam only
+            scene.add(planeLeft);
+
+            planeRight = new THREE.Mesh(planeGeom, matRight);
+            planeRight.layers.set(2); // visible to right sub-cam only
+            scene.add(planeRight);
+        }
+
+        /**
+         * fitAndPositionPlane(plane, subCam, offsetX, offsetY, offsetZ)
+         *  1) Reads sub-cam’s world transform (pos/quat).
+         *  2) Parses sub-cam's FOV from its projection matrix.
+         *  3) Sizes the plane so it won't crop given sub-cam's FOV, at DISTANCE away.
+         *  4) Moves plane in front of subCam by DISTANCE.
+         */
+        function fitAndPositionPlane(plane, subCam, offsetX = 0, offsetY = 0, offsetZ = 0) {
+            // 1) sub-cam's position/orientation
+            subCam.getWorldPosition(tmpPos);
+            subCam.getWorldQuaternion(tmpQuat);
+
+            plane.position.copy(tmpPos);
+            plane.quaternion.copy(tmpQuat);
+
+            // 2) parse FOV
+            const { fov, aspect } = parseSubCamFov(subCam);
+            // plane's half aspect: if the original image is 2:1, each half is ( (2 / 2) : 1 ) = (1:1 ).
+            // But if your image has different dimensions, compute properly:
+            //   const halfAspect = (imgW / (2 * imgH))...
+            // Here, let's read the actual loaded image:
+            const imgW = sbsTexture.image.naturalWidth;
+            const imgH = sbsTexture.image.naturalHeight;
+            const halfAspect = imgW / (2 * imgH);
+
+            // 3) compute plane width/height so it fits inside subCam FOV
+            const { planeWidth, planeHeight } = fitPlaneInFov(halfAspect, fov, aspect, DISTANCE);
+
+            // We'll scale our 1x1 geometry to that size
+            plane.scale.set(planeWidth, planeHeight, 1);
+
+            // 4) shift the plane forward by DISTANCE
+            // (in the plane’s local coordinate frame, “forward” is -Z)
+            plane.translateZ(-DISTANCE);
+
+            // optionally apply any extra offsets
+            plane.translateX(offsetX);
+            plane.translateY(offsetY);
+            plane.translateZ(offsetZ);
+        }
+
+        /**
+         * parseSubCamFov(subCam):
+         *  Derive the vertical FOV & approximate aspect ratio from the subCam's projectionMatrix.
+         */
+        function parseSubCamFov(subCam) {
+            const m = subCam.projectionMatrix.elements;
+            // For a symmetric perspective matrix: m[5] = 1 / tan(fov/2)
+            const fov = 2 * Math.atan(1 / m[5]);    // vertical FOV in radians
+            const aspect = m[5] / m[0];            // approximate horizontal/vertical ratio
+            return { fov, aspect };
+        }
+
+        /**
+         * fitPlaneInFov(planeAspect, vFOV, camAspect, dist)
+         *  Returns plane width/height so a plane of ratio 'planeAspect'
+         *  at distance 'dist' won't be cropped in vertical/horizontal FOV.
+         */
+        function fitPlaneInFov(planeAspect, vFOV, camAspect, dist) {
+            // Fit vertically first
+            let planeHeight = 2 * dist * Math.tan(vFOV / 2);
+            let planeWidth = planeHeight * planeAspect;
+
+            // Check horizontal
+            const hFOV = 2 * Math.atan(camAspect * Math.tan(vFOV / 2));
+            const horizontalMax = 2 * dist * Math.tan(hFOV / 2);
+
+            if (planeWidth > horizontalMax) {
+                const scale = horizontalMax / planeWidth;
+                planeWidth *= scale;
+                planeHeight *= scale;
+            }
+            return { planeWidth, planeHeight };
+        }
+    </script>
+</body>
+
+</html>
