@@ -7,6 +7,7 @@ let baseline = 1.0; // Global variable
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
 const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // default to mono rendering
+let background = urlParams.get('background') ? urlParams.get('background').split(',').map(Number) : [0.1, 0.1, 0.1]; // default to black background
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -43,7 +44,8 @@ function setupWebGL(gl, fragmentShaderSource) {
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -135,7 +137,8 @@ function setupWebGLST(gl, fragmentShaderSource) {
       roll2: gl.getUniformLocation(shaderProgram, 'roll2'),
       f2: gl.getUniformLocation(shaderProgram, 'f2'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -220,7 +223,8 @@ function setupWebGL2ST(gl, fragmentShaderSource) {
       roll2R: gl.getUniformLocation(shaderProgram, 'roll2R'),
       f2R: gl.getUniformLocation(shaderProgram, 'f2R'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -317,7 +321,8 @@ function setupWebGLST2ST(gl, fragmentShaderSource) {
       roll2R: gl.getUniformLocation(shaderProgram, 'roll2R'),
       f2R: gl.getUniformLocation(shaderProgram, 'f2R'),
       oRes: gl.getUniformLocation(shaderProgram, 'oRes'),
-      feathering: gl.getUniformLocation(shaderProgram, 'feathering')
+      feathering: gl.getUniformLocation(shaderProgram, 'feathering'),
+      background: gl.getUniformLocation(shaderProgram, 'background')
       //vd: gl.getUniformLocation(shaderProgram, 'vd'),
       //IO: gl.getUniformLocation(shaderProgram, 'IO'),
       //f: gl.getUniformLocation(shaderProgram, 'f')
@@ -430,6 +435,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -532,6 +538,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -599,7 +606,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
   gl.uniform2fv(programInfo.uniformLocations.iRes, views[0].layers.map(layer => [layer.width, layer.height]).flat());
 
   // rendering info
-  //gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+  // gl.uniform2f(programInfo.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
   gl.uniform2f(programInfo.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height); // no window effect
 
   gl.uniform3f(programInfo.uniformLocations.uFacePositionL, renderCamL.pos.x, renderCamL.pos.y, renderCamL.pos.z); // normalized to camera space
@@ -615,6 +622,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
   gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -724,6 +732,7 @@ function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR)
   gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
+  gl.uniform3fv(programInfo.uniformLocations.background, background);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
