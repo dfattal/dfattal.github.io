@@ -61,7 +61,10 @@
             renderer.toneMapping = THREE.NoToneMapping;
 
             document.body.appendChild(renderer.domElement);
-            document.body.appendChild(VRButton.createButton(renderer));
+            const vrButton = VRButton.createButton(renderer)
+            document.body.appendChild(vrButton);
+            // Override background to semi-transparent black
+            vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
 
             // Load SBS texture
             const loader = new THREE.TextureLoader();
