@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>WebXR: SBS + Single HUD (1/5 FOV, fixed corner)</title>
+    <title>WebXR: SBS + Single HUD + Non-VR Left Image</title>
     <style>
         body {
             margin: 0;
@@ -26,18 +26,20 @@
         import { VRButton } from 'three/addons/webxr/VRButton.js';
 
         let scene, camera, renderer;
-        let planeLeft = null, planeRight = null;
-        let sbsTexture = null;   // the loaded side-by-side texture
+        let planeLeft = null, planeRight = null;  // VR planes
+        let planeNonVR = null;                    // single-plane for NON-VR
+        let sbsTexture = null;                    // loaded side-by-side texture
 
-        const DISTANCE = 20;      // how far from each eye to place the main SBS planes
-        const HUD_DISTANCE = 10; // how far in front of the camera we place the HUD plane
+        const DISTANCE = 20;       // how far from each eye to place the main SBS planes in VR
+        const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 
-        let hudPlane, hudTexture, hudCtx;
-        let hudCreated = false;  // so we only create/attach the HUD once
-
-        // Temp re-usable objects
+        // Temp re-usable vectors/quats
         const tmpPos = new THREE.Vector3();
         const tmpQuat = new THREE.Quaternion();
+
+        // HUD
+        let hudPlane, hudTexture, hudCtx;
+        let hudCreated = false;  // so we only create/attach the HUD once
 
         init();
         animate();
@@ -46,13 +48,14 @@
         function init() {
             scene = new THREE.Scene();
 
-            // Main camera used outside VR. In immersive mode, an ArrayCamera is used under the hood.
+            // Camera used outside VR; in VR, Three.js uses an internal ArrayCamera.
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
             scene.add(camera);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
+
             // So colors don’t look washed out
             renderer.outputEncoding = THREE.sRGBEncoding;
             renderer.toneMapping = THREE.NoToneMapping;
@@ -66,9 +69,12 @@
                 tex.encoding = THREE.sRGBEncoding;
                 sbsTexture = tex;
                 console.log('Loaded SBS texture:', tex.image.width, 'x', tex.image.height);
+
+                // Once texture is loaded, create the single-plane for non-VR
+                createNonVRPlane();
             });
 
-            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('resize', onWindowResize);
         }
 
         function onWindowResize() {
@@ -77,30 +83,33 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        /** Main XR animation loop. */
+        /** Our main animation/render loop (WebXR). */
         function animate() {
             renderer.setAnimationLoop(() => {
                 const xrCam = renderer.xr.getCamera(camera);
+                const isInVR = renderer.xr.isPresenting;  // Are we in an immersive VR session?
 
-                // If in VR (ArrayCamera) and we have our texture loaded:
-                if (sbsTexture && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+                // Show/hide the single-plane if we're in VR or not
+                if (planeNonVR) planeNonVR.visible = !isInVR;
 
-                    // Create SBS planes if not done yet
+                if (isInVR && sbsTexture && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+                    // =============== VR MODE ===============
+                    // Create left/right planes if needed
                     if (!planeLeft || !planeRight) {
-                        createPlanes();
+                        createPlanesVR();
                     }
 
-                    // Sub-cameras
+                    // Access the sub-cameras
                     const leftCam = xrCam.cameras[0];
                     const rightCam = xrCam.cameras[1];
 
-                    // Create/attach the HUD plane once we can parse left-cam’s FOV
+                    // Create HUD once we have the leftCam
                     if (!hudCreated) {
                         createHUDWithFOV(leftCam);
                         hudCreated = true;
                     }
 
-                    // Position the SBS planes for each eye
+                    // Position the VR planes
                     fitAndPositionPlane(planeLeft, leftCam);
                     fitAndPositionPlane(planeRight, rightCam);
 
@@ -110,22 +119,40 @@
 
                     // Update HUD text
                     updateHUD(leftCam, rightCam);
+
+                    // Hide the VR planes if we happen to switch out of VR
+                    planeLeft.visible = true;
+                    planeRight.visible = true;
+
+                } else {
+                    // ============ NOT IN VR ============
+                    // Hide VR planes if they exist
+                    if (planeLeft) planeLeft.visible = false;
+                    if (planeRight) planeRight.visible = false;
+
+                    // Fit the single-plane to fill the 2D viewport with the left image
+                    if (planeNonVR) {
+                        fitNonVRPlane(planeNonVR, camera);
+                    }
                 }
 
                 renderer.render(scene, camera);
             });
         }
 
-        /* ----------------  SBS PLANES  ---------------- */
+        /* -------------------------------------------------------------------- */
+        /*                  VR Planes (Left + Right Eye)                        */
+        /* -------------------------------------------------------------------- */
 
-        /** Create two planes, each half of the SBS texture. */
-        function createPlanes() {
-            console.log('Creating SBS planes...');
+        function createPlanesVR() {
+            console.log('Creating VR planes (left + right)...');
+            // Left half texture
             const texLeft = sbsTexture.clone();
             texLeft.encoding = THREE.sRGBEncoding;
             texLeft.offset.set(0, 0);
             texLeft.repeat.set(0.5, 1);
 
+            // Right half
             const texRight = sbsTexture.clone();
             texRight.encoding = THREE.sRGBEncoding;
             texRight.offset.set(0.5, 0);
@@ -134,15 +161,17 @@
             const matLeft = new THREE.MeshBasicMaterial({ map: texLeft });
             const matRight = new THREE.MeshBasicMaterial({ map: texRight });
 
-            // 1x1 geometry, to be scaled each frame to fit the eye's FOV
+            // 1x1 geometry, scaled each frame
             const planeGeom = new THREE.PlaneGeometry(1, 1);
 
             planeLeft = new THREE.Mesh(planeGeom, matLeft);
             planeLeft.layers.set(1); // left eye only
+            planeLeft.visible = false;
             scene.add(planeLeft);
 
             planeRight = new THREE.Mesh(planeGeom, matRight);
             planeRight.layers.set(2); // right eye only
+            planeRight.visible = false;
             scene.add(planeRight);
         }
 
@@ -160,38 +189,35 @@
             plane.position.copy(tmpPos);
             plane.quaternion.copy(tmpQuat);
 
-            // Derive sub-cam FOV & aspect from its projectionMatrix
             const { fov, aspect } = parseSubCamFov(subCam);
 
-            // If your image is 2:1, each half is (imgW/(2*imgH))
+            // For 2:1 image, each half has aspect = (imgW / (2 * imgH))
             const imgW = sbsTexture.image.naturalWidth;
             const imgH = sbsTexture.image.naturalHeight;
             const halfAspect = imgW / (2 * imgH);
 
             const { planeWidth, planeHeight } = fitPlaneInFov(halfAspect, fov, aspect, DISTANCE);
-            plane.scale.set(planeWidth, planeHeight, 1);
 
+            plane.scale.set(planeWidth, planeHeight, 1);
             plane.translateZ(-DISTANCE);
         }
 
-        /** parseSubCamFov(subCam): get vertical FOV & approximate aspect from sub-cam. */
         function parseSubCamFov(subCam) {
             const m = subCam.projectionMatrix.elements;
-            // For a symmetric perspective: m[5] = 1 / tan(vFOV/2)
+            // For symmetric perspective: m[5] = 1 / tan(vFOV/2)
             const vFov = 2 * Math.atan(1 / m[5]);
             const aspect = m[5] / m[0];
             return { fov: vFov, aspect };
         }
 
-        /** fitPlaneInFov(planeAspect, vFOV, camAspect, dist) => planeWidth/planeHeight w/o cropping. */
         function fitPlaneInFov(planeAspect, vFOV, camAspect, dist) {
             // Fit vertically
             let planeHeight = 2 * dist * Math.tan(vFOV / 2);
             let planeWidth = planeHeight * planeAspect;
 
             // Check horizontal
-            const hFov = 2 * Math.atan(camAspect * Math.tan(vFOV / 2));
-            const horizontalMax = 2 * dist * Math.tan(hFov / 2);
+            const hFOV = 2 * Math.atan(camAspect * Math.tan(vFOV / 2));
+            const horizontalMax = 2 * dist * Math.tan(hFOV / 2);
 
             if (planeWidth > horizontalMax) {
                 const scale = horizontalMax / planeWidth;
@@ -201,7 +227,66 @@
             return { planeWidth, planeHeight };
         }
 
-        /* ----------------  HUD  ---------------- */
+        /* -------------------------------------------------------------------- */
+        /*                  Single-Plane for Non-VR (Left Image)                */
+        /* -------------------------------------------------------------------- */
+
+        function createNonVRPlane() {
+            console.log('Creating single-plane for NON-VR display...');
+            // We'll show the LEFT half of the SBS texture
+            const texLeft = sbsTexture.clone();
+            texLeft.encoding = THREE.sRGBEncoding;
+            texLeft.offset.set(0, 0);
+            texLeft.repeat.set(0.5, 1);
+
+            const mat = new THREE.MeshBasicMaterial({ map: texLeft });
+            const geom = new THREE.PlaneGeometry(1, 1);
+            planeNonVR = new THREE.Mesh(geom, mat);
+            scene.add(planeNonVR);
+        }
+
+        /**
+         * fitNonVRPlane(plane, camera):
+         *   Fills the entire 2D browser window with the "left half" image
+         *   by matching the camera's FOV + distance.
+         */
+        function fitNonVRPlane(plane, camera) {
+            // We'll pick a distance (e.g. 1.0) in front of the camera
+            const dist = 1.0;
+
+            // Position the plane at (0,0,-dist) in the camera's local space
+            plane.position.copy(camera.position);
+            plane.quaternion.copy(camera.quaternion);
+            plane.translateZ(-dist);
+
+            // Derive camera's vertical FOV in radians
+            const vFOV = THREE.MathUtils.degToRad(camera.fov);
+            // The plane's aspect ratio is half of the image (left side only)
+            const imgW = sbsTexture.image.naturalWidth;
+            const imgH = sbsTexture.image.naturalHeight;
+            const halfAspect = imgW / (2 * imgH);
+
+            // Fit the plane so it won't be cropped in normal 2D (roughly)
+            // We'll replicate the "fitPlaneInFov" logic, but with camera's aspect
+            let planeHeight = 2 * dist * Math.tan(vFOV / 2);
+            let planeWidth = planeHeight * halfAspect;
+
+            // Check horizontal
+            const hFOV = 2 * Math.atan(camera.aspect * Math.tan(vFOV / 2));
+            const horizontalMax = 2 * dist * Math.tan(hFOV / 2);
+
+            if (planeWidth > horizontalMax) {
+                const scale = horizontalMax / planeWidth;
+                planeWidth *= scale;
+                planeHeight *= scale;
+            }
+
+            plane.scale.set(planeWidth, planeHeight, 1);
+        }
+
+        /* -------------------------------------------------------------------- */
+        /*                               HUD                                    */
+        /* -------------------------------------------------------------------- */
 
         /**
          * createHUDWithFOV(referenceCam):
@@ -213,22 +298,15 @@
         function createHUDWithFOV(referenceCam) {
             console.log('Creating HUD using left sub-cam FOV at distance', HUD_DISTANCE);
 
-            // 1) Compute horizontal FOV from the left sub-cam
-            const { fov: vFOV, aspect } = parseSubCamFov(referenceCam); // vertical FOV in radians
-            const hFOV = 2 * Math.atan(aspect * Math.tan(vFOV / 2));   // horizontal FOV in radians
-            console.log('Left sub-cam FOV:', hFOV * 180 / Math.PI, 'degrees');
-            console.log('Left sub-cam aspect:', aspect);
-
-            // At distance = HUD_DISTANCE, the full width of the left eye’s view is:
+            const { fov: vFOV, aspect } = parseSubCamFov(referenceCam);
+            const hFOV = 2 * Math.atan(aspect * Math.tan(vFOV / 2));
             const viewWidth = 2 * HUD_DISTANCE * Math.tan(hFOV / 2);
             const viewHeight = 2 * HUD_DISTANCE * Math.tan(vFOV / 2);
-            console.log('Left sub-cam view width:', viewWidth, 'height:', viewHeight);
 
-            // We'll make our HUD plane 1/5 of that width, and half as tall
-            const hudW = viewWidth / 5;
-            const hudH = hudW / 2;
+            const hudW = viewWidth / 5;   // 1/5
+            const hudH = hudW / 2;       // half the width
 
-            // 2) Build the canvas + texture
+            // Canvas + texture
             const canvas = document.createElement('canvas');
             canvas.width = 256;
             canvas.height = 128;
@@ -241,27 +319,23 @@
                 map: hudTexture,
                 transparent: true
             });
-
-            // 3) Create a plane geometry with that size
             const hudGeom = new THREE.PlaneGeometry(hudW, hudH);
             hudPlane = new THREE.Mesh(hudGeom, hudMat);
 
-            // 4) Parent it to the camera so it doesn't move if the XR camera moves around the room
+            // Attach to main camera so it doesn't move relative to your head
             camera.add(hudPlane);
 
-            // 5) Position it in local camera space so it appears in the top-left corner
-            //    We'll move it forward by -HUD_DISTANCE, left, and up:
-            //    The plane is center-anchored, so if we want top-left corner in view,
-            //    shift half of its width left, half of its height up.
-            hudPlane.position.set(- (viewWidth / 2) + (hudW / 2),
-                viewHeight/2 - (hudH / 2), // or we can use vFOV to get top, but we do a rough approximation
-                - HUD_DISTANCE);
-            console.log('HUD plane positioned at', hudPlane.position);
+            // Position in local camera space, top-left corner
+            hudPlane.position.set(
+                -(viewWidth / 2) + (hudW / 2),
+                (viewHeight / 2) - (hudH / 2),
+                -HUD_DISTANCE
+            );
         }
 
         /**
          * updateHUD(leftCam, rightCam):
-         *   Draw each eye’s position onto the HUD plane. Called every frame.
+         *   Draw each eye's position onto the HUD plane. Called every frame in VR.
          */
         function updateHUD(leftCam, rightCam) {
             if (!hudCtx || !hudTexture) return;
@@ -276,7 +350,6 @@
             hudCtx.font = '20px sans-serif';
             hudCtx.fillText('Eye Positions', 10, 26);
 
-            // Grab each eye’s world position
             const leftPos = new THREE.Vector3();
             const rightPos = new THREE.Vector3();
             leftCam.getWorldPosition(leftPos);
