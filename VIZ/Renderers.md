@@ -1,4 +1,4 @@
-# Renderer.js Module Documentation
+# Renderers.js Module Documentation
 
 This module provides a set of reusable WebGL renderer classes for different input/output modes. The module exports four renderer classes, each designed to handle one of the following scenarios:
 
