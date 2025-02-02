@@ -35,6 +35,8 @@ export class BaseRenderer {
         };
         // Create common buffers (a full-screen quad).
         this.buffers = BaseRenderer.setupCommonBuffers(gl);
+        this.feathering = 0.1;
+        this.background = [0.1, 0.1, 0.1];
     }
 
     /**
@@ -217,8 +219,8 @@ export class MN2MNRenderer extends BaseRenderer {
             renderCam.sl.x, renderCam.sl.y);
         gl.uniform1f(this.uniformLocations.roll2, renderCam.roll);
         gl.uniform1f(this.uniformLocations.f2, renderCam.f);
-        gl.uniform1f(this.uniformLocations.feathering, 0.1);
-        gl.uniform3fv(this.uniformLocations.background, [0.1, 0.1, 0.1]);
+        gl.uniform1f(this.uniformLocations.feathering, this.feathering);
+        gl.uniform3fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
@@ -333,8 +335,8 @@ export class ST2MNRenderer extends BaseRenderer {
         gl.uniform2f(this.uniformLocations.sl2, renderCam.sl.x, renderCam.sl.y);
         gl.uniform1f(this.uniformLocations.roll2, renderCam.roll);
         gl.uniform1f(this.uniformLocations.f2, renderCam.f);
-        gl.uniform1f(this.uniformLocations.feathering, 0.1);
-        gl.uniform3fv(this.uniformLocations.background, [0.1, 0.1, 0.1]);
+        gl.uniform1f(this.uniformLocations.feathering, this.feathering);
+        gl.uniform3fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
@@ -438,8 +440,8 @@ export class MN2STRenderer extends BaseRenderer {
         gl.uniform1f(this.uniformLocations.roll2R, renderCamR.roll);
         gl.uniform1f(this.uniformLocations.f2R, renderCamR.f);
         gl.uniform1f(this.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
-        gl.uniform1f(this.uniformLocations.feathering, 0.1);
-        gl.uniform3fv(this.uniformLocations.background, [0.1, 0.1, 0.1]);
+        gl.uniform1f(this.uniformLocations.feathering, this.feathering);
+        gl.uniform3fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
@@ -572,8 +574,8 @@ export class ST2STRenderer extends BaseRenderer {
         gl.uniform2f(this.uniformLocations.sl2R, renderCamR.sl.x, renderCamR.sl.y);
         gl.uniform1f(this.uniformLocations.roll2R, renderCamR.roll);
         gl.uniform1f(this.uniformLocations.f2R, renderCamR.f);
-        gl.uniform1f(this.uniformLocations.feathering, 0.1);
-        gl.uniform3fv(this.uniformLocations.background, [0.1, 0.1, 0.1]);
+        gl.uniform1f(this.uniformLocations.feathering, this.feathering);
+        gl.uniform3fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
