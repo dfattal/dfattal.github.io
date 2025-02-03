@@ -1,4 +1,4 @@
-// main.js
+// testLoader.js
 
 import { LifLoader } from './LifLoader.js';
 
