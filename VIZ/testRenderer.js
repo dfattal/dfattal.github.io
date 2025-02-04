@@ -78,20 +78,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await loader.load(file);
 
                 // Retrieve processed views from LifLoader.
-                views = loader.getViews();
-                stereo_render_data = loader.getStereoRenderData();
+                views = loader.views;
+                stereo_render_data = loader.stereo_render_data;
 
                 console.log('Views:', views);
                 console.log('Stereo Render Data:', stereo_render_data);
 
-                // Calculate focus (for logging/demo purposes).
-                const focus = stereo_render_data.inv_convergence_distance / views[0].layers_top_to_bottom[0].inv_z_map.min;
-                console.log('Focus:', focus);
+                if (stereo_render_data) {
+                    // Calculate focus (for logging/demo purposes).
+                    const focus = stereo_render_data.inv_convergence_distance / views[0].layers_top_to_bottom[0].inv_z_map.min;
+                    console.log('Focus:', focus);
+                }
 
                 // Initialize renderer with views.
                 if (!renderer) {
                     await initRenderer(views);
                 }
+                // Hide the file picker after file selection
+                filePicker.style.display = 'none';
             } catch (error) {
                 console.error('Error loading LIF:', error);
             }

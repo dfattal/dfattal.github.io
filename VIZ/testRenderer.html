@@ -4,9 +4,17 @@
   <meta charset="UTF-8">
   <title>LIF Loader & WebGL Renderer Test</title>
   <style>
+    body {
+      margin: 0;
+    }
+    /* Fullscreen container to center the canvas */
     #canvas-container {
-      width: 800px;
-      height: 600px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
     }
     #glCanvas {
       width: 100%;
@@ -16,7 +24,7 @@
 </head>
 <body>
   <input type="file" id="filePicker" accept="image/jpeg">
-  <div id="canvas-container" style="width: 50%;">
+  <div id="canvas-container">
     <canvas id="glCanvas"></canvas>
   </div>
   <script type="module" src="testRenderer.js"></script>

@@ -147,8 +147,8 @@ export class LifLoaderOld {
                 view.position = view.camera_data.position;
                 view.frustum_skew = view.camera_data.frustum_skew;
                 view.rotation = view.camera_data.rotation;
-                view.invZ.max /= -view.camera_data.focal_ratio_to_width;
-                view.invZ.min /= -view.camera_data.focal_ratio_to_width;
+                view.inv_z_map.max /= -view.camera_data.focal_ratio_to_width;
+                view.inv_z_map.min /= -view.camera_data.focal_ratio_to_width;
             }
 
             let outpaint_width_px, outpaint_height_px, camera_data;
@@ -167,8 +167,8 @@ export class LifLoaderOld {
                         layer.camera_data = camera_data;
                         layer.outpainting_added_width_px = outpaint_width_px;
                         layer.outpainting_added_height_px = outpaint_height_px;
-                        layer.invZ.min /= 1 + outpaint_width_px / view.width_px;
-                        layer.invZ.max /= 1 + outpaint_width_px / view.width_px;
+                        layer.inv_z_map.min /= 1 + outpaint_width_px / view.width_px;
+                        layer.inv_z_map.max /= 1 + outpaint_width_px / view.width_px;
                     }
                     if (layer.outpainting_added_width_px) {
                         outpaint_width_px = layer.outpainting_added_width_px;
@@ -176,8 +176,8 @@ export class LifLoaderOld {
                         layer.width_px = view.width_px + outpaint_width_px;
                         layer.height_px = view.height_px + outpaint_height_px;
                         layer.focal_px = view.focal_px;
-                        layer.invZ.max /= -layer.camera_data.focal_ratio_to_width;
-                        layer.invZ.min /= -layer.camera_data.focal_ratio_to_width;
+                        layer.inv_z_map.max /= -layer.camera_data.focal_ratio_to_width;
+                        layer.inv_z_map.min /= -layer.camera_data.focal_ratio_to_width;
                         delete layer.camera_data;
                         delete layer.outpainting_added_width_px;
                         delete layer.outpainting_added_height_px;
@@ -464,6 +464,22 @@ export class LifLoader {
         return Array.isArray(obj) ? Object.values(newObj) : newObj;
     }
 
+    async getImageDimensions(url) {
+        const img = new Image();
+    
+        return new Promise((resolve, reject) => {
+            img.onload = () => {
+                resolve({ width: img.width, height: img.height });
+            };
+    
+            img.onerror = (error) => {
+                reject(new Error('Failed to load image'));
+            };
+    
+            img.src = url;
+        });
+    }
+
     async _processViews(result, metadata, arrayBuffer) {
         if (!result.views) return [];
 
@@ -493,7 +509,7 @@ export class LifLoader {
             makeUrls(view);
 
             // Legacy support: calculate dimensions if not already provided.
-            if (!view.width_px) {
+            if (!view.width_px) { // prior to 5.3
                 const dims = await this.getImageDimensions(view.image.url);
                 view.width_px = dims.width;
                 view.height_px = dims.height;
@@ -501,8 +517,8 @@ export class LifLoader {
                 view.position = view.camera_data.position;
                 view.frustum_skew = view.camera_data.frustum_skew;
                 view.rotation = view.camera_data.rotation;
-                view.invZ.max /= -view.camera_data.focal_ratio_to_width;
-                view.invZ.min /= -view.camera_data.focal_ratio_to_width;
+                view.inv_z_map.max /= -view.camera_data.focal_ratio_to_width;
+                view.inv_z_map.min /= -view.camera_data.focal_ratio_to_width;
             }
 
             let outpaint_width_px, outpaint_height_px, camera_data;
@@ -521,8 +537,8 @@ export class LifLoader {
                         layer.camera_data = camera_data;
                         layer.outpainting_added_width_px = outpaint_width_px;
                         layer.outpainting_added_height_px = outpaint_height_px;
-                        layer.invZ.min /= 1 + outpaint_width_px / view.width_px;
-                        layer.invZ.max /= 1 + outpaint_width_px / view.width_px;
+                        layer.inv_z_map.min /= 1 + outpaint_width_px / view.width_px;
+                        layer.inv_z_map.max /= 1 + outpaint_width_px / view.width_px;
                     }
                     if (layer.outpainting_added_width_px) {
                         outpaint_width_px = layer.outpainting_added_width_px;
@@ -530,8 +546,8 @@ export class LifLoader {
                         layer.width_px = view.width_px + outpaint_width_px;
                         layer.height_px = view.height_px + outpaint_height_px;
                         layer.focal_px = view.focal_px;
-                        layer.invZ.max /= -layer.camera_data.focal_ratio_to_width;
-                        layer.invZ.min /= -layer.camera_data.focal_ratio_to_width;
+                        layer.inv_z_map.max /= -layer.camera_data.focal_ratio_to_width;
+                        layer.inv_z_map.min /= -layer.camera_data.focal_ratio_to_width;
                         delete layer.camera_data;
                         delete layer.outpainting_added_width_px;
                         delete layer.outpainting_added_height_px;
