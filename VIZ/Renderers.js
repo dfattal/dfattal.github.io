@@ -9,9 +9,11 @@ export class BaseRenderer {
      * @param {string} fragmentShaderSource - The fragment shader source.
      * @param {Object} views - The processed views from LifLoader.
      */
-    constructor(gl, fragmentShaderSource, views) {
+    constructor(gl, fragmentShaderSource, views, debug = false) {
         this.gl = gl;
         this.views = null;
+        this._debugCount = 0;
+        this.debug = debug;
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position
             sl: { x: 0, y: 0 },
@@ -81,10 +83,10 @@ export class BaseRenderer {
      * @param {Object} views - The processed views from LifLoader.
      * @returns {Promise<BaseRenderer>} - A promise resolving to an instance of BaseRenderer.
      */
-    static async createInstance(gl, fragmentShaderUrl, views) {
+    static async createInstance(gl, fragmentShaderUrl, views, debug = false) {
         const response = await fetch(fragmentShaderUrl + "?t=" + Date.now());
         const fragmentShaderSource = await response.text();
-        return new this(gl, fragmentShaderSource, views);
+        return new this(gl, fragmentShaderSource, views, debug);
     }
 
     /**
@@ -199,6 +201,22 @@ export class BaseRenderer {
         gl.enableVertexAttribArray(this.attribLocations.textureCoord);
     }
 
+    // Debug function to display images if debugging is enabled.
+    debugTexture(imgData) {
+        const img = document.createElement('img');
+        img.style.width = '50%';
+        img.id = `debug-im${this._debugCount}`;
+        img.classList.add('debug-im');
+        if (imgData.src) {
+            img.src = imgData.src;
+            document.body.appendChild(document.createElement('br'));
+        } else {
+            img.src = imgData.toDataURL ? imgData.toDataURL() : '';
+        }
+        document.body.appendChild(img);
+        this._debugCount++;
+    }
+
     /**
      * Loads images, processes depth maps, and assigns WebGL textures asynchronously.
      * @param {Object} obj - The object containing image & depth data.
@@ -210,6 +228,10 @@ export class BaseRenderer {
                     try {
                         // console.log("Loading image:", obj[key].url);
                         const img = await this._loadImage2(obj[key].url);
+                        if (this.debug) {
+                            console.log("Debugging image:", obj[key].url);
+                            this.debugTexture(img);
+                        }
                         obj[key]["texture"] = this._createTexture(img);
                     } catch (error) {
                         console.error("Error loading image:", error);
@@ -219,6 +241,10 @@ export class BaseRenderer {
                         const maskImg = await this._loadImage2(obj["mask"].url);
                         const invzImg = await this._loadImage2(obj["invZ"].url);
                         const maskedInvz = this._create4ChannelImage(invzImg, maskImg);
+                        if (this.debug) {
+                            console.log("Debugging mask image:", obj["mask"].url);
+                            this.debugTexture(maskedInvz);
+                        }
                         obj["invZ"]["texture"] = this._createTexture(maskedInvz);
                     } catch (error) {
                         console.error("Error loading mask or invZ image:", error);
@@ -328,8 +354,8 @@ export class BaseRenderer {
 // (Formerly setupWebGL & drawScene)
 // ================================
 export class MN2MNRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views) {
-        super(gl, fragmentShaderSource, views);
+    constructor(gl, fragmentShaderSource, views, debug = false) {
+        super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
         this.uniformLocations = {
             uNumLayers: ctx.getUniformLocation(this.program, "uNumLayers"),
@@ -418,8 +444,8 @@ export class MN2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGLST & drawSceneST)
 // ================================
 export class ST2MNRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views) {
-        super(gl, fragmentShaderSource, views);
+    constructor(gl, fragmentShaderSource, views, debug = false) {
+        super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
         this.uniformLocations = {
             // Left view uniforms:
@@ -536,8 +562,8 @@ export class ST2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGL2ST & drawScene2ST)
 // ================================
 export class MN2STRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views) {
-        super(gl, fragmentShaderSource, views);
+    constructor(gl, fragmentShaderSource, views, debug = false) {
+        super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
         this.renderCamL = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position
@@ -658,8 +684,8 @@ export class MN2STRenderer extends BaseRenderer {
 // (Former setupWebGLST2ST & drawSceneST2ST)
 // ---------------------------
 export class ST2STRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views) {
-        super(gl, fragmentShaderSource, views);
+    constructor(gl, fragmentShaderSource, views, debug = false) {
+        super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
         this.renderCamL = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position

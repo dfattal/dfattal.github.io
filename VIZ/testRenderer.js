@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize renderer with views
     async function initRenderer(views) {
-        renderer = await MN2MNRenderer.createInstance(gl, fragmentShaderUrl, views);
+        renderer = await MN2MNRenderer.createInstance(gl, fragmentShaderUrl, views, true);
         console.log('Renderer initialized with views:', renderer.views);
         if (stereo_render_data) {
             // Calculate focus (for logging/demo purposes).
