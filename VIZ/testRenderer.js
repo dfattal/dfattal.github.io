@@ -46,6 +46,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function initRenderer(views) {
         renderer = await MN2MNRenderer.createInstance(gl, fragmentShaderUrl, views);
         console.log('Renderer initialized with views:', renderer.views);
+        if (stereo_render_data) {
+            // Calculate focus (for logging/demo purposes).
+            const focus = stereo_render_data.inv_convergence_distance / renderer.views[0].layers[0].invZ.min;
+            console.log('Focus:', focus);
+        }
     }
 
     let startTime = null;
@@ -83,12 +88,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 console.log('Views:', views);
                 console.log('Stereo Render Data:', stereo_render_data);
-
-                if (stereo_render_data) {
-                    // Calculate focus (for logging/demo purposes).
-                    const focus = stereo_render_data.inv_convergence_distance / views[0].layers_top_to_bottom[0].inv_z_map.min;
-                    console.log('Focus:', focus);
-                }
 
                 // Initialize renderer with views.
                 if (!renderer) {

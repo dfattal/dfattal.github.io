@@ -208,7 +208,7 @@ export class BaseRenderer {
             if (obj.hasOwnProperty(key)) {
                 if (key === "image") {
                     try {
-                        console.log("Loading image:", obj[key].url);
+                        // console.log("Loading image:", obj[key].url);
                         const img = await this._loadImage2(obj[key].url);
                         obj[key]["texture"] = this._createTexture(img);
                     } catch (error) {
