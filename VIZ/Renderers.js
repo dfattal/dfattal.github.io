@@ -6,67 +6,117 @@
 export class BaseRenderer {
     /**
      * @param {WebGLRenderingContext} gl - The WebGL context.
-     * @param {string} vertexShaderSource - The vertex shader source.
-     *   If not provided, a default shader is used.
      * @param {string} fragmentShaderSource - The fragment shader source.
+     * @param {Object} views - The processed views from LifLoader.
      */
-    constructor(gl, vertexShaderSource, fragmentShaderSource) {
+    constructor(gl, fragmentShaderSource, views) {
         this.gl = gl;
-        // Use default vertex shader if none is provided.
-        if (!vertexShaderSource) {
-            vertexShaderSource = `
-          attribute vec4 aVertexPosition;
-          attribute vec2 aTextureCoord;
-          varying highp vec2 v_texcoord;
-          void main(void) {
-            gl_Position = aVertexPosition;
-            v_texcoord = aTextureCoord;
-          }
-        `;
-        }
-        this.program = BaseRenderer.createProgram(gl, vertexShaderSource, fragmentShaderSource);
+        this.views = null;
+        this.renderCam = {
+            pos: { x: 0, y: 0, z: 0 }, // Default camera position
+            sl: { x: 0, y: 0 },
+            sk: { x: 0, y: 0 },
+            roll: 0,
+            f: 0 // Placeholder for focal length
+        };
+
+        this.program = BaseRenderer.createProgram(gl, BaseRenderer.defaultVertexShader(), fragmentShaderSource);
         if (!this.program) {
-            throw new Error("Program creation failed");
+            throw new Error("Shader program creation failed.");
         }
+
         // Common attribute locations.
         this.attribLocations = {
             vertexPosition: gl.getAttribLocation(this.program, "aVertexPosition"),
-            textureCoord: gl.getAttribLocation(this.program, "aTextureCoord")
+            textureCoord: gl.getAttribLocation(this.program, "aTextureCoord"),
         };
+
         // Create common buffers (a full-screen quad).
         this.buffers = BaseRenderer.setupCommonBuffers(gl);
         this.feathering = 0.1;
         this.background = [0.1, 0.1, 0.1];
+
+        // Process views and assign textures.
+        this._processViews(views);
     }
 
     /**
-     * Static async factory method.
-     * If a fragment shader source is not provided, fetch it from the given URL
-     * with a cache-busting query parameter.
-     *
-     * @param {WebGLRenderingContext} gl - The WebGL context.
-     * @param {string} fragmentShaderUrl - URL for the fragment shader.
-     * @param {string} [vertexShaderSource] - Optional vertex shader source.
-     * @returns {Promise<BaseRenderer>} - A promise that resolves to a new BaseRenderer instance.
+     * Processes views: replaces keys and loads textures.
+     * @param {Object} views - The processed views from LifLoader.
+     * @returns {Object} - Views with processed textures.
      */
-    static async createInstance(gl, fragmentShaderUrl, vertexShaderSource) {
-        if (!vertexShaderSource) {
-            vertexShaderSource = `
-          attribute vec4 aVertexPosition;
-          attribute vec2 aTextureCoord;
-          varying highp vec2 v_texcoord;
-          void main(void) {
-            gl_Position = aVertexPosition;
-            v_texcoord = aTextureCoord;
-          }
-        `;
-        }
-        const response = await fetch(fragmentShaderUrl + '?t=' + Date.now());
-        const fragmentShaderSource = await response.text();
-        return new BaseRenderer(gl, vertexShaderSource, fragmentShaderSource);
+    async _processViews(views) {
+        this.views = this.replaceKeys(views,
+            ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant', 'render_data'],
+            ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl', 'stereo_render_data']
+        );
+
+        await this._parseObjectAndCreateTextures(this.views);
     }
 
-    // --- Static utility methods (unchanged) ---
+    /**
+     * Replaces keys in an object to standardize property names.
+     * @param {Object} obj - The object containing legacy keys.
+     * @param {Array} oldKeys - The old keys to be replaced.
+     * @param {Array} newKeys - The new keys to replace with.
+     * @returns {Object} - Object with updated key names.
+     */
+    replaceKeys(obj, oldKeys, newKeys) {
+        if (typeof obj !== "object" || obj === null) return obj;
+        const newObj = {};
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                const index = oldKeys.indexOf(key);
+                const updatedKey = index !== -1 ? newKeys[index] : key;
+                newObj[updatedKey] = this.replaceKeys(obj[key], oldKeys, newKeys);
+            }
+        }
+        return Array.isArray(obj) ? Object.values(newObj) : newObj;
+    }
+
+    /**
+     * Static async factory method to create a renderer instance.
+     * @param {WebGLRenderingContext} gl - The WebGL context.
+     * @param {string} fragmentShaderUrl - URL for the fragment shader.
+     * @param {Object} views - The processed views from LifLoader.
+     * @returns {Promise<BaseRenderer>} - A promise resolving to an instance of BaseRenderer.
+     */
+    static async createInstance(gl, fragmentShaderUrl, views) {
+        const response = await fetch(fragmentShaderUrl + "?t=" + Date.now());
+        const fragmentShaderSource = await response.text();
+        return new this(gl, fragmentShaderSource, views);
+    }
+
+    /**
+     * Creates a WebGL program from vertex and fragment shaders.
+     * @param {WebGLRenderingContext} gl - The WebGL context.
+     * @param {string} vsSource - Vertex shader source code.
+     * @param {string} fsSource - Fragment shader source code.
+     * @returns {WebGLProgram} - The compiled WebGL program.
+     */
+    static createProgram(gl, vsSource, fsSource) {
+        const vertexShader = BaseRenderer.createShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = BaseRenderer.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error("Program link error:", gl.getProgramInfoLog(program));
+            return null;
+        }
+        return program;
+    }
+
+    /**
+     * Compiles a WebGL shader.
+     * @param {WebGLRenderingContext} gl - The WebGL context.
+     * @param {number} type - The shader type (vertex/fragment).
+     * @param {string} source - The shader source code.
+     * @returns {WebGLShader} - The compiled WebGL shader.
+     */
     static createShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -79,46 +129,64 @@ export class BaseRenderer {
         return shader;
     }
 
-    static createProgram(gl, vsSource, fsSource) {
-        const vertexShader = BaseRenderer.createShader(gl, gl.VERTEX_SHADER, vsSource);
-        const fragmentShader = BaseRenderer.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
-        const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error("Program link error:", gl.getProgramInfoLog(program));
-            return null;
-        }
-        return program;
+    /**
+     * Returns a default vertex shader.
+     * @returns {string} The default vertex shader source code.
+     */
+    static defaultVertexShader() {
+        return `
+            attribute vec4 aVertexPosition;
+            attribute vec2 aTextureCoord;
+            varying highp vec2 v_texcoord;
+            void main(void) {
+                gl_Position = aVertexPosition;
+                v_texcoord = aTextureCoord;
+            }
+        `;
     }
 
-    static createBuffer(gl, target, data, usage = gl.STATIC_DRAW) {
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(target, buffer);
-        gl.bufferData(target, data, usage);
-        return buffer;
-    }
-
+    /**
+     * Sets up a full-screen quad buffer for rendering.
+     * @param {WebGLRenderingContext} gl - The WebGL context.
+     * @returns {Object} Buffers for vertex positions, texture coordinates, and indices.
+     */
     static setupCommonBuffers(gl) {
         const positions = new Float32Array([
-            -1.0, 1.0,
-            1.0, 1.0,
-            -1.0, -1.0,
-            1.0, -1.0
+            -1.0, 1.0,   // Top left
+            1.0, 1.0,   // Top right
+            -1.0, -1.0,   // Bottom left
+            1.0, -1.0    // Bottom right
         ]);
+
         const textureCoords = new Float32Array([
             0.0, 0.0,
             1.0, 0.0,
             0.0, 1.0,
             1.0, 1.0
         ]);
+
         const indices = new Uint16Array([0, 1, 2, 2, 1, 3]);
+
         return {
             position: BaseRenderer.createBuffer(gl, gl.ARRAY_BUFFER, positions),
             textureCoord: BaseRenderer.createBuffer(gl, gl.ARRAY_BUFFER, textureCoords),
-            indices: BaseRenderer.createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, indices)
+            indices: BaseRenderer.createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, indices),
         };
+    }
+
+    /**
+     * Creates a buffer in WebGL.
+     * @param {WebGLRenderingContext} gl - The WebGL context.
+     * @param {number} target - The buffer target type.
+     * @param {TypedArray} data - The buffer data.
+     * @param {number} [usage=gl.STATIC_DRAW] - The usage pattern of the buffer.
+     * @returns {WebGLBuffer} The created WebGL buffer.
+     */
+    static createBuffer(gl, target, data, usage = gl.STATIC_DRAW) {
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(target, buffer);
+        gl.bufferData(target, data, usage);
+        return buffer;
     }
 
     bindAttributes() {
@@ -131,19 +199,137 @@ export class BaseRenderer {
         gl.enableVertexAttribArray(this.attribLocations.textureCoord);
     }
 
-    // Abstract method – must be implemented by subclass.
+    /**
+     * Loads images, processes depth maps, and assigns WebGL textures asynchronously.
+     * @param {Object} obj - The object containing image & depth data.
+     */
+    async _parseObjectAndCreateTextures(obj) {
+        for (let key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                if (key === "image") {
+                    try {
+                        console.log("Loading image:", obj[key].url);
+                        const img = await this._loadImage2(obj[key].url);
+                        obj[key]["texture"] = this._createTexture(img);
+                    } catch (error) {
+                        console.error("Error loading image:", error);
+                    }
+                } else if (key === "invZ" && obj.hasOwnProperty("mask")) {
+                    try {
+                        const maskImg = await this._loadImage2(obj["mask"].url);
+                        const invzImg = await this._loadImage2(obj["invZ"].url);
+                        const maskedInvz = this._create4ChannelImage(invzImg, maskImg);
+                        obj["invZ"]["texture"] = this._createTexture(maskedInvz);
+                    } catch (error) {
+                        console.error("Error loading mask or invZ image:", error);
+                    }
+                } else if (key === "invZ") {
+                    try {
+                        const invzImg = await this._loadImage2(obj["invZ"].url);
+                        obj["invZ"]["texture"] = this._createTexture(invzImg);
+                    } catch (error) {
+                        console.error("Error loading invZ image:", error);
+                    }
+                } else if (typeof obj[key] === "object" && obj[key] !== null) {
+                    await this._parseObjectAndCreateTextures(obj[key]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads an image from a URL.
+     * @param {string} url - The URL of the image.
+     * @returns {Promise<HTMLImageElement>} - A promise resolving to the loaded image.
+     */
+    async _loadImage2(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = url;
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+        });
+    }
+
+    /**
+     * Creates a WebGL texture from an image.
+     * @param {HTMLImageElement|HTMLCanvasElement} image - The image to create a texture from.
+     * @returns {WebGLTexture} - The generated WebGL texture.
+     */
+    _createTexture(image) {
+        const gl = this.gl;
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        return texture;
+    }
+
+    /**
+    * Creates a 4-channel image from RGB and mask images.
+    * @param {HTMLImageElement} rgbImage - The RGB image.
+    * @param {HTMLImageElement} maskImage - The mask image.
+    * @returns {HTMLCanvasElement} - The combined 4-channel image.
+    */
+    _create4ChannelImage(rgbImage, maskImage) {
+        const width = rgbImage.width;
+        const height = rgbImage.height;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        // Enable `willReadFrequently` to optimize multiple `getImageData` calls
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+        // Draw RGB image and get pixel data
+        ctx.drawImage(rgbImage, 0, 0, width, height);
+        const rgbImageData = ctx.getImageData(0, 0, width, height);
+        const rgbData = rgbImageData.data;
+
+        // Draw mask image and get pixel data
+        ctx.drawImage(maskImage, 0, 0, width, height);
+        const maskImageData = ctx.getImageData(0, 0, width, height);
+        const maskData = maskImageData.data;
+
+        // Create a new imageData object for the combined output
+        const combinedData = ctx.createImageData(width, height);
+        const combinedPixels = combinedData.data;
+
+        // Merge RGB channels from the RGB image and Alpha from the mask
+        for (let i = 0; i < rgbData.length / 4; i++) {
+            combinedPixels[i * 4] = rgbData[i * 4];       // Red
+            combinedPixels[i * 4 + 1] = rgbData[i * 4 + 1]; // Green
+            combinedPixels[i * 4 + 2] = rgbData[i * 4 + 2]; // Blue
+            combinedPixels[i * 4 + 3] = maskData[i * 4];   // Alpha (from mask red channel)
+        }
+
+        // Put modified image data back onto the canvas
+        ctx.putImageData(combinedData, 0, 0);
+
+        return canvas;
+    }
+
+
+    /**
+     * Abstract method – must be implemented by subclass.
+     */
     drawScene() {
         throw new Error("drawScene() must be implemented by subclass");
     }
 }
+
 
 // ================================
 // MN2MNRenderer: Mono Input → Mono Output
 // (Formerly setupWebGL & drawScene)
 // ================================
 export class MN2MNRenderer extends BaseRenderer {
-    constructor(gl, vertexShaderSource, fragmentShaderSource) {
-        super(gl, vertexShaderSource, fragmentShaderSource);
+    constructor(gl, fragmentShaderSource, views) {
+        super(gl, fragmentShaderSource, views);
         const ctx = this.gl;
         this.uniformLocations = {
             uNumLayers: ctx.getUniformLocation(this.program, "uNumLayers"),
@@ -179,8 +365,10 @@ export class MN2MNRenderer extends BaseRenderer {
      *                        image.texture, invZ.texture, f, invZ.min, invZ.max, width, height.
      * @param {Object} renderCam - Camera object with properties: pos, sk, sl, roll, f.
      */
-    drawScene(views, renderCam) {
+    drawScene() {
         const gl = this.gl;
+        const views = this.views;
+        const renderCam = this.renderCam;
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -230,8 +418,8 @@ export class MN2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGLST & drawSceneST)
 // ================================
 export class ST2MNRenderer extends BaseRenderer {
-    constructor(gl, vertexShaderSource, fragmentShaderSource) {
-        super(gl, vertexShaderSource, fragmentShaderSource);
+    constructor(gl, fragmentShaderSource, views) {
+        super(gl, fragmentShaderSource, views);
         const ctx = this.gl;
         this.uniformLocations = {
             // Left view uniforms:
@@ -282,8 +470,10 @@ export class ST2MNRenderer extends BaseRenderer {
      *   views[0] as left view and views[1] as right view.
      *   renderCam is a mono camera for output.
      */
-    drawScene(views, renderCam) {
+    drawScene() {
         const gl = this.gl;
+        const views = this.views;
+        const renderCam = this.renderCam;
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -346,9 +536,23 @@ export class ST2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGL2ST & drawScene2ST)
 // ================================
 export class MN2STRenderer extends BaseRenderer {
-    constructor(gl, vertexShaderSource, fragmentShaderSource) {
-        super(gl, vertexShaderSource, fragmentShaderSource);
+    constructor(gl, fragmentShaderSource, views) {
+        super(gl, fragmentShaderSource, views);
         const ctx = this.gl;
+        this.renderCamL = {
+            pos: { x: 0, y: 0, z: 0 }, // Default camera position
+            sl: { x: 0, y: 0 },
+            sk: { x: 0, y: 0 },
+            roll: 0,
+            f: 0 // Placeholder for focal length
+        };
+        this.renderCamR = {
+            pos: { x: 0, y: 0, z: 0 }, // Default camera position
+            sl: { x: 0, y: 0 },
+            sk: { x: 0, y: 0 },
+            roll: 0,
+            f: 0 // Placeholder for focal length
+        };
         // Uniforms for mono input and stereo rendering.
         this.uniformLocations = {
             // Mono input uniforms:
@@ -390,8 +594,11 @@ export class MN2STRenderer extends BaseRenderer {
      *   views[0] as mono input.
      *   renderCamL and renderCamR as stereo rendering camera parameters.
      */
-    drawScene(views, renderCamL, renderCamR) {
+    drawScene() {
         const gl = this.gl;
+        const views = this.views;
+        const renderCamL = this.renderCamL;
+        const renderCamR = this.renderCamR;
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -451,9 +658,23 @@ export class MN2STRenderer extends BaseRenderer {
 // (Former setupWebGLST2ST & drawSceneST2ST)
 // ---------------------------
 export class ST2STRenderer extends BaseRenderer {
-    constructor(gl, vertexShaderSource, fragmentShaderSource) {
-        super(gl, vertexShaderSource, fragmentShaderSource);
+    constructor(gl, fragmentShaderSource, views) {
+        super(gl, fragmentShaderSource, views);
         const ctx = this.gl;
+        this.renderCamL = {
+            pos: { x: 0, y: 0, z: 0 }, // Default camera position
+            sl: { x: 0, y: 0 },
+            sk: { x: 0, y: 0 },
+            roll: 0,
+            f: 0 // Placeholder for focal length
+        };
+        this.renderCamR = {
+            pos: { x: 0, y: 0, z: 0 }, // Default camera position
+            sl: { x: 0, y: 0 },
+            sk: { x: 0, y: 0 },
+            roll: 0,
+            f: 0 // Placeholder for focal length
+        };
         // Uniform locations for left view
         this.uniformLocations = {
             // Left view uniforms
@@ -511,8 +732,11 @@ export class ST2STRenderer extends BaseRenderer {
      *   views[0] as left view, views[1] as right view.
      *   renderCamL and renderCamR as the left and right rendering camera parameters.
      */
-    drawScene(views, renderCamL, renderCamR) {
+    drawScene() {
         const gl = this.gl;
+        const views = this.views;
+        const renderCamL = this.renderCamL;
+        const renderCamR = this.renderCamR;
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -579,8 +803,3 @@ export class ST2STRenderer extends BaseRenderer {
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
-
-
-// ================================
-// Export all four renderers.
-export { MN2MNRenderer, ST2MNRenderer, MN2STRenderer, ST2STRenderer };
