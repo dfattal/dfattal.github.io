@@ -369,6 +369,7 @@ export class MN2MNRenderer extends BaseRenderer {
     constructor(gl, fragmentShaderSource, views, debug = false) {
         super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
+        this.windowEffect = false;
         this.uniformLocations = {
             uNumLayers: ctx.getUniformLocation(this.program, "uNumLayers"),
             invZmin: ctx.getUniformLocation(this.program, "invZmin"),
@@ -435,7 +436,11 @@ export class MN2MNRenderer extends BaseRenderer {
         gl.uniform1fv(this.uniformLocations.invZmin, views[0].layers.map(l => l.invZ.min));
         gl.uniform1fv(this.uniformLocations.invZmax, views[0].layers.map(l => l.invZ.max));
         gl.uniform2fv(this.uniformLocations.iRes, views[0].layers.map(l => [l.width, l.height]).flat());
-        gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        if (this.windowEffect) {
+            gl.uniform2f(this.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+        } else {
+            gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        }
         gl.uniform3f(this.uniformLocations.uFacePosition,
             renderCam.pos.x, renderCam.pos.y, renderCam.pos.z);
         gl.uniform2f(this.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
@@ -459,6 +464,7 @@ export class ST2MNRenderer extends BaseRenderer {
     constructor(gl, fragmentShaderSource, views, debug = false) {
         super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
+        this.windowEffect = false;
         this.uniformLocations = {
             // Left view uniforms:
             uImageL: [],
@@ -556,7 +562,11 @@ export class ST2MNRenderer extends BaseRenderer {
         gl.uniform1fv(this.uniformLocations.invZminR, views[1].layers.map(l => l.invZ.min));
         gl.uniform1fv(this.uniformLocations.invZmaxR, views[1].layers.map(l => l.invZ.max));
         gl.uniform2fv(this.uniformLocations.iResR, views[1].layers.map(l => [l.width, l.height]).flat());
-        gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        if (this.windowEffect) {
+            gl.uniform2f(this.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+        } else {
+            gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        }
         gl.uniform3f(this.uniformLocations.uFacePosition, renderCam.pos.x, renderCam.pos.y, renderCam.pos.z);
         gl.uniform2f(this.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
         gl.uniform2f(this.uniformLocations.sk2, renderCam.sk.x, renderCam.sk.y);
@@ -577,6 +587,7 @@ export class MN2STRenderer extends BaseRenderer {
     constructor(gl, fragmentShaderSource, views, debug = false) {
         super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
+        this.windowEffect = false;
         this.renderCamL = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position
             sl: { x: 0, y: 0 },
@@ -666,7 +677,11 @@ export class MN2STRenderer extends BaseRenderer {
         gl.uniform1fv(this.uniformLocations.invZmin, views[0].layers.map(l => l.invZ.min));
         gl.uniform1fv(this.uniformLocations.invZmax, views[0].layers.map(l => l.invZ.max));
         gl.uniform2fv(this.uniformLocations.iRes, views[0].layers.map(l => [l.width, l.height]).flat());
-        gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        if (this.windowEffect) {
+            gl.uniform2f(this.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+        } else {
+            gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        }
         // Stereo rendering uniforms:
         gl.uniform3f(this.uniformLocations.uFacePositionL,
             renderCamL.pos.x, renderCamL.pos.y, renderCamL.pos.z);
@@ -699,6 +714,7 @@ export class ST2STRenderer extends BaseRenderer {
     constructor(gl, fragmentShaderSource, views, debug = false) {
         super(gl, fragmentShaderSource, views, debug);
         const ctx = this.gl;
+        this.windowEffect = false;
         this.renderCamL = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position
             sl: { x: 0, y: 0 },
@@ -822,7 +838,11 @@ export class ST2STRenderer extends BaseRenderer {
         gl.uniform1fv(this.uniformLocations.invZmaxR, views[1].layers.map(l => l.invZ.max));
         gl.uniform2fv(this.uniformLocations.iResR, views[1].layers.map(l => [l.width, l.height]).flat());
         // Rendering info for stereo:
-        gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        if (this.windowEffect) {
+            gl.uniform2f(this.uniformLocations.iResOriginal, views[0].width, views[0].height); // for window effect only
+        } else {
+            gl.uniform2f(this.uniformLocations.iResOriginal, gl.canvas.width, gl.canvas.height);
+        }
         gl.uniform3f(this.uniformLocations.uFacePositionL,
             renderCamL.pos.x, renderCamL.pos.y, renderCamL.pos.z);
         gl.uniform2f(this.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
