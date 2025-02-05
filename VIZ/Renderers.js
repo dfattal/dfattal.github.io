@@ -21,6 +21,8 @@ export class BaseRenderer {
             roll: 0,
             f: 0 // Placeholder for focal length
         };
+        console.log("Debug Views:", views);
+        this.invd = null;
 
         this.program = BaseRenderer.createProgram(gl, BaseRenderer.defaultVertexShader(), fragmentShaderSource);
         if (!this.program) {

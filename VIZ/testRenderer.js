@@ -1,7 +1,7 @@
 // testRenderer.js is a simple script that demonstrates how to use the MN2MNRenderer class to render LIF files.
 
 import { LifLoader } from '../LIF/LifLoader.js';
-import { MN2MNRenderer } from './Renderers.js'; // Assumes MN2MNRenderer (or BaseRenderer) is exported from here.
+import { MN2MNRenderer, ST2MNRenderer } from './Renderers.js'; // Assumes MN2MNRenderer (or BaseRenderer) is exported from here.
 
 // Focal calculations
 function viewportScale(iRes, oRes) {
@@ -34,23 +34,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     window.addEventListener('resize', () => resizeCanvasToContainer(canvas, container, gl));
-    resizeCanvasToContainer(canvas, container, gl);
-
-    const fragmentShaderUrl = '../Shaders/rayCastMonoLDI.glsl';
+    resizeCanvasToContainer(canvas, container, gl);;
 
     let renderer = null;
     let views = null;
     let stereo_render_data = null;
 
     // Initialize renderer with views
-    async function initRenderer(views) {
-        renderer = await MN2MNRenderer.createInstance(gl, fragmentShaderUrl, views, true);
-        console.log('Renderer initialized with views:', renderer.views);
-        if (stereo_render_data) {
-            // Calculate focus (for logging/demo purposes).
-            const focus = stereo_render_data.inv_convergence_distance / renderer.views[0].layers[0].invZ.min;
-            console.log('Focus:', focus);
+    async function initRenderer(views,stereo_render_data) {
+        if (views.length > 1) {
+            renderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDI.glsl', views, true);
+        } else {
+            renderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views, false);
         }
+        
+        renderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        
+        console.log('Renderer initialized with views:', renderer.views);
+        console.log('Focus: ', renderer.invd ? renderer.invd / renderer.views[0].invZ.min : null);
     }
 
     let startTime = null;
@@ -61,13 +62,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (renderer) {
             // Oscillate renderCam.pos.x between -1 and 1 with a period of 1 sec.
             renderer.renderCam.pos.x = Math.sin(2 * Math.PI * elapsed);
-
+            renderer.renderCam.sk.x = - renderer.renderCam.pos.x * renderer.invd / (1 - renderer.renderCam.pos.z * renderer.invd);
 
             // Update focal length in renderer's internal renderCam
-            renderer.renderCam.f = renderer.views[0].f * viewportScale(
+            const vs = viewportScale(
                 { x: renderer.views[0].width, y: renderer.views[0].height },
                 { x: gl.canvas.width, y: gl.canvas.height }
-            );
+            )
+            renderer.renderCam.f = renderer.views[0].f * vs * Math.max(1 - renderer.renderCam.pos.z * renderer.invd, 0);
 
 
             renderer.drawScene();
@@ -91,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Initialize renderer with views.
                 if (!renderer) {
-                    await initRenderer(views);
+                    await initRenderer(views,stereo_render_data);
                 }
                 // Hide the file picker after file selection
                 filePicker.style.display = 'none';
