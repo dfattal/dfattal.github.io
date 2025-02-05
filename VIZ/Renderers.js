@@ -191,6 +191,7 @@ export class BaseRenderer {
         return buffer;
     }
 
+    // Binds vertex and texture coordinate attributes.
     bindAttributes() {
         const gl = this.gl;
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.position);
@@ -307,24 +308,25 @@ export class BaseRenderer {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-
+    
         // Enable `willReadFrequently` to optimize multiple `getImageData` calls
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
+    
         // Draw RGB image and get pixel data
         ctx.drawImage(rgbImage, 0, 0, width, height);
-        const rgbImageData = ctx.getImageData(0, 0, width, height);
-        const rgbData = rgbImageData.data;
-
+        const rgbData = ctx.getImageData(0, 0, width, height).data;
+    
+        // Clear the canvas before drawing the mask
+        ctx.clearRect(0, 0, width, height);
+    
         // Draw mask image and get pixel data
         ctx.drawImage(maskImage, 0, 0, width, height);
-        const maskImageData = ctx.getImageData(0, 0, width, height);
-        const maskData = maskImageData.data;
-
+        const maskData = ctx.getImageData(0, 0, width, height).data;
+    
         // Create a new imageData object for the combined output
         const combinedData = ctx.createImageData(width, height);
         const combinedPixels = combinedData.data;
-
+    
         // Merge RGB channels from the RGB image and Alpha from the mask
         for (let i = 0; i < rgbData.length / 4; i++) {
             combinedPixels[i * 4] = rgbData[i * 4];       // Red
@@ -332,11 +334,8 @@ export class BaseRenderer {
             combinedPixels[i * 4 + 2] = rgbData[i * 4 + 2]; // Blue
             combinedPixels[i * 4 + 3] = maskData[i * 4];   // Alpha (from mask red channel)
         }
-
-        // Put modified image data back onto the canvas
-        ctx.putImageData(combinedData, 0, 0);
-
-        return canvas;
+    
+        return combinedData;
     }
 
 
