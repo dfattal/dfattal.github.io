@@ -208,12 +208,22 @@ export class BaseRenderer {
         img.style.width = '50%';
         img.id = `debug-im${this._debugCount}`;
         img.classList.add('debug-im');
-        if (imgData.src) {
+    
+        if (imgData instanceof ImageData) {
+            // Case: imgData is an ImageData object, so we need to draw it on a canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = imgData.width;
+            canvas.height = imgData.height;
+    
+            const ctx = canvas.getContext('2d');
+            ctx.putImageData(imgData, 0, 0);
+    
+            img.src = canvas.toDataURL(); // Convert canvas content to an image source
+        } else if (imgData.src) {
+            // Case: imgData is already an image with a valid src
             img.src = imgData.src;
-            document.body.appendChild(document.createElement('br'));
-        } else {
-            img.src = imgData.toDataURL ? imgData.toDataURL() : '';
         }
+    
         document.body.appendChild(img);
         this._debugCount++;
     }
@@ -230,7 +240,6 @@ export class BaseRenderer {
                         // console.log("Loading image:", obj[key].url);
                         const img = await this._loadImage2(obj[key].url);
                         if (this.debug) {
-                            console.log("Debugging image:", obj[key].url);
                             this.debugTexture(img);
                         }
                         obj[key]["texture"] = this._createTexture(img);
@@ -243,7 +252,6 @@ export class BaseRenderer {
                         const invzImg = await this._loadImage2(obj["invZ"].url);
                         const maskedInvz = this._create4ChannelImage(invzImg, maskImg);
                         if (this.debug) {
-                            console.log("Debugging mask image:", obj["mask"].url);
                             this.debugTexture(maskedInvz);
                         }
                         obj["invZ"]["texture"] = this._createTexture(maskedInvz);
@@ -253,6 +261,9 @@ export class BaseRenderer {
                 } else if (key === "invZ") {
                     try {
                         const invzImg = await this._loadImage2(obj["invZ"].url);
+                        if (this.debug) {
+                            this.debugTexture(invzImg);
+                        }
                         obj["invZ"]["texture"] = this._createTexture(invzImg);
                     } catch (error) {
                         console.error("Error loading invZ image:", error);
@@ -334,7 +345,7 @@ export class BaseRenderer {
             combinedPixels[i * 4 + 2] = rgbData[i * 4 + 2]; // Blue
             combinedPixels[i * 4 + 3] = maskData[i * 4];   // Alpha (from mask red channel)
         }
-    
+        
         return combinedData;
     }
 
