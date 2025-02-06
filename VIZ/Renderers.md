@@ -1,237 +1,161 @@
-# Renderers.js Module Documentation
-
-This module provides a set of reusable WebGL renderer classes for different input/output modes. The module exports four renderer classes, each designed to handle one of the following scenarios:
-
-- **MN2MNRenderer**: Mono input → Mono output  
-- **ST2MNRenderer**: Stereo input → Mono output  
-- **MN2STRenderer**: Mono input → Stereo output  
-- **ST2STRenderer**: Stereo input → Stereo output
-
-All these classes extend the common **BaseRenderer** class, which provides shared functionality such as shader creation, program linking, common buffer setup, and attribute binding.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Installation](#installation)
-- [Usage](#usage)
-    - [Importing the Module](#importing-the-module)
-    - [BaseRenderer and Default Shaders](#baserenderer-and-default-shaders)
-    - [Renderer Classes](#renderer-classes)
-        - [MN2MNRenderer](#mn2mnrenderer)
-        - [ST2MNRenderer](#st2mnrenderer)
-        - [MN2STRenderer](#mn2strenderer)
-        - [ST2STRenderer](#st2strenderer)
-- [API Reference](#api-reference)
-- [License](#license)
+# Renderers Module Documentation
 
 ## Overview
 
-The module is designed to allow you to easily set up and reuse WebGL renderers for various stereo and mono rendering scenarios. Each renderer class encapsulates:
-- Creation of the WebGL shader program.
-- Retrieval of attribute and uniform locations.
-- Setup of common vertex, texture coordinate, and index buffers.
-- A `drawScene()` method to bind textures, set uniforms, and issue the draw call.
+The `Renderers` module provides WebGL-based rendering for **Leia Image Format (LIF)** files. It processes **multi-view, depth-aware images** and renders them using custom WebGL shaders. The module supports both **mono and stereo rendering**, making it compatible with Leia’s **glasses-free 3D displays**.
 
-Additionally, the **BaseRenderer** class contains a static async factory method to load a fragment shader from a given URL (with cache busting) and use a default vertex shader if none is provided.
+This module works in conjunction with the `LifLoader` module to extract and display **LIF images** in a WebGL canvas.
 
-## Installation
+---
 
-Place the `Renderer.js` file in your project (for example, in a `src/` or `lib/` folder). Ensure your project supports ES modules (or use a bundler like Webpack).
+## Base Class: `BaseRenderer`
 
-## Usage
+### Constructor
 
-### Importing the Module
-
-In your application code, import the renderer classes as follows:
-
-```js
-import {
-    MN2MNRenderer,
-    ST2MNRenderer,
-    MN2STRenderer,
-    ST2STRenderer
-} from "./Renderer.js";
+```javascript
+constructor(gl, fragmentShaderSource, views, debug = false)
 ```
 
-### BaseRenderer and Default Shaders
+Initializes a renderer with WebGL context, shader programs, and extracted **LIF views**.
 
-The BaseRenderer class automatically uses a default vertex shader if one isn’t provided. Additionally, you can use its static async factory method to load a fragment shader from a URL with cache busting:
+**Parameters:**
 
-```js
-import { BaseRenderer } from "./Renderer.js";
+- `gl` (`WebGLRenderingContext`): The WebGL context for rendering.
+- `fragmentShaderSource` (`string`): GLSL fragment shader source code.
+- `views` (`Object`): Extracted views from a LIF file.
+- `debug` (`boolean`, optional): Enables debug rendering.
 
-(async function() {
-    const canvas = document.getElementById("glCanvas");
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-        console.error("WebGL not supported!");
-        return;
-    }
-    // Load default fragment shader from URL:
-    const fragmentShaderUrl = "path/to/defaultFragmentShader.glsl";
-    const renderer = await BaseRenderer.createInstance(gl, fragmentShaderUrl);
-    // Use the renderer instance as needed...
-})();
+### Methods
+
+#### `async _processViews(views: Object)`
+
+Processes and standardizes views by replacing deprecated keys and loading textures.
+
+#### `replaceKeys(obj: Object, oldKeys: Array, newKeys: Array): Object`
+
+Recursively replaces outdated keys in LIF metadata.
+
+#### `static async createInstance(gl, fragmentShaderUrl, views, debug = false): Promise<BaseRenderer>`
+
+Asynchronously loads the fragment shader and creates a new renderer instance.
+
+#### `drawScene()`
+
+Abstract method for rendering a scene. Must be implemented in derived classes.
+
+#### `debugTexture(imgData)`
+
+Displays a texture in an HTML image element for debugging purposes.
+
+---
+
+## Derived Classes
+
+### `MN2MNRenderer`
+
+**Mono-to-Mono Renderer** – Processes and renders a single LIF view using WebGL.
+
+#### Constructor
+
+```javascript
+constructor(gl, fragmentShaderSource, views, debug = false)
 ```
 
-### Renderer Classes
+#### `drawScene()`
 
-#### MN2MNRenderer
-- **Description**: For mono input and mono output. This renderer uses uniforms such as `uNumLayers`, `invZmin`, `uViewPosition`, etc. and binds textures from a single view.
-- **Usage Example**:
+Renders a **mono image** using depth-based synthesis.
 
-```js
-const renderer = new MN2MNRenderer(gl, vertexShaderSource, fragmentShaderSource);
-const views = [{
-    position: { x: 0, y: 0, z: 0 },
-    sk: { x: 0, y: 0 },
-    rotation: { sl: { x: 0, y: 0 }, roll_degrees: 0 },
-    layers: [
-        {
-            f: 700,
-            invZ: { min: 0.5, max: 2.0, texture: someTexture1 },
-            image: { texture: someTexture2 },
-            width: 800,
-            height: 600
-        }
-    ]
-}];
-const renderCam = {
-    pos: { x: 0, y: 0, z: 0 },
-    sk: { x: 0, y: 0 },
-    sl: { x: 0, y: 0 },
-    roll: 0,
-    f: 600
-};
-function renderLoop() {
-    renderer.drawScene(views, renderCam);
-    requestAnimationFrame(renderLoop);
-}
-renderLoop();
+---
+
+### `ST2MNRenderer`
+
+**Stereo-to-Mono Renderer** – Converts stereo LIF data into a **single monoscopic** view.
+
+#### Constructor
+
+```javascript
+constructor(gl, fragmentShaderSource, views, debug = false)
 ```
 
-#### ST2MNRenderer
-- **Description**: For stereo input (left & right views) and mono output. The renderer binds textures and uniforms from both left and right views, but produces a mono output.
-- **Usage Example**:
+#### `drawScene()`
 
-```js
-const renderer = new ST2MNRenderer(gl, vertexShaderSource, fragmentShaderSource);
-const views = [
-    { // Left view
-        position: { x: 0, y: 0, z: 0 },
-        sk: { x: 0, y: 0 },
-        rotation: { sl: { x: 0, y: 0 }, roll_degrees: 0 },
-        layers: [ /* ... left view layers ... */ ]
-    },
-    { // Right view
-        position: { x: 0, y: 0, z: 0 },
-        sk: { x: 0, y: 0 },
-        rotation: { sl: { x: 0, y: 0 }, roll_degrees: 0 },
-        layers: [ /* ... right view layers ... */ ]
-    }
-];
-const renderCam = { pos: { x: 0, y: 0, z: 0 }, sk: { x: 0, y: 0 }, sl: { x: 0, y: 0 }, roll: 0, f: 50 };
-function renderLoop() {
-    renderer.drawScene(views, renderCam);
-    requestAnimationFrame(renderLoop);
-}
-renderLoop();
+Renders a **stereo image** into a monoscopic output.
+
+---
+
+### `MN2STRenderer`
+
+**Mono-to-Stereo Renderer** – Converts a single LIF view into a **stereo 3D image**.
+
+#### Constructor
+
+```javascript
+constructor(gl, fragmentShaderSource, views, debug = false)
 ```
 
-#### MN2STRenderer
-- **Description**: For mono input and stereo output. This renderer uses a mono input view and then produces separate stereo outputs using two sets of rendering camera parameters (left and right).
-- **Usage Example**:
+#### `drawScene()`
 
-```js
-const renderer = new MN2STRenderer(gl, vertexShaderSource, fragmentShaderSource);
-const views = [{
-    position: { x: 0, y: 0, z: 0 },
-    sk: { x: 0, y: 0 },
-    rotation: { sl: { x: 0, y: 0 }, roll_degrees: 0 },
-    layers: [ /* mono input layers */ ]
-}];
-const renderCamL = { pos: { x: 0, y: 0, z: 0 }, sk: { x: 0, y: 0 }, sl: { x: 0, y: 0 }, roll: 0, f: 50 };
-const renderCamR = { pos: { x: 0, y: 0, z: 0 }, sk: { x: 0, y: 0 }, sl: { x: 0, y: 0 }, roll: 0, f: 50 };
-function renderLoop() {
-    renderer.drawScene(views, renderCamL, renderCamR);
-    requestAnimationFrame(renderLoop);
-}
-renderLoop();
+Generates **stereo output** from a **mono depth** source.
+
+---
+
+### `ST2STRenderer`
+
+**Stereo-to-Stereo Renderer** – Processes **stereo LIF views** and renders stereo output.
+
+#### Constructor
+
+```javascript
+constructor(gl, fragmentShaderSource, views, debug = false)
 ```
 
-#### ST2STRenderer
-- **Description**: For stereo input and stereo output. This renderer expects two input views (left and right) and renders with separate stereo camera parameters.
-- **Usage Example**:
+#### `drawScene()`
 
-```js
-const renderer = new ST2STRenderer(gl, vertexShaderSource, fragmentShaderSource);
-const views = [
-    { // Left view
-        position: { x: 0, y: 0, z: 0 },
-        sk: { x: 0, y: 0 },
-        rotation: { sl: { x: 0, y: 0 }, roll_degrees: 0 },
-        layers: [ /* left view layers */ ]
-    },
-    { // Right view
-        position: { x: 0, y: 0, z: 0 },
-        sk: { x: 0, y: 0 },
-        rotation: { sl: { x: 0, y: 0 }, roll_degrees: 0 },
-        layers: [ /* right view layers */ ]
-    }
-];
-const renderCamL = { pos: { x: 0, y: 0, z: 0 }, sk: { x: 0, y: 0 }, sl: { x: 0, y: 0 }, roll: 0, f: 50 };
-const renderCamR = { pos: { x: 0, y: 0, z: 0 }, sk: { x: 0, y: 0 }, sl: { x: 0, y: 0 }, roll: 0, f: 50 };
-function renderLoop() {
-    renderer.drawScene(views, renderCamL, renderCamR);
-    requestAnimationFrame(renderLoop);
-}
-renderLoop();
+Maintains **stereo input-output** rendering.
+
+---
+
+## WebGL Utilities
+
+### `static createProgram(gl, vsSource, fsSource): WebGLProgram`
+
+Creates a **WebGL shader program** from vertex and fragment shaders.
+
+### `static createShader(gl, type, source): WebGLShader`
+
+Compiles a shader from GLSL source code.
+
+### `static setupCommonBuffers(gl): Object`
+
+Creates WebGL buffers for rendering a **full-screen quad**.
+
+### `static createBuffer(gl, target, data, usage = gl.STATIC_DRAW): WebGLBuffer`
+
+Creates and initializes a **WebGL buffer**.
+
+---
+
+## Usage Example
+
+```javascript
+const gl = document.getElementById('glCanvas').getContext('webgl');
+const loader = new LifLoader();
+await loader.load(file);
+const views = loader.views;
+const renderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views);
+requestAnimationFrame(() => renderer.drawScene());
 ```
 
-## API Reference
+---
 
-### BaseRenderer
-- **Constructor**:
-    ```js
-    new BaseRenderer(gl, vertexShaderSource, fragmentShaderSource)
-    ```
-    If `vertexShaderSource` is omitted, a default basic vertex shader is used.
-- **Static Methods**:
-    - `createShader(gl, type, source)`
-    - `createProgram(gl, vsSource, fsSource)`
-    - `createBuffer(gl, target, data, usage)`
-    - `setupCommonBuffers(gl)`
-    - `createInstance(gl, fragmentShaderUrl, vertexShaderSource?)` (async factory method)
-- **Instance Methods**:
-    - `bindAttributes()`
-    - `drawScene()` (abstract; implemented by subclasses)
+## Dependencies
 
-### Renderer Subclasses
+- `LifLoader.js`: Parses LIF files to extract **views, images, and depth maps**.
+- `WebGL Shaders`: GLSL fragment shaders for rendering.
 
-Each subclass implements its own `drawScene()` method. The parameters typically are:
-- For mono renderers: `(views, renderCam)`
-- For stereo renderers: `(views, renderCamL, renderCamR)`
+---
 
-## License
+## Notes
 
-MIT License
-
-Copyright (c) [2025] [LEIA INC]
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+- Supports **multi-layered depth maps** for **de-occlusion handling**.
+- Optimized for **Leia’s 3D display technology**.

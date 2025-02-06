@@ -3,11 +3,8 @@
 export class LifLoader {
     /**
      * @param {Object} options
-     * @param {boolean} [options.debug=false] - If true, debugs images by adding them to the document.
      */
-    constructor({ debug = false } = {}) {
-        this.debug = debug;
-        this._debugCount = 0;
+    constructor() {
         // Saved views (processed but not yet loaded into WebGL) are stored here after load().
         this.views = null;
         this.stereo_render_data = null;

@@ -8,6 +8,7 @@ export class BaseRenderer {
      * @param {WebGLRenderingContext} gl - The WebGL context.
      * @param {string} fragmentShaderSource - The fragment shader source.
      * @param {Object} views - The processed views from LifLoader.
+     * @param {boolean} [debug=false] - Whether to display debug images.
      */
     constructor(gl, fragmentShaderSource, views, debug = false) {
         this.gl = gl;

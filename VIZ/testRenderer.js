@@ -1,16 +1,18 @@
-// testRenderer.js is a simple script that demonstrates how to use the MN2MNRenderer class to render LIF files.
+// testRenderer.js is a simple script that demonstrates how to use the MN2MNRenderer or ST2MNRenderer class to render LIF files.
 
 import { LifLoader } from '../LIF/LifLoader.js';
-import { MN2MNRenderer, ST2MNRenderer } from './Renderers.js'; // Assumes MN2MNRenderer (or BaseRenderer) is exported from here.
+import { MN2MNRenderer, ST2MNRenderer } from './Renderers.js'; // Assumes MN2MNRenderer, ST2MNRenderer (or BaseRenderer) is exported from here.
 
 // Focal calculations
 function viewportScale(iRes, oRes) {
     return Math.min(oRes.x, oRes.y) / Math.min(iRes.x, iRes.y);
 }
 
-function resizeCanvasToContainer(canvas, container, gl) {
+function resizeCanvasToContainer(canvas, container) {
     const displayWidth = container.clientWidth;
     const displayHeight = container.clientHeight;
+
+    const gl = canvas.getContext('webgl');
 
     if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
         canvas.width = displayWidth;
@@ -33,8 +35,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    window.addEventListener('resize', () => resizeCanvasToContainer(canvas, container, gl));
-    resizeCanvasToContainer(canvas, container, gl);;
+    window.addEventListener('resize', () => resizeCanvasToContainer(canvas, container));
+    resizeCanvasToContainer(canvas, container);
 
     let renderer = null;
     let views = null;
@@ -43,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize renderer with views
     async function initRenderer(views,stereo_render_data) {
         if (views.length > 1) {
-            renderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDI.glsl', views, true);
+            renderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDI.glsl', views, false);
         } else {
             renderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views, false);
         }
