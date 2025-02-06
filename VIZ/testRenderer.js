@@ -3,11 +3,6 @@
 import { LifLoader } from '../LIF/LifLoader.js';
 import { MN2MNRenderer, ST2MNRenderer } from './Renderers.js'; // Assumes MN2MNRenderer, ST2MNRenderer (or BaseRenderer) is exported from here.
 
-// Focal calculations
-function viewportScale(iRes, oRes) {
-    return Math.min(oRes.x, oRes.y) / Math.min(iRes.x, iRes.y);
-}
-
 function resizeCanvasToContainer(canvas, container) {
     const displayWidth = container.clientWidth;
     const displayHeight = container.clientHeight;
@@ -66,12 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderer.renderCam.pos.x = Math.sin(2 * Math.PI * elapsed);
             renderer.renderCam.sk.x = - renderer.renderCam.pos.x * renderer.invd / (1 - renderer.renderCam.pos.z * renderer.invd);
 
-            // Update focal length in renderer's internal renderCam
-            const vs = viewportScale(
-                { x: renderer.views[0].width, y: renderer.views[0].height },
-                { x: gl.canvas.width, y: gl.canvas.height }
-            )
-            renderer.renderCam.f = renderer.views[0].f * vs * Math.max(1 - renderer.renderCam.pos.z * renderer.invd, 0);
+            renderer.renderCam.f = renderer.views[0].f * renderer.viewportScale() * Math.max(1 - renderer.renderCam.pos.z * renderer.invd, 0);
 
 
             renderer.drawScene();

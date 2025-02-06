@@ -46,6 +46,15 @@ export class BaseRenderer {
     }
 
     /**
+     * Computes the appropriate scaling factor between the LIF image size and the rendering viewport.
+     *
+     * @returns {number} The scaling factor based on the minimum dimensions of the canvas and the view.
+     */
+    viewportScale() {
+        return Math.min(this.gl.canvas.width, this.gl.canvas.height) / Math.min(this.views[0].width, this.views[0].height);
+    }
+
+    /**
      * Processes views: replaces keys and loads textures.
      * @param {Object} views - The processed views from LifLoader.
      * @returns {Object} - Views with processed textures.

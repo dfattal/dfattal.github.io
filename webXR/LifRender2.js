@@ -89,7 +89,7 @@ function init() {
         texL = tex;
         console.log('Loaded left texture:', tex.image.width, 'x', tex.image.height);
     });
-    loader.load(views[1 % views.length].image.url, (tex) => {
+    loader.load(views[1].image.url, (tex) => {
         tex.encoding = THREE.sRGBEncoding;
         texR = tex;
         console.log('Loaded right texture:', tex.image.width, 'x', tex.image.height);
