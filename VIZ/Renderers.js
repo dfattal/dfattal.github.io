@@ -22,7 +22,7 @@ export class BaseRenderer {
             roll: 0,
             f: 0 // Placeholder for focal length
         };
-        console.log("Debug Views:", views);
+        if (this.debug) console.log("Debug Views:", views);
         this.invd = null;
 
         this.program = BaseRenderer.createProgram(gl, BaseRenderer.defaultVertexShader(), fragmentShaderSource);
@@ -43,6 +43,7 @@ export class BaseRenderer {
 
         // Process views and assign textures.
         this._processViews(views);
+        this.renderCam.f = this.views[0].f * this.viewportScale();
     }
 
     /**
