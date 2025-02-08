@@ -15,6 +15,7 @@ export class BaseRenderer {
         this.views = null;
         this._debugCount = 0;
         this.debug = debug;
+        this.windowEffect = false;
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position
             sl: { x: 0, y: 0 },
@@ -44,11 +45,12 @@ export class BaseRenderer {
         // Process views and assign textures.
         this._processViews(views);
         this.renderCam.f = this.views[0].f * this.viewportScale();
-
+        const ctx = this.gl;
         this.uniformLocations = {
             oRes: ctx.getUniformLocation(this.program, "oRes"),
             feathering: ctx.getUniformLocation(this.program, "feathering"),
-            background: ctx.getUniformLocation(this.program, "background")
+            background: ctx.getUniformLocation(this.program, "background"),
+            iResOriginal: ctx.getUniformLocation(this.program, "iResOriginal")
         };
     }
 
@@ -400,7 +402,6 @@ export class MN2MNRenderer extends BaseRenderer {
             roll1: ctx.getUniformLocation(this.program, "roll1"),
             f1: ctx.getUniformLocation(this.program, "f1"),
             iRes: ctx.getUniformLocation(this.program, "iRes"),
-            iResOriginal: ctx.getUniformLocation(this.program, "iResOriginal"),
             uFacePosition: ctx.getUniformLocation(this.program, "uFacePosition"),
             sk2: ctx.getUniformLocation(this.program, "sk2"),
             sl2: ctx.getUniformLocation(this.program, "sl2"),
@@ -509,7 +510,6 @@ export class ST2MNRenderer extends BaseRenderer {
             f1R: ctx.getUniformLocation(this.program, "f1R"),
             iResR: ctx.getUniformLocation(this.program, "iResR"),
             // Rendering info (mono output):
-            iResOriginal: ctx.getUniformLocation(this.program, "iResOriginal"),
             uFacePosition: ctx.getUniformLocation(this.program, "uFacePosition"),
             sk2: ctx.getUniformLocation(this.program, "sk2"),
             sl2: ctx.getUniformLocation(this.program, "sl2"),
@@ -632,7 +632,6 @@ export class MN2STRenderer extends BaseRenderer {
             roll1: ctx.getUniformLocation(this.program, "roll1"),
             f1: ctx.getUniformLocation(this.program, "f1"),
             iRes: ctx.getUniformLocation(this.program, "iRes"),
-            iResOriginal: ctx.getUniformLocation(this.program, "iResOriginal"),
             // Stereo rendering uniforms:
             uFacePositionL: ctx.getUniformLocation(this.program, "uFacePositionL"),
             sk2L: ctx.getUniformLocation(this.program, "sk2L"),
@@ -770,7 +769,6 @@ export class ST2STRenderer extends BaseRenderer {
             f1R: ctx.getUniformLocation(this.program, "f1R"),
             iResR: ctx.getUniformLocation(this.program, "iResR"),
             // Rendering info (stereo):
-            iResOriginal: ctx.getUniformLocation(this.program, "iResOriginal"),
             uFacePositionL: ctx.getUniformLocation(this.program, "uFacePositionL"),
             sk2L: ctx.getUniformLocation(this.program, "sk2L"),
             sl2L: ctx.getUniformLocation(this.program, "sl2L"),

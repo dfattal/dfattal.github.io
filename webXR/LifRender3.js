@@ -98,6 +98,10 @@ async function init() {
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     }
 
+    // set background to white
+    // rL.background = [1,1,1];
+    // rR.background = [1,1,1];
+
     texL = new THREE.CanvasTexture(rL.gl.canvas);
     texR = new THREE.CanvasTexture(rR.gl.canvas);
 
