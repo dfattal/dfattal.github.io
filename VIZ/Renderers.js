@@ -44,7 +44,15 @@ export class BaseRenderer {
         // Process views and assign textures.
         this._processViews(views);
         this.renderCam.f = this.views[0].f * this.viewportScale();
+
+        this.uniformLocations = {
+            oRes: ctx.getUniformLocation(this.program, "oRes"),
+            feathering: ctx.getUniformLocation(this.program, "feathering"),
+            background: ctx.getUniformLocation(this.program, "background")
+        };
     }
+
+
 
     /**
      * Computes the appropriate scaling factor between the LIF image size and the rendering viewport.
@@ -221,22 +229,22 @@ export class BaseRenderer {
         img.style.width = '50%';
         img.id = `debug-im${this._debugCount}`;
         img.classList.add('debug-im');
-    
+
         if (imgData instanceof ImageData) {
             // Case: imgData is an ImageData object, so we need to draw it on a canvas
             const canvas = document.createElement('canvas');
             canvas.width = imgData.width;
             canvas.height = imgData.height;
-    
+
             const ctx = canvas.getContext('2d');
             ctx.putImageData(imgData, 0, 0);
-    
+
             img.src = canvas.toDataURL(); // Convert canvas content to an image source
         } else if (imgData.src) {
             // Case: imgData is already an image with a valid src
             img.src = imgData.src;
         }
-    
+
         document.body.appendChild(img);
         this._debugCount++;
     }
@@ -332,25 +340,25 @@ export class BaseRenderer {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-    
+
         // Enable `willReadFrequently` to optimize multiple `getImageData` calls
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    
+
         // Draw RGB image and get pixel data
         ctx.drawImage(rgbImage, 0, 0, width, height);
         const rgbData = ctx.getImageData(0, 0, width, height).data;
-    
+
         // Clear the canvas before drawing the mask
         ctx.clearRect(0, 0, width, height);
-    
+
         // Draw mask image and get pixel data
         ctx.drawImage(maskImage, 0, 0, width, height);
         const maskData = ctx.getImageData(0, 0, width, height).data;
-    
+
         // Create a new imageData object for the combined output
         const combinedData = ctx.createImageData(width, height);
         const combinedPixels = combinedData.data;
-    
+
         // Merge RGB channels from the RGB image and Alpha from the mask
         for (let i = 0; i < rgbData.length / 4; i++) {
             combinedPixels[i * 4] = rgbData[i * 4];       // Red
@@ -358,7 +366,7 @@ export class BaseRenderer {
             combinedPixels[i * 4 + 2] = rgbData[i * 4 + 2]; // Blue
             combinedPixels[i * 4 + 3] = maskData[i * 4];   // Alpha (from mask red channel)
         }
-        
+
         return combinedData;
     }
 
@@ -382,6 +390,7 @@ export class MN2MNRenderer extends BaseRenderer {
         const ctx = this.gl;
         this.windowEffect = false;
         this.uniformLocations = {
+            ...this.uniformLocations,
             uNumLayers: ctx.getUniformLocation(this.program, "uNumLayers"),
             invZmin: ctx.getUniformLocation(this.program, "invZmin"),
             invZmax: ctx.getUniformLocation(this.program, "invZmax"),
@@ -396,10 +405,7 @@ export class MN2MNRenderer extends BaseRenderer {
             sk2: ctx.getUniformLocation(this.program, "sk2"),
             sl2: ctx.getUniformLocation(this.program, "sl2"),
             roll2: ctx.getUniformLocation(this.program, "roll2"),
-            f2: ctx.getUniformLocation(this.program, "f2"),
-            oRes: ctx.getUniformLocation(this.program, "oRes"),
-            feathering: ctx.getUniformLocation(this.program, "feathering"),
-            background: ctx.getUniformLocation(this.program, "background")
+            f2: ctx.getUniformLocation(this.program, "f2")
         };
         this.uniformLocations.uImage = [];
         this.uniformLocations.uDisparityMap = [];
@@ -477,6 +483,7 @@ export class ST2MNRenderer extends BaseRenderer {
         const ctx = this.gl;
         this.windowEffect = false;
         this.uniformLocations = {
+            ...this.uniformLocations,
             // Left view uniforms:
             uImageL: [],
             uDisparityMapL: [],
@@ -507,10 +514,7 @@ export class ST2MNRenderer extends BaseRenderer {
             sk2: ctx.getUniformLocation(this.program, "sk2"),
             sl2: ctx.getUniformLocation(this.program, "sl2"),
             roll2: ctx.getUniformLocation(this.program, "roll2"),
-            f2: ctx.getUniformLocation(this.program, "f2"),
-            oRes: ctx.getUniformLocation(this.program, "oRes"),
-            feathering: ctx.getUniformLocation(this.program, "feathering"),
-            background: ctx.getUniformLocation(this.program, "background")
+            f2: ctx.getUniformLocation(this.program, "f2")
         };
         for (let i = 0; i < 4; i++) {
             this.uniformLocations.uImageL.push(ctx.getUniformLocation(this.program, `uImageL[${i}]`));
@@ -615,6 +619,7 @@ export class MN2STRenderer extends BaseRenderer {
         };
         // Uniforms for mono input and stereo rendering.
         this.uniformLocations = {
+            ...this.uniformLocations,
             // Mono input uniforms:
             uImage: [],
             uDisparityMap: [],
@@ -638,10 +643,7 @@ export class MN2STRenderer extends BaseRenderer {
             sk2R: ctx.getUniformLocation(this.program, "sk2R"),
             sl2R: ctx.getUniformLocation(this.program, "sl2R"),
             roll2R: ctx.getUniformLocation(this.program, "roll2R"),
-            f2R: ctx.getUniformLocation(this.program, "f2R"),
-            oRes: ctx.getUniformLocation(this.program, "oRes"),
-            feathering: ctx.getUniformLocation(this.program, "feathering"),
-            background: ctx.getUniformLocation(this.program, "background")
+            f2R: ctx.getUniformLocation(this.program, "f2R")
         };
         for (let i = 0; i < 4; i++) {
             this.uniformLocations.uImage.push(ctx.getUniformLocation(this.program, `uImage[${i}]`));
@@ -742,6 +744,7 @@ export class ST2STRenderer extends BaseRenderer {
         };
         // Uniform locations for left view
         this.uniformLocations = {
+            ...this.uniformLocations,
             // Left view uniforms
             uImageL: [],
             uDisparityMapL: [],
@@ -777,10 +780,7 @@ export class ST2STRenderer extends BaseRenderer {
             sk2R: ctx.getUniformLocation(this.program, "sk2R"),
             sl2R: ctx.getUniformLocation(this.program, "sl2R"),
             roll2R: ctx.getUniformLocation(this.program, "roll2R"),
-            f2R: ctx.getUniformLocation(this.program, "f2R"),
-            oRes: ctx.getUniformLocation(this.program, "oRes"),
-            feathering: ctx.getUniformLocation(this.program, "feathering"),
-            background: ctx.getUniformLocation(this.program, "background")
+            f2R: ctx.getUniformLocation(this.program, "f2R")
         };
 
         // Create uniform arrays for textures for left and right.
