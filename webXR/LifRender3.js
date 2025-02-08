@@ -86,10 +86,17 @@ async function init() {
     const glL = offscreenCanvasL.getContext('webgl');
     const glR = offscreenCanvasR.getContext('webgl');
 
-    rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI.glsl', views, false);
-    rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI.glsl', views, false);
-    rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
-    rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    if (views.length == 1) {
+        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI.glsl', views, false);
+        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI.glsl', views, false);
+        rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    } else if (views.length == 2) {
+        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI.glsl', views, false);
+        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI.glsl', views, false);
+        rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    }
 
     texL = new THREE.CanvasTexture(rL.gl.canvas);
     texR = new THREE.CanvasTexture(rR.gl.canvas);
