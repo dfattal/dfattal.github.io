@@ -158,8 +158,8 @@ function animate() {
             // Render the scene
             const IPD = leftCam.position.distanceTo(rightCam.position);
             rL.renderCam.pos.x = leftCam.position.x / IPD;
-            rL.renderCam.pos.y = -leftCam.position.z / IPD;
-            rL.renderCam.pos.z = (60+leftCam.position.y) / IPD;
+            rL.renderCam.pos.y = -leftCam.position.y / IPD;
+            rL.renderCam.pos.z = (70-leftCam.position.z) / IPD;
             rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
@@ -167,8 +167,8 @@ function animate() {
             texL.needsUpdate = true;
             // console.log('rL.renderCam: ', rL.renderCam);
             rR.renderCam.pos.x = rightCam.position.x / IPD;
-            rR.renderCam.pos.y = -rightCam.position.z / IPD;
-            rR.renderCam.pos.z = (60+rightCam.position.y) / IPD;
+            rR.renderCam.pos.y = -rightCam.position.y / IPD;
+            rR.renderCam.pos.z = (70-rightCam.position.z) / IPD;
             rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
@@ -398,8 +398,8 @@ function updateHUD(leftCam, rightCam) {
     leftCam.getWorldPosition(leftPos);
     rightCam.getWorldPosition(rightPos);
 
-    const lx = leftPos.x.toFixed(2), ly = -leftPos.z.toFixed(2), lz = -leftPos.y.toFixed(2);
-    const rx = rightPos.x.toFixed(2), ry = -rightPos.z.toFixed(2), rz = -rightPos.z.toFixed(2);
+    const lx = leftPos.x.toFixed(2), ly = leftPos.y.toFixed(2), lz = leftPos.z.toFixed(2);
+    const rx = rightPos.x.toFixed(2), ry = rightPos.y.toFixed(2), rz = rightPos.z.toFixed(2);
 
     hudCtx.fillText(`Left:  (${lx}, ${ly}, ${lz})`, 10, 60);
     hudCtx.fillText(`Right: (${rx}, ${ry}, ${rz})`, 10, 90);
