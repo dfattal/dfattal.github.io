@@ -81,6 +81,7 @@ function animate() {
             // Access the sub-cameras
             const leftCam = xrCam.cameras[0];
             const rightCam = xrCam.cameras[1];
+            console.log('leftCam.pos: ', leftCam.position);
 
             // Create HUD once we have the leftCam
             if (!hudCreated) {
