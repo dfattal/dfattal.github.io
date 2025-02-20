@@ -292,6 +292,9 @@ function createHUDOverlayForVR(plane, subCam) {
     hudOverlay.position.set(localX, localY, 0.01); // slight offset to avoid z-fighting
     hudOverlay.scale.set(hudW / planeWidth, hudH / planeHeight, 1);
 
+    // Copy the parent plane's layer so that the HUD overlay appears only for that eye.
+    hudOverlay.layers.mask = plane.layers.mask;
+
     plane.add(hudOverlay);
     plane.userData.hudOverlay = hudOverlay;
 }
