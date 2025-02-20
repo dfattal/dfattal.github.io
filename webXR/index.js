@@ -312,7 +312,7 @@ function updateHUD(leftCam, rightCam) {
 
     hudCtx.fillStyle = '#fff';
     hudCtx.font = '20px sans-serif';
-    hudCtx.fillText('Eye Positions', 10, 26);
+    hudCtx.fillText('Eye Pos', 10, 26);
 
     const leftPos = new THREE.Vector3();
     const rightPos = new THREE.Vector3();
