@@ -137,10 +137,12 @@ function animate() {
             rR.gl.canvas.width = rightCam.viewport.width;
             rR.gl.canvas.height = rightCam.viewport.height;
 
-            // Create HUD once we have the leftCam
-            if (!hudCreated) {
-                createHUDWithFOV(leftCam);
-                hudCreated = true;
+            // Create HUD overlay for each VR plane if not already created
+            if (!planeLeft.userData.hudOverlay) {
+                createHUDOverlayForVR(planeLeft, leftCam);
+            }
+            if (!planeRight.userData.hudOverlay) {
+                createHUDOverlayForVR(planeRight, rightCam);
             }
 
             // Position the VR planes
@@ -157,8 +159,8 @@ function animate() {
             // Render the scene
             const IPD = leftCam.position.distanceTo(rightCam.position);
             rL.renderCam.pos.x = leftCam.position.x / IPD;
-            rL.renderCam.pos.y = -(leftCam.position.y - 1.7) / IPD;
-            rL.renderCam.pos.z = -leftCam.position.z / IPD;
+            rL.renderCam.pos.y = leftCam.position.z / IPD;
+            rL.renderCam.pos.z = -leftCam.position.y / IPD;
             rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
@@ -166,8 +168,8 @@ function animate() {
             texL.needsUpdate = true;
             // console.log('rL.renderCam: ', rL.renderCam);
             rR.renderCam.pos.x = rightCam.position.x / IPD;
-            rR.renderCam.pos.y = -(rightCam.position.y - 1.7) / IPD;
-            rR.renderCam.pos.z = -rightCam.position.z / IPD;
+            rR.renderCam.pos.y = rightCam.position.z / IPD;
+            rR.renderCam.pos.z = -rightCam.position.y / IPD;
             rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
@@ -326,66 +328,73 @@ function fitPlaneInFov(planeAspect, vFOV, camAspect, dist) {
 /* -------------------------------------------------------------------- */
 
 /**
- * createHUDWithFOV(referenceCam):
- *   1) Parse leftCam's horizontal FOV at `HUD_DISTANCE`,
- *   2) Make the HUD plane geometry sized at (1/5 of that view width) x half that,
- *   3) Parent it to the main camera so it doesn't move in your view,
- *   4) Position it in the top-left corner of your local camera space.
+ * createHUDOverlayForVR(plane, subCam):
+ *   1) Compute the view dimensions at DISTANCE using the subCam FOV.
+ *   2) Create a HUD overlay (using a shared canvas texture) sized to 1/5 of the view width (with height = half of that).
+ *   3) Position the overlay in the top-left corner of the VR plane.
  */
-function createHUDWithFOV(referenceCam) {
-    console.log('Creating HUD using left sub-cam FOV at distance', HUD_DISTANCE);
-
-    const { fov: vFOV, aspect } = parseSubCamFov(referenceCam);
+function createHUDOverlayForVR(plane, subCam) {
+    const { fov: vFOV, aspect } = parseSubCamFov(subCam);
     const hFOV = 2 * Math.atan(aspect * Math.tan(vFOV / 2));
-    const viewWidth = 2 * HUD_DISTANCE * Math.tan(hFOV / 2);
-    const viewHeight = 2 * HUD_DISTANCE * Math.tan(vFOV / 2);
+    const viewWidth = 2 * DISTANCE * Math.tan(hFOV / 2);
+    const viewHeight = 2 * DISTANCE * Math.tan(vFOV / 2);
+    const hudW = viewWidth / 5;
+    const hudH = hudW / 2;
 
-    const hudW = viewWidth / 5;   // 1/5
-    const hudH = hudW / 2;       // half the width
+    // Recalculate VR plane dimensions (same as in fitAndPositionPlane)
+    const imgW = sbsTexture.image.naturalWidth;
+    const imgH = sbsTexture.image.naturalHeight;
+    const halfAspect = imgW / (2 * imgH);
+    const { planeWidth, planeHeight } = fitPlaneInFov(halfAspect, vFOV, aspect, DISTANCE);
 
-    // Canvas + texture
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
-    hudCtx = canvas.getContext('2d');
-
-    hudTexture = new THREE.CanvasTexture(canvas);
-    hudTexture.encoding = THREE.sRGBEncoding;
+    // Create shared HUD canvas/texture if not already created
+    if (!hudCanvas) {
+        hudCanvas = document.createElement('canvas');
+        hudCanvas.width = 256;
+        hudCanvas.height = 128;
+        hudCtx = hudCanvas.getContext('2d');
+        hudTexture = new THREE.CanvasTexture(hudCanvas);
+        hudTexture.encoding = THREE.sRGBEncoding;
+    }
 
     const hudMat = new THREE.MeshBasicMaterial({
         map: hudTexture,
         transparent: true
     });
-    const hudGeom = new THREE.PlaneGeometry(hudW, hudH);
-    hudPlane = new THREE.Mesh(hudGeom, hudMat);
+    const hudGeom = new THREE.PlaneGeometry(1, 1);
+    const hudOverlay = new THREE.Mesh(hudGeom, hudMat);
 
-    // Attach to main camera so it doesn't move relative to your head
-    camera.add(hudPlane);
+    // In the VR plane's local coordinates (PlaneGeometry(1,1) spans -0.5 to 0.5),
+    // position the overlay so its center is at the top-left corner.
+    const localX = -0.5 + (hudW / (2 * planeWidth));
+    const localY = 0.5 - (hudH / (2 * planeHeight));
+    hudOverlay.position.set(localX, localY, 0.01); // slight offset to avoid z-fighting
+    hudOverlay.scale.set(hudW / planeWidth, hudH / planeHeight, 1);
 
-    // Position in local camera space, top-left corner
-    hudPlane.position.set(
-        -(viewWidth / 2) + (hudW / 2),
-        (viewHeight / 2) - (hudH / 2),
-        -HUD_DISTANCE
-    );
+    // Copy the parent plane's layer so that the HUD overlay appears only for that eye.
+    hudOverlay.layers.mask = plane.layers.mask;
+
+    plane.add(hudOverlay);
+    plane.userData.hudOverlay = hudOverlay;
 }
 
 /**
  * updateHUD(leftCam, rightCam):
- *   Draw each eye's position onto the HUD plane. Called every frame in VR.
+ *   Draw each eye's position onto the shared HUD canvas.
+ *   Both VR HUD overlays share this texture.
  */
 function updateHUD(leftCam, rightCam) {
     if (!hudCtx || !hudTexture) return;
 
-    hudCtx.clearRect(0, 0, hudCtx.canvas.width, hudCtx.canvas.height);
+    hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
 
     // Semi-transparent background
     hudCtx.fillStyle = 'rgba(0,0,0,0.5)';
-    hudCtx.fillRect(0, 0, hudCtx.canvas.width, hudCtx.canvas.height);
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
 
     hudCtx.fillStyle = '#fff';
     hudCtx.font = '20px sans-serif';
-    hudCtx.fillText('Eye Positions', 10, 26);
+    hudCtx.fillText('Eye Pos', 10, 26);
 
     const leftPos = new THREE.Vector3();
     const rightPos = new THREE.Vector3();
