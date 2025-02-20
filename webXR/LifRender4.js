@@ -24,9 +24,8 @@ const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 
-// HUD
-let hudPlane, hudTexture, hudCtx;
-let hudCreated = false;  // so we only create/attach the HUD once
+// Shared HUD globals (for both eyes)
+let hudCanvas, hudCtx, hudTexture;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const filePicker = document.getElementById('filePicker');
@@ -341,11 +340,9 @@ function createHUDOverlayForVR(plane, subCam) {
     const hudW = viewWidth / 5;
     const hudH = hudW / 2;
 
-    // Recalculate VR plane dimensions (same as in fitAndPositionPlane)
-    const imgW = sbsTexture.image.naturalWidth;
-    const imgH = sbsTexture.image.naturalHeight;
-    const halfAspect = imgW / (2 * imgH);
-    const { planeWidth, planeHeight } = fitPlaneInFov(halfAspect, vFOV, aspect, DISTANCE);
+    // Instead of using sbsTexture, use the computed plane dimensions from the VR setup:
+    const planeHeight = 2 * DISTANCE * Math.tan(vFOV / 2);
+    const planeWidth = 2 * DISTANCE * Math.tan(hFOV / 2);
 
     // Create shared HUD canvas/texture if not already created
     if (!hudCanvas) {
@@ -371,7 +368,7 @@ function createHUDOverlayForVR(plane, subCam) {
     hudOverlay.position.set(localX, localY, 0.01); // slight offset to avoid z-fighting
     hudOverlay.scale.set(hudW / planeWidth, hudH / planeHeight, 1);
 
-    // Copy the parent plane's layer so that the HUD overlay appears only for that eye.
+    // Copy the parent plane's layer so the HUD overlay appears only for that eye.
     hudOverlay.layers.mask = plane.layers.mask;
 
     plane.add(hudOverlay);
