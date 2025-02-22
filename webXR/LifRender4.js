@@ -26,6 +26,8 @@ const tmpQuat = new THREE.Quaternion();
 
 // Shared HUD globals (for both eyes)
 let hudCanvas, hudCtx, hudTexture;
+// initial position of the center eyes
+let initialY, initialZ, IPD;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const filePicker = document.getElementById('filePicker');
@@ -155,11 +157,18 @@ function animate() {
             // Update HUD text
             updateHUD(leftCam, rightCam);
 
+            // Capture the initial head positions once
+            if (initialY === undefined) {
+                initialY = (leftCam.position.y + rightCam.position.y) / 2;
+                initialZ = (leftCam.position.z + rightCam.position.z) / 2;
+                IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
+            }
+
             // Render the scene
-            const IPD = leftCam.position.distanceTo(rightCam.position);
+            //const IPD = leftCam.position.distanceTo(rightCam.position); 
             rL.renderCam.pos.x = leftCam.position.x / IPD;
-            rL.renderCam.pos.y = -leftCam.position.y / IPD;
-            rL.renderCam.pos.z = (70-leftCam.position.z) / IPD;
+            rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
+            rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
             rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
@@ -167,8 +176,8 @@ function animate() {
             texL.needsUpdate = true;
             // console.log('rL.renderCam: ', rL.renderCam);
             rR.renderCam.pos.x = rightCam.position.x / IPD;
-            rR.renderCam.pos.y = -rightCam.position.y / IPD;
-            rR.renderCam.pos.z = (70-rightCam.position.z) / IPD;
+            rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
+            rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
             rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
