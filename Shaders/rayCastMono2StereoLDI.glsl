@@ -254,8 +254,21 @@ void main(void) {
         // if (confidence == 0.0) {
         //     result.r = 1.0;
         // } 
-        // Output the final color
-        gl_FragColor = result;
+        
+        // Glow effect based on depth value and normalized uTime
+        float normInvZ = invZ / invZmin[0];
+        // Calculate the contour effect based on time and depth value
+        float phase = 1.0 - min(uTime, 1.0);
+        float contourEffect = smoothstep(phase - 0.02, phase - 0.01, normInvZ) * (1.0 - smoothstep(phase + 0.01, phase + 0.02, normInvZ));
+        // Mix the base color with the contour color based on the contour effect
+        vec3 contourColor2 = vec3(0.0, 0.0, 1.0);
+        vec3 contourColor1 = vec3(1.0, 1.0, 1.0);
+        vec4 contour = vec4(mix(contourColor2, contourColor1, contourEffect * contourEffect), 1.0);
+
+        // Combine the base color with the contour effect
+        gl_FragColor = mix(result, contour, contourEffect * normInvZ);
+        
+        //gl_FragColor = result;
         
 
     } else {
