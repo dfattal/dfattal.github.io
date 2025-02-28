@@ -36,6 +36,7 @@ function setupWebGL(gl, fragmentShaderSource) {
       f1: gl.getUniformLocation(shaderProgram, 'f1'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
       iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
 
       // rendering info
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
@@ -131,6 +132,7 @@ function setupWebGLST(gl, fragmentShaderSource) {
 
       // rendering info
       iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
       uFacePosition: gl.getUniformLocation(shaderProgram, 'uFacePosition'),
       sk2: gl.getUniformLocation(shaderProgram, 'sk2'),
       sl2: gl.getUniformLocation(shaderProgram, 'sl2'),
@@ -210,6 +212,7 @@ function setupWebGL2ST(gl, fragmentShaderSource) {
       f1: gl.getUniformLocation(shaderProgram, 'f1'),
       iRes: gl.getUniformLocation(shaderProgram, 'iRes'), // vec2 array
       iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
 
       // rendering info
       uFacePositionL: gl.getUniformLocation(shaderProgram, 'uFacePositionL'),
@@ -310,6 +313,7 @@ function setupWebGLST2ST(gl, fragmentShaderSource) {
 
       // rendering info
       iResOriginal: gl.getUniformLocation(shaderProgram, 'iResOriginal'),
+      uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
       uFacePositionL: gl.getUniformLocation(shaderProgram, 'uFacePositionL'),
       sk2L: gl.getUniformLocation(shaderProgram, 'sk2L'),
       sl2L: gl.getUniformLocation(shaderProgram, 'sl2L'),
@@ -367,7 +371,7 @@ function setupWebGLST2ST(gl, fragmentShaderSource) {
   return { programInfo, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer } };
 }
 
-function drawScene(gl, programInfo, buffers, views, renderCam) {
+function drawScene(gl, programInfo, buffers, views, renderCam, t=1.0) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -436,6 +440,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
   gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -444,7 +449,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function drawSceneST(gl, programInfo, buffers, views, renderCam) {
+function drawSceneST(gl, programInfo, buffers, views, renderCam, t=1.0) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -539,6 +544,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
   gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -547,7 +553,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
+function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t=1.0) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -623,6 +629,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
   gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
@@ -631,7 +638,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR) {
+function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t=1.0) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -733,6 +740,7 @@ function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR)
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
   gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
   const type = gl.UNSIGNED_SHORT;
