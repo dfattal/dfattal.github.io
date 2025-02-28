@@ -2,6 +2,13 @@
 import { LifLoader } from '../LIF/LifLoader.js';
 import { MN2MNRenderer, ST2MNRenderer } from '../VIZ/Renderers.js';
 
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const glow = urlParams.get('glow') ? urlParams.get('glow') : false; // Default to false
+const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
+const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+
+
 let views = null;
 let stereo_render_data = null;
 
@@ -173,7 +180,7 @@ function animate() {
                 IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
             }
 
-            const uTime = (currentTime - startTime) / 2.0; // later change 2.0 to glowAnimTime
+            const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1; 
 
             // Render the scene
             //const IPD = leftCam.position.distanceTo(rightCam.position); 
@@ -183,7 +190,7 @@ function animate() {
             rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
-            rL.drawScene(uTime % 2);
+            rL.drawScene(uTime % glowPulsePeriod);
             texL.needsUpdate = true;
             // console.log('rL.renderCam: ', rL.renderCam);
             rR.renderCam.pos.x = rightCam.position.x / IPD;
@@ -192,7 +199,7 @@ function animate() {
             rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
-            rR.drawScene(uTime % 2);
+            rR.drawScene(uTime % glowPulsePeriod);
             texR.needsUpdate = true;
 
             // Hide the VR planes if we happen to switch out of VR
