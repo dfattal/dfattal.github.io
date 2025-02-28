@@ -47,6 +47,7 @@ export class BaseRenderer {
         this.renderCam.f = this.views[0].f * this.viewportScale();
         const ctx = this.gl;
         this.uniformLocations = {
+            uTime: ctx.getUniformLocation(this.program, 'uTime'),
             oRes: ctx.getUniformLocation(this.program, "oRes"),
             feathering: ctx.getUniformLocation(this.program, "feathering"),
             background: ctx.getUniformLocation(this.program, "background"),
@@ -422,7 +423,7 @@ export class MN2MNRenderer extends BaseRenderer {
      *                        image.texture, invZ.texture, f, invZ.min, invZ.max, width, height.
      * @param {Object} renderCam - Camera object with properties: pos, sk, sl, roll, f.
      */
-    drawScene() {
+    drawScene(t=1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCam = this.renderCam;
@@ -443,6 +444,7 @@ export class MN2MNRenderer extends BaseRenderer {
             gl.uniform1i(this.uniformLocations.uDisparityMap[i], 2 * i + 1);
         }
         gl.uniform1i(this.uniformLocations.uNumLayers, numLayers);
+        gl.uniform1f(this.uniformLocations.uTime, t);
         gl.uniform3f(this.uniformLocations.uViewPosition,
             views[0].position.x, views[0].position.y, views[0].position.z);
         gl.uniform2f(this.uniformLocations.sk1,
@@ -529,7 +531,7 @@ export class ST2MNRenderer extends BaseRenderer {
      *   views[0] as left view and views[1] as right view.
      *   renderCam is a mono camera for output.
      */
-    drawScene() {
+    drawScene(t=1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCam = this.renderCam;
@@ -549,6 +551,7 @@ export class ST2MNRenderer extends BaseRenderer {
             gl.uniform1i(this.uniformLocations.uDisparityMapL[i], 4 * i + 1);
         }
         gl.uniform1i(this.uniformLocations.uNumLayersL, numLayersL);
+        gl.uniform1f(this.uniformLocations.uTime, t);
         gl.uniform3f(this.uniformLocations.uViewPositionL,
             views[0].position.x, views[0].position.y, views[0].position.z);
         gl.uniform2f(this.uniformLocations.sk1L, views[0].sk.x, views[0].sk.y);
@@ -655,7 +658,7 @@ export class MN2STRenderer extends BaseRenderer {
      *   views[0] as mono input.
      *   renderCamL and renderCamR as stereo rendering camera parameters.
      */
-    drawScene() {
+    drawScene(t=1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCamL = this.renderCamL;
@@ -677,6 +680,7 @@ export class MN2STRenderer extends BaseRenderer {
             gl.uniform1i(this.uniformLocations.uDisparityMap[i], 2 * i + 1);
         }
         gl.uniform1i(this.uniformLocations.uNumLayers, numLayers);
+        gl.uniform1f(this.uniformLocations.uTime, t);
         gl.uniform3f(this.uniformLocations.uViewPosition,
             views[0].position.x, views[0].position.y, views[0].position.z);
         gl.uniform2f(this.uniformLocations.sk1,
@@ -795,7 +799,7 @@ export class ST2STRenderer extends BaseRenderer {
      *   views[0] as left view, views[1] as right view.
      *   renderCamL and renderCamR as the left and right rendering camera parameters.
      */
-    drawScene() {
+    drawScene(t=1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCamL = this.renderCamL;
@@ -817,6 +821,7 @@ export class ST2STRenderer extends BaseRenderer {
             gl.uniform1i(this.uniformLocations.uDisparityMapL[i], 4 * i + 1);
         }
         gl.uniform1i(this.uniformLocations.uNumLayersL, numLayersL);
+        gl.uniform1f(this.uniformLocations.uTime, t);
         gl.uniform3f(this.uniformLocations.uViewPositionL,
             views[0].position.x, views[0].position.y, views[0].position.z);
         gl.uniform2f(this.uniformLocations.sk1L, views[0].sk.x, views[0].sk.y);

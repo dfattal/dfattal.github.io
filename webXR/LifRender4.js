@@ -17,6 +17,8 @@ let texR = null;                    // loaded right eye texture
 let rL = null;                      // MN2MNRenderer for left eye
 let rR = null;                      // MN2MNRenderer for right eye
 
+let startTime;
+
 const DISTANCE = 20;       // how far from each eye to place the main SBS planes in VR
 const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 
@@ -118,6 +120,7 @@ function onWindowResize() {
 /** Our main animation/render loop (WebXR). */
 function animate() {
     renderer.setAnimationLoop(() => {
+
         const xrCam = renderer.xr.getCamera(camera);
 
         if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
@@ -130,6 +133,12 @@ function animate() {
             // Access the sub-cameras
             const leftCam = xrCam.cameras[0];
             const rightCam = xrCam.cameras[1];
+
+            // Get the current time in seconds
+            const currentTime = performance.now() / 1000;
+            if (startTime === undefined) {
+                startTime = currentTime;
+            }
 
             // Update offscreen canvas sizes to match the sub-camera viewport dimensions.
             // (Assuming leftCam.viewport exists; consult Three.js docs if needed.)
@@ -164,6 +173,8 @@ function animate() {
                 IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
             }
 
+            const uTime = (currentTime - startTime) / 2.0; // later change 2.0 to glowAnimTime
+
             // Render the scene
             //const IPD = leftCam.position.distanceTo(rightCam.position); 
             rL.renderCam.pos.x = leftCam.position.x / IPD;
@@ -172,7 +183,7 @@ function animate() {
             rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
-            rL.drawScene();
+            rL.drawScene(uTime % 2);
             texL.needsUpdate = true;
             // console.log('rL.renderCam: ', rL.renderCam);
             rR.renderCam.pos.x = rightCam.position.x / IPD;
@@ -181,7 +192,7 @@ function animate() {
             rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
-            rR.drawScene();
+            rR.drawScene(uTime % 2);
             texR.needsUpdate = true;
 
             // Hide the VR planes if we happen to switch out of VR
