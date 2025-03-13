@@ -11,6 +11,7 @@ const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPu
 
 let views = null;
 let stereo_render_data = null;
+let xrCanvasInitialized = false;
 
 // Three.js renderer
 import * as THREE from 'three';
@@ -147,12 +148,15 @@ function animate() {
                 startTime = currentTime;
             }
 
-            // Update offscreen canvas sizes to match the sub-camera viewport dimensions.
-            // (Assuming leftCam.viewport exists; consult Three.js docs if needed.)
-            rL.gl.canvas.width = leftCam.viewport.width;
-            rL.gl.canvas.height = leftCam.viewport.height;
-            rR.gl.canvas.width = rightCam.viewport.width;
-            rR.gl.canvas.height = rightCam.viewport.height;
+            // Set canvas dimensions once when XR cameras are available
+            if (!xrCanvasInitialized) {
+                rL.gl.canvas.width = leftCam.viewport.width;
+                rL.gl.canvas.height = leftCam.viewport.height;
+                rR.gl.canvas.width = rightCam.viewport.width;
+                rR.gl.canvas.height = rightCam.viewport.height;
+
+                xrCanvasInitialized = true;
+            }
 
             // Create HUD overlay for each VR plane if not already created
             if (!planeLeft.userData.hudOverlay) {
@@ -211,6 +215,7 @@ function animate() {
             // Hide VR planes if they exist
             if (planeLeft) planeLeft.visible = false;
             if (planeRight) planeRight.visible = false;
+            xrCanvasInitialized = false; // Reset initialization if exiting VR
 
             // Fit the single-plane to fill the 2D viewport with the left image
             if (planeNonVR) {
