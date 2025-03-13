@@ -131,7 +131,10 @@ async function main() {
         sl2: { value: new THREE.Vector2(0.0, 0.0) },
         roll2: { value: 0.0 },
         f2: { value: 400.0 },
-        oRes: { value: new THREE.Vector2(1, 1) }
+        oRes: { value: new THREE.Vector2(1, 1) },
+        uTime: { value: 1.0 },
+        feathering: { value: 0.1},
+        background: { value: new THREE.Vector3(0.0, 0.0, 0.0) }
     };
 
     const uniformsST = {
@@ -166,7 +169,10 @@ async function main() {
         sl2: { value: new THREE.Vector2(0.0, 0.0) },
         roll2: { value: 0.0 },
         f2: { value: 400.0 },
-        oRes: { value: new THREE.Vector2(1, 1) }
+        oRes: { value: new THREE.Vector2(1, 1) },
+        uTime: { value: 1.0 },
+        feathering: { value: 0.1},
+        background: { value: new THREE.Vector3(0.0, 0.0, 0.0) }
     };
 
     // Create the shader material
