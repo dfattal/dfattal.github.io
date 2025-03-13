@@ -425,10 +425,12 @@ function updateHUD(leftCam, rightCam) {
     hudCtx.font = '20px sans-serif';
     hudCtx.fillText('Eye Pos', 10, 26);
 
-    const leftPos = new THREE.Vector3();
-    const rightPos = new THREE.Vector3();
-    leftCam.getWorldPosition(leftPos);
-    rightCam.getWorldPosition(rightPos);
+    // const leftPos = new THREE.Vector3();
+    // const rightPos = new THREE.Vector3();
+    // leftCam.getWorldPosition(leftPos);
+    // rightCam.getWorldPosition(rightPos);
+    const leftPos = leftCam.position;
+    const rightPos = rightCam.position;
 
     const lx = leftPos.x.toFixed(2), ly = leftPos.y.toFixed(2), lz = leftPos.z.toFixed(2);
     const rx = rightPos.x.toFixed(2), ry = rightPos.y.toFixed(2), rz = rightPos.z.toFixed(2);
