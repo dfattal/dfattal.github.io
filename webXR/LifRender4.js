@@ -39,12 +39,50 @@ let hudCanvas, hudCtx, hudTexture;
 // initial position of the center eyes
 let initialY, initialZ, IPD;
 
+function disposeResources() {
+    if (texL) {
+        texL.dispose();
+        texL = null;
+    }
+    if (texR) {
+        texR.dispose();
+        texR = null;
+    }
+    if (renderer) {
+        renderer.dispose();
+        renderer.forceContextLoss(); // Explicitly trigger context loss (optional but recommended)
+        renderer = null;
+    }
+    if (planeLeft) {
+        planeLeft.geometry.dispose();
+        planeLeft.material.dispose();
+        planeLeft = null;
+    }
+    if (planeRight) {
+        planeRight.geometry.dispose();
+        planeRight.material.dispose();
+        planeRight = null;
+    }
+    if (rL) {
+        rL.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        rL = null;
+    }
+    if (rR) {
+        rR.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        rR = null;
+    }
+
+    console.log('Resources disposed.');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const filePicker = document.getElementById('filePicker');
     filePicker.addEventListener('change', async (event) => {
         const file = event.target.files[0];
         if (file) {
             try {
+                // Dispose of old resources explicitly before loading new ones
+                disposeResources();
                 const loader = new LifLoader();
                 await loader.load(file);
 
@@ -79,6 +117,14 @@ async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+
+    // ADD CONTEXT LOSS HANDLER HERE
+    renderer.domElement.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        console.error('WebGL context lost.');
+        disposeResources();
+    });
+
     document.body.appendChild(renderer.domElement);
     const vrButton = VRButton.createButton(renderer)
     document.body.appendChild(vrButton);
@@ -184,7 +230,7 @@ function animate() {
                 IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
             }
 
-            const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1; 
+            const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1;
 
             // Render the scene
             //const IPD = leftCam.position.distanceTo(rightCam.position); 
