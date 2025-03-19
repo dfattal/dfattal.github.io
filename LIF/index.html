@@ -193,7 +193,7 @@
             <div class="input-container tooltip">
                 <label for="inpaintPrompt">Inpaint Prompt:</label>
                 <input type="text" id="inpaintPrompt" name="inpaintPrompt"
-                    value="background without foreground object, seamless and natural">
+                    value="inpaint">
                 <span class="tooltiptext">Text prompt to guide the inpainting generation process.</span>
             </div>
         </div>
@@ -201,7 +201,7 @@
             <div class="input-container tooltip">
                 <label for="inpaintNegativePrompt">Inpaint Negative Prompt:</label>
                 <input type="text" id="inpaintNegativePrompt" name="inpaintNegativePrompt"
-                    value="text, subtitles, chair, object, people, face, human, person, animal, banner">
+                    value="">
                 <span class="tooltiptext">Negative text prompt to avoid certain elements in the inpainting generation
                     process.</span>
             </div>
@@ -210,7 +210,7 @@
             <div class="input-container tooltip">
                 <label for="outpaintPrompt">Outpaint Prompt:</label>
                 <input type="text" id="outpaintPrompt" name="outpaintPrompt"
-                    value="background without foreground object, seamless and natural">
+                    value="inpaint">
                 <span class="tooltiptext">Text prompt to guide the outpainting generation process.</span>
             </div>
         </div>
@@ -218,7 +218,7 @@
             <div class="input-container tooltip">
                 <label for="outpaintNegativePrompt">Outpaint Negative Prompt:</label>
                 <input type="text" id="outpaintNegativePrompt" name="outpaintNegativePrompt"
-                    value="photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block">
+                    value="">
                 <span class="tooltiptext">Negative text prompt to avoid certain elements in the outpainting generation
                     process.</span>
             </div>
@@ -239,10 +239,10 @@
         function ldlFormReset() {
             document.getElementById('dilation').value = 0.005;
             document.getElementById('depthDilationPercent').value = 0.00;
-            document.getElementById('inpaintPrompt').value = 'background without foreground object, seamless and natural';
-            document.getElementById('inpaintNegativePrompt').value = 'text, subtitles, chair, object, people, face, human, person, animal, banner';
-            document.getElementById('outpaintPrompt').value = 'background without foreground object, seamless and natural';
-            document.getElementById('outpaintNegativePrompt').value = 'photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block';
+            document.getElementById('inpaintPrompt').value = 'inpaint';
+            document.getElementById('inpaintNegativePrompt').value = '';
+            document.getElementById('outpaintPrompt').value = 'inpaint';
+            document.getElementById('outpaintNegativePrompt').value = '';
             document.getElementById('outpaint').value = 0.1;
         }
         document.getElementById('inpaintMethod').addEventListener('change', function () {
