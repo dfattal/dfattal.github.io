@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { computeVirtualDisplay } from './webXrUtils.js';
+import { computeVirtualDisplay } from './webXRUtils.js';
 
 let camera, scene, renderer;
 let cube;
