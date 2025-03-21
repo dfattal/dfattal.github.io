@@ -1175,7 +1175,7 @@ class monoLdiGenerator {
                     inputs: { inputImageUrl: this.imDownloadUrl },
                     outputs: { outputLifUrl: this.outpaintImUploadUrl },
                     params: {
-                        inpaintMethod: "lama",
+                        inpaintMethod: "SD",
                         outpaint: "0.1"
                     }
                 }
@@ -1213,14 +1213,14 @@ class monoLdiGenerator {
                     inputs: {},
                     outputs: {},
                     params: {
-                        inpaintMethod: "lama",
+                        inpaintMethod: "SD",
                         dilation: "0.005",
                         depthDilationPercent: "0.0",
                         outpaint: "-0.1",
-                        inpaintPrompt: "background without foreground object, seamless and natural",
-                        inpaintNegativePrompt: "text, subtitles, chair, object, people, face, human, person, animal, banner",
-                        outpaintPrompt: "background without foreground object, seamless and natural",
-                        outpaintNegativePrompt: "photoframe, frame, album, small text, subtitles, object, person ,animal, banner, text, color block",
+                        inpaintPrompt: "inpaint",
+                        inpaintNegativePrompt: "",
+                        outpaintPrompt: "inpaint",
+                        outpaintNegativePrompt: "",
                     }
                 }
             }

@@ -152,7 +152,7 @@ async function generateImage(mode) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer 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',  // Replace with your actual Hugging Face API key
+                'Authorization': 'Bearer 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',  // Updated API key
                 'Content-Type': 'application/json',
                 "x-use-cache": "false"
             },
