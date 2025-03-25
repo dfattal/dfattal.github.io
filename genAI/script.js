@@ -1,6 +1,10 @@
 imDiv = document.getElementById('image-preview');
 let lifGen = null; // Declare lifGen globally to be accessible by other functions
 
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const inpainting = urlParams.get('inpainting') ? urlParams.get('inpainting') : 'lama'; // Default to lama
+
 
 // Function to show the loading spinner while the image is being generated
 function showLoadingSpinner() {
@@ -172,7 +176,7 @@ async function generateImage(mode) {
         imDiv.classList.add('glowing');
 
         const imageFile = new File([blob], 'generatedImage.jpg', { type: 'image/jpeg' });
-        lifGen = new monoLdiGenerator(imageFile);
+        lifGen = new monoLdiGenerator(imageFile, inpainting);
 
         lifGen.afterLoad = function () {
             const viewer = new lifViewer(this.lifDownloadUrl, imDiv, height = 400, autoplay = true);

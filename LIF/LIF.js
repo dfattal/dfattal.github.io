@@ -1149,12 +1149,12 @@ class lifViewer {
 }
 
 class monoLdiGenerator {
-    constructor(file = null) {
+    constructor(file = null, inpainting = 'lama') {
         this.AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
         this.file = file ? file : null;
         this.width = 0;
         this.height = 0;
-
+        this.inpainting = inpainting;
         this.endpointUrl = 'https://api.dev.immersity.ai/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
@@ -1175,7 +1175,7 @@ class monoLdiGenerator {
                     inputs: { inputImageUrl: this.imDownloadUrl },
                     outputs: { outputLifUrl: this.outpaintImUploadUrl },
                     params: {
-                        inpaintMethod: "SD",
+                        inpaintMethod: this.inpainting,
                         outpaint: "0.1"
                     }
                 }
@@ -1213,7 +1213,7 @@ class monoLdiGenerator {
                     inputs: {},
                     outputs: {},
                     params: {
-                        inpaintMethod: "SD",
+                        inpaintMethod: this.inpainting,
                         dilation: "0.005",
                         depthDilationPercent: "0.0",
                         outpaint: "-0.1",
