@@ -171,7 +171,8 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         disp = readDisp(iChannelDisp, s1 + .5, invZmin, invZmax, iRes);
         gradDisp = disp - oldDisp;
         oldDisp = disp;
-        invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
+        invZ2 = invZ; // for this shader we want to return original invZ
+        // invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
         if((disp > invZ) && (invZ2 > 0.0)) { // if ray is below the "virtual surface"...
             if(abs(gradDisp) > gradThr)
                 confidence = 0.0;
@@ -253,8 +254,18 @@ void main(void) {
         // if (confidence == 0.0) {
         //     result.r = 1.0;
         // } 
-
         // Output the final color
+        
+        // Glow effect based on depth value and normalized uTime
+        float normInvZ = invZ / invZmin[0];
+        // Calculate the contour effect based on time and depth value
+        float phase = min(uTime, 1.0);
+        // Create grayscale version of the color
+        vec3 grayscale = vec3(dot(result.rgb, vec3(0.299, 0.587, 0.114)));
+        
+        // Apply grayscale if invZ is less than phase
+        result.rgb = mix(grayscale, result.rgb, smoothstep(phase - 0.02, phase + 0.02, normInvZ));
+        
         gl_FragColor = result;
         
 

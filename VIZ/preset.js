@@ -19,6 +19,7 @@ let background = urlParams.get('background') ? urlParams.get('background').split
 const glow = urlParams.get('glow') ? urlParams.get('glow') : false; // Default to false
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+const colorPop = urlParams.get('colorPop') ? urlParams.get('colorPop') : false; // Default to false
 
 // Function to recursively update IDs of cloned elements
 function updateClonedElementIDs(originalElement, clonedElement) {
@@ -881,6 +882,7 @@ async function main() {
   let saving = 0;
   updateSliderValue('animTime', 'animTval');
   updateSliderValue('focus', 'focusval');
+  updateSliderValue('shaderEffect', 'shaderEffectval');
   updateSliderValue('x0', 'x0val');
   updateSliderValue('x1', 'x1val');
   updateSliderValue('x2', 'x2val');
@@ -1147,7 +1149,7 @@ async function main() {
           const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI.glsl');
           ({ programInfo, buffers } = setupWebGL2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile(colorPop ? '../Shaders/rayCastMonoLDIColorPop.glsl' : '../Shaders/rayCastMonoLDIGlow.glsl');
           ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
         }
       } else {
@@ -1282,7 +1284,7 @@ async function main() {
       if (stereo) {
         drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
       } else {
-        drawScene(gl, programInfo, buffers, views, renderCam);
+        drawScene(gl, programInfo, buffers, views, renderCam, parseFloat(document.getElementById('shaderEffect').value));
       }
     } else {
       if (stereo) {
