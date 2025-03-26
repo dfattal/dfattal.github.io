@@ -1,10 +1,12 @@
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
 const dispModel = urlParams.get('dispModel') ? urlParams.get('dispModel') : "Leia"; // Set to true to enable decency checks
+const mode = urlParams.get('mode') ? urlParams.get('mode') : "old"; // choice to use dev or prod version of the API
+console.log(mode);
 
 class lifGenerator {
     constructor(file = null, form = null) {
-        this.AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
+        this.AWS_LAMBDA_URL = mode=='old'?'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws':'https://yccghw8qb7.execute-api.us-east-1.amazonaws.com/default/auth-helper-http?mode=' + mode;
         this.file = file ? file : null;
         this.stLifInput = false;
         this.width = 0;
@@ -12,7 +14,7 @@ class lifGenerator {
         this.formData;
         this.ldlForm = document.getElementById("image-generation-form");
         this.inpaintMethod = '';
-        this.endpointUrl = 'https://api.dev.immersity.ai/api/v1';
+        this.endpointUrl = 'https://' + (mode=='dev' || mode=='old'?'api.dev.immersity.ai':'api.immersity.ai') + '/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
         this.outpaintImUploadUrl;
