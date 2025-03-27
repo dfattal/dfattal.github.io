@@ -1,5 +1,9 @@
-const AWS_LAMBDA_URL = 'https://sk5ppdkibbohlyjwygbjqoi2ru0dvwje.lambda-url.us-east-1.on.aws';
-const endpointUrl = 'https://api.dev.immersity.ai/api/v1';
+const urlParams = new URLSearchParams(window.location.search);
+const mode = urlParams.get('mode') ? urlParams.get('mode') : "prod"; // choice to use dev or prod version of the API
+console.log(mode);
+
+const AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode;
+const endpointUrl = 'https://' + (mode=='dev'?'api.dev.immersity.ai':'api.immersity.ai') + '/api/v1';
 let outputFilename;
 
 async function getAccessToken() {
