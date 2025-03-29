@@ -1226,10 +1226,10 @@ class monoLdiGenerator {
                         dilation: "0.005",
                         depthDilationPercent: "0.0",
                         outpaint: "-0.1",
-                        inpaintPrompt: "inpaint",
-                        inpaintNegativePrompt: "",
-                        outpaintPrompt: "inpaint",
-                        outpaintNegativePrompt: "",
+                        inpaintPrompt: "inpaint background",
+                        inpaintNegativePrompt: "extra limb, artificial limbs, person",
+                        outpaintPrompt: "outpaint background",
+                        outpaintNegativePrompt: "frame, pattern, design, text, banner, pillar",
                     }
                 }
             }
