@@ -495,7 +495,7 @@ function setupWebGLST2ST(gl, fragmentShaderSource) {
   return { programInfo, buffers: { position: positionBuffer, textureCoord: textureCoordBuffer, indices: indexBuffer } };
 }
 
-function drawScene(gl, programInfo, buffers, views, renderCam, t=1.0) {
+function drawScene(gl, programInfo, buffers, views, renderCam, t = 1.5) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -573,7 +573,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam, t=1.0) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function drawSceneST(gl, programInfo, buffers, views, renderCam, t=1.0) {
+function drawSceneST(gl, programInfo, buffers, views, renderCam, t = 1.5) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -677,7 +677,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam, t=1.0) {
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t=1.0) {
+function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t = 1.5) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -762,7 +762,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t
   gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
 }
 
-function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t=1.0) {
+function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t = 1.5) {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -1266,6 +1266,7 @@ async function main() {
     renderCamL.pos = { x: renderCam.pos.x - 0.5, y: renderCam.pos.y, z: renderCam.pos.z };
     renderCamR.pos = { x: renderCam.pos.x + 0.5, y: renderCam.pos.y, z: renderCam.pos.z };
     focus = parseFloat(document.getElementById('focus').value);
+    if (!stereo && views.length > 1) renderCam.pos.x -= 0.5; // for mono view, center animation on left eye to avoid stereo mix blurring
     invd = focus * views[0].layers[0].invZ.min; // set focus point
     renderCam.sk.x = - (renderCam.pos.x * invd + offset.x) / (1 - renderCam.pos.z * invd);
     renderCam.sk.y = - (renderCamL.pos.y * invd + offset.y) / (1 - renderCamL.pos.z * invd);
@@ -1284,13 +1285,13 @@ async function main() {
       if (stereo) {
         drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
       } else {
-        drawScene(gl, programInfo, buffers, views, renderCam, parseFloat(document.getElementById('shaderEffect').value));
+        drawScene(gl, programInfo, buffers, views, renderCam, parseFloat(1.2*document.getElementById('shaderEffect').value)-0.1);
       }
     } else {
       if (stereo) {
         drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR);
       } else {
-        drawSceneST(gl, programInfo, buffers, views, renderCam, parseFloat(document.getElementById('shaderEffect').value));
+        drawSceneST(gl, programInfo, buffers, views, renderCam, parseFloat(1.2*document.getElementById('shaderEffect').value)-0.1);
       }
     }
   }
