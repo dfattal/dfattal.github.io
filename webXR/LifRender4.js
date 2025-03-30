@@ -175,7 +175,7 @@ function onDocumentMouseMove(event) {
     if (isVRActive) return;
 
     mouseX = (event.clientX - windowHalfX) / windowHalfX; // Normalize to [-1, 1]
-    mouseY = (event.clientY - windowHalfY) / windowHalfY * -1; // Normalize and invert Y
+    mouseY = (event.clientY - windowHalfY) / windowHalfY; // Normalize and invert Y
 }
 
 /** Initialize scene, camera, renderer, etc. */
