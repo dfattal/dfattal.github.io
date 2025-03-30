@@ -138,8 +138,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 filePicker.style.display = 'none';
                 await init();
                 animate();
+
+                // We now dispatch lif-loaded in the animate function for better timing
+                // No longer need to dispatch it here
             } catch (error) {
                 console.error('Error loading LIF:', error);
+
+                // Dispatch an error event that HTML can listen for
+                const errorEvent = new CustomEvent('lif-load-error', {
+                    detail: { message: 'Failed to load LIF file. Make sure it is a valid LIF format.' }
+                });
+                window.dispatchEvent(errorEvent);
             }
         }
     });
@@ -258,10 +267,12 @@ async function init() {
 }
 
 function onWindowResize() {
-    // Update Three.js camera and renderer
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    // Update Three.js camera and renderer only if they exist
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 
     // Resize our custom non-VR canvas
     resizeCanvasToContainer();
@@ -271,11 +282,37 @@ function onWindowResize() {
 function animate() {
     // Flag to track if animation should continue
     let isAnimating = true;
+    let loadEventDispatched = false;
 
     // Listen for reset event to stop animation
     document.addEventListener('reset-viewer', () => {
         isAnimating = false;
     });
+
+    // Ensure the lif-loaded event is dispatched only once, at the beginning
+    // This is important for smooth transitions
+    if (nonVRRenderer) {
+        // Add a delay to ensure the renderer is ready - longer for stereo LIFs
+        const delay = views.length > 1 ? 500 : 200; // Longer delay for stereo to fully initialize
+
+        setTimeout(() => {
+            // Force at least one render to happen before we show the canvas
+            if (nonVRRenderer) {
+                // Force a first draw for both mono and stereo before showing
+                if (views.length == 1) {
+                    nonVRRenderer.drawScene(1.1); // Force a mono draw
+                } else if (views.length == 2) {
+                    nonVRRenderer.drawScene(1.1); // Force a stereo draw
+                }
+            }
+
+            if (!loadEventDispatched) {
+                loadEventDispatched = true;
+                const loadedEvent = new Event('lif-loaded');
+                window.dispatchEvent(loadedEvent);
+            }
+        }, delay);
+    }
 
     // Animation function
     function animateFrame() {
@@ -438,7 +475,8 @@ function createPlanesVR() {
     const matLeft = new THREE.ShaderMaterial({
         // Define uniforms: pass in the dynamic texture.
         uniforms: {
-            uTexture: { value: texL }
+            uTexture: { value: texL },
+            uOpacity: { value: 0.0 } // Start with transparent
         },
         // Vertex shader: passes through positions and UVs.
         vertexShader: /* glsl */`
@@ -451,16 +489,20 @@ function createPlanesVR() {
         // Fragment shader: samples the texture.
         fragmentShader: /* glsl */`
               uniform sampler2D uTexture; // Dynamic texture from MN2MNRenderer
+              uniform float uOpacity;     // Opacity control for fade-in
               varying vec2 vUv;
               void main() {
-                gl_FragColor = texture2D(uTexture, vUv); // Sample the texture at the interpolated UV
+                vec4 texColor = texture2D(uTexture, vUv);
+                gl_FragColor = vec4(texColor.rgb, texColor.a * uOpacity); // Apply opacity
               }
-            `
+            `,
+        transparent: true // Enable transparency
     });
     const matRight = new THREE.ShaderMaterial({
         // Define uniforms: pass in the dynamic texture.
         uniforms: {
-            uTexture: { value: texR }
+            uTexture: { value: texR },
+            uOpacity: { value: 0.0 } // Start with transparent
         },
         // Vertex shader: passes through positions and UVs.
         vertexShader: /* glsl */`
@@ -473,15 +515,15 @@ function createPlanesVR() {
         // Fragment shader: samples the texture.
         fragmentShader: /* glsl */`
           uniform sampler2D uTexture; // Dynamic texture from MN2MNRenderer
+          uniform float uOpacity;     // Opacity control for fade-in
           varying vec2 vUv;
           void main() {
-            gl_FragColor = texture2D(uTexture, vUv); // Sample the texture at the interpolated UV
+            vec4 texColor = texture2D(uTexture, vUv);
+            gl_FragColor = vec4(texColor.rgb, texColor.a * uOpacity); // Apply opacity
           }
-        `
+        `,
+        transparent: true // Enable transparency
     });
-
-    // const matLeft = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // Blue for left eye
-    // const matRight = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red for right eye
 
     // 1x1 geometry, scaled each frame
     const planeGeom = new THREE.PlaneGeometry(1, 1);
@@ -495,6 +537,29 @@ function createPlanesVR() {
     planeRight.layers.set(2); // right eye only
     planeRight.visible = false;
     scene.add(planeRight);
+
+    // Start fade-in animation
+    setTimeout(() => {
+        // Animate opacity from 0 to 1 over 1 second
+        const startTime = performance.now();
+        const duration = 1000; // 1 second in ms
+
+        function fadeIn() {
+            const currentTime = performance.now();
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1.0);
+
+            // Update opacity uniform
+            matLeft.uniforms.uOpacity.value = progress;
+            matRight.uniforms.uOpacity.value = progress;
+
+            if (progress < 1.0) {
+                requestAnimationFrame(fadeIn);
+            }
+        }
+
+        fadeIn();
+    }, 200); // Small delay before starting fade
 }
 
 /**

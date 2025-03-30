@@ -35,6 +35,70 @@
       height: 100%;
       display: none;
       /* Hidden until a file is loaded */
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+
+    #glCanvas.visible {
+      opacity: 1;
+    }
+
+    /* Three.js renderer element */
+    canvas[data-engine="three.js"] {
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+
+    canvas[data-engine="three.js"].visible {
+      opacity: 1;
+    }
+
+    /* Loading spinner */
+    .loader-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, var(--primary-color), #1a2530);
+      z-index: 40;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s ease;
+    }
+
+    .loader-container.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .loader {
+      width: 80px;
+      height: 80px;
+      border: 8px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border-top: 8px solid var(--accent-color);
+      animation: spin 1s linear infinite;
+    }
+
+    .loader-text {
+      position: absolute;
+      margin-top: 120px;
+      font-size: 18px;
+      letter-spacing: 1px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
     }
 
     /* Landing page container */
@@ -191,7 +255,12 @@
       </div>
     </div>
     <div class="version">v1.0 • Leia Inc.</div>
-    <img src="../assets/Leia_Logomark_White.png" alt="Leia Inc." class="logo">
+  </div>
+
+  <!-- Loading spinner -->
+  <div class="loader-container" id="loaderContainer">
+    <div class="loader"></div>
+    <div class="loader-text" id="loaderText">Loading LIF file...</div>
   </div>
 
   <div id="canvas-container">
@@ -207,6 +276,8 @@
     const filePicker = document.getElementById('filePicker');
     const landingContainer = document.getElementById('landing-container');
     const canvas = document.getElementById('glCanvas');
+    const loaderContainer = document.getElementById('loaderContainer');
+    const loaderText = document.getElementById('loaderText');
 
     // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -251,24 +322,83 @@
       }
     }
 
+    // Handle error during loading
+    window.addEventListener('lif-load-error', function (event) {
+      // Show error message in the loader
+      loaderText.textContent = event.detail.message;
+      loaderText.style.color = '#ff5555';
+
+      // Add a button to go back to the landing page
+      const backButton = document.createElement('button');
+      backButton.textContent = 'Try Again';
+      backButton.style.marginTop = '30px';
+      backButton.style.padding = '8px 16px';
+      backButton.style.background = 'rgba(255, 255, 255, 0.2)';
+      backButton.style.border = 'none';
+      backButton.style.borderRadius = '4px';
+      backButton.style.color = 'white';
+      backButton.style.cursor = 'pointer';
+
+      backButton.addEventListener('click', function () {
+        loaderContainer.classList.remove('active');
+        landingContainer.style.display = 'flex';
+        loaderText.textContent = 'Loading LIF file...';
+        loaderText.style.color = '';
+        backButton.remove();
+      });
+
+      loaderContainer.appendChild(backButton);
+    });
+
     // Hide landing page and show canvas when file is loaded
     filePicker.addEventListener('change', () => {
       if (filePicker.files.length > 0) {
-        // Let the file loading complete before hiding the landing page
-        setTimeout(() => {
-          landingContainer.style.display = 'none';
+        // First show the loader
+        landingContainer.style.display = 'none';
+        loaderContainer.classList.add('active');
+
+        // Listen for an event from the module that indicates loading is complete
+        window.addEventListener('lif-loaded', function loadHandler() {
+          // Show the canvas first (but still with 0 opacity due to CSS)
           canvas.style.display = 'block';
 
+          // Check if it's a stereo LIF by seeing if Three.js renderer is present
+          const threeCanvas = document.querySelector('canvas[data-engine="three.js"]');
+
+          // Use setTimeout to ensure proper sequence of transitions
+          setTimeout(() => {
+            // Add the visible class to trigger the fade-in transition
+            canvas.classList.add('visible');
+
+            // Also fade in the Three.js canvas if it exists (for VR button)
+            if (threeCanvas) {
+              threeCanvas.classList.add('visible');
+            }
+
+            // Hide the loader after a delay to ensure smooth transition
+            setTimeout(() => {
+              loaderContainer.classList.remove('active');
+            }, 300); // Longer delay to avoid flickering
+          }, 100); // Longer initial delay
+
           // Make sure the VR button is visible when created
-          // This runs on a loop to catch when the VR button is created
           const vrButtonCheck = setInterval(() => {
             const vrButton = document.getElementById('VRButton');
             if (vrButton) {
               vrButton.style.display = 'block';
+              vrButton.style.opacity = '0';
+              // Fade in the VR button after canvas is visible
+              setTimeout(() => {
+                vrButton.style.opacity = '1';
+                vrButton.style.transition = 'opacity 0.5s ease';
+              }, 500);
               clearInterval(vrButtonCheck);
             }
           }, 100);
-        }, 500);
+
+          // Remove this event listener
+          window.removeEventListener('lif-loaded', loadHandler);
+        });
       }
     });
   </script>
