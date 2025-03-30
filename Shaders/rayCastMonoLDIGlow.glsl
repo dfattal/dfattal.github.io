@@ -220,7 +220,7 @@ void main(void) {
 
         vec3 C2 = uFacePosition;
         mat3 FSKR2 = matFromFocal(vec2(f2 / oRes.x, f2 / oRes.y)) * matFromSkew(sk2) * matFromRoll(roll2) * matFromSlant(sl2);
-        float invZ, confidence;
+        float invZ, confidence,invZfinal=0.0;
 
         // LDI
         vec4 result;
@@ -228,21 +228,25 @@ void main(void) {
         vec4 layer1 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[0] / iRes[0].x, f1[0] / iRes[0].y)) * SKR1, C1, uImage[0], uDisparityMap[0], invZmin[0], invZmax[0], iRes[0], 1.0, invZ, confidence);
         result = layer1;
         result.rgb *= result.a; // amount of light emitted by the layer
+        if (result.a > 0.0) invZfinal = invZ;
         if(!(result.a == 1.0 || uNumLayers == 1)) {
             vec4 layer2 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uImage[1], uDisparityMap[1], invZmin[1], invZmax[1], iRes[1], 1.0, invZ, confidence);
             result.rgb = result.rgb + (1.0-result.a)*layer2.a*layer2.rgb; // Blend background with with layer2
             result.a = layer2.a + result.a * (1.0 - layer2.a); // Blend alpha
             // result.rgb /= result.a; // Normalize color
+            if (result.a > 0.0 && invZfinal == 0.0) invZfinal = invZ;
             if(!(result.a == 1.0 || uNumLayers == 2)) {
                 vec4 layer3 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[2] / iRes[2].x, f1[2] / iRes[2].y)) * SKR1, C1, uImage[2], uDisparityMap[2], invZmin[2], invZmax[2], iRes[2], 1.0, invZ, confidence);
                 result.rgb = result.rgb + (1.0 - result.a)*layer3.a * layer3.rgb; // Blend background with with layer3
                 result.a = layer3.a + result.a * (1.0 - layer3.a); // Blend alpha
                 // result.rgb /= result.a; // Normalize color
+                if (result.a > 0.0 && invZfinal == 0.0) invZfinal = invZ;
                 if(!(result.a == 1.0 || uNumLayers == 3)) {
                     vec4 layer4 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[3] / iRes[3].x, f1[3] / iRes[3].y)) * SKR1, C1, uImage[3], uDisparityMap[3], invZmin[3], invZmax[3], iRes[3], 1.0, invZ, confidence);
                     result.rgb = result.rgb + (1.0 - result.a) * layer4.a * layer4.rgb; // Blend background with with layer4
                     result.a = layer4.a + result.a * (1.0 - layer4.a); // Blend alpha
                     // result.rgb /= result.a; // Normalize color
+                    if (result.a > 0.0 && invZfinal == 0.0) invZfinal = invZ;
                 }
             }
         }
@@ -257,7 +261,7 @@ void main(void) {
         // Output the final color
         
         // Glow effect based on depth value and normalized uTime
-        float normInvZ = invZ / invZmin[0];
+        float normInvZ = invZfinal / invZmin[0];
         // Calculate the contour effect based on time and depth value
         float phase = 1.0 - min(uTime, 1.0);
         float contourEffect = smoothstep(phase - 0.02, phase - 0.01, normInvZ) * (1.0 - smoothstep(phase + 0.01, phase + 0.02, normInvZ));

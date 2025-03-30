@@ -249,6 +249,7 @@ void main(void) {
         float invZL = 0.0;
         float invZR = 0.0;
         float invZ = 0.0;
+        float invZfinal = 0.0;
         float aL, aR;
 
         float wR = weight2(C2, C1L, C1R);
@@ -266,8 +267,10 @@ void main(void) {
             invZ = invZL;
         }
         layer = (1.0 - wR) * layer1L + wR * layer1R;
+        invZ = (1.0-wR)*invZL + wR*invZR;
         result = layer;
         result.rgb *= result.a; // amount of light emitted by the layer
+        if (result.a > 0.0) invZfinal = invZ;
         if(!(result.a == 1.0 || uNumLayersL == 1)) {
             vec4 layer2L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[1] / iResL[1].x, f1L[1] / iResL[1].y)) * SKR1L, C1L, uImageL[1], uDisparityMapL[1], invZminL[1], invZmaxL[1], iResL[1], 1.0, invZL, aL);
             vec4 layer2R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[1] / iResR[1].x, f1R[1] / iResR[1].y)) * SKR1R, C1R, uImageR[1], uDisparityMapR[1], invZminR[1], invZmaxR[1], iResR[1], 1.0, invZR, aR);
@@ -282,8 +285,10 @@ void main(void) {
                 invZ = invZL;
             }
             layer = (1.0 - wR) * layer2L + wR * layer2R;
+            invZ = (1.0-wR)*invZL + wR*invZR;
             result.rgb = result.rgb + (1.0 - result.a) * layer.a * layer.rgb; // Blend background with with layer2
             result.a = layer.a + result.a * (1.0 - layer.a); // Blend alpha
+            if (result.a > 0.0 && invZfinal == 0.0) invZfinal = invZ;
             if(!(result.a == 1.0 || uNumLayersL == 2)) {
                 vec4 layer3L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[2] / iResL[2].x, f1L[2] / iResL[2].y)) * SKR1L, C1L, uImageL[2], uDisparityMapL[2], invZminL[2], invZmaxL[2], iResL[2], 1.0, invZL, aL);
                 vec4 layer3R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[2] / iResR[2].x, f1R[2] / iResR[2].y)) * SKR1R, C1R, uImageR[2], uDisparityMapR[2], invZminR[2], invZmaxR[2], iResR[2], 1.0, invZR, aR);
@@ -298,8 +303,10 @@ void main(void) {
                     invZ = invZL;
                 }
                 layer = (1.0 - wR) * layer3L + wR * layer3R;
+                invZ = (1.0-wR)*invZL + wR*invZR;
                 result.rgb = result.rgb + (1.0 - result.a) * layer.a * layer.rgb; // Blend background with with layer2
                 result.a = layer.a + result.a * (1.0 - layer.a); // Blend alpha
+                if (result.a > 0.0 && invZfinal == 0.0) invZfinal = invZ;
                 if(!(result.a == 1.0 || uNumLayersL == 3)) {
                     vec4 layer4L = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1L[3] / iResL[3].x, f1L[3] / iResL[3].y)) * SKR1L, C1L, uImageL[3], uDisparityMapL[3], invZminL[3], invZmaxL[3], iResL[3], 1.0, invZL, aL);
                     vec4 layer4R = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1R[3] / iResR[3].x, f1R[3] / iResR[3].y)) * SKR1R, C1R, uImageR[3], uDisparityMapR[3], invZminR[3], invZmaxR[3], iResR[3], 1.0, invZR, aR);
@@ -314,8 +321,10 @@ void main(void) {
                         invZ = invZL;
                     }
                     layer = (1.0 - wR) * layer4L + wR * layer4R;
+                    invZ = (1.0-wR)*invZL + wR*invZR;
                     result.rgb = result.rgb + (1.0 - result.a) * layer.a * layer.rgb; // Blend background with with layer2
                     result.a = layer.a + result.a * (1.0 - layer.a); // Blend alpha
+                    if (result.a > 0.0 && invZfinal == 0.0) invZfinal = invZ;
                 }
 
             }
@@ -326,8 +335,8 @@ void main(void) {
         result.a = 1.0; // Ensure full opacity after blending with the background
 
         // Glow effect based on depth value and normalized uTime
-        invZ = max(max(invZ, invZL), invZR);
-        float normInvZ = invZ / max(invZminL[0],invZminR[0]);
+        // invZ = max(max(invZ, invZL), invZR);
+        float normInvZ = invZfinal / max(invZminL[0],invZminR[0]);
         // Calculate the contour effect based on time and depth value
         float phase = 1.0 - min(uTime, 1.0);
         float contourEffect = smoothstep(phase - 0.02, phase - 0.01, normInvZ) * (1.0 - smoothstep(phase + 0.01, phase + 0.02, normInvZ));
