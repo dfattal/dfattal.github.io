@@ -1148,23 +1148,24 @@ class lifViewer {
     }
 }
 
+let mode2;
 // Set default mode if not defined
 if (typeof mode !== 'undefined') {
-    mode = mode;
+    mode2 = mode;
 } else {
-    mode = "prod";
+    mode2 = urlParams.get('mode') ? urlParams.get('mode') : "prod"; // choice to use dev or prod version of the API
 }
 
-console.log(mode);
+console.log(mode2);
 
 class monoLdiGenerator {
     constructor(file = null, inpainting = 'lama') {
-        this.AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode;
+        this.AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode2;
         this.file = file ? file : null;
         this.width = 0;
         this.height = 0;
         this.inpainting = inpainting;
-        this.endpointUrl = 'https://' + (mode=='dev'?'api.dev.immersity.ai':'api.immersity.ai') + '/api/v1';
+        this.endpointUrl = 'https://' + (mode2 == 'dev' ? 'api.dev.immersity.ai' : 'api.immersity.ai') + '/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
         this.outpaintImUploadUrl;
