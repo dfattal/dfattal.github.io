@@ -3,8 +3,88 @@ const mode = urlParams.get('mode') ? urlParams.get('mode') : "prod"; // choice t
 console.log(mode);
 
 const AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode;
-const endpointUrl = 'https://' + (mode=='dev'?'api.dev.immersity.ai':'api.immersity.ai') + '/api/v1';
+const endpointUrl = 'https://' + (mode == 'dev' ? 'api.dev.immersity.ai' : 'api.immersity.ai') + '/api/v1';
 let outputFilename;
+
+// DOM elements
+const dropArea = document.getElementById('dropArea');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusElement = document.getElementById('status');
+const anaglyphContainer = document.getElementById('anaglyph-container');
+const spinner = document.getElementById('spinner');
+
+// Drag and drop events
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropArea.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropArea.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropArea.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight() {
+    dropArea.classList.add('highlight');
+}
+
+function unhighlight() {
+    dropArea.classList.remove('highlight');
+}
+
+// Handle file drop and selection
+dropArea.addEventListener('drop', handleDrop, false);
+fileInput.addEventListener('change', handleFileSelect, false);
+dropArea.addEventListener('click', () => fileInput.click());
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files.length > 0 && (files[0].type === 'image/jpeg' || files[0].type === 'image/png')) {
+        handleFiles(files);
+    } else {
+        statusElement.textContent = 'Please drop a valid JPG or PNG file.';
+    }
+}
+
+function handleFileSelect(e) {
+    if (fileInput.files.length > 0) {
+        handleFiles(fileInput.files);
+    }
+}
+
+function handleFiles(files) {
+    const file = files[0];
+    if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
+        statusElement.textContent = 'Please select a valid JPG or PNG file.';
+        return;
+    }
+
+    // Show file info
+    fileInfo.style.display = 'block';
+    fileInfo.textContent = `File: ${file.name} (${formatFileSize(file.size)})`;
+
+    // Hide drop area
+    dropArea.style.display = 'none';
+
+    // Start processing
+    processFile(file);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+}
 
 async function getAccessToken() {
     console.log('Acquiring access token from LeiaLogin...');
@@ -54,19 +134,13 @@ async function uploadToStorage(url, file) {
     }
 }
 
-document.getElementById('uploadBtn').addEventListener('click', async () => {
-    const fileInput = document.getElementById('fileInput');
-
-    if (!fileInput.files || fileInput.files.length === 0) {
-        alert("Please upload an SBS JPG file.");
-        return;
-    }
-
-    const sbsImage = fileInput.files[0];
+function processFile(sbsImage) {
     let filename = sbsImage.name;
     filename = filename.substring(0, filename.lastIndexOf('.')); // remove extension
     filename = filename.replace(/(_2x1|sbs)$/i, ''); // remove _2x1 or sbs suffix, case insensitive
     outputFilename = filename + '_STLIF.jpg';
+
+    statusElement.textContent = 'Processing your image...';
 
     const reader = new FileReader();
 
@@ -91,7 +165,7 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
 
             // Display the anaglyph while processing
             createAnaglyph(contextLeft, contextRight, halfWidth, height);
-            
+
             // Convert each half to blobs and upload
             canvasLeft.toBlob(async (leftBlob) => {
                 canvasRight.toBlob(async (rightBlob) => {
@@ -102,7 +176,7 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
     };
 
     reader.readAsDataURL(sbsImage);
-});
+}
 
 function createAnaglyph(contextLeft, contextRight, width, height) {
     const anaglyphCanvas = document.getElementById('anaglyphCanvas');
@@ -125,13 +199,13 @@ function createAnaglyph(contextLeft, contextRight, width, height) {
 
     // Draw anaglyph and show the container
     anaglyphContext.putImageData(anaglyphData, 0, 0);
-    document.getElementById('anaglyph-container').style.display = 'block';
-    document.getElementById('spinner').style.display = 'block';
+    anaglyphContainer.style.display = 'block';
+    spinner.style.display = 'block';
 }
 
 async function uploadToServer(leftBlob, rightBlob) {
     try {
-        document.getElementById('status').textContent = '';
+        statusElement.textContent = 'Uploading and converting...';
 
         const accessToken = await getAccessToken();
 
@@ -180,16 +254,14 @@ async function uploadToServer(leftBlob, rightBlob) {
         const data = await response.json();
 
         // Hide the spinner and anaglyph after processing
-        document.getElementById('spinner').style.display = 'none';
-        document.getElementById('anaglyph-container').style.display = 'none';
+        spinner.style.display = 'none';
 
         handleDownload(lifOutDownUrl);
 
     } catch (error) {
         console.error('Error:', error);
-        document.getElementById('status').textContent = 'Error creating LIF file.';
-        document.getElementById('spinner').style.display = 'none';
-        document.getElementById('anaglyph-container').style.display = 'none';
+        statusElement.textContent = 'Error creating LIF file.';
+        spinner.style.display = 'none';
     }
 }
 
@@ -212,5 +284,23 @@ function handleDownload(lifOutDownUrl) {
         document.body.removeChild(link);
     }
 
-    document.getElementById('status').textContent = `LIF file created and ready for download.`;
+    statusElement.textContent = `LIF file created and ready for download. Keep the anaglyph preview open to see a 3D preview.`;
+
+    // Add reset link
+    const resetLink = document.createElement('a');
+    resetLink.href = '#';
+    resetLink.textContent = ' Reset';
+    resetLink.style.marginLeft = '10px';
+    resetLink.style.color = '#3498db';
+    resetLink.onclick = function (e) {
+        e.preventDefault();
+        dropArea.style.display = 'flex';
+        anaglyphContainer.style.display = 'none';
+        fileInfo.style.display = 'none';
+        statusElement.textContent = '';
+        fileInput.value = '';
+        statusElement.removeChild(resetLink);
+    };
+
+    statusElement.appendChild(resetLink);
 }
