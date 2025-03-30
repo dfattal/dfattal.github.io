@@ -25,6 +25,12 @@ let texR = null;                    // loaded right eye texture
 let rL = null;                      // MN2MNRenderer for left eye
 let rR = null;                      // MN2MNRenderer for right eye
 
+// Non-VR WebGL canvas variables
+let container, canvas, gl, nonVRRenderer = null;
+let mouseX = 0, mouseY = 0;
+let windowHalfX, windowHalfY;
+let isVRActive = false;
+
 let startTime;
 
 const DISTANCE = 20;       // how far from each eye to place the main SBS planes in VR
@@ -40,6 +46,11 @@ let hudCanvas, hudCtx, hudTexture;
 let initialY, initialZ, IPD;
 
 function disposeResources() {
+    if (renderer) {
+        // Stop the animation loop
+        renderer.setAnimationLoop(null);
+    }
+
     if (texL) {
         texL.dispose();
         texL = null;
@@ -71,11 +82,41 @@ function disposeResources() {
         rR.gl.getExtension('WEBGL_lose_context')?.loseContext();
         rR = null;
     }
+    if (nonVRRenderer) {
+        nonVRRenderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        nonVRRenderer = null;
+    }
+
+    // Reset animation variables
+    startTime = undefined;
+    xrCanvasInitialized = false;
+    isVRActive = false;
+    initialY = undefined;
+    initialZ = undefined;
+    IPD = undefined;
 
     console.log('Resources disposed.');
 }
 
+// Expose the dispose function globally for the reset button
+window.disposeResources = disposeResources;
+
 document.addEventListener('DOMContentLoaded', async () => {
+    // Get canvas and container elements
+    container = document.getElementById('canvas-container');
+    canvas = document.getElementById('glCanvas');
+
+    // Set initial window dimensions
+    windowHalfX = window.innerWidth / 2;
+    windowHalfY = window.innerHeight / 2;
+
+    // Initialize canvas size
+    resizeCanvasToContainer();
+
+    // Add mouse event listeners
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    window.addEventListener('resize', onWindowResize);
+
     const filePicker = document.getElementById('filePicker');
     filePicker.addEventListener('change', async (event) => {
         const file = event.target.files[0];
@@ -102,12 +143,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     });
-
-
 });
+
+function resizeCanvasToContainer() {
+    const displayWidth = container.clientWidth || window.innerWidth;
+    const displayHeight = container.clientHeight || window.innerHeight;
+
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+
+        // Update window half values for mouse tracking
+        windowHalfX = displayWidth / 2;
+        windowHalfY = displayHeight / 2;
+
+        // The renderers will handle viewport updates internally
+        // when they call drawScene in the next animation frame
+    }
+}
+
+function onDocumentMouseMove(event) {
+    if (isVRActive) return;
+
+    mouseX = (event.clientX - windowHalfX) / windowHalfX; // Normalize to [-1, 1]
+    mouseY = (event.clientY - windowHalfY) / windowHalfY * -1; // Normalize and invert Y
+}
 
 /** Initialize scene, camera, renderer, etc. */
 async function init() {
+    // Initialize WebGL canvas for non-VR mode
+    gl = canvas.getContext('webgl');
+    if (!gl) {
+        console.error('Unable to initialize WebGL');
+        return;
+    }
+
+    // Create non-VR renderer using the canvas
+    if (views.length == 1) {
+        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views, false);
+        nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    } else if (views.length == 2) {
+        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDI.glsl', views, false);
+        nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    }
+
+    // Three.js scene setup for VR mode
     scene = new THREE.Scene();
 
     // Camera used outside VR; in VR, Three.js uses an internal ArrayCamera.
@@ -117,6 +197,18 @@ async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+
+    // Add XR session start/end event listeners
+    renderer.xr.addEventListener('sessionstart', () => {
+        isVRActive = true;
+        canvas.style.display = 'none'; // Hide non-VR canvas when in VR
+    });
+
+    renderer.xr.addEventListener('sessionend', () => {
+        isVRActive = false;
+        canvas.style.display = 'block'; // Show non-VR canvas when exiting VR
+        resizeCanvasToContainer(); // Make sure canvas is properly sized
+    });
 
     // ADD CONTEXT LOSS HANDLER HERE
     renderer.domElement.addEventListener('webglcontextlost', (event) => {
@@ -166,27 +258,41 @@ async function init() {
 }
 
 function onWindowResize() {
+    // Update Three.js camera and renderer
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Resize our custom non-VR canvas
+    resizeCanvasToContainer();
 }
 
 /** Our main animation/render loop (WebXR). */
 function animate() {
-    renderer.setAnimationLoop(() => {
+    // Flag to track if animation should continue
+    let isAnimating = true;
 
-        const xrCam = renderer.xr.getCamera(camera);
+    // Listen for reset event to stop animation
+    document.addEventListener('reset-viewer', () => {
+        isAnimating = false;
+    });
 
-        if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
-            // =============== VR MODE ===============
-            // Create left/right planes if needed
-            if (!planeLeft || !planeRight) {
-                createPlanesVR();
+    // Animation function
+    function animateFrame() {
+        // Stop if no longer animating
+        if (!isAnimating) return;
+
+        // Check if renderer still exists
+        if (!renderer) return;
+
+        renderer.setAnimationLoop(() => {
+            // Additional check inside loop
+            if (!renderer || !isAnimating) {
+                renderer?.setAnimationLoop(null);
+                return;
             }
 
-            // Access the sub-cameras
-            const leftCam = xrCam.cameras[0];
-            const rightCam = xrCam.cameras[1];
+            const xrCam = renderer.xr.getCamera(camera);
 
             // Get the current time in seconds
             const currentTime = performance.now() / 1000;
@@ -194,83 +300,132 @@ function animate() {
                 startTime = currentTime;
             }
 
-            // Set canvas dimensions once when XR cameras are available
-            if (!xrCanvasInitialized) {
-                rL.gl.canvas.width = leftCam.viewport.width;
-                rL.gl.canvas.height = leftCam.viewport.height;
-                rR.gl.canvas.width = rightCam.viewport.width;
-                rR.gl.canvas.height = rightCam.viewport.height;
-
-                xrCanvasInitialized = true;
-            }
-
-            // Create HUD overlay for each VR plane if not already created
-            if (!planeLeft.userData.hudOverlay) {
-                createHUDOverlayForVR(planeLeft, leftCam);
-            }
-            if (!planeRight.userData.hudOverlay) {
-                createHUDOverlayForVR(planeRight, rightCam);
-            }
-
-            // Position the VR planes
-            fitAndPositionPlane(planeLeft, leftCam);
-            fitAndPositionPlane(planeRight, rightCam);
-
-            // Each eye sees only its plane
-            leftCam.layers.enable(1);
-            rightCam.layers.enable(2);
-
-            // Update HUD text
-            updateHUD(leftCam, rightCam);
-
-            // Capture the initial head positions once
-            if (initialY === undefined) {
-                initialY = (leftCam.position.y + rightCam.position.y) / 2;
-                initialZ = (leftCam.position.z + rightCam.position.z) / 2;
-                IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
-            }
-
             const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1;
 
-            // Render the scene
-            //const IPD = leftCam.position.distanceTo(rightCam.position); 
-            rL.renderCam.pos.x = leftCam.position.x / IPD;
-            rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
-            rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
-            rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-            rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-            rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
-            rL.drawScene(uTime % glowPulsePeriod);
-            texL.needsUpdate = true;
-            // console.log('rL.renderCam: ', rL.renderCam);
-            rR.renderCam.pos.x = rightCam.position.x / IPD;
-            rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
-            rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
-            rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-            rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-            rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
-            rR.drawScene(uTime % glowPulsePeriod);
-            texR.needsUpdate = true;
+            if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+                // =============== VR MODE ===============
+                isVRActive = true;
 
-            // Hide the VR planes if we happen to switch out of VR
-            planeLeft.visible = true;
-            planeRight.visible = true;
+                // Create left/right planes if needed
+                if (!planeLeft || !planeRight) {
+                    createPlanesVR();
+                }
 
-        } else {
-            // ============ NOT IN VR ============
-            // Hide VR planes if they exist
-            if (planeLeft) planeLeft.visible = false;
-            if (planeRight) planeRight.visible = false;
-            xrCanvasInitialized = false; // Reset initialization if exiting VR
+                // Access the sub-cameras
+                const leftCam = xrCam.cameras[0];
+                const rightCam = xrCam.cameras[1];
 
-            // Fit the single-plane to fill the 2D viewport with the left image
-            if (planeNonVR) {
-                fitNonVRPlane(planeNonVR, camera);
+                // Set canvas dimensions once when XR cameras are available
+                if (!xrCanvasInitialized) {
+                    rL.gl.canvas.width = leftCam.viewport.width;
+                    rL.gl.canvas.height = leftCam.viewport.height;
+                    rR.gl.canvas.width = rightCam.viewport.width;
+                    rR.gl.canvas.height = rightCam.viewport.height;
+
+                    xrCanvasInitialized = true;
+                }
+
+                // Create HUD overlay for each VR plane if not already created
+                if (!planeLeft.userData.hudOverlay) {
+                    createHUDOverlayForVR(planeLeft, leftCam);
+                }
+                if (!planeRight.userData.hudOverlay) {
+                    createHUDOverlayForVR(planeRight, rightCam);
+                }
+
+                // Position the VR planes
+                fitAndPositionPlane(planeLeft, leftCam);
+                fitAndPositionPlane(planeRight, rightCam);
+
+                // Each eye sees only its plane
+                leftCam.layers.enable(1);
+                rightCam.layers.enable(2);
+
+                // Update HUD text
+                updateHUD(leftCam, rightCam);
+
+                // Capture the initial head positions once
+                if (initialY === undefined) {
+                    initialY = (leftCam.position.y + rightCam.position.y) / 2;
+                    initialZ = (leftCam.position.z + rightCam.position.z) / 2;
+                    IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
+                }
+
+                // Render the scene
+                //const IPD = leftCam.position.distanceTo(rightCam.position); 
+                rL.renderCam.pos.x = leftCam.position.x / IPD;
+                rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
+                rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
+                rL.drawScene(uTime % glowPulsePeriod);
+                texL.needsUpdate = true;
+
+                rR.renderCam.pos.x = rightCam.position.x / IPD;
+                rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
+                rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
+                rR.drawScene(uTime % glowPulsePeriod);
+                texR.needsUpdate = true;
+
+                // Show the VR planes
+                planeLeft.visible = true;
+                planeRight.visible = true;
+
+                // Hide non-VR canvas
+                canvas.style.display = 'none';
+
+            } else {
+                // ============ NOT IN VR ============
+                isVRActive = false;
+
+                // Hide VR planes if they exist
+                if (planeLeft) planeLeft.visible = false;
+                if (planeRight) planeRight.visible = false;
+                xrCanvasInitialized = false; // Reset initialization if exiting VR
+
+                // Show non-VR canvas
+                canvas.style.display = 'block';
+
+                // Render to non-VR canvas using mouse position
+                if (nonVRRenderer) {
+                    // Use mouse position to control camera pos
+                    // Scale mouse influence (0.5 gives a good range of motion)
+                    const scale = 0.5;
+                    nonVRRenderer.renderCam.pos.x = mouseX * scale;
+                    nonVRRenderer.renderCam.pos.y = mouseY * scale;
+                    nonVRRenderer.renderCam.pos.z = 0; // No Z movement with mouse
+
+                    // Apply the same skew corrections as in VR mode
+                    nonVRRenderer.renderCam.sk.x = -nonVRRenderer.renderCam.pos.x * nonVRRenderer.invd /
+                        (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
+                    nonVRRenderer.renderCam.sk.y = -nonVRRenderer.renderCam.pos.y * nonVRRenderer.invd /
+                        (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
+
+                    // Set focal length - no need to adjust for z since it's 0
+                    nonVRRenderer.renderCam.f = nonVRRenderer.views[0].f * nonVRRenderer.viewportScale();
+
+                    // Draw the scene
+                    nonVRRenderer.drawScene(uTime % glowPulsePeriod);
+                }
             }
-        }
 
-        renderer.render(scene, camera);
-    });
+            if (renderer) {
+                renderer.render(scene, camera);
+            }
+
+            // Request next frame (for non-XR mode)
+            if (!isVRActive && isAnimating) {
+                requestAnimationFrame(animateFrame);
+            }
+        });
+    }
+
+    // Start the animation
+    animateFrame();
 }
 
 /* -------------------------------------------------------------------- */

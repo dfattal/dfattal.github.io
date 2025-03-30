@@ -3,11 +3,160 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>WebXR: SBS + Single HUD + Non-VR Left Image</title>
+  <title>Immersive LIF Viewer</title>
   <style>
+    :root {
+      --primary-color: #2c3e50;
+      --accent-color: #3498db;
+      --text-color: #ecf0f1;
+      --shadow-color: rgba(0, 0, 0, 0.2);
+    }
+
     body {
       margin: 0;
       overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, var(--primary-color), #1a2530);
+      color: var(--text-color);
+    }
+
+    /* Fullscreen container to center the canvas */
+    #canvas-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #glCanvas {
+      width: 100%;
+      height: 100%;
+      display: none;
+      /* Hidden until a file is loaded */
+    }
+
+    /* Landing page container */
+    #landing-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, var(--primary-color), #1a2530);
+      z-index: 50;
+    }
+
+    .landing-content {
+      text-align: center;
+      max-width: 600px;
+      padding: 2rem;
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 20px var(--shadow-color);
+    }
+
+    h1 {
+      margin: 0 0 1rem 0;
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    p {
+      margin-bottom: 2rem;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .drop-area {
+      border: 2px dashed rgba(255, 255, 255, 0.5);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .drop-area:hover,
+    .drop-area.active {
+      border-color: var(--accent-color);
+      background-color: rgba(52, 152, 219, 0.1);
+    }
+
+    .drop-area i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: var(--accent-color);
+    }
+
+    .browse-btn {
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.8rem 1.5rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 6px var(--shadow-color);
+      transition: all 0.3s ease;
+    }
+
+    .browse-btn:hover {
+      background-color: #2980b9;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px var(--shadow-color);
+    }
+
+    .version {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      font-size: 0.8rem;
+      opacity: 0.5;
+    }
+
+    .logo {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      height: 32px;
+      width: auto;
+      opacity: 0.7;
+      z-index: 100;
+    }
+
+    .supported-formats {
+      font-size: 0.9rem;
+      margin-top: 1rem;
+      opacity: 0.8;
+    }
+
+    #filePicker {
+      position: absolute;
+      width: 0.1px;
+      height: 0.1px;
+      opacity: 0;
+      overflow: hidden;
+      z-index: -1;
+    }
+
+    /* VR Button style override */
+    #VRButton {
+      border-radius: 4px !important;
+      font-family: inherit !important;
+      background: rgba(0, 0, 0, 0.5) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    #VRButton:hover {
+      background: rgba(0, 0, 0, 0.7) !important;
     }
   </style>
   <script type="importmap">
@@ -18,11 +167,111 @@
     }
   }
   </script>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
 <body>
-  <input type="file" id="filePicker" accept="image/jpeg">
+  <input type="file" id="filePicker" accept="image/*">
+
+  <div id="landing-container">
+    <div class="landing-content">
+      <h1>Immersive LIF Viewer</h1>
+      <p>Experience Leia Image Format files in stunning 3D.</br>Drop your LIF file below or click to browse.</p>
+
+      <div class="drop-area" id="dropArea">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <p>Drag & drop your LIF file here</p>
+        <label for="filePicker" class="browse-btn">Browse Files</label>
+      </div>
+
+      <div class="supported-formats">
+        <p>Supports LIF format images. Use mouse to control perspective in 2D mode, or enter VR for immersive viewing.
+        </p>
+      </div>
+    </div>
+    <div class="version">v1.0 • Leia Inc.</div>
+    <img src="../assets/Leia_Logomark_White.png" alt="Leia Inc." class="logo">
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="glCanvas"></canvas>
+  </div>
+  <img src="../assets/Leia_Logomark_White.png" alt="Leia Inc." class="logo">
+
   <script type="module" src="LifRender4.js"></script>
+
+  <script>
+    // Drag and drop functionality
+    const dropArea = document.getElementById('dropArea');
+    const filePicker = document.getElementById('filePicker');
+    const landingContainer = document.getElementById('landing-container');
+    const canvas = document.getElementById('glCanvas');
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false);
+      document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop area when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    dropArea.addEventListener('drop', handleDrop, false);
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight() {
+      dropArea.classList.add('active');
+    }
+
+    function unhighlight() {
+      dropArea.classList.remove('active');
+    }
+
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+
+      if (files.length > 0) {
+        filePicker.files = files;
+        // Trigger change event
+        const event = new Event('change');
+        filePicker.dispatchEvent(event);
+      }
+    }
+
+    // Hide landing page and show canvas when file is loaded
+    filePicker.addEventListener('change', () => {
+      if (filePicker.files.length > 0) {
+        // Let the file loading complete before hiding the landing page
+        setTimeout(() => {
+          landingContainer.style.display = 'none';
+          canvas.style.display = 'block';
+
+          // Make sure the VR button is visible when created
+          // This runs on a loop to catch when the VR button is created
+          const vrButtonCheck = setInterval(() => {
+            const vrButton = document.getElementById('VRButton');
+            if (vrButton) {
+              vrButton.style.display = 'block';
+              clearInterval(vrButtonCheck);
+            }
+          }, 100);
+        }, 500);
+      }
+    });
+  </script>
 </body>
 
 </html>

@@ -2,8 +2,16 @@
 import { LifLoader } from '../LIF/LifLoader.js';
 import { MN2MNRenderer, ST2MNRenderer } from '../VIZ/Renderers.js';
 
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const glow = urlParams.get('glow') ? urlParams.get('glow') : false; // Default to false
+const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
+const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+
+
 let views = null;
 let stereo_render_data = null;
+let xrCanvasInitialized = false;
 
 // Three.js renderer
 import * as THREE from 'three';
@@ -17,16 +25,55 @@ let texR = null;                    // loaded right eye texture
 let rL = null;                      // MN2MNRenderer for left eye
 let rR = null;                      // MN2MNRenderer for right eye
 
-const DISTANCE = 20;       // how far from each eye to place the main SBS planes in VR
+let startTime;
+
+const DISTANCE = 50;       // default view plane distance for parallel frustums
 const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 
 // Temp re-usable vectors/quats
 const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 
-// HUD
-let hudPlane, hudTexture, hudCtx;
-let hudCreated = false;  // so we only create/attach the HUD once
+// Shared HUD globals (for both eyes)
+let hudCanvas, hudCtx, hudTexture;
+// initial position of the center eyes
+let initialY, initialZ, IPD;
+
+function disposeResources() {
+    if (texL) {
+        texL.dispose();
+        texL = null;
+    }
+    if (texR) {
+        texR.dispose();
+        texR = null;
+    }
+    if (renderer) {
+        renderer.dispose();
+        renderer.forceContextLoss(); // Explicitly trigger context loss (optional but recommended)
+        renderer = null;
+    }
+    if (planeLeft) {
+        planeLeft.geometry.dispose();
+        planeLeft.material.dispose();
+        planeLeft = null;
+    }
+    if (planeRight) {
+        planeRight.geometry.dispose();
+        planeRight.material.dispose();
+        planeRight = null;
+    }
+    if (rL) {
+        rL.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        rL = null;
+    }
+    if (rR) {
+        rR.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        rR = null;
+    }
+
+    console.log('Resources disposed.');
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const filePicker = document.getElementById('filePicker');
@@ -34,6 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const file = event.target.files[0];
         if (file) {
             try {
+                // Dispose of old resources explicitly before loading new ones
+                disposeResources();
                 const loader = new LifLoader();
                 await loader.load(file);
 
@@ -68,6 +117,14 @@ async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+
+    // ADD CONTEXT LOSS HANDLER HERE
+    renderer.domElement.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        console.error('WebGL context lost.');
+        disposeResources();
+    });
+
     document.body.appendChild(renderer.domElement);
     const vrButton = VRButton.createButton(renderer)
     document.body.appendChild(vrButton);
@@ -117,6 +174,7 @@ function onWindowResize() {
 /** Our main animation/render loop (WebXR). */
 function animate() {
     renderer.setAnimationLoop(() => {
+
         const xrCam = renderer.xr.getCamera(camera);
 
         if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
@@ -130,41 +188,75 @@ function animate() {
             const leftCam = xrCam.cameras[0];
             const rightCam = xrCam.cameras[1];
 
-            // Create HUD once we have the leftCam
-            if (!hudCreated) {
-                createHUDWithFOV(leftCam);
-                hudCreated = true;
+            // Get the current time in seconds
+            const currentTime = performance.now() / 1000;
+            if (startTime === undefined) {
+                startTime = currentTime;
             }
 
-            // Position the VR planes
-            fitAndPositionPlane(planeLeft, leftCam);
-            fitAndPositionPlane(planeRight, rightCam);
+            // Set canvas dimensions once when XR cameras are available
+            if (!xrCanvasInitialized) {
+                rL.gl.canvas.width = leftCam.viewport.width;
+                rL.gl.canvas.height = leftCam.viewport.height;
+                rR.gl.canvas.width = rightCam.viewport.width;
+                rR.gl.canvas.height = rightCam.viewport.height;
 
-            // Each eye sees only its plane
-            leftCam.layers.enable(1);
-            rightCam.layers.enable(2);
+                xrCanvasInitialized = true;
+
+                // Calculate the convergence plane position and size
+                const convergencePlane = calculateConvergencePlane(leftCam, rightCam);
+                console.log('convergencePlane: ', convergencePlane);
+                // Position both planes at the same convergence point
+                positionPlaneAtConvergence(planeLeft, leftCam, convergencePlane);
+                positionPlaneAtConvergence(planeRight, rightCam, convergencePlane);
+
+                // Save the convergence plane info for HUD creation
+                planeLeft.userData.convergencePlane = convergencePlane;
+                planeRight.userData.convergencePlane = convergencePlane;
+
+                // Set up layers only once
+                leftCam.layers.enable(1);
+                rightCam.layers.enable(2);
+            }
+
+            // Create HUD overlay for each VR plane if not already created
+            if (!planeLeft.userData.hudOverlay) {
+                createHUDOverlayForVR(planeLeft, leftCam, planeLeft.userData.convergencePlane);
+            }
+            if (!planeRight.userData.hudOverlay) {
+                createHUDOverlayForVR(planeRight, rightCam, planeRight.userData.convergencePlane);
+            }
 
             // Update HUD text
             updateHUD(leftCam, rightCam);
 
+            // Capture the initial head positions once
+            if (initialY === undefined) {
+                initialY = (leftCam.position.y + rightCam.position.y) / 2;
+                initialZ = (leftCam.position.z + rightCam.position.z) / 2;
+                IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
+            }
+
+            const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1;
+
             // Render the scene
-            const IPD = leftCam.position.distanceTo(rightCam.position);
+            //const IPD = leftCam.position.distanceTo(rightCam.position); 
             rL.renderCam.pos.x = leftCam.position.x / IPD;
-            rL.renderCam.pos.y = -(leftCam.position.y - 1.7) / IPD;
-            rL.renderCam.pos.z = -leftCam.position.z / IPD;
+            rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
+            rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
             rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
             rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
-            rL.drawScene();
+            rL.drawScene(uTime % glowPulsePeriod);
             texL.needsUpdate = true;
             // console.log('rL.renderCam: ', rL.renderCam);
             rR.renderCam.pos.x = rightCam.position.x / IPD;
-            rR.renderCam.pos.y = -(rightCam.position.y - 1.7) / IPD;
-            rR.renderCam.pos.z = -rightCam.position.z / IPD;
+            rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
+            rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
             rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
             rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
-            rR.drawScene();
+            rR.drawScene(uTime % glowPulsePeriod);
             texR.needsUpdate = true;
 
             // Hide the VR planes if we happen to switch out of VR
@@ -176,6 +268,7 @@ function animate() {
             // Hide VR planes if they exist
             if (planeLeft) planeLeft.visible = false;
             if (planeRight) planeRight.visible = false;
+            xrCanvasInitialized = false; // Reset initialization if exiting VR
 
             // Fit the single-plane to fill the 2D viewport with the left image
             if (planeNonVR) {
@@ -257,29 +350,109 @@ function createPlanesVR() {
 }
 
 /**
- * fitAndPositionPlane(plane, subCam):
- * 1) Copy sub-cam pos/orient
- * 2) Parse sub-cam FOV
- * 3) Scale so it won't crop at DISTANCE
- * 4) Move plane DISTANCE forward
+ * calculateConvergencePlane(leftCam, rightCam):
+ * Calculate the position and size of the convergence plane where
+ * the left and right eye frustums meet.
+ * @returns {Object} Position and dimensions of the convergence plane
  */
-function fitAndPositionPlane(plane, subCam) {
-    subCam.getWorldPosition(tmpPos);
-    subCam.getWorldQuaternion(tmpQuat);
+function calculateConvergencePlane(leftCam, rightCam) {
+    // Extract FOV angles for both eyes
+    const leftFov = extractFovAngles(leftCam);
+    const rightFov = extractFovAngles(rightCam);
 
-    plane.position.copy(tmpPos);
-    plane.quaternion.copy(tmpQuat);
+    // Shorthand notation to match the provided math
+    const l0 = Math.tan(leftFov.angleLeft);
+    const r0 = Math.tan(leftFov.angleRight);
+    const u0 = Math.tan(leftFov.angleUp);
+    const d0 = Math.tan(leftFov.angleDown);
 
-    const { fov, aspect } = parseSubCamFov(subCam);
+    const l1 = Math.tan(rightFov.angleLeft);
+    const r1 = Math.tan(rightFov.angleRight);
+    const u1 = Math.tan(rightFov.angleUp);
+    const d1 = Math.tan(rightFov.angleDown);
 
-    const imgW = texL.image.width;
-    const imgH = texL.image.height;
-    const imAspect = imgW / imgH;
+    // Eye positions
+    const x0 = leftCam.position.x;
+    const y0 = leftCam.position.y;
+    const z0 = leftCam.position.z;
 
-    const { planeWidth, planeHeight } = fitPlaneInFov(imAspect, fov, aspect, DISTANCE);
+    const x1 = rightCam.position.x;
+    const y1 = rightCam.position.y;
+    const z1 = rightCam.position.z;
 
-    plane.scale.set(planeWidth, planeHeight, 1);
-    plane.translateZ(-DISTANCE);
+    // Check for parallel frustums (will cause division by zero)
+    const denomX = (r1 - l1) - (r0 - l0);
+    const denomY = (u1 - d1) - (u0 - d0);
+
+    if (Math.abs(denomX) < 1e-6 || Math.abs(denomY) < 1e-6) {
+        // Frustums are nearly parallel, use fallback
+        const centerPos = new THREE.Vector3()
+            .addVectors(leftCam.position, rightCam.position)
+            .multiplyScalar(0.5);
+
+        // Position far away in front of the center point
+        centerPos.z -= DISTANCE;
+
+        // Size that matches FOV
+        const { fov, aspect } = parseSubCamFov(leftCam);
+        const width = 2 * DISTANCE * Math.tan(Math.atan(aspect * Math.tan(fov / 2)));
+        const height = 2 * DISTANCE * Math.tan(fov / 2);
+
+        return {
+            position: centerPos,
+            width: width,
+            height: height
+        };
+    }
+
+    // Calculate display position using the provided math
+    const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
+    const yd = ((u1 - d1) * (y0 + z0 * (u0 - d0)) - (u0 - d0) * (y1 + z1 * (u1 - d1))) / denomY;
+    const zd = (x1 + z1 * (r1 - l1) - x0 - z0 * (r0 - l0)) / denomX;
+
+    // Calculate display size
+    const W = Math.abs((z0 - zd) * (l0 + r0));
+    const H = Math.abs((z0 - zd) * (u0 + d0));
+
+    return {
+        position: new THREE.Vector3(xd, yd, zd),
+        width: W,
+        height: H
+    };
+}
+
+/**
+ * Extract FOV angles from a camera's projection matrix
+ */
+function extractFovAngles(camera) {
+    const projMatrix = camera.projectionMatrix.elements;
+
+    // Extract FOV from projection matrix
+    const left = Math.atan(-1 / projMatrix[0] - projMatrix[8] / projMatrix[0]);
+    const right = Math.atan(1 / projMatrix[0] - projMatrix[8] / projMatrix[0]);
+    const bottom = Math.atan(-1 / projMatrix[5] - projMatrix[9] / projMatrix[5]);
+    const top = Math.atan(1 / projMatrix[5] - projMatrix[9] / projMatrix[5]);
+
+    return {
+        angleLeft: left,
+        angleRight: right,
+        angleUp: top,
+        angleDown: bottom
+    };
+}
+
+/**
+ * Position a plane at the convergence point, oriented toward its respective camera
+ */
+function positionPlaneAtConvergence(plane, camera, convergencePlane) {
+    // Position the plane at the convergence point
+    plane.position.copy(convergencePlane.position);
+
+    // Orient the plane to face the camera
+    plane.lookAt(camera.position);
+
+    // Set the plane size
+    plane.scale.set(convergencePlane.width, convergencePlane.height, 1);
 }
 
 function parseSubCamFov(subCam) {
@@ -312,71 +485,80 @@ function fitPlaneInFov(planeAspect, vFOV, camAspect, dist) {
 /* -------------------------------------------------------------------- */
 
 /**
- * createHUDWithFOV(referenceCam):
- *   1) Parse leftCam's horizontal FOV at `HUD_DISTANCE`,
- *   2) Make the HUD plane geometry sized at (1/5 of that view width) x half that,
- *   3) Parent it to the main camera so it doesn't move in your view,
- *   4) Position it in the top-left corner of your local camera space.
+ * createHUDOverlayForVR(plane, subCam, convergencePlane):
+ *   1) Use the convergence plane position and size to calculate HUD dimensions
+ *   2) Create a HUD overlay sized to 1/5 of the view width with height = half of that
+ *   3) Position the overlay in the top-left corner of the VR plane
  */
-function createHUDWithFOV(referenceCam) {
-    console.log('Creating HUD using left sub-cam FOV at distance', HUD_DISTANCE);
+function createHUDOverlayForVR(plane, subCam, convergencePlane) {
+    // Distance from camera to convergence plane
+    const cameraPos = new THREE.Vector3();
+    subCam.getWorldPosition(cameraPos);
+    const distToPlane = cameraPos.distanceTo(convergencePlane.position);
 
-    const { fov: vFOV, aspect } = parseSubCamFov(referenceCam);
-    const hFOV = 2 * Math.atan(aspect * Math.tan(vFOV / 2));
-    const viewWidth = 2 * HUD_DISTANCE * Math.tan(hFOV / 2);
-    const viewHeight = 2 * HUD_DISTANCE * Math.tan(vFOV / 2);
+    // Use the convergence plane's dimensions
+    const planeWidth = convergencePlane.width;
+    const planeHeight = convergencePlane.height;
 
-    const hudW = viewWidth / 5;   // 1/5
-    const hudH = hudW / 2;       // half the width
+    // HUD size (1/5 of width, with height = half of that)
+    const hudW = planeWidth / 5;
+    const hudH = hudW / 2;
 
-    // Canvas + texture
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
-    hudCtx = canvas.getContext('2d');
-
-    hudTexture = new THREE.CanvasTexture(canvas);
-    hudTexture.encoding = THREE.sRGBEncoding;
+    // Create shared HUD canvas/texture if not already created
+    if (!hudCanvas) {
+        hudCanvas = document.createElement('canvas');
+        hudCanvas.width = 256;
+        hudCanvas.height = 128;
+        hudCtx = hudCanvas.getContext('2d');
+        hudTexture = new THREE.CanvasTexture(hudCanvas);
+        hudTexture.encoding = THREE.sRGBEncoding;
+    }
 
     const hudMat = new THREE.MeshBasicMaterial({
         map: hudTexture,
         transparent: true
     });
-    const hudGeom = new THREE.PlaneGeometry(hudW, hudH);
-    hudPlane = new THREE.Mesh(hudGeom, hudMat);
+    const hudGeom = new THREE.PlaneGeometry(1, 1);
+    const hudOverlay = new THREE.Mesh(hudGeom, hudMat);
 
-    // Attach to main camera so it doesn't move relative to your head
-    camera.add(hudPlane);
+    // In the VR plane's local coordinates (PlaneGeometry(1,1) spans -0.5 to 0.5),
+    // position the overlay so its center is at the top-left corner.
+    const localX = -0.5 + (hudW / (2 * planeWidth));
+    const localY = 0.5 - (hudH / (2 * planeHeight));
+    hudOverlay.position.set(localX, localY, 0.01); // slight offset to avoid z-fighting
+    hudOverlay.scale.set(hudW / planeWidth, hudH / planeHeight, 1);
 
-    // Position in local camera space, top-left corner
-    hudPlane.position.set(
-        -(viewWidth / 2) + (hudW / 2),
-        (viewHeight / 2) - (hudH / 2),
-        -HUD_DISTANCE
-    );
+    // Copy the parent plane's layer so the HUD overlay appears only for that eye.
+    hudOverlay.layers.mask = plane.layers.mask;
+
+    plane.add(hudOverlay);
+    plane.userData.hudOverlay = hudOverlay;
 }
 
 /**
  * updateHUD(leftCam, rightCam):
- *   Draw each eye's position onto the HUD plane. Called every frame in VR.
+ *   Draw each eye's position onto the shared HUD canvas.
+ *   Both VR HUD overlays share this texture.
  */
 function updateHUD(leftCam, rightCam) {
     if (!hudCtx || !hudTexture) return;
 
-    hudCtx.clearRect(0, 0, hudCtx.canvas.width, hudCtx.canvas.height);
+    hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
 
     // Semi-transparent background
     hudCtx.fillStyle = 'rgba(0,0,0,0.5)';
-    hudCtx.fillRect(0, 0, hudCtx.canvas.width, hudCtx.canvas.height);
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
 
     hudCtx.fillStyle = '#fff';
     hudCtx.font = '20px sans-serif';
-    hudCtx.fillText('Eye Positions', 10, 26);
+    hudCtx.fillText('Eye Pos', 10, 26);
 
-    const leftPos = new THREE.Vector3();
-    const rightPos = new THREE.Vector3();
-    leftCam.getWorldPosition(leftPos);
-    rightCam.getWorldPosition(rightPos);
+    // const leftPos = new THREE.Vector3();
+    // const rightPos = new THREE.Vector3();
+    // leftCam.getWorldPosition(leftPos);
+    // rightCam.getWorldPosition(rightPos);
+    const leftPos = leftCam.position;
+    const rightPos = rightCam.position;
 
     const lx = leftPos.x.toFixed(2), ly = leftPos.y.toFixed(2), lz = leftPos.z.toFixed(2);
     const rx = rightPos.x.toFixed(2), ry = rightPos.y.toFixed(2), rz = rightPos.z.toFixed(2);
