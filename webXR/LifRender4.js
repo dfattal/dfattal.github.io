@@ -4,7 +4,7 @@ import { MN2MNRenderer, ST2MNRenderer } from '../VIZ/Renderers.js';
 
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
-const glow = urlParams.get('glow') ? urlParams.get('glow') : false; // Default to false
+const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
 
@@ -189,10 +189,10 @@ async function init() {
 
     // Create non-VR renderer using the canvas
     if (views.length == 1) {
-        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views, false);
+        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow.glsl', views, false);
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     } else if (views.length == 2) {
-        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDI.glsl', views, false);
+        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow.glsl', views, false);
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     }
 
@@ -432,7 +432,7 @@ function animate() {
                     // Use mouse position to control camera pos
                     // Scale mouse influence (0.5 gives a good range of motion)
                     const scale = 0.5;
-                    nonVRRenderer.renderCam.pos.x = mouseX * scale;
+                    nonVRRenderer.renderCam.pos.x = -0.5 +mouseX * scale;
                     nonVRRenderer.renderCam.pos.y = mouseY * scale;
                     nonVRRenderer.renderCam.pos.z = 0; // No Z movement with mouse
 
