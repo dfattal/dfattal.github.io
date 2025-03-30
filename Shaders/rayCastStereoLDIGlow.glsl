@@ -194,7 +194,8 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         disp = readDisp(iChannelDisp, s1 + .5, invZmin, invZmax, iRes);
         gradDisp = disp - oldDisp;
         oldDisp = disp;
-        invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
+        // invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
+        invZ2 = invZ; // for glow effect
         if((disp > invZ) && (invZ2 > 0.0)) { // if ray is below the "virtual surface"...
             if(abs(gradDisp) > gradThr)
                 confidence = 0.0;
