@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebXR Controller Test</title>
+    <style>
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+      }
+    }
+    </script>
+
+<body>
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Position camera for better starting view
+        camera.position.set(0, 1.6, 0);
+
+        // Add lights
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(1, 2, 3);
+        scene.add(directionalLight);
+
+        // Add a floor grid for reference
+        const gridHelper = new THREE.GridHelper(10, 10);
+        scene.add(gridHelper);
+
+        const controllerModelFactory = new XRControllerModelFactory();
+
+        for (let i = 0; i < 2; i++) {
+            const controller = renderer.xr.getController(i);
+            controller.addEventListener('selectstart', () => console.log(`Controller ${i} select start`));
+            controller.addEventListener('selectend', () => console.log(`Controller ${i} select end`));
+            scene.add(controller);
+
+            const grip = renderer.xr.getControllerGrip(i);
+            grip.add(controllerModelFactory.createControllerModel(grip));
+            scene.add(grip);
+        }
+
+        // Create cube with more visible color and position in front of user
+        const geometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.set(0, 1.5, -2);  // Position in front of user at eye level
+        scene.add(cube);
+
+        function animate() {
+            renderer.setAnimationLoop(() => {
+                cube.rotation.x += 0.01;
+                cube.rotation.y += 0.01;
+                renderer.render(scene, camera);
+            });
+        }
+
+        document.body.appendChild(VRButton.createButton(renderer));
+        animate();
+    </script>
+</body>
+
+</html>
