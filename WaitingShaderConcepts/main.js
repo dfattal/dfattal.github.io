@@ -27,7 +27,8 @@ const shaderSelector = document.createElement('div');
 shaderSelector.id = 'shader-selector';
 shaderSelector.innerHTML = `
   <div>
-    <button id="stereoGlitch" class="active">Stereo Glitch</button>
+    <button id="pulseWave" class="active">Pulse Wave</button>
+    <button id="stereoGlitch">Stereo Glitch</button>
     <button id="cinematicSweep">Cinematic Sweep</button>
   </div>
 `;
@@ -62,7 +63,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Track current shader
-let currentShader = 'stereoGlitch';
+let currentShader = 'pulseWave';
 let fragSrc, program, vs, fs;
 
 // Load shader function
@@ -188,6 +189,7 @@ function setupUniforms() {
 }
 
 // Add event listeners to shader buttons
+document.getElementById('pulseWave').addEventListener('click', () => loadShader('pulseWave'));
 document.getElementById('stereoGlitch').addEventListener('click', () => loadShader('stereoGlitch'));
 document.getElementById('cinematicSweep').addEventListener('click', () => loadShader('cinematicSweep'));
 
@@ -227,9 +229,20 @@ image.onload = () => {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
         // Load initial shader
-        loadShader('stereoGlitch').then(success => {
+        loadShader('pulseWave').then(success => {
             if (success) {
                 gl.uniform1i(uTexture, 0);
+
+                // Start animation timer
+                console.log('Starting animation with shader:', currentShader);
+                console.log('Uniform locations:', { uTime, uTexture, uAmount });
+
+                // Initial time update to verify values are set
+                gl.uniform1f(uTime, 0.0);
+                if (currentShader === 'stereoGlitch') {
+                    gl.uniform1f(uAmount, 0.002);
+                }
+
                 requestAnimationFrame(draw);
             }
         });
@@ -247,17 +260,27 @@ function draw(time) {
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // Animate based on current shader
-    gl.uniform1f(uTime, time * 0.001);
+    // Base time update for all shaders
+    const normalizedTime = time * 0.001;
 
-    // Special handling for stereoGlitch shader
+    // Special handling for each shader type
     if (currentShader === 'stereoGlitch') {
         // Animate glitch effect with adjustable frequency
         const frequency = 1.5; // Adjust for faster/slower oscillation
-        gl.uniform1f(uTime, time * 0.001 * frequency);
+        gl.uniform1f(uTime, normalizedTime * frequency);
 
         // Use a smaller value for a more subtle effect since we're amplifying it on edges
         gl.uniform1f(uAmount, 0.002); // Reduced from 0.005 as edge detection multiplies this
+    } else if (currentShader === 'pulseWave') {
+        // Debug info for pulse wave
+        console.log('PulseWave time:', normalizedTime);
+
+        // Try using a more noticeable time scale for this effect
+        const pulseFrequency = 2.0;
+        gl.uniform1f(uTime, normalizedTime * pulseFrequency);
+    } else {
+        // Default time update for other shaders
+        gl.uniform1f(uTime, normalizedTime);
     }
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
