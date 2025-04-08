@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Stereo Glitch Shader (WebGL)</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+        #status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="glCanvas"></canvas>
+    <div id="status">Loading...</div>
+    <script type="module" src="./main.js"></script>
+    <script>
+        window.onerror = function (msg, url, line) {
+            document.getElementById('status').innerHTML =
+                'Error: ' + msg + '<br>Line: ' + line;
+            return false;
+        };
+    </script>
+</body>
+
+</html>
