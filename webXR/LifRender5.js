@@ -359,14 +359,14 @@ function locateConvergencePlane(leftCam, rightCam) {
 
         // Extract FOV angles for both cameras
         const u0 = leftFov.tanUp;
-        const d0 = leftFov.tanDown;
+        const d0 = -leftFov.tanDown;
         const r0 = leftFov.tanRight;
-        const l0 = leftFov.tanLeft;
+        const l0 = -leftFov.tanLeft;
 
         const u1 = rightFov.tanUp;
-        const d1 = rightFov.tanDown;
+        const d1 = -rightFov.tanDown;
         const r1 = rightFov.tanRight;
-        const l1 = rightFov.tanLeft;
+        const l1 = -rightFov.tanLeft;
 
         console.log("FOV angles extracted:",
             "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
