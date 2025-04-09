@@ -409,8 +409,9 @@ function locateConvergencePlane(leftCam, rightCam) {
 
         // Calculate display position
         const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
-        const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
+        // const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
         const zd = (x1 + z1 * (r1 - l1) - x0 - z0 * (r0 - l0)) / denomX;
+        const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
 
         console.log("Display position calculation:",
             "xd:", xd, "yd:", yd, "zd:", zd);
