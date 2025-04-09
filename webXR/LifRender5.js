@@ -463,7 +463,8 @@ function locateConvergencePlane(leftCam, rightCam) {
             };
         }
 
-        const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
+        // const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
+        const finalPos = new THREE.Vector3(xd, yd, zd); // assume leftQuat is identity (true at start of session)
         console.log("Final asymmetric result:",
             "position:", finalPos,
             "width:", Math.abs(W),
