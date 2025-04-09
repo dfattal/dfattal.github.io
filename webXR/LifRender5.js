@@ -280,10 +280,17 @@ function onWindowResize() {
 
 // Returns the size, position and orientation of the convergence plane
 function locateConvergencePlane(leftCam, rightCam) {
+    console.log("locateConvergencePlane called with:",
+        "leftCam pos:", leftCam.position,
+        "rightCam pos:", rightCam.position);
 
     // Get quaternions from cameras and verify they match
     const leftQuat = leftCam.quaternion;
     const rightQuat = rightCam.quaternion;
+
+    console.log("Camera quaternions:",
+        "leftQuat:", leftQuat.toArray(),
+        "rightQuat:", rightQuat.toArray());
 
     // Verify cameras have same orientation
     if (!leftQuat.equals(rightQuat)) {
@@ -292,9 +299,14 @@ function locateConvergencePlane(leftCam, rightCam) {
 
     // Calculate center position between left and right cameras
     const centerCam = leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5);
+    console.log("Center camera position:", centerCam);
 
     const leftFov = computeFovTanAngles(leftCam);
     const rightFov = computeFovTanAngles(rightCam);
+
+    console.log("FOV angles:",
+        "leftFov:", leftFov,
+        "rightFov:", rightFov);
 
     // Check if FOVs are equal and symmetric
     const isSymmetric = Math.abs(leftFov.tanUp) === Math.abs(leftFov.tanDown) &&
@@ -304,24 +316,47 @@ function locateConvergencePlane(leftCam, rightCam) {
         Math.abs(leftFov.tanLeft - rightFov.tanLeft) < 0.0001 &&
         Math.abs(leftFov.tanRight - rightFov.tanRight) < 0.0001;
 
+    console.log("FOV analysis:",
+        "isSymmetric:", isSymmetric,
+        "isEqual:", isEqual);
+
     if (isEqual && isSymmetric) {
+        console.log("Using symmetric FOV calculation");
+
         // Calculate plane dimensions at DISTANCE based on FOV
         const width = 2 * DISTANCE * Math.abs(leftFov.tanRight); // Use abs() since left/right are symmetric
         const height = 2 * DISTANCE * Math.abs(leftFov.tanUp); // Use abs() since up/down are symmetric
+
+        console.log("Calculated plane dimensions:",
+            "width:", width,
+            "height:", height,
+            "DISTANCE:", DISTANCE,
+            "leftFov.tanRight:", leftFov.tanRight,
+            "leftFov.tanUp:", leftFov.tanUp);
+
         // Create position vector in camera space (0,0,-DISTANCE) 
         const pos = new THREE.Vector3(0, 0, -DISTANCE);
+        console.log("Initial position vector:", pos);
+
         // Transform position by camera orientation to get world space position
         pos.applyQuaternion(leftQuat);
+        console.log("Position after quaternion rotation:", pos);
+
         // Add camera position to get final world position
         pos.add(leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5));
+        console.log("Final position:", pos);
 
-        return {
+        const result = {
             position: pos,
             quaternion: leftQuat.clone(),
             width: width,
             height: height
         };
+        console.log("Symmetric calculation result:", result);
+        return result;
     } else {
+        console.log("Using asymmetric FOV calculation");
+
         // Extract FOV angles for both cameras
         const u0 = leftFov.tanUp;
         const d0 = leftFov.tanDown;
@@ -333,6 +368,10 @@ function locateConvergencePlane(leftCam, rightCam) {
         const r1 = rightFov.tanRight;
         const l1 = rightFov.tanLeft;
 
+        console.log("FOV angles extracted:",
+            "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
+            "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
+
         // Get camera positions relative to center
         const x0 = leftCam.position.x - centerCam.x;
         const y0 = leftCam.position.y - centerCam.y;
@@ -342,17 +381,95 @@ function locateConvergencePlane(leftCam, rightCam) {
         const y1 = rightCam.position.y - centerCam.y;
         const z1 = rightCam.position.z - centerCam.z;
 
+        console.log("Camera positions relative to center:",
+            "x0:", x0, "y0:", y0, "z0:", z0,
+            "x1:", x1, "y1:", y1, "z1:", z1);
+
+        // Calculate display position denominators - check for division by zero
+        const denomX = (r1 - l1 - r0 + l0);
+        const denomY = (u1 - d1 - u0 + d0);
+        console.log("Denominators for position calculation:",
+            "denomX:", denomX,
+            "denomY:", denomY);
+
+        if (Math.abs(denomX) < 0.0001 || Math.abs(denomY) < 0.0001) {
+            console.warn("Near-zero denominators detected, using fallback calculation");
+            // Fallback to symmetric calculation
+            const width = 2 * DISTANCE * Math.abs(leftFov.tanRight);
+            const height = 2 * DISTANCE * Math.abs(leftFov.tanUp);
+            const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
+
+            return {
+                position: pos,
+                quaternion: leftQuat.clone(),
+                width: width,
+                height: height
+            };
+        }
+
         // Calculate display position
-        const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / (r1 - l1 - r0 + l0);
-        const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / (u1 - d1 - u0 + d0);
-        const zd = (x1 + z1 * (r1 - l1) - x0 - z0 * (r0 - l0)) / (r1 - l1 - r0 + l0);
+        const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
+        const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
+        const zd = (x1 + z1 * (r1 - l1) - x0 - z0 * (r0 - l0)) / denomX;
+
+        console.log("Display position calculation:",
+            "xd:", xd, "yd:", yd, "zd:", zd);
+
+        // Check for NaN values in position
+        if (isNaN(xd) || isNaN(yd) || isNaN(zd)) {
+            console.warn("NaN detected in position calculation - check calculations above");
+            // Fallback to symmetric calculation
+            const width = 2 * DISTANCE * Math.abs(leftFov.tanRight);
+            const height = 2 * DISTANCE * Math.abs(leftFov.tanUp);
+            const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
+
+            return {
+                position: pos,
+                quaternion: leftQuat.clone(),
+                width: width,
+                height: height
+            };
+        }
 
         // Calculate display size
         const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
         const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
 
+        console.log("Display size calculation:",
+            "W:", W, "H:", H,
+            "z0-zd:", (z0 - zd),
+            "l0+r0:", (l0 + r0),
+            "u0+d0:", (u0 + d0));
+
+        // Check for NaN or very small values in display size
+        if (isNaN(W) || isNaN(H) || Math.abs(W) < 0.0001 || Math.abs(H) < 0.0001) {
+            console.warn("NaN or very small values detected in size calculation - using fallback");
+            // Fallback to symmetric calculation
+            const width = 2 * DISTANCE * Math.abs(leftFov.tanRight);
+            const height = 2 * DISTANCE * Math.abs(leftFov.tanUp);
+
+            const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
+            console.log("Final asymmetric result with fallback size:",
+                "position:", finalPos,
+                "width:", width,
+                "height:", height);
+
+            return {
+                position: finalPos,
+                quaternion: leftQuat.clone(),
+                width: width,
+                height: height
+            };
+        }
+
+        const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
+        console.log("Final asymmetric result:",
+            "position:", finalPos,
+            "width:", Math.abs(W),
+            "height:", Math.abs(H));
+
         return {
-            position: new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam),
+            position: finalPos,
             quaternion: leftQuat.clone(),
             width: Math.abs(W),
             height: Math.abs(H)
@@ -362,20 +479,48 @@ function locateConvergencePlane(leftCam, rightCam) {
 
 // Compute FOV angles from XR camera projection matrix
 function computeFovTanAngles(subcam) {
+    console.log("Computing FOV for camera:", subcam);
     const projMatrix = subcam.projectionMatrix;
+    console.log("Projection matrix:", Array.from(projMatrix.elements));
 
     // Extract relevant values from projection matrix
-    const left = (1 - projMatrix[8]) / projMatrix[0];
-    const right = (1 + projMatrix[8]) / projMatrix[0];
-    const bottom = (1 - projMatrix[9]) / projMatrix[5];
-    const top = (1 + projMatrix[9]) / projMatrix[5];
+    const m00 = projMatrix.elements[0];
+    const m05 = projMatrix.elements[5];
+    const m08 = projMatrix.elements[8];
+    const m09 = projMatrix.elements[9];
 
-    return {
+    console.log("Critical matrix elements:",
+        "m00:", m00,
+        "m05:", m05,
+        "m08:", m08,
+        "m09:", m09);
+
+    // Check for division by zero
+    if (Math.abs(m00) < 0.0001 || Math.abs(m05) < 0.0001) {
+        console.warn("Near-zero values in projection matrix, may cause NaN in FOV calculation");
+    }
+
+    // Extract relevant values from projection matrix
+    const left = (1 - m08) / m00;
+    const right = (1 + m08) / m00;
+    const bottom = (1 - m09) / m05;
+    const top = (1 + m09) / m05;
+
+    console.log("FOV tangent values:",
+        "left:", left,
+        "right:", right,
+        "bottom:", bottom,
+        "top:", top);
+
+    const result = {
         tanUp: top,
         tanDown: -bottom,
         tanLeft: -left,
         tanRight: right
     };
+
+    console.log("Final FOV result:", result);
+    return result;
 }
 
 
@@ -448,16 +593,51 @@ function animate() {
                 if (!planeLeft || !planeRight) {
                     createPlanesVR();
                     // Initialize planes with convergence plane data immediately
-                    const convergencePlane = locateConvergencePlane(xrCam.cameras[0], xrCam.cameras[1]);
-                    planeLeft.position.copy(convergencePlane.position);
-                    planeLeft.quaternion.copy(convergencePlane.quaternion);
-                    planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
-                    planeLeft.visible = true;
+                    try {
+                        // Make sure xrCam and its cameras array exist and are valid
+                        if (xrCam && xrCam.isArrayCamera && xrCam.cameras.length >= 2) {
+                            const leftCam = xrCam.cameras[0];
+                            const rightCam = xrCam.cameras[1];
 
-                    planeRight.position.copy(convergencePlane.position);
-                    planeRight.quaternion.copy(convergencePlane.quaternion);
-                    planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
-                    planeRight.visible = true;
+                            console.log("Trying to initialize convergence plane with:",
+                                "leftCam exists:", !!leftCam,
+                                "rightCam exists:", !!rightCam);
+
+                            if (leftCam && rightCam && leftCam.projectionMatrix && rightCam.projectionMatrix) {
+                                const convergencePlane = locateConvergencePlane(leftCam, rightCam);
+                                console.log("Convergence plane initial result:", convergencePlane);
+
+                                // Only apply if we got valid values
+                                if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
+                                    !isNaN(convergencePlane.position.x)) {
+                                    planeLeft.position.copy(convergencePlane.position);
+                                    planeLeft.quaternion.copy(convergencePlane.quaternion);
+                                    planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
+                                    planeLeft.visible = true;
+
+                                    planeRight.position.copy(convergencePlane.position);
+                                    planeRight.quaternion.copy(convergencePlane.quaternion);
+                                    planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
+                                    planeRight.visible = true;
+                                } else {
+                                    console.warn("Invalid convergence plane values, falling back to default");
+                                    // Use simple default values
+                                    planeLeft.position.set(0, 0, -DISTANCE);
+                                    planeRight.position.set(0, 0, -DISTANCE);
+                                    planeLeft.scale.set(2, 2, 1);
+                                    planeRight.scale.set(2, 2, 1);
+                                    planeLeft.visible = false;  // Will be shown later in animation loop
+                                    planeRight.visible = false; // Will be shown later in animation loop
+                                }
+                            } else {
+                                console.warn("XR cameras don't have valid projection matrices yet");
+                            }
+                        } else {
+                            console.warn("XR camera array not ready yet:", xrCam);
+                        }
+                    } catch (error) {
+                        console.error("Error during initial convergence plane setup:", error);
+                    }
                 }
 
                 // Access the sub-cameras
