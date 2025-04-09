@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Immersive LIF Viewer</title>
+  <style>
+    :root {
+      --primary-color: #2c3e50;
+      --accent-color: #3498db;
+      --text-color: #ecf0f1;
+      --shadow-color: rgba(0, 0, 0, 0.2);
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, var(--primary-color), #1a2530);
+      color: var(--text-color);
+    }
+
+    /* Fullscreen container to center the canvas */
+    #canvas-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #glCanvas {
+      width: 100%;
+      height: 100%;
+      display: none;
+      /* Hidden until a file is loaded */
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+
+    #glCanvas.visible {
+      opacity: 1;
+    }
+
+    /* Three.js renderer element */
+    canvas[data-engine="three.js"] {
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+
+    canvas[data-engine="three.js"].visible {
+      opacity: 1;
+    }
+
+    /* Loading spinner */
+    .loader-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, var(--primary-color), #1a2530);
+      z-index: 40;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s ease;
+    }
+
+    .loader-container.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .loader {
+      width: 80px;
+      height: 80px;
+      border: 8px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border-top: 8px solid var(--accent-color);
+      animation: spin 1s linear infinite;
+    }
+
+    .loader-text {
+      position: absolute;
+      margin-top: 120px;
+      font-size: 18px;
+      letter-spacing: 1px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Landing page container */
+    #landing-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, var(--primary-color), #1a2530);
+      z-index: 50;
+    }
+
+    .landing-content {
+      text-align: center;
+      max-width: 600px;
+      padding: 2rem;
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 20px var(--shadow-color);
+    }
+
+    h1 {
+      margin: 0 0 1rem 0;
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    p {
+      margin-bottom: 2rem;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .drop-area {
+      border: 2px dashed rgba(255, 255, 255, 0.5);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .drop-area:hover,
+    .drop-area.active {
+      border-color: var(--accent-color);
+      background-color: rgba(52, 152, 219, 0.1);
+    }
+
+    .drop-area i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: var(--accent-color);
+    }
+
+    .browse-btn {
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.8rem 1.5rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 6px var(--shadow-color);
+      transition: all 0.3s ease;
+    }
+
+    .browse-btn:hover {
+      background-color: #2980b9;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px var(--shadow-color);
+    }
+
+    .version {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      font-size: 0.8rem;
+      opacity: 0.5;
+    }
+
+    .logo {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      height: 32px;
+      width: auto;
+      opacity: 0.7;
+      z-index: 100;
+    }
+
+    .supported-formats {
+      font-size: 0.9rem;
+      margin-top: 1rem;
+      opacity: 0.8;
+    }
+
+    #filePicker {
+      position: absolute;
+      width: 0.1px;
+      height: 0.1px;
+      opacity: 0;
+      overflow: hidden;
+      z-index: -1;
+    }
+
+    /* VR Button style override */
+    #VRButton {
+      border-radius: 4px !important;
+      font-family: inherit !important;
+      background: rgba(0, 0, 0, 0.5) !important;
+      transition: all 0.3s ease !important;
+    }
+
+    #VRButton:hover {
+      background: rgba(0, 0, 0, 0.7) !important;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+    }
+  }
+  </script>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <input type="file" id="filePicker" accept="image/*">
+
+  <div id="landing-container">
+    <div class="landing-content">
+      <h1>Immersive LIF Viewer</h1>
+      <p>Experience Leia Image Format files in stunning 3D.</br>Drop your LIF file below or click to browse.</p>
+
+      <div class="drop-area" id="dropArea">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <p>Drag & drop your LIF file here</p>
+        <label for="filePicker" class="browse-btn">Browse Files</label>
+      </div>
+
+      <div class="supported-formats">
+        <p>Supports LIF format images. Use mouse to control perspective in 2D mode, or enter VR for immersive viewing.
+        </p>
+      </div>
+    </div>
+    <div class="version">v1.0 • Leia Inc.</div>
+  </div>
+
+  <!-- Loading spinner -->
+  <div class="loader-container" id="loaderContainer">
+    <div class="loader"></div>
+    <div class="loader-text" id="loaderText">Loading LIF file...</div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="glCanvas"></canvas>
+  </div>
+  <img src="../assets/Leia_Logomark_White.png" alt="Leia Inc." class="logo">
+
+  <script type="module" src="LifRender5.js"></script>
+
+  <script>
+    // Drag and drop functionality
+    const dropArea = document.getElementById('dropArea');
+    const filePicker = document.getElementById('filePicker');
+    const landingContainer = document.getElementById('landing-container');
+    const canvas = document.getElementById('glCanvas');
+    const loaderContainer = document.getElementById('loaderContainer');
+    const loaderText = document.getElementById('loaderText');
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false);
+      document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop area when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    dropArea.addEventListener('drop', handleDrop, false);
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight() {
+      dropArea.classList.add('active');
+    }
+
+    function unhighlight() {
+      dropArea.classList.remove('active');
+    }
+
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+
+      if (files.length > 0) {
+        filePicker.files = files;
+        // Trigger change event
+        const event = new Event('change');
+        filePicker.dispatchEvent(event);
+      }
+    }
+
+    // Handle error during loading
+    window.addEventListener('lif-load-error', function (event) {
+      // Show error message in the loader
+      loaderText.textContent = event.detail.message;
+      loaderText.style.color = '#ff5555';
+
+      // Add a button to go back to the landing page
+      const backButton = document.createElement('button');
+      backButton.textContent = 'Try Again';
+      backButton.style.marginTop = '30px';
+      backButton.style.padding = '8px 16px';
+      backButton.style.background = 'rgba(255, 255, 255, 0.2)';
+      backButton.style.border = 'none';
+      backButton.style.borderRadius = '4px';
+      backButton.style.color = 'white';
+      backButton.style.cursor = 'pointer';
+
+      backButton.addEventListener('click', function () {
+        loaderContainer.classList.remove('active');
+        landingContainer.style.display = 'flex';
+        loaderText.textContent = 'Loading LIF file...';
+        loaderText.style.color = '';
+        backButton.remove();
+      });
+
+      loaderContainer.appendChild(backButton);
+    });
+
+    // Hide landing page and show canvas when file is loaded
+    filePicker.addEventListener('change', () => {
+      if (filePicker.files.length > 0) {
+        // First show the loader
+        landingContainer.style.display = 'none';
+        loaderContainer.classList.add('active');
+
+        // Listen for an event from the module that indicates loading is complete
+        window.addEventListener('lif-loaded', function loadHandler() {
+          // Show the canvas first (but still with 0 opacity due to CSS)
+          canvas.style.display = 'block';
+
+          // Check if it's a stereo LIF by seeing if Three.js renderer is present
+          const threeCanvas = document.querySelector('canvas[data-engine="three.js"]');
+
+          // Use setTimeout to ensure proper sequence of transitions
+          setTimeout(() => {
+            // Add the visible class to trigger the fade-in transition
+            canvas.classList.add('visible');
+
+            // Also fade in the Three.js canvas if it exists (for VR button)
+            if (threeCanvas) {
+              threeCanvas.classList.add('visible');
+            }
+
+            // Hide the loader after a delay to ensure smooth transition
+            setTimeout(() => {
+              loaderContainer.classList.remove('active');
+            }, 300); // Longer delay to avoid flickering
+          }, 100); // Longer initial delay
+
+          // Make sure the VR button is visible when created
+          const vrButtonCheck = setInterval(() => {
+            const vrButton = document.getElementById('VRButton');
+            if (vrButton) {
+              vrButton.style.display = 'block';
+              vrButton.style.opacity = '0';
+              // Fade in the VR button after canvas is visible
+              setTimeout(() => {
+                vrButton.style.opacity = '1';
+                vrButton.style.transition = 'opacity 0.5s ease';
+              }, 500);
+              clearInterval(vrButtonCheck);
+            }
+          }, 100);
+
+          // Remove this event listener
+          window.removeEventListener('lif-loaded', loadHandler);
+        });
+      }
+    });
+  </script>
+</body>
+
+</html>
