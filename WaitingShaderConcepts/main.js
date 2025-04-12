@@ -27,7 +27,8 @@ const shaderSelector = document.createElement('div');
 shaderSelector.id = 'shader-selector';
 shaderSelector.innerHTML = `
   <div>
-    <button id="pulseWave" class="active">Pulse Wave</button>
+    <button id="spinningWheel" class="active">Spinning Wheel</button>  
+    <button id="pulseWave" >Pulse Wave</button>
     <button id="stereoGlitch">Stereo Glitch</button>
     <button id="cinematicSweep">Cinematic Sweep</button>
   </div>
@@ -63,7 +64,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Track current shader
-let currentShader = 'pulseWave';
+let currentShader = 'spinningWheel';
 let fragSrc, program, vs, fs;
 
 // Load shader function
@@ -190,6 +191,7 @@ function setupUniforms() {
 
 // Add event listeners to shader buttons
 document.getElementById('pulseWave').addEventListener('click', () => loadShader('pulseWave'));
+document.getElementById('spinningWheel').addEventListener('click', () => loadShader('spinningWheel'));
 document.getElementById('stereoGlitch').addEventListener('click', () => loadShader('stereoGlitch'));
 document.getElementById('cinematicSweep').addEventListener('click', () => loadShader('cinematicSweep'));
 
@@ -229,7 +231,7 @@ image.onload = () => {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
         // Load initial shader
-        loadShader('pulseWave').then(success => {
+        loadShader('spinningWheel').then(success => {
             if (success) {
                 gl.uniform1i(uTexture, 0);
 
@@ -278,6 +280,9 @@ function draw(time) {
         // Try using a more noticeable time scale for this effect
         const pulseFrequency = 2.0;
         gl.uniform1f(uTime, normalizedTime * pulseFrequency);
+    } else if (currentShader === 'spinningWheel') {
+        // The spinning wheel effect uses real-time for smooth rotation
+        gl.uniform1f(uTime, normalizedTime);
     } else {
         // Default time update for other shaders
         gl.uniform1f(uTime, normalizedTime);
