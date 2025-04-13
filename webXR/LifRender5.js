@@ -372,7 +372,7 @@ function locateConvergencePlane(leftCam, rightCam) {
             "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
             "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
 
-        // Get camera positions relative to center
+        // Get absolute camera positions
         const x0 = leftCam.position.x;
         const y0 = leftCam.position.y;
         const z0 = leftCam.position.z;
@@ -381,7 +381,7 @@ function locateConvergencePlane(leftCam, rightCam) {
         const y1 = rightCam.position.y;
         const z1 = rightCam.position.z;
 
-        console.log("Camera positions relative to center:",
+        console.log("Camera positions:",
             "x0:", x0, "y0:", y0, "z0:", z0,
             "x1:", x1, "y1:", y1, "z1:", z1);
 
