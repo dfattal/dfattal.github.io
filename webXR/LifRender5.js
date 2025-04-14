@@ -408,13 +408,14 @@ function locateConvergencePlane(leftCam, rightCam) {
         }
 
         // Calculate display position
-        const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
-        // const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
-        const zd = (x1 + z1 * (r1 - l1) - x0 - z0 * (r0 - l0)) / denomX;
+        const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
+        const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
         const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
+        //const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
+        // const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
 
         console.log("Display position calculation:",
-            "xd:", xd, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
+            "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
 
         // Check for NaN values in position
         if (isNaN(xd) || isNaN(yd) || isNaN(zd)) {
