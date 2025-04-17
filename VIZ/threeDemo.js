@@ -134,7 +134,7 @@ async function main() {
         oRes: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 1.0 },
         feathering: { value: 0.1},
-        background: { value: new THREE.Vector3(0.0, 0.0, 0.0) }
+        background: { value: new THREE.Vector4(0.0, 0.0, 0.0, 0.0) }
     };
 
     const uniformsST = {
@@ -172,7 +172,7 @@ async function main() {
         oRes: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 1.0 },
         feathering: { value: 0.1},
-        background: { value: new THREE.Vector3(0.0, 0.0, 0.0) }
+        background: { value: new THREE.Vector4(0.0, 0.0, 0.0, 0.0) }
     };
 
     // Create the shader material

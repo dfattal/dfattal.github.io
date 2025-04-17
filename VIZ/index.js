@@ -7,7 +7,7 @@ let baseline = 1.0; // Global variable
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
 const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // default to mono rendering
-let background = urlParams.get('background') ? urlParams.get('background').split(',').map(Number) : [0.1, 0.1, 0.1]; // default to black background
+let background = urlParams.get('background') ? urlParams.get('background').split(',').map(Number) : [0.1, 0.1, 0.1, 1.0]; // default to dark grey opaque background
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -439,7 +439,7 @@ function drawScene(gl, programInfo, buffers, views, renderCam, t=1.0) {
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
-  gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform4fv(programInfo.uniformLocations.background, background);
   gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
@@ -543,7 +543,7 @@ function drawSceneST(gl, programInfo, buffers, views, renderCam, t=1.0) {
   gl.uniform1f(programInfo.uniformLocations.roll2, renderCam.roll);
   gl.uniform1f(programInfo.uniformLocations.f2, renderCam.f); // in px
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
-  gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform4fv(programInfo.uniformLocations.background, background);
   gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
@@ -628,7 +628,7 @@ function drawScene2ST(gl, programInfo, buffers, views, renderCamL, renderCamR, t
   gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
-  gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform4fv(programInfo.uniformLocations.background, background);
   gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;
@@ -739,7 +739,7 @@ function drawSceneST2ST(gl, programInfo, buffers, views, renderCamL, renderCamR,
   gl.uniform1f(programInfo.uniformLocations.f2R, renderCamR.f); // in px
 
   gl.uniform1f(programInfo.uniformLocations.feathering, feathering);
-  gl.uniform3fv(programInfo.uniformLocations.background, background);
+  gl.uniform4fv(programInfo.uniformLocations.background, background);
   gl.uniform1f(programInfo.uniformLocations.uTime, t);
 
   const vertexCount = 6;

@@ -27,7 +27,7 @@ uniform float roll2, f2; // f2 in px
 uniform vec2 oRes; // viewport resolution in px
 uniform float feathering; // Feathering factor for smooth transitions at the edges
 
-uniform vec3 background; // background color
+uniform vec4 background; // background color
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {
     ivec2 ivec = ivec2(int(coord.x * iRes.x),  // asssuming all input textures are of same size
                        int(coord.y * iRes.y));
@@ -197,7 +197,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     } else {
         invZ2 = 0.0;
         confidence = 0.0;
-        return vec4(background, .0);
+        return vec4(background.rgb, 0.0);
     }
 }
 
@@ -252,8 +252,8 @@ void main(void) {
         }
 
         // Blend with the background
-        result.rgb = background * (1.0 - result.a) + result.rgb;
-        result.a = 1.0; // Ensure full opacity after blending with the background
+        result.rgb = background.rgb * background.a * (1.0 - result.a) + result.rgb;
+        result.a = background.a + result.a * (1.0 - background.a); // Blend alpha
         // Optionally, show low confidence ("stretch marks") pixels in red (for debugging)
         // if (confidence == 0.0) {
         //     result.r = 1.0;
@@ -277,6 +277,6 @@ void main(void) {
         
 
     } else {
-        gl_FragColor = vec4(background, 1.0);
+        gl_FragColor = background;
     }
 }

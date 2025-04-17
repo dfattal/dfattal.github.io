@@ -40,7 +40,7 @@ export class BaseRenderer {
         // Create common buffers (a full-screen quad).
         this.buffers = BaseRenderer.setupCommonBuffers(gl);
         this.feathering = 0.1;
-        this.background = [0.1, 0.1, 0.1];
+        this.background = [0.1, 0.1, 0.1, 1.0];
 
         // Process views and assign textures.
         this._processViews(views);
@@ -471,7 +471,7 @@ export class MN2MNRenderer extends BaseRenderer {
         gl.uniform1f(this.uniformLocations.roll2, renderCam.roll);
         gl.uniform1f(this.uniformLocations.f2, renderCam.f);
         gl.uniform1f(this.uniformLocations.feathering, this.feathering);
-        gl.uniform3fv(this.uniformLocations.background, this.background);
+        gl.uniform4fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
@@ -592,7 +592,7 @@ export class ST2MNRenderer extends BaseRenderer {
         gl.uniform1f(this.uniformLocations.roll2, renderCam.roll);
         gl.uniform1f(this.uniformLocations.f2, renderCam.f);
         gl.uniform1f(this.uniformLocations.feathering, this.feathering);
-        gl.uniform3fv(this.uniformLocations.background, this.background);
+        gl.uniform4fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
@@ -717,7 +717,7 @@ export class MN2STRenderer extends BaseRenderer {
         gl.uniform1f(this.uniformLocations.f2R, renderCamR.f);
         gl.uniform1f(this.uniformLocations.oRes, gl.canvas.width, gl.canvas.height);
         gl.uniform1f(this.uniformLocations.feathering, this.feathering);
-        gl.uniform3fv(this.uniformLocations.background, this.background);
+        gl.uniform4fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }
@@ -871,7 +871,7 @@ export class ST2STRenderer extends BaseRenderer {
         gl.uniform1f(this.uniformLocations.roll2R, renderCamR.roll);
         gl.uniform1f(this.uniformLocations.f2R, renderCamR.f);
         gl.uniform1f(this.uniformLocations.feathering, this.feathering);
-        gl.uniform3fv(this.uniformLocations.background, this.background);
+        gl.uniform4fv(this.uniformLocations.background, this.background);
         gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     }
 }

@@ -40,7 +40,7 @@ uniform vec2 sk2, sl2;
 uniform float roll2, f2; // f2 in px
 uniform vec2 oRes; // viewport resolution in px
 uniform float feathering;
-uniform vec3 background; // background color
+uniform vec4 background; // background color
 
 /*vec4 texture2(sampler2D iChannel, vec2 coord) {
     ivec2 ivec = ivec2(int(coord.x * iRes.x),  // asssuming all input textures are of same size
@@ -218,7 +218,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     } else {
         invZ2 = 0.0;
         // confidence = 0.0;
-        return vec4(background, 0.0);
+        return vec4(background.rgb, 0.0);
     }
 }
 
@@ -322,12 +322,12 @@ void main(void) {
         }
 
         // Blend with the background
-        result.rgb = background * (1.0 - result.a) + result.rgb;
-        result.a = 1.0; // Ensure full opacity after blending with the background
+        result.rgb = background.rgb * background.a * (1.0 - result.a) + result.rgb;
+        result.a = background.a + result.a * (1.0 - background.a); // Blend alpha
 
         gl_FragColor = result;
 
     } else {
-        gl_FragColor = vec4(background, 1.0);
+        gl_FragColor = background;
     }
 }
