@@ -713,8 +713,10 @@ function animate() {
                 // Render the scene
                 //const IPD = leftCam.position.distanceTo(rightCam.position); 
                 rL.renderCam.pos.x = (leftCam.position.x-convergencePlane.position.x) / IPD;
-                rL.renderCam.pos.y = (convergencePlane.position.y - leftCam.position.y) / IPD;
-                rL.renderCam.pos.z = (convergencePlane.position.z+rL.views[0].f * rL.viewportScale()/leftCam.viewport.width*convergencePlane.width - leftCam.position.z) / IPD;
+                //rL.renderCam.pos.y = (convergencePlane.position.y - leftCam.position.y) / IPD;
+                rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
+                // rL.renderCam.pos.z = (convergencePlane.position.z+rL.views[0].f * rL.viewportScale()/leftCam.viewport.width*convergencePlane.width - leftCam.position.z) / IPD;
+                rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
                 rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
@@ -722,8 +724,10 @@ function animate() {
                 texL.needsUpdate = true;
 
                 rR.renderCam.pos.x = (rightCam.position.x-convergencePlane.position.x) / IPD;
-                rR.renderCam.pos.y = (convergencePlane.position.y - rightCam.position.y) / IPD;
-                rR.renderCam.pos.z = (convergencePlane.position.z+rR.views[0].f * rR.viewportScale()/rightCam.viewport.width*convergencePlane.width - rightCam.position.z) / IPD;
+                // rR.renderCam.pos.y = (convergencePlane.position.y - rightCam.position.y) / IPD;
+                rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
+                // rR.renderCam.pos.z = (convergencePlane.position.z+rR.views[0].f * rR.viewportScale()/rightCam.viewport.width*convergencePlane.width - rightCam.position.z) / IPD;
+                rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
                 rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
