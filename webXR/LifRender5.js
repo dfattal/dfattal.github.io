@@ -689,6 +689,9 @@ function animate() {
                     initialY = (leftCam.position.y + rightCam.position.y) / 2;
                     initialZ = (leftCam.position.z + rightCam.position.z) / 2;
                     IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
+                    console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+                    console.log("convergencePlane position:", convergencePlane.position);
+                    console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z+rL.views[0].f * rL.viewportScale());
                 }
 
                 // // Get forward vectors from both cameras' quaternions
