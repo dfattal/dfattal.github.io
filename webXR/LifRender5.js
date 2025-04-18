@@ -220,6 +220,9 @@ async function init() {
         isVRActive = false;
         canvas.style.display = 'block'; // Show non-VR canvas when exiting VR
         resizeCanvasToContainer(); // Make sure canvas is properly sized
+
+        // Reload the page when exiting VR
+        window.location.reload();
     });
 
     // ADD CONTEXT LOSS HANDLER HERE
@@ -691,7 +694,7 @@ function animate() {
                     IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
                     console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                     console.log("convergencePlane position:", convergencePlane.position);
-                    console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z+rL.views[0].f * rL.viewportScale()/leftCam.viewport.width*convergencePlane.width);
+                    console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z + rL.views[0].f * rL.viewportScale() / leftCam.viewport.width * convergencePlane.width);
                 }
 
                 // // Get forward vectors from both cameras' quaternions
@@ -699,7 +702,7 @@ function animate() {
                 // forwardLeft.applyQuaternion(leftCam.quaternion);
                 // const forwardRight = new THREE.Vector3(0, 0, -1); 
                 // forwardRight.applyQuaternion(rightCam.quaternion);
-                
+
                 // // Calculate slant vectors from forward direction tangents
                 // const slantLeft = {
                 //     x: forwardLeft.x / forwardLeft.z,
@@ -712,7 +715,7 @@ function animate() {
 
                 // Render the scene
                 //const IPD = leftCam.position.distanceTo(rightCam.position); 
-                rL.renderCam.pos.x = (leftCam.position.x-convergencePlane.position.x) / IPD;
+                rL.renderCam.pos.x = (leftCam.position.x - convergencePlane.position.x) / IPD;
                 //rL.renderCam.pos.y = (convergencePlane.position.y - leftCam.position.y) / IPD;
                 rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
                 // rL.renderCam.pos.z = (convergencePlane.position.z+rL.views[0].f * rL.viewportScale()/leftCam.viewport.width*convergencePlane.width - leftCam.position.z) / IPD;
@@ -723,7 +726,7 @@ function animate() {
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
 
-                rR.renderCam.pos.x = (rightCam.position.x-convergencePlane.position.x) / IPD;
+                rR.renderCam.pos.x = (rightCam.position.x - convergencePlane.position.x) / IPD;
                 // rR.renderCam.pos.y = (convergencePlane.position.y - rightCam.position.y) / IPD;
                 rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
                 // rR.renderCam.pos.z = (convergencePlane.position.z+rR.views[0].f * rR.viewportScale()/rightCam.viewport.width*convergencePlane.width - rightCam.position.z) / IPD;
