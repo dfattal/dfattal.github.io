@@ -12,6 +12,7 @@ const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPu
 let views = null;
 let stereo_render_data = null;
 let xrCanvasInitialized = false;
+let convergencePlane = null;
 
 // Three.js renderer
 import * as THREE from 'three';
@@ -616,7 +617,7 @@ function animate() {
                                 "rightCam exists:", !!rightCam);
 
                             if (leftCam && rightCam && leftCam.projectionMatrix && rightCam.projectionMatrix) {
-                                const convergencePlane = locateConvergencePlane(leftCam, rightCam);
+                                convergencePlane = locateConvergencePlane(leftCam, rightCam);
                                 console.log("Convergence plane initial result:", convergencePlane);
 
                                 // Only apply if we got valid values
@@ -689,6 +690,22 @@ function animate() {
                     initialZ = (leftCam.position.z + rightCam.position.z) / 2;
                     IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
                 }
+
+                // // Get forward vectors from both cameras' quaternions
+                // const forwardLeft = new THREE.Vector3(0, 0, -1);
+                // forwardLeft.applyQuaternion(leftCam.quaternion);
+                // const forwardRight = new THREE.Vector3(0, 0, -1); 
+                // forwardRight.applyQuaternion(rightCam.quaternion);
+                
+                // // Calculate slant vectors from forward direction tangents
+                // const slantLeft = {
+                //     x: forwardLeft.x / forwardLeft.z,
+                //     y: forwardLeft.y / forwardLeft.z
+                // };
+                // const slantRight = {
+                //     x: forwardRight.x / forwardRight.z, 
+                //     y: forwardRight.y / forwardRight.z
+                // };
 
                 // Render the scene
                 //const IPD = leftCam.position.distanceTo(rightCam.position); 
