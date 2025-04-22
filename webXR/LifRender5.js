@@ -34,7 +34,7 @@ let isVRActive = false;
 
 let startTime;
 
-const DISTANCE = 20;       // how far from each eye to place the main SBS planes in VR
+const DISTANCE = 100;       // how far from each eye to place the main SBS planes in VR
 const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 
 // Temp re-usable vectors/quats
@@ -203,7 +203,7 @@ async function init() {
     scene = new THREE.Scene();
 
     // Camera used outside VR; in VR, Three.js uses an internal ArrayCamera.
-    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
     scene.add(camera);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
