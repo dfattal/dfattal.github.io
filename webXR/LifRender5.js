@@ -345,7 +345,7 @@ function locateConvergencePlane(leftCam, rightCam) {
             "leftFov.tanUp:", leftFov.tanUp);
 
         // Create position vector in camera space (0,0,-DISTANCE) 
-        const pos = new THREE.Vector3(0, 0, -DISTANCE);
+        const pos = new THREE.Vector3(centerCam.x, centerCam.y, centerCam.z - DISTANCE);
         console.log("Initial position vector:", pos);
 
         // Transform position by camera orientation to get world space position
