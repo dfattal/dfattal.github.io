@@ -456,7 +456,7 @@ function locateConvergencePlane(leftCam, rightCam) {
             "leftFov.tanUp:", leftFov.tanUp);
 
         // Create position vector in camera space (0,0,-DISTANCE) 
-        const pos = new THREE.Vector3(centerCam.x, centerCam.y, centerCam.z - DISTANCE);
+        const pos = new THREE.Vector3(0,0, - DISTANCE);
         console.log("Initial position vector:", pos);
 
         // Transform position by camera orientation to get world space position
@@ -513,11 +513,11 @@ function locateConvergencePlane(leftCam, rightCam) {
             "denomX:", denomX,
             "denomY:", denomY);
 
-        if (Math.abs(denomX) < 0.0001 || Math.abs(denomY) < 0.0001) {
-            console.warn("Near-zero denominators detected, using fallback calculation");
+        if (Math.abs(denomX) < 0.0001) {
+            console.warn("Near-zero denominator detected, using fallback calculation");
             // Fallback to symmetric calculation
-            const width = 2 * DISTANCE * Math.abs(leftFov.tanRight);
-            const height = 2 * DISTANCE * Math.abs(leftFov.tanUp);
+            const width = DISTANCE * Math.abs(leftFov.tanRight + leftFov.tanLeft);
+            const height = DISTANCE * Math.abs(leftFov.tanUp + leftFov.tanDown);
             const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
             return {
