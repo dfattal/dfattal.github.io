@@ -437,45 +437,45 @@ function locateConvergencePlane(leftCam, rightCam) {
         Math.abs(leftFov.tanLeft - rightFov.tanLeft) < 0.0001 &&
         Math.abs(leftFov.tanRight - rightFov.tanRight) < 0.0001;
 
-    console.log("FOV analysis:",
-        "isSymmetric:", isSymmetric,
-        "isEqual:", isEqual);
+    // console.log("FOV analysis:",
+    //     "isSymmetric:", isSymmetric,
+    //     "isEqual:", isEqual);
 
-    if (isEqual && isSymmetric) {
-        console.log("Using symmetric FOV calculation");
+    // if (isEqual && isSymmetric) {
+    //     console.log("Using symmetric FOV calculation");
 
-        // Calculate plane dimensions at DISTANCE based on FOV
-        const width = 2 * DISTANCE * Math.abs(leftFov.tanRight); // Use abs() since left/right are symmetric
-        const height = 2 * DISTANCE * Math.abs(leftFov.tanUp); // Use abs() since up/down are symmetric
+    //     // Calculate plane dimensions at DISTANCE based on FOV
+    //     const width = 2 * DISTANCE * Math.abs(leftFov.tanRight); // Use abs() since left/right are symmetric
+    //     const height = 2 * DISTANCE * Math.abs(leftFov.tanUp); // Use abs() since up/down are symmetric
 
-        console.log("Calculated plane dimensions:",
-            "width:", width,
-            "height:", height,
-            "DISTANCE:", DISTANCE,
-            "leftFov.tanRight:", leftFov.tanRight,
-            "leftFov.tanUp:", leftFov.tanUp);
+    //     console.log("Calculated plane dimensions:",
+    //         "width:", width,
+    //         "height:", height,
+    //         "DISTANCE:", DISTANCE,
+    //         "leftFov.tanRight:", leftFov.tanRight,
+    //         "leftFov.tanUp:", leftFov.tanUp);
 
-        // Create position vector in camera space (0,0,-DISTANCE) 
-        const pos = new THREE.Vector3(0,0, - DISTANCE);
-        console.log("Initial position vector:", pos);
+    //     // Create position vector in camera space (0,0,-DISTANCE) 
+    //     const pos = new THREE.Vector3(0,0, - DISTANCE);
+    //     console.log("Initial position vector:", pos);
 
-        // Transform position by camera orientation to get world space position
-        pos.applyQuaternion(leftQuat);
-        console.log("Position after quaternion rotation:", pos);
+    //     // Transform position by camera orientation to get world space position
+    //     pos.applyQuaternion(leftQuat);
+    //     console.log("Position after quaternion rotation:", pos);
 
-        // Add camera position to get final world position
-        pos.add(leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5));
-        console.log("Final position:", pos);
+    //     // Add camera position to get final world position
+    //     pos.add(leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5));
+    //     console.log("Final position:", pos);
 
-        const result = {
-            position: pos,
-            quaternion: leftQuat.clone(),
-            width: width,
-            height: height
-        };
-        console.log("Symmetric calculation result:", result);
-        return result;
-    } else {
+    //     const result = {
+    //         position: pos,
+    //         quaternion: leftQuat.clone(),
+    //         width: width,
+    //         height: height
+    //     };
+    //     console.log("Symmetric calculation result:", result);
+    //     return result;
+    // } else {
         console.log("Using asymmetric FOV calculation");
 
         // Extract FOV angles for both cameras
@@ -516,8 +516,8 @@ function locateConvergencePlane(leftCam, rightCam) {
         if (Math.abs(denomX) < 0.0001) {
             console.warn("Near-zero denominator detected, using fallback calculation");
             // Fallback to symmetric calculation
-            const width = DISTANCE * Math.abs(leftFov.tanRight + leftFov.tanLeft);
-            const height = DISTANCE * Math.abs(leftFov.tanUp + leftFov.tanDown);
+            const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
+            const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
             const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
             return {
@@ -601,7 +601,7 @@ function locateConvergencePlane(leftCam, rightCam) {
             width: Math.abs(W),
             height: Math.abs(H)
         };
-    }
+    // }
 }
 
 // Compute FOV angles from XR camera projection matrix
