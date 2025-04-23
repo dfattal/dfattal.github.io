@@ -409,10 +409,6 @@ function locateConvergencePlane(leftCam, rightCam) {
     const leftQuat = leftCam.quaternion;
     const rightQuat = rightCam.quaternion;
 
-    console.log("Camera quaternions:",
-        "leftQuat:", leftQuat.toArray(),
-        "rightQuat:", rightQuat.toArray());
-
     // Verify cameras have same orientation
     if (!leftQuat.equals(rightQuat)) {
         console.warn('Left and right camera orientations do not match');
@@ -420,7 +416,6 @@ function locateConvergencePlane(leftCam, rightCam) {
 
     // Calculate center position between left and right cameras
     const centerCam = leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5);
-    console.log("Center camera position:", centerCam);
 
     const leftFov = computeFovTanAngles(leftCam);
     const rightFov = computeFovTanAngles(rightCam);
@@ -436,10 +431,12 @@ function locateConvergencePlane(leftCam, rightCam) {
         Math.abs(leftFov.tanDown - rightFov.tanDown) < 0.0001 &&
         Math.abs(leftFov.tanLeft - rightFov.tanLeft) < 0.0001 &&
         Math.abs(leftFov.tanRight - rightFov.tanRight) < 0.0001;
+    const isMirror = Math.abs(leftFov.tanLeft) === Math.abs(rightFov.tanRight) && Math.abs(leftFov.tanRight) === Math.abs(rightFov.tanLeft) && Math.abs(leftFov.tanUp) === Math.abs(rightFov.tanUp) && Math.abs(leftFov.tanDown) === Math.abs(rightFov.tanDown);
 
-    // console.log("FOV analysis:",
-    //     "isSymmetric:", isSymmetric,
-    //     "isEqual:", isEqual);
+    console.log("FOV analysis:",
+        "isSymmetric:", isSymmetric,
+        "isEqual:", isEqual,
+        "isMirror:", isMirror);
 
     // if (isEqual && isSymmetric) {
     //     console.log("Using symmetric FOV calculation");
@@ -476,7 +473,6 @@ function locateConvergencePlane(leftCam, rightCam) {
     //     console.log("Symmetric calculation result:", result);
     //     return result;
     // } else {
-        console.log("Using asymmetric FOV calculation");
 
         // Extract FOV angles for both cameras
         const u0 = leftFov.tanUp;
@@ -489,9 +485,9 @@ function locateConvergencePlane(leftCam, rightCam) {
         const r1 = rightFov.tanRight;
         const l1 = -rightFov.tanLeft;
 
-        console.log("FOV angles extracted:",
-            "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
-            "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
+        // console.log("FOV angles extracted:",
+        //     "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
+        //     "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
 
         // Get absolute camera positions
         const x0 = leftCam.position.x;
@@ -502,9 +498,9 @@ function locateConvergencePlane(leftCam, rightCam) {
         const y1 = rightCam.position.y;
         const z1 = rightCam.position.z;
 
-        console.log("Camera positions:",
-            "x0:", x0, "y0:", y0, "z0:", z0,
-            "x1:", x1, "y1:", y1, "z1:", z1);
+        // console.log("Camera positions:",
+        //     "x0:", x0, "y0:", y0, "z0:", z0,
+        //     "x1:", x1, "y1:", y1, "z1:", z1);
 
         // Calculate display position denominators - check for division by zero
         const denomX = (r1 - l1 - r0 + l0);
@@ -513,8 +509,8 @@ function locateConvergencePlane(leftCam, rightCam) {
             "denomX:", denomX,
             "denomY:", denomY);
 
-        if (Math.abs(denomX) < 0.0001) {
-            console.warn("Near-zero denominator detected, using fallback calculation");
+        if (Math.abs(denomX) < 0.0001 || isMirror) {
+            console.warn("RENDERING for VR");
             // Fallback to symmetric calculation
             const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
             const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
@@ -538,59 +534,23 @@ function locateConvergencePlane(leftCam, rightCam) {
         console.log("Display position calculation:",
             "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
 
-        // Check for NaN values in position
-        if (isNaN(xd) || isNaN(yd) || isNaN(zd)) {
-            console.warn("NaN detected in position calculation - check calculations above");
-            // Fallback to symmetric calculation
-            const width = 2 * DISTANCE * Math.abs(leftFov.tanRight);
-            const height = 2 * DISTANCE * Math.abs(leftFov.tanUp);
-            const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
-
-            return {
-                position: pos,
-                quaternion: leftQuat.clone(),
-                width: width,
-                height: height
-            };
-        }
-
         // Calculate display size
         const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
         const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
 
-        console.log("Display size calculation:",
-            "W:", W, "H:", H,
-            "z0-zd:", (z0 - zd),
-            "l0+r0:", (l0 + r0),
-            "u0+d0:", (u0 + d0),
-            "(z1-zd)*(l1+r1):", (z1 - zd) * (l1 + r1),
-            "z1-zd:", (z1 - zd),
-            "l1+r1:", (l1 + r1));
-
-        // Check for NaN or very small values in display size
-        if (isNaN(W) || isNaN(H) || Math.abs(W) < 0.0001 || Math.abs(H) < 0.0001) {
-            console.warn("NaN or very small values detected in size calculation - using fallback");
-            // Fallback to symmetric calculation
-            const width = 2 * DISTANCE * Math.abs(leftFov.tanRight);
-            const height = 2 * DISTANCE * Math.abs(leftFov.tanUp);
-
-            const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
-            console.log("Final asymmetric result with fallback size:",
-                "position:", finalPos,
-                "width:", width,
-                "height:", height);
-
-            return {
-                position: finalPos,
-                quaternion: leftQuat.clone(),
-                width: width,
-                height: height
-            };
-        }
+        // console.log("Display size calculation:",
+        //     "W:", W, "H:", H,
+        //     "z0-zd:", (z0 - zd),
+        //     "l0+r0:", (l0 + r0),
+        //     "u0+d0:", (u0 + d0),
+        //     "(z1-zd)*(l1+r1):", (z1 - zd) * (l1 + r1),
+        //     "z1-zd:", (z1 - zd),
+        //     "l1+r1:", (l1 + r1));
 
         // const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
         const finalPos = new THREE.Vector3(xd, yd, zd); // assume leftQuat is identity (true at start of session)
-        console.log("Final asymmetric result:",
+        console.log("RENDERING for 3D");
+        console.log("Final result:",
             "position:", finalPos,
             "width:", Math.abs(W),
             "height:", Math.abs(H));
@@ -606,9 +566,9 @@ function locateConvergencePlane(leftCam, rightCam) {
 
 // Compute FOV angles from XR camera projection matrix
 function computeFovTanAngles(subcam) {
-    console.log("Computing FOV for camera:", subcam);
+    // console.log("Computing FOV for camera:", subcam);
     const projMatrix = subcam.projectionMatrix;
-    console.log("Projection matrix:", Array.from(projMatrix.elements));
+    // console.log("Projection matrix:", Array.from(projMatrix.elements));
 
     // Extract relevant values from projection matrix
     const m00 = projMatrix.elements[0];
@@ -616,11 +576,11 @@ function computeFovTanAngles(subcam) {
     const m08 = projMatrix.elements[8];
     const m09 = projMatrix.elements[9];
 
-    console.log("Critical matrix elements:",
-        "m00:", m00,
-        "m05:", m05,
-        "m08:", m08,
-        "m09:", m09);
+    // console.log("Critical matrix elements:",
+        // "m00:", m00,
+        // "m05:", m05,
+        // "m08:", m08,
+        // "m09:", m09);
 
     // Check for division by zero
     if (Math.abs(m00) < 0.0001 || Math.abs(m05) < 0.0001) {
@@ -633,11 +593,11 @@ function computeFovTanAngles(subcam) {
     const bottom = (1 - m09) / m05;
     const top = (1 + m09) / m05;
 
-    console.log("FOV tangent values:",
-        "left:", left,
-        "right:", right,
-        "bottom:", bottom,
-        "top:", top);
+    // console.log("FOV tangent values:",
+        // "left:", left,
+        // "right:", right,
+        // "bottom:", bottom,
+        // "top:", top);
 
     const result = {
         tanUp: top,
@@ -646,7 +606,7 @@ function computeFovTanAngles(subcam) {
         tanRight: right
     };
 
-    console.log("Final FOV result:", result);
+    // console.log("Final FOV result:", result);
     return result;
 }
 
