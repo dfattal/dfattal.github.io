@@ -30,6 +30,7 @@ let rR = null;                      // MN2MNRenderer for right eye
 let leftController = null;
 let rightController = null;
 let leftButtonPressed = false;
+let leftXButtonPressed = false; // Track X button state
 
 // Non-VR WebGL canvas variables
 let container, canvas, gl, nonVRRenderer = null;
@@ -301,8 +302,6 @@ function setupVRControllers() {
 
         // Clear any existing controllers
         if (leftController) {
-            leftController.removeEventListener('selectstart', onLeftSelectStart);
-            leftController.removeEventListener('selectend', onLeftSelectEnd);
             scene.remove(leftController);
         }
         if (rightController) {
@@ -316,11 +315,8 @@ function setupVRControllers() {
             if (inputSource.handedness === 'left') {
                 console.log('Found left controller');
                 leftController = controller;
+                leftController.userData.inputSource = inputSource; // Store reference to inputSource
                 scene.add(leftController);
-
-                // Add event listeners to the left controller
-                leftController.addEventListener('selectstart', onLeftSelectStart);
-                leftController.addEventListener('selectend', onLeftSelectEnd);
             }
             else if (inputSource.handedness === 'right') {
                 console.log('Found right controller');
@@ -330,22 +326,26 @@ function setupVRControllers() {
         });
     }
 
-    // Handler functions for left controller events
-    function onLeftSelectStart() {
-        leftButtonPressed = true;
-        console.log('Left controller button pressed');
-    }
-
-    function onLeftSelectEnd() {
-        leftButtonPressed = false;
-        console.log('Left controller button released');
-    }
-
     // Set up controllers
     setupControllersByHandedness();
 
     // Also listen for inputsourceschange event to handle controller reconnection
     session.addEventListener('inputsourceschange', setupControllersByHandedness);
+}
+
+// Function to check X button state on left controller
+function checkXButtonState() {
+    if (!leftController || !leftController.userData.inputSource || !leftController.userData.inputSource.gamepad) {
+        return false;
+    }
+
+    const gamepad = leftController.userData.inputSource.gamepad;
+    // X button is typically at index 4 on left controller
+    if (gamepad.buttons.length > 4) {
+        return gamepad.buttons[4].pressed;
+    }
+
+    return false;
 }
 
 function onWindowResize() {
@@ -661,6 +661,16 @@ function animate() {
             if (!renderer || !isAnimating) {
                 renderer?.setAnimationLoop(null);
                 return;
+            }
+
+            // Check X button state if in VR mode
+            if (isVRActive) {
+                const newXButtonState = checkXButtonState();
+                // Only log changes in button state to avoid console spam
+                if (newXButtonState !== leftXButtonPressed) {
+                    leftXButtonPressed = newXButtonState;
+                    console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
+                }
             }
 
             const xrCam = renderer.xr.getCamera(camera);
@@ -1077,8 +1087,8 @@ function updateHUD(leftCam, rightCam) {
 
     hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
 
-    // Change background color based on button state
-    const bgColor = leftButtonPressed ? 'rgba(255,0,0,0.7)' : 'rgba(0,0,0,0.5)';
+    // Change background color based on X button state
+    const bgColor = leftXButtonPressed ? 'rgba(255,0,0,0.7)' : 'rgba(0,0,0,0.5)';
     hudCtx.fillStyle = bgColor;
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
 
@@ -1101,7 +1111,7 @@ function updateHUD(leftCam, rightCam) {
 
     // Add controller status text if in VR mode
     if (isVRActive) {
-        hudCtx.fillText(`Button: ${leftButtonPressed ? 'PRESSED' : 'released'}`, 10, 120);
+        hudCtx.fillText(`X Button: ${leftXButtonPressed ? 'PRESSED' : 'released'}`, 10, 120);
     }
 
     hudTexture.needsUpdate = true;
