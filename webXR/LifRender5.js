@@ -401,6 +401,10 @@ function onWindowResize() {
 
 // Returns the size, position and orientation of the convergence plane
 function locateConvergencePlane(leftCam, rightCam) {
+    
+    requestDisplayMode(); // sends SHIFT+D command to XR runtime to switch to display-centric mode
+    // requestXKeyPress(); // sends X key press event to XR runtime to reset the camera
+    
     console.log("locateConvergencePlane called with:",
         "leftCam pos:", leftCam.position,
         "rightCam pos:", rightCam.position);
@@ -609,6 +613,51 @@ function computeFovTanAngles(subcam) {
     // console.log("Final FOV result:", result);
     return result;
 }
+
+// Function to request Display-centric mode
+function requestDisplayMode() {
+    // Create and dispatch keydown events for SHIFT and D keys
+    const shiftEvent = new KeyboardEvent('keydown', {
+      key: 'Shift',
+      code: 'ShiftLeft',
+      shiftKey: true,
+      bubbles: true
+    });
+    
+    const dEvent = new KeyboardEvent('keydown', {
+      key: 'd',
+      code: 'KeyD',
+      shiftKey: true,
+      bubbles: true
+    });
+    
+    // Dispatch the events in sequence
+    document.dispatchEvent(shiftEvent);
+    document.dispatchEvent(dEvent);
+    
+    // Release the keys after a brief delay
+    setTimeout(() => {
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'd', code: 'KeyD', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', code: 'ShiftLeft', bubbles: true }));
+    }, 150);
+  }
+
+  function requestXKeyPress() {
+    // Send X key press event
+    const xEvent = new KeyboardEvent('keydown', {
+      key: 'x',
+      code: 'KeyX', 
+      bubbles: true
+    });
+    
+    // Dispatch the event
+    document.dispatchEvent(xEvent);
+    
+    // Release the key after a brief delay
+    setTimeout(() => {
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'x', code: 'KeyX', bubbles: true }));
+    }, 150);
+  }
 
 
 /** Our main animation/render loop (WebXR). */
