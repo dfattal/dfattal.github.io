@@ -284,24 +284,68 @@ async function init() {
 
 // Create and set up VR controllers
 function setupVRControllers() {
-    // Create controller objects
-    leftController = renderer.xr.getController(0);
-    rightController = renderer.xr.getController(1);
+    // Create controller objects - use InputSources to check handedness
+    const session = renderer.xr.getSession();
 
-    // Add controllers to the scene
-    scene.add(leftController);
-    scene.add(rightController);
+    if (!session) {
+        console.warn('No XR session available for controller setup');
+        return;
+    }
 
-    // Set up event listeners for controller button presses
-    leftController.addEventListener('selectstart', () => {
+    // Function to set up controllers once input sources are available
+    function setupControllersByHandedness() {
+        if (!session.inputSources || session.inputSources.length === 0) {
+            // Try again in the next frame if no input sources are available yet
+            return requestAnimationFrame(setupControllersByHandedness);
+        }
+
+        // Clear any existing controllers
+        if (leftController) {
+            leftController.removeEventListener('selectstart', onLeftSelectStart);
+            leftController.removeEventListener('selectend', onLeftSelectEnd);
+            scene.remove(leftController);
+        }
+        if (rightController) {
+            scene.remove(rightController);
+        }
+
+        // Find controllers by handedness
+        session.inputSources.forEach((inputSource, index) => {
+            const controller = renderer.xr.getController(index);
+
+            if (inputSource.handedness === 'left') {
+                console.log('Found left controller');
+                leftController = controller;
+                scene.add(leftController);
+
+                // Add event listeners to the left controller
+                leftController.addEventListener('selectstart', onLeftSelectStart);
+                leftController.addEventListener('selectend', onLeftSelectEnd);
+            }
+            else if (inputSource.handedness === 'right') {
+                console.log('Found right controller');
+                rightController = controller;
+                scene.add(rightController);
+            }
+        });
+    }
+
+    // Handler functions for left controller events
+    function onLeftSelectStart() {
         leftButtonPressed = true;
         console.log('Left controller button pressed');
-    });
+    }
 
-    leftController.addEventListener('selectend', () => {
+    function onLeftSelectEnd() {
         leftButtonPressed = false;
         console.log('Left controller button released');
-    });
+    }
+
+    // Set up controllers
+    setupControllersByHandedness();
+
+    // Also listen for inputsourceschange event to handle controller reconnection
+    session.addEventListener('inputsourceschange', setupControllersByHandedness);
 }
 
 function onWindowResize() {
