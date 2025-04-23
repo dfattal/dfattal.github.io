@@ -31,6 +31,7 @@ let leftController = null;
 let rightController = null;
 let leftButtonPressed = false;
 let leftXButtonPressed = false; // Track X button state
+let leftXButtonJustPressed = false; // Track when X button is first pressed
 
 // Non-VR WebGL canvas variables
 let container, canvas, gl, nonVRRenderer = null;
@@ -348,6 +349,44 @@ function checkXButtonState() {
     return false;
 }
 
+// Function to reset convergence plane and tracking variables
+function resetConvergencePlane(leftCam, rightCam) {
+    console.log("Resetting convergence plane and tracking variables...");
+
+    try {
+        // Recalculate convergence plane based on current camera positions
+        convergencePlane = locateConvergencePlane(leftCam, rightCam);
+        console.log("New convergence plane:", convergencePlane);
+
+        // Reset initial tracking variables
+        initialY = (leftCam.position.y + rightCam.position.y) / 2;
+        initialZ = (leftCam.position.z + rightCam.position.z) / 2;
+        IPD = leftCam.position.distanceTo(rightCam.position);
+
+        console.log("Reset tracking variables - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+
+        // Update plane positions and scales
+        if (planeLeft && planeRight && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height)) {
+            planeLeft.position.copy(convergencePlane.position);
+            planeLeft.quaternion.copy(convergencePlane.quaternion);
+            planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
+
+            planeRight.position.copy(convergencePlane.position);
+            planeRight.quaternion.copy(convergencePlane.quaternion);
+            planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
+
+            console.log("Updated plane positions and scales");
+        } else {
+            console.warn("Could not update plane positions - invalid values or planes not initialized");
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Error during convergence plane reset:", error);
+        return false;
+    }
+}
+
 function onWindowResize() {
     // Update Three.js camera and renderer only if they exist
     if (camera && renderer) {
@@ -663,17 +702,31 @@ function animate() {
                 return;
             }
 
+            // Get XR camera first so it's available for all subsequent code
+            const xrCam = renderer.xr.getCamera(camera);
+
             // Check X button state if in VR mode
             if (isVRActive) {
                 const newXButtonState = checkXButtonState();
+
+                // Detect when X button is first pressed (transition from false to true)
+                leftXButtonJustPressed = newXButtonState && !leftXButtonPressed;
+
                 // Only log changes in button state to avoid console spam
                 if (newXButtonState !== leftXButtonPressed) {
                     leftXButtonPressed = newXButtonState;
                     console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
                 }
-            }
 
-            const xrCam = renderer.xr.getCamera(camera);
+                // If X button was just pressed, reset convergence plane
+                if (leftXButtonJustPressed && xrCam && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+                    const leftCam = xrCam.cameras[0];
+                    const rightCam = xrCam.cameras[1];
+
+                    const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                    console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+                }
+            }
 
             // Get the current time in seconds
             const currentTime = performance.now() / 1000;
@@ -1109,10 +1162,16 @@ function updateHUD(leftCam, rightCam) {
     hudCtx.fillText(`Left:  (${lx}, ${ly}, ${lz})`, 10, 60);
     hudCtx.fillText(`Right: (${rx}, ${ry}, ${rz})`, 10, 90);
 
-    // Add controller status text if in VR mode
-    if (isVRActive) {
-        hudCtx.fillText(`X Button: ${leftXButtonPressed ? 'PRESSED' : 'released'}`, 10, 120);
-    }
+    // // Add controller status text if in VR mode
+    // if (isVRActive) {
+    //     hudCtx.fillText(`X Button: ${leftXButtonPressed ? 'PRESSED' : 'released'}`, 10, 120);
+
+    //     // Show recalibration message if X button was just pressed
+    //     if (leftXButtonJustPressed) {
+    //         hudCtx.fillStyle = '#ffff00'; // Yellow for visibility
+    //         hudCtx.fillText('RECALIBRATED!', 100, 26);
+    //     }
+    // }
 
     hudTexture.needsUpdate = true;
 }
