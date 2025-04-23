@@ -26,6 +26,11 @@ let texR = null;                    // loaded right eye texture
 let rL = null;                      // MN2MNRenderer for left eye
 let rR = null;                      // MN2MNRenderer for right eye
 
+// Controller tracking
+let leftController = null;
+let rightController = null;
+let leftButtonPressed = false;
+
 // Non-VR WebGL canvas variables
 let container, canvas, gl, nonVRRenderer = null;
 let mouseX = 0, mouseY = 0;
@@ -214,6 +219,7 @@ async function init() {
     renderer.xr.addEventListener('sessionstart', () => {
         isVRActive = true;
         canvas.style.display = 'none'; // Hide non-VR canvas when in VR
+        setupVRControllers();
     });
 
     renderer.xr.addEventListener('sessionend', () => {
@@ -274,6 +280,28 @@ async function init() {
     texR = new THREE.CanvasTexture(rR.gl.canvas);
 
     window.addEventListener('resize', onWindowResize);
+}
+
+// Create and set up VR controllers
+function setupVRControllers() {
+    // Create controller objects
+    leftController = renderer.xr.getController(0);
+    rightController = renderer.xr.getController(1);
+
+    // Add controllers to the scene
+    scene.add(leftController);
+    scene.add(rightController);
+
+    // Set up event listeners for controller button presses
+    leftController.addEventListener('selectstart', () => {
+        leftButtonPressed = true;
+        console.log('Left controller button pressed');
+    });
+
+    leftController.addEventListener('selectend', () => {
+        leftButtonPressed = false;
+        console.log('Left controller button released');
+    });
 }
 
 function onWindowResize() {
@@ -1005,8 +1033,9 @@ function updateHUD(leftCam, rightCam) {
 
     hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
 
-    // Semi-transparent background
-    hudCtx.fillStyle = 'rgba(0,0,0,0.5)';
+    // Change background color based on button state
+    const bgColor = leftButtonPressed ? 'rgba(255,0,0,0.7)' : 'rgba(0,0,0,0.5)';
+    hudCtx.fillStyle = bgColor;
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
 
     hudCtx.fillStyle = '#fff';
@@ -1025,6 +1054,11 @@ function updateHUD(leftCam, rightCam) {
 
     hudCtx.fillText(`Left:  (${lx}, ${ly}, ${lz})`, 10, 60);
     hudCtx.fillText(`Right: (${rx}, ${ry}, ${rz})`, 10, 90);
+
+    // Add controller status text if in VR mode
+    if (isVRActive) {
+        hudCtx.fillText(`Button: ${leftButtonPressed ? 'PRESSED' : 'released'}`, 10, 120);
+    }
 
     hudTexture.needsUpdate = true;
 }
