@@ -47,6 +47,7 @@ let container, canvas, gl, nonVRRenderer = null;
 let mouseX = 0, mouseY = 0;
 let windowHalfX, windowHalfY;
 let isVRActive = false;
+let is3D = 1;
 
 let startTime;
 
@@ -575,6 +576,7 @@ function locateConvergencePlane(leftCam, rightCam) {
 
     if (Math.abs(denomX) < 0.0001 || isMirror) {
         console.warn("RENDERING for VR");
+        is3D = 0;
         // Fallback to symmetric calculation
         const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft) / 2;
         const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown) / 2;
@@ -836,18 +838,18 @@ function animate() {
                 rL.renderCam.pos.x = localLeftCamPos.x / IPD;
                 rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
                 rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
-                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd * is3D);
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd * is3D);
+                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd * is3D, 0);
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
 
                 rR.renderCam.pos.x = localRightCamPos.x / IPD;
                 rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
                 rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
-                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd * is3D);
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd * is3D);
+                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd * is3D, 0);
                 rR.drawScene(uTime % glowPulsePeriod);
                 texR.needsUpdate = true;
 
