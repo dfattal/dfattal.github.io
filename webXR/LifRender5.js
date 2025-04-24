@@ -582,9 +582,14 @@ function locateConvergencePlane(leftCam, rightCam) {
         const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown) / 2;
         const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
+        // Remove roll from quaternion by extracting yaw and pitch only
+        const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
+        euler.z = 0; // Remove roll
+        const noRollQuat = new THREE.Quaternion().setFromEuler(euler);
+
         return {
             position: pos,
-            quaternion: leftQuat.clone(),
+            quaternion: noRollQuat,
             width: width,
             height: height
         };
