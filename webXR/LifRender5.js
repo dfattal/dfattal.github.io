@@ -11,6 +11,12 @@ const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPu
 // Default to display-centric mode unless explicitly set to false
 const useDisplayCentric = urlParams.get('displayCentric') !== 'false';
 
+// SRHydra parameters from URL or default values
+const convergenceOffset = parseFloat(urlParams.get('convergenceOffset')) || 1.0;
+const perspectiveFactor = parseFloat(urlParams.get('perspectiveFactor')) || 1.0;
+const sceneScale = parseFloat(urlParams.get('sceneScale')) || 1.0;
+const parallaxStrength = parseFloat(urlParams.get('parallaxStrength')) || 1.0;
+const ipdScale = parseFloat(urlParams.get('ipdScale')) || 1.0;
 
 let views = null;
 let stereo_render_data = null;
@@ -225,11 +231,14 @@ async function init() {
     // Configure the SRHydra session parameters
     const srhydraConfig = {
         projectionMode: useDisplayCentric ? 'display-centric' : 'camera-centric',
-        // Add other SRHydra parameters if needed
-        convergenceOffset: 1.0,  // Default value, adjust as needed
-        perspectiveFactor: 1.0,  // Default value, adjust as needed
-        sceneScale: 1.0          // Default value, adjust as needed
+        convergenceOffset: convergenceOffset,  // Value between 0.01 and 2.0
+        perspectiveFactor: perspectiveFactor,  // Value between 0.2 and 5.0
+        sceneScale: sceneScale,                // Value between 0.1 and 10.0
+        parallaxStrength: parallaxStrength,    // Value between 0.0 and 1.0
+        ipdScale: ipdScale                     // Value between 0.0 and 2.0
     };
+
+    console.log('Initializing WebXR with SRHydra parameters:', srhydraConfig);
 
     // Create VR button with SRHydra parameters
     const vrButton = createVRButton(renderer, srhydraConfig);

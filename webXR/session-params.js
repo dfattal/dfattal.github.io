@@ -12,6 +12,8 @@ export class SRHydraSessionParams {
      * @param {number} [config.convergenceOffset] - Value between 0.01 and 2.0
      * @param {number} [config.perspectiveFactor] - Value between 0.2 and 5.0
      * @param {number} [config.sceneScale] - Value between 0.1 and 10.0
+     * @param {number} [config.parallaxStrength] - Value between 0.0 and 1.0
+     * @param {number} [config.ipdScale] - Value between 0.0 and 2.0
      * @returns {Object} Session parameters object
      */
     static createParams(config) {
@@ -31,6 +33,14 @@ export class SRHydraSessionParams {
 
         if (typeof config.sceneScale === 'number') {
             params.sceneScale = Math.max(0.1, Math.min(10.0, config.sceneScale));
+        }
+
+        if (typeof config.parallaxStrength === 'number') {
+            params.parallaxStrength = Math.max(0.0, Math.min(1.0, config.parallaxStrength));
+        }
+
+        if (typeof config.ipdScale === 'number') {
+            params.ipdScale = Math.max(0.0, Math.min(2.0, config.ipdScale));
         }
 
         return params;
