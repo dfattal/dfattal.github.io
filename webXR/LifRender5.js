@@ -401,10 +401,10 @@ function onWindowResize() {
 
 // Returns the size, position and orientation of the convergence plane
 function locateConvergencePlane(leftCam, rightCam) {
-    
+
     requestDisplayMode(); // sends SHIFT+D command to XR runtime to switch to display-centric mode
     // requestXKeyPress(); // sends X key press event to XR runtime to reset the camera
-    
+
     console.log("locateConvergencePlane called with:",
         "leftCam pos:", leftCam.position,
         "rightCam pos:", rightCam.position);
@@ -478,93 +478,93 @@ function locateConvergencePlane(leftCam, rightCam) {
     //     return result;
     // } else {
 
-        // Extract FOV angles for both cameras
-        const u0 = leftFov.tanUp;
-        const d0 = -leftFov.tanDown;
-        const r0 = leftFov.tanRight;
-        const l0 = -leftFov.tanLeft;
+    // Extract FOV angles for both cameras
+    const u0 = leftFov.tanUp;
+    const d0 = -leftFov.tanDown;
+    const r0 = leftFov.tanRight;
+    const l0 = -leftFov.tanLeft;
 
-        const u1 = rightFov.tanUp;
-        const d1 = -rightFov.tanDown;
-        const r1 = rightFov.tanRight;
-        const l1 = -rightFov.tanLeft;
+    const u1 = rightFov.tanUp;
+    const d1 = -rightFov.tanDown;
+    const r1 = rightFov.tanRight;
+    const l1 = -rightFov.tanLeft;
 
-        // console.log("FOV angles extracted:",
-        //     "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
-        //     "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
+    // console.log("FOV angles extracted:",
+    //     "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
+    //     "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
 
-        // Get absolute camera positions
-        const x0 = leftCam.position.x;
-        const y0 = leftCam.position.y;
-        const z0 = leftCam.position.z;
+    // Get absolute camera positions
+    const x0 = leftCam.position.x;
+    const y0 = leftCam.position.y;
+    const z0 = leftCam.position.z;
 
-        const x1 = rightCam.position.x;
-        const y1 = rightCam.position.y;
-        const z1 = rightCam.position.z;
+    const x1 = rightCam.position.x;
+    const y1 = rightCam.position.y;
+    const z1 = rightCam.position.z;
 
-        // console.log("Camera positions:",
-        //     "x0:", x0, "y0:", y0, "z0:", z0,
-        //     "x1:", x1, "y1:", y1, "z1:", z1);
+    // console.log("Camera positions:",
+    //     "x0:", x0, "y0:", y0, "z0:", z0,
+    //     "x1:", x1, "y1:", y1, "z1:", z1);
 
-        // Calculate display position denominators - check for division by zero
-        const denomX = (r1 - l1 - r0 + l0);
-        const denomY = (u1 - d1 - u0 + d0);
-        console.log("Denominators for position calculation:",
-            "denomX:", denomX,
-            "denomY:", denomY);
+    // Calculate display position denominators - check for division by zero
+    const denomX = (r1 - l1 - r0 + l0);
+    const denomY = (u1 - d1 - u0 + d0);
+    console.log("Denominators for position calculation:",
+        "denomX:", denomX,
+        "denomY:", denomY);
 
-        if (Math.abs(denomX) < 0.0001 || isMirror) {
-            console.warn("RENDERING for VR");
-            // Fallback to symmetric calculation
-            const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
-            const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
-            const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
-
-            return {
-                position: pos,
-                quaternion: leftQuat.clone(),
-                width: width,
-                height: height
-            };
-        }
-
-        // Calculate display position
-        const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
-        const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
-        const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
-        //const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
-        // const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
-
-        console.log("Display position calculation:",
-            "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
-
-        // Calculate display size
-        const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
-        const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
-
-        // console.log("Display size calculation:",
-        //     "W:", W, "H:", H,
-        //     "z0-zd:", (z0 - zd),
-        //     "l0+r0:", (l0 + r0),
-        //     "u0+d0:", (u0 + d0),
-        //     "(z1-zd)*(l1+r1):", (z1 - zd) * (l1 + r1),
-        //     "z1-zd:", (z1 - zd),
-        //     "l1+r1:", (l1 + r1));
-
-        // const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
-        const finalPos = new THREE.Vector3(xd, yd, zd); // assume leftQuat is identity (true at start of session)
-        console.log("RENDERING for 3D");
-        console.log("Final result:",
-            "position:", finalPos,
-            "width:", Math.abs(W),
-            "height:", Math.abs(H));
+    if (Math.abs(denomX) < 0.0001 || isMirror) {
+        console.warn("RENDERING for VR");
+        // Fallback to symmetric calculation
+        const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
+        const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
+        const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
         return {
-            position: finalPos,
+            position: pos,
             quaternion: leftQuat.clone(),
-            width: Math.abs(W),
-            height: Math.abs(H)
+            width: width,
+            height: height
         };
+    }
+
+    // Calculate display position
+    const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
+    const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
+    const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
+    //const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
+    // const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
+
+    console.log("Display position calculation:",
+        "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
+
+    // Calculate display size
+    const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
+    const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
+
+    // console.log("Display size calculation:",
+    //     "W:", W, "H:", H,
+    //     "z0-zd:", (z0 - zd),
+    //     "l0+r0:", (l0 + r0),
+    //     "u0+d0:", (u0 + d0),
+    //     "(z1-zd)*(l1+r1):", (z1 - zd) * (l1 + r1),
+    //     "z1-zd:", (z1 - zd),
+    //     "l1+r1:", (l1 + r1));
+
+    // const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
+    const finalPos = new THREE.Vector3(xd, yd, zd); // assume leftQuat is identity (true at start of session)
+    console.log("RENDERING for 3D");
+    console.log("Final result:",
+        "position:", finalPos,
+        "width:", Math.abs(W),
+        "height:", Math.abs(H));
+
+    return {
+        position: finalPos,
+        quaternion: leftQuat.clone(),
+        width: Math.abs(W),
+        height: Math.abs(H)
+    };
     // }
 }
 
@@ -581,10 +581,10 @@ function computeFovTanAngles(subcam) {
     const m09 = projMatrix.elements[9];
 
     // console.log("Critical matrix elements:",
-        // "m00:", m00,
-        // "m05:", m05,
-        // "m08:", m08,
-        // "m09:", m09);
+    // "m00:", m00,
+    // "m05:", m05,
+    // "m08:", m08,
+    // "m09:", m09);
 
     // Check for division by zero
     if (Math.abs(m00) < 0.0001 || Math.abs(m05) < 0.0001) {
@@ -598,10 +598,10 @@ function computeFovTanAngles(subcam) {
     const top = (1 + m09) / m05;
 
     // console.log("FOV tangent values:",
-        // "left:", left,
-        // "right:", right,
-        // "bottom:", bottom,
-        // "top:", top);
+    // "left:", left,
+    // "right:", right,
+    // "bottom:", bottom,
+    // "top:", top);
 
     const result = {
         tanUp: top,
@@ -616,48 +616,132 @@ function computeFovTanAngles(subcam) {
 
 // Function to request Display-centric mode
 function requestDisplayMode() {
-    // Create and dispatch keydown events for SHIFT and D keys
-    const shiftEvent = new KeyboardEvent('keydown', {
-      key: 'Shift',
-      code: 'ShiftLeft',
-      shiftKey: true,
-      bubbles: true
-    });
-    
-    const dEvent = new KeyboardEvent('keydown', {
-      key: 'd',
-      code: 'KeyD',
-      shiftKey: true,
-      bubbles: true
-    });
-    
-    // Dispatch the events in sequence
-    document.dispatchEvent(shiftEvent);
-    document.dispatchEvent(dEvent);
-    
-    // Release the keys after a brief delay
-    setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'd', code: 'KeyD', bubbles: true }));
-      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', code: 'ShiftLeft', bubbles: true }));
-    }, 150);
-  }
+    console.log("Attempting to request display-centric mode");
 
-  function requestXKeyPress() {
+    // Approach 1: Try using navigator.xr directly if available
+    if (renderer && renderer.xr && renderer.xr.getSession()) {
+        try {
+            const session = renderer.xr.getSession();
+            console.log("Active XR session found, sending mode change request");
+
+            // Try to send a custom event through the session if possible
+            if (session.dispatchEvent) {
+                const customEvent = new CustomEvent('display-mode-request', {
+                    detail: { mode: 'display-centric' },
+                    bubbles: true,
+                    cancelable: true
+                });
+                session.dispatchEvent(customEvent);
+                console.log("Custom XR event dispatched");
+            }
+
+            // If the runtime has exposed any configuration functions, try those
+            if (session.updateRenderState) {
+                // Some runtimes support configuration through updateRenderState
+                session.updateRenderState({
+                    // This is speculative - check your runtime's documentation
+                    displayMode: 'display-centric'
+                }).catch(err => console.warn("Could not update render state:", err));
+                console.log("Attempted render state update");
+            }
+        } catch (e) {
+            console.error("Error trying to communicate with XR session:", e);
+        }
+    }
+
+    // Approach 2: Try a more aggressive key event approach
+    try {
+        console.log("Trying direct keyboard simulation");
+
+        // Target the canvas element directly
+        const targetElement = renderer?.domElement || document.body;
+
+        // Create the events with more properties
+        const shiftEvent = new KeyboardEvent('keydown', {
+            key: 'Shift',
+            code: 'ShiftLeft',
+            keyCode: 16,  // Legacy keyCode for Shift
+            which: 16,    // Legacy which property
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+            composed: true,  // Allow crossing shadow DOM boundary
+            view: window     // Associate with the window
+        });
+
+        const dEvent = new KeyboardEvent('keydown', {
+            key: 'd',
+            code: 'KeyD',
+            keyCode: 68,  // Legacy keyCode for D
+            which: 68,    // Legacy which property
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window
+        });
+
+        // Focus the element first
+        if (targetElement.focus) {
+            targetElement.focus();
+        }
+
+        // Dispatch events directly to the canvas
+        targetElement.dispatchEvent(shiftEvent);
+        setTimeout(() => {
+            targetElement.dispatchEvent(dEvent);
+
+            // Release keys
+            setTimeout(() => {
+                targetElement.dispatchEvent(new KeyboardEvent('keyup', {
+                    key: 'd', code: 'KeyD', keyCode: 68, which: 68, bubbles: true
+                }));
+                targetElement.dispatchEvent(new KeyboardEvent('keyup', {
+                    key: 'Shift', code: 'ShiftLeft', keyCode: 16, which: 16, bubbles: true
+                }));
+            }, 100);
+        }, 50);
+    } catch (e) {
+        console.error("Error dispatching keyboard events:", e);
+    }
+
+    // Approach 3: Try a gamepad button press simulation if the runtime supports it
+    if (navigator.xr && renderer.xr.getSession()) {
+        try {
+            // Check for connected gamepads
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            console.log("Available gamepads:", gamepads.length);
+
+            // Log gamepad info to help debug
+            for (let i = 0; i < gamepads.length; i++) {
+                if (gamepads[i]) {
+                    console.log(`Gamepad ${i}:`, gamepads[i].id, "Buttons:", gamepads[i].buttons.length);
+                }
+            }
+        } catch (e) {
+            console.warn("Could not access gamepads:", e);
+        }
+    }
+
+    console.log("Display mode request complete - check runtime logs for response");
+}
+
+function requestXKeyPress() {
     // Send X key press event
     const xEvent = new KeyboardEvent('keydown', {
-      key: 'x',
-      code: 'KeyX', 
-      bubbles: true
+        key: 'x',
+        code: 'KeyX',
+        bubbles: true
     });
-    
+
     // Dispatch the event
     document.dispatchEvent(xEvent);
-    
+
     // Release the key after a brief delay
     setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'x', code: 'KeyX', bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keyup', { key: 'x', code: 'KeyX', bubbles: true }));
     }, 150);
-  }
+}
 
 
 /** Our main animation/render loop (WebXR). */
@@ -839,6 +923,7 @@ function animate() {
                     console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                     console.log("convergencePlane position:", convergencePlane.position);
                     console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z + rL.views[0].f * rL.viewportScale() / leftCam.viewport.width * convergencePlane.width);
+                    requestDisplayMode();
                 }
 
                 // // Get forward vectors from both cameras' quaternions
