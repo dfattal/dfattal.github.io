@@ -313,7 +313,7 @@ async function init() {
 
 // Create a custom VR button that uses SRHydra parameters
 function createVRButton(renderer, srhydraConfig) {
-    const button = document.createElement('button');
+    let button = document.createElement('button');
     button.style.display = 'none';
 
     // Check for WebXR support
@@ -459,10 +459,17 @@ function resetConvergencePlane(leftCam, rightCam) {
         convergencePlane = locateConvergencePlane(leftCam, rightCam);
         console.log("New convergence plane:", convergencePlane);
 
-        // Reset initial tracking variables
-        initialY = (leftCam.position.y + rightCam.position.y) / 2;
-        initialZ = (leftCam.position.z + rightCam.position.z) / 2;
-        IPD = leftCam.position.distanceTo(rightCam.position);
+        // Calculate camera positions in convergence plane's local coordinate system
+        const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
+        localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+        const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(convergencePlane.position);
+        localRightCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+        // Reset initial tracking variables using local coordinates
+        initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+        initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+        IPD = localLeftCamPos.distanceTo(localRightCamPos);
 
         console.log("Reset tracking variables - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
 
@@ -569,8 +576,8 @@ function locateConvergencePlane(leftCam, rightCam) {
     if (Math.abs(denomX) < 0.0001 || isMirror) {
         console.warn("RENDERING for VR");
         // Fallback to symmetric calculation
-        const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
-        const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
+        const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft) / 2;
+        const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown) / 2;
         const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
         return {
@@ -805,34 +812,39 @@ function animate() {
                     createHUDOverlayForVR(planeRight, rightCam);
                 }
 
-
-
                 // Update HUD text
                 updateHUD(leftCam, rightCam);
 
-                // Capture the initial head positions once
+                // Calculate camera positions in convergence plane's local coordinate system
+                const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
+                localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+                const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(convergencePlane.position);
+                localRightCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+                // Capture the initial head positions once (in local coordinates)
                 if (initialY === undefined) {
-                    initialY = (leftCam.position.y + rightCam.position.y) / 2;
-                    initialZ = (leftCam.position.z + rightCam.position.z) / 2;
-                    IPD = leftCam.position.distanceTo(rightCam.position); // 0.063
+                    initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+                    initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+                    IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
                     console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                     console.log("convergencePlane position:", convergencePlane.position);
                     console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z + rL.views[0].f * rL.viewportScale() / leftCam.viewport.width * convergencePlane.width);
                 }
 
-                // Render the scene
-                rL.renderCam.pos.x = (leftCam.position.x - convergencePlane.position.x) / IPD;
-                rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
-                rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
+                // Render the scene using local coordinates
+                rL.renderCam.pos.x = localLeftCamPos.x / IPD;
+                rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
+                rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
                 rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0);
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
 
-                rR.renderCam.pos.x = (rightCam.position.x - convergencePlane.position.x) / IPD;
-                rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
-                rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
+                rR.renderCam.pos.x = localRightCamPos.x / IPD;
+                rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
+                rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
                 rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0);

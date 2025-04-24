@@ -53,10 +53,22 @@ export class SRHydraSessionParams {
      * @returns {Object} The modified session init object
      */
     static applyToSessionInit(sessionInit, srhydraParams) {
-        return {
-            ...sessionInit,
-            srhydraSettings: srhydraParams
-        };
+        // Create a field that exactly matches what the OpenXR runtime expects
+        sessionInit.srhydra = srhydraParams;     // Keep original approach
+
+        // Add a compatibility approach that Chrome/Meta browsers might recognize
+        if (!sessionInit.xrExtensions) {
+            sessionInit.xrExtensions = [];
+        }
+
+        // Add our extension information in a format browsers might recognize
+        sessionInit.xrExtensions.push({
+            name: "XR_SRHYDRA_session_settings",
+            parameters: srhydraParams
+        });
+
+        console.log("Session init with SRHydra settings:", sessionInit);
+        return sessionInit;
     }
 
     /**
