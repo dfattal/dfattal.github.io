@@ -1,12 +1,15 @@
 // LifRender.js -- test renderer for LIF files in webXR
 import { LifLoader } from '../LIF/LifLoader.js';
 import { MN2MNRenderer, ST2MNRenderer } from '../VIZ/Renderers.js';
+import { SRHydraSessionParams } from './session-params.js';
 
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+// Default to display-centric mode unless explicitly set to false
+const useDisplayCentric = urlParams.get('displayCentric') !== 'false';
 
 
 let views = null;
@@ -215,13 +218,32 @@ async function init() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Set up WebXR with SRHydra parameters
     renderer.xr.enabled = true;
+
+    // Configure the SRHydra session parameters
+    const srhydraConfig = {
+        projectionMode: useDisplayCentric ? 'display-centric' : 'camera-centric',
+        // Add other SRHydra parameters if needed
+        convergenceOffset: 1.0,  // Default value, adjust as needed
+        perspectiveFactor: 1.0,  // Default value, adjust as needed
+        sceneScale: 1.0          // Default value, adjust as needed
+    };
+
+    // Create VR button with SRHydra parameters
+    const vrButton = createVRButton(renderer, srhydraConfig);
+    document.body.appendChild(vrButton);
+    // Override background to semi-transparent black
+    vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
 
     // Add XR session start/end event listeners
     renderer.xr.addEventListener('sessionstart', () => {
         isVRActive = true;
         canvas.style.display = 'none'; // Hide non-VR canvas when in VR
         setupVRControllers();
+        console.log('XR session started with mode:',
+            useDisplayCentric ? 'display-centric' : 'camera-centric');
     });
 
     renderer.xr.addEventListener('sessionend', () => {
@@ -241,10 +263,6 @@ async function init() {
     });
 
     document.body.appendChild(renderer.domElement);
-    const vrButton = VRButton.createButton(renderer)
-    document.body.appendChild(vrButton);
-    // Override background to semi-transparent black
-    vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
 
     // create offscreen canvases
     const offscreenCanvasL = document.createElement('canvas');
@@ -282,6 +300,80 @@ async function init() {
     texR = new THREE.CanvasTexture(rR.gl.canvas);
 
     window.addEventListener('resize', onWindowResize);
+}
+
+// Create a custom VR button that uses SRHydra parameters
+function createVRButton(renderer, srhydraConfig) {
+    const button = document.createElement('button');
+    button.style.display = 'none';
+
+    // Check for WebXR support
+    function showEnterVR() {
+        let currentSession = null;
+
+        async function onSessionEnded() {
+            currentSession.removeEventListener('end', onSessionEnded);
+            currentSession = null;
+            button.textContent = 'ENTER VR';
+            button.removeEventListener('click', onSessionEnd);
+            button.addEventListener('click', onSessionStart);
+        }
+
+        function onSessionStart() {
+            button.removeEventListener('click', onSessionStart);
+
+            // Create session with SRHydra parameters
+            SRHydraSessionParams.requestSession('immersive-vr', {
+                requiredFeatures: ['local-floor'],
+                optionalFeatures: ['hand-tracking'],
+                srhydra: srhydraConfig
+            })
+                .then(session => {
+                    currentSession = session;
+                    renderer.xr.setSession(session);
+                    button.textContent = 'EXIT VR';
+                    button.addEventListener('click', onSessionEnd);
+                    currentSession.addEventListener('end', onSessionEnded);
+                })
+                .catch(error => {
+                    console.error('Error starting XR session:', error);
+                    button.addEventListener('click', onSessionStart);
+                });
+        }
+
+        function onSessionEnd() {
+            if (currentSession) {
+                currentSession.end();
+            }
+        }
+
+        button.style.display = '';
+        button.style.cursor = 'pointer';
+        button.style.padding = '10px';
+        button.style.position = 'absolute';
+        button.style.bottom = '20px';
+        button.style.right = '20px';
+        button.style.border = 'none';
+        button.style.borderRadius = '5px';
+        button.style.background = 'rgba(0, 0, 0, 0.5)';
+        button.style.color = 'white';
+        button.style.font = 'bold 16px sans-serif';
+        button.textContent = 'ENTER VR';
+        button.addEventListener('click', onSessionStart);
+
+        return button;
+    }
+
+    if (navigator.xr) {
+        navigator.xr.isSessionSupported('immersive-vr')
+            .then(supported => {
+                if (supported) {
+                    button = showEnterVR();
+                }
+            });
+    }
+
+    return button;
 }
 
 // Create and set up VR controllers
@@ -401,10 +493,6 @@ function onWindowResize() {
 
 // Returns the size, position and orientation of the convergence plane
 function locateConvergencePlane(leftCam, rightCam) {
-
-    requestDisplayMode(); // sends SHIFT+D command to XR runtime to switch to display-centric mode
-    // requestXKeyPress(); // sends X key press event to XR runtime to reset the camera
-
     console.log("locateConvergencePlane called with:",
         "leftCam pos:", leftCam.position,
         "rightCam pos:", rightCam.position);
@@ -442,42 +530,6 @@ function locateConvergencePlane(leftCam, rightCam) {
         "isEqual:", isEqual,
         "isMirror:", isMirror);
 
-    // if (isEqual && isSymmetric) {
-    //     console.log("Using symmetric FOV calculation");
-
-    //     // Calculate plane dimensions at DISTANCE based on FOV
-    //     const width = 2 * DISTANCE * Math.abs(leftFov.tanRight); // Use abs() since left/right are symmetric
-    //     const height = 2 * DISTANCE * Math.abs(leftFov.tanUp); // Use abs() since up/down are symmetric
-
-    //     console.log("Calculated plane dimensions:",
-    //         "width:", width,
-    //         "height:", height,
-    //         "DISTANCE:", DISTANCE,
-    //         "leftFov.tanRight:", leftFov.tanRight,
-    //         "leftFov.tanUp:", leftFov.tanUp);
-
-    //     // Create position vector in camera space (0,0,-DISTANCE) 
-    //     const pos = new THREE.Vector3(0,0, - DISTANCE);
-    //     console.log("Initial position vector:", pos);
-
-    //     // Transform position by camera orientation to get world space position
-    //     pos.applyQuaternion(leftQuat);
-    //     console.log("Position after quaternion rotation:", pos);
-
-    //     // Add camera position to get final world position
-    //     pos.add(leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5));
-    //     console.log("Final position:", pos);
-
-    //     const result = {
-    //         position: pos,
-    //         quaternion: leftQuat.clone(),
-    //         width: width,
-    //         height: height
-    //     };
-    //     console.log("Symmetric calculation result:", result);
-    //     return result;
-    // } else {
-
     // Extract FOV angles for both cameras
     const u0 = leftFov.tanUp;
     const d0 = -leftFov.tanDown;
@@ -489,10 +541,6 @@ function locateConvergencePlane(leftCam, rightCam) {
     const r1 = rightFov.tanRight;
     const l1 = -rightFov.tanLeft;
 
-    // console.log("FOV angles extracted:",
-    //     "u0:", u0, "d0:", d0, "r0:", r0, "l0:", l0,
-    //     "u1:", u1, "d1:", d1, "r1:", r1, "l1:", l1);
-
     // Get absolute camera positions
     const x0 = leftCam.position.x;
     const y0 = leftCam.position.y;
@@ -501,10 +549,6 @@ function locateConvergencePlane(leftCam, rightCam) {
     const x1 = rightCam.position.x;
     const y1 = rightCam.position.y;
     const z1 = rightCam.position.z;
-
-    // console.log("Camera positions:",
-    //     "x0:", x0, "y0:", y0, "z0:", z0,
-    //     "x1:", x1, "y1:", y1, "z1:", z1);
 
     // Calculate display position denominators - check for division by zero
     const denomX = (r1 - l1 - r0 + l0);
@@ -532,8 +576,6 @@ function locateConvergencePlane(leftCam, rightCam) {
     const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
     const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
     const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
-    //const xd = ((r1 - l1) * (x0 + z0 * (r0 - l0)) - (r0 - l0) * (x1 + z1 * (r1 - l1))) / denomX;
-    // const yd = ((u1 - d1) * (y0 + z0 * (r0 - l0)) - (r0 - l0) * (y1 + z1 * (u1 - d1))) / denomY;
 
     console.log("Display position calculation:",
         "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
@@ -542,16 +584,6 @@ function locateConvergencePlane(leftCam, rightCam) {
     const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
     const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
 
-    // console.log("Display size calculation:",
-    //     "W:", W, "H:", H,
-    //     "z0-zd:", (z0 - zd),
-    //     "l0+r0:", (l0 + r0),
-    //     "u0+d0:", (u0 + d0),
-    //     "(z1-zd)*(l1+r1):", (z1 - zd) * (l1 + r1),
-    //     "z1-zd:", (z1 - zd),
-    //     "l1+r1:", (l1 + r1));
-
-    // const finalPos = new THREE.Vector3(xd, yd, zd).applyQuaternion(leftQuat).add(centerCam);
     const finalPos = new THREE.Vector3(xd, yd, zd); // assume leftQuat is identity (true at start of session)
     console.log("RENDERING for 3D");
     console.log("Final result:",
@@ -565,26 +597,17 @@ function locateConvergencePlane(leftCam, rightCam) {
         width: Math.abs(W),
         height: Math.abs(H)
     };
-    // }
 }
 
 // Compute FOV angles from XR camera projection matrix
 function computeFovTanAngles(subcam) {
-    // console.log("Computing FOV for camera:", subcam);
     const projMatrix = subcam.projectionMatrix;
-    // console.log("Projection matrix:", Array.from(projMatrix.elements));
 
     // Extract relevant values from projection matrix
     const m00 = projMatrix.elements[0];
     const m05 = projMatrix.elements[5];
     const m08 = projMatrix.elements[8];
     const m09 = projMatrix.elements[9];
-
-    // console.log("Critical matrix elements:",
-    // "m00:", m00,
-    // "m05:", m05,
-    // "m08:", m08,
-    // "m09:", m09);
 
     // Check for division by zero
     if (Math.abs(m00) < 0.0001 || Math.abs(m05) < 0.0001) {
@@ -597,12 +620,6 @@ function computeFovTanAngles(subcam) {
     const bottom = (1 - m09) / m05;
     const top = (1 + m09) / m05;
 
-    // console.log("FOV tangent values:",
-    // "left:", left,
-    // "right:", right,
-    // "bottom:", bottom,
-    // "top:", top);
-
     const result = {
         tanUp: top,
         tanDown: -bottom,
@@ -610,139 +627,8 @@ function computeFovTanAngles(subcam) {
         tanRight: right
     };
 
-    // console.log("Final FOV result:", result);
     return result;
 }
-
-// Function to request Display-centric mode
-function requestDisplayMode() {
-    console.log("Attempting to request display-centric mode");
-
-    // Approach 1: Try using navigator.xr directly if available
-    if (renderer && renderer.xr && renderer.xr.getSession()) {
-        try {
-            const session = renderer.xr.getSession();
-            console.log("Active XR session found, sending mode change request");
-
-            // Try to send a custom event through the session if possible
-            if (session.dispatchEvent) {
-                const customEvent = new CustomEvent('display-mode-request', {
-                    detail: { mode: 'display-centric' },
-                    bubbles: true,
-                    cancelable: true
-                });
-                session.dispatchEvent(customEvent);
-                console.log("Custom XR event dispatched");
-            }
-
-            // If the runtime has exposed any configuration functions, try those
-            if (session.updateRenderState) {
-                // Some runtimes support configuration through updateRenderState
-                session.updateRenderState({
-                    // This is speculative - check your runtime's documentation
-                    displayMode: 'display-centric'
-                }).catch(err => console.warn("Could not update render state:", err));
-                console.log("Attempted render state update");
-            }
-        } catch (e) {
-            console.error("Error trying to communicate with XR session:", e);
-        }
-    }
-
-    // Approach 2: Try a more aggressive key event approach
-    try {
-        console.log("Trying direct keyboard simulation");
-
-        // Target the canvas element directly
-        const targetElement = renderer?.domElement || document.body;
-
-        // Create the events with more properties
-        const shiftEvent = new KeyboardEvent('keydown', {
-            key: 'Shift',
-            code: 'ShiftLeft',
-            keyCode: 16,  // Legacy keyCode for Shift
-            which: 16,    // Legacy which property
-            shiftKey: true,
-            bubbles: true,
-            cancelable: true,
-            composed: true,  // Allow crossing shadow DOM boundary
-            view: window     // Associate with the window
-        });
-
-        const dEvent = new KeyboardEvent('keydown', {
-            key: 'd',
-            code: 'KeyD',
-            keyCode: 68,  // Legacy keyCode for D
-            which: 68,    // Legacy which property
-            shiftKey: true,
-            bubbles: true,
-            cancelable: true,
-            composed: true,
-            view: window
-        });
-
-        // Focus the element first
-        if (targetElement.focus) {
-            targetElement.focus();
-        }
-
-        // Dispatch events directly to the canvas
-        targetElement.dispatchEvent(shiftEvent);
-        setTimeout(() => {
-            targetElement.dispatchEvent(dEvent);
-
-            // Release keys
-            setTimeout(() => {
-                targetElement.dispatchEvent(new KeyboardEvent('keyup', {
-                    key: 'd', code: 'KeyD', keyCode: 68, which: 68, bubbles: true
-                }));
-                targetElement.dispatchEvent(new KeyboardEvent('keyup', {
-                    key: 'Shift', code: 'ShiftLeft', keyCode: 16, which: 16, bubbles: true
-                }));
-            }, 100);
-        }, 50);
-    } catch (e) {
-        console.error("Error dispatching keyboard events:", e);
-    }
-
-    // Approach 3: Try a gamepad button press simulation if the runtime supports it
-    if (navigator.xr && renderer.xr.getSession()) {
-        try {
-            // Check for connected gamepads
-            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-            console.log("Available gamepads:", gamepads.length);
-
-            // Log gamepad info to help debug
-            for (let i = 0; i < gamepads.length; i++) {
-                if (gamepads[i]) {
-                    console.log(`Gamepad ${i}:`, gamepads[i].id, "Buttons:", gamepads[i].buttons.length);
-                }
-            }
-        } catch (e) {
-            console.warn("Could not access gamepads:", e);
-        }
-    }
-
-    console.log("Display mode request complete - check runtime logs for response");
-}
-
-function requestXKeyPress() {
-    // Send X key press event
-    const xEvent = new KeyboardEvent('keydown', {
-        key: 'x',
-        code: 'KeyX',
-        bubbles: true
-    });
-
-    // Dispatch the event
-    document.dispatchEvent(xEvent);
-
-    // Release the key after a brief delay
-    setTimeout(() => {
-        document.dispatchEvent(new KeyboardEvent('keyup', { key: 'x', code: 'KeyX', bubbles: true }));
-    }, 150);
-}
-
 
 /** Our main animation/render loop (WebXR). */
 function animate() {
@@ -923,31 +809,11 @@ function animate() {
                     console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                     console.log("convergencePlane position:", convergencePlane.position);
                     console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z + rL.views[0].f * rL.viewportScale() / leftCam.viewport.width * convergencePlane.width);
-                    requestDisplayMode();
                 }
 
-                // // Get forward vectors from both cameras' quaternions
-                // const forwardLeft = new THREE.Vector3(0, 0, -1);
-                // forwardLeft.applyQuaternion(leftCam.quaternion);
-                // const forwardRight = new THREE.Vector3(0, 0, -1); 
-                // forwardRight.applyQuaternion(rightCam.quaternion);
-
-                // // Calculate slant vectors from forward direction tangents
-                // const slantLeft = {
-                //     x: forwardLeft.x / forwardLeft.z,
-                //     y: forwardLeft.y / forwardLeft.z
-                // };
-                // const slantRight = {
-                //     x: forwardRight.x / forwardRight.z, 
-                //     y: forwardRight.y / forwardRight.z
-                // };
-
                 // Render the scene
-                //const IPD = leftCam.position.distanceTo(rightCam.position); 
                 rL.renderCam.pos.x = (leftCam.position.x - convergencePlane.position.x) / IPD;
-                //rL.renderCam.pos.y = (convergencePlane.position.y - leftCam.position.y) / IPD;
                 rL.renderCam.pos.y = (initialY - leftCam.position.y) / IPD;
-                // rL.renderCam.pos.z = (convergencePlane.position.z+rL.views[0].f * rL.viewportScale()/leftCam.viewport.width*convergencePlane.width - leftCam.position.z) / IPD;
                 rL.renderCam.pos.z = (initialZ - leftCam.position.z) / IPD;
                 rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
@@ -956,9 +822,7 @@ function animate() {
                 texL.needsUpdate = true;
 
                 rR.renderCam.pos.x = (rightCam.position.x - convergencePlane.position.x) / IPD;
-                // rR.renderCam.pos.y = (convergencePlane.position.y - rightCam.position.y) / IPD;
                 rR.renderCam.pos.y = (initialY - rightCam.position.y) / IPD;
-                // rR.renderCam.pos.z = (convergencePlane.position.z+rR.views[0].f * rR.viewportScale()/rightCam.viewport.width*convergencePlane.width - rightCam.position.z) / IPD;
                 rR.renderCam.pos.z = (initialZ - rightCam.position.z) / IPD;
                 rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
@@ -1243,10 +1107,6 @@ function updateHUD(leftCam, rightCam) {
     hudCtx.font = '20px sans-serif';
     hudCtx.fillText('Eye Pos', 10, 26);
 
-    // const leftPos = new THREE.Vector3();
-    // const rightPos = new THREE.Vector3();
-    // leftCam.getWorldPosition(leftPos);
-    // rightCam.getWorldPosition(rightPos);
     const leftPos = leftCam.position;
     const rightPos = rightCam.position;
 
@@ -1255,17 +1115,6 @@ function updateHUD(leftCam, rightCam) {
 
     hudCtx.fillText(`Left:  (${lx}, ${ly}, ${lz})`, 10, 60);
     hudCtx.fillText(`Right: (${rx}, ${ry}, ${rz})`, 10, 90);
-
-    // // Add controller status text if in VR mode
-    // if (isVRActive) {
-    //     hudCtx.fillText(`X Button: ${leftXButtonPressed ? 'PRESSED' : 'released'}`, 10, 120);
-
-    //     // Show recalibration message if X button was just pressed
-    //     if (leftXButtonJustPressed) {
-    //         hudCtx.fillStyle = '#ffff00'; // Yellow for visibility
-    //         hudCtx.fillText('RECALIBRATED!', 100, 26);
-    //     }
-    // }
 
     hudTexture.needsUpdate = true;
 }
