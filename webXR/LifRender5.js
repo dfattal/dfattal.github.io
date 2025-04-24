@@ -232,18 +232,28 @@ async function init() {
     // Configure the SRHydra session parameters
     const srhydraConfig = {
         projectionMode: useDisplayCentric ? 'display-centric' : 'camera-centric',
-        convergenceOffset: convergenceOffset,  // Value between 0.01 and 2.0
-        perspectiveFactor: perspectiveFactor,  // Value between 0.2 and 5.0
-        sceneScale: sceneScale,                // Value between 0.1 and 10.0
-        parallaxStrength: parallaxStrength,    // Value between 0.0 and 1.0
-        ipdScale: ipdScale                     // Value between 0.0 and 2.0
+        convergenceOffset: convergenceOffset,
+        perspectiveFactor: perspectiveFactor,
+        sceneScale: sceneScale
     };
 
-    console.log('Initializing WebXR with SRHydra parameters:', srhydraConfig);
+    // Log the configuration for debugging
+    console.warn("SRHydra configuration:", srhydraConfig);
+
+    // Save to localStorage as a fallback approach
+    try {
+        localStorage.setItem('SRHYDRA_PROJECTION_MODE', srhydraConfig.projectionMode);
+        localStorage.setItem('SRHYDRA_CONVERGENCE_OFFSET', srhydraConfig.convergenceOffset.toString());
+        localStorage.setItem('SRHYDRA_PERSPECTIVE_FACTOR', srhydraConfig.perspectiveFactor.toString());
+        localStorage.setItem('SRHYDRA_SCENE_SCALE', srhydraConfig.sceneScale.toString());
+    } catch (e) {
+        console.warn("Could not store settings in localStorage:", e);
+    }
 
     // Create VR button with SRHydra parameters
     const vrButton = createVRButton(renderer, srhydraConfig);
     document.body.appendChild(vrButton);
+
     // Override background to semi-transparent black
     vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
 
@@ -314,10 +324,9 @@ async function init() {
 
 // Create a custom VR button that uses SRHydra parameters
 function createVRButton(renderer, srhydraConfig) {
-    let button = document.createElement('button');
+    const button = document.createElement('button');
     button.style.display = 'none';
 
-    // Check for WebXR support
     function showEnterVR() {
         let currentSession = null;
 
@@ -332,7 +341,10 @@ function createVRButton(renderer, srhydraConfig) {
         function onSessionStart() {
             button.removeEventListener('click', onSessionStart);
 
-            // Create session with SRHydra parameters
+            // Log the exact configuration being sent
+            console.warn("Requesting XR session with SRHydra parameters:", srhydraConfig);
+
+            // Use the updated session params module
             SRHydraSessionParams.requestSession('immersive-vr', {
                 requiredFeatures: ['local-floor'],
                 optionalFeatures: ['hand-tracking'],
@@ -340,6 +352,7 @@ function createVRButton(renderer, srhydraConfig) {
             })
                 .then(session => {
                     currentSession = session;
+                    console.log("WebXR Session created successfully!");
                     renderer.xr.setSession(session);
                     button.textContent = 'EXIT VR';
                     button.addEventListener('click', onSessionEnd);
@@ -659,6 +672,9 @@ function animate() {
     let isAnimating = true;
     let loadEventDispatched = false;
 
+    // Check if we're running in SRHydra runtime once VR mode becomes active
+    let srhydraDetected = false;
+
     // Listen for reset event to stop animation
     document.addEventListener('reset-viewer', () => {
         isAnimating = false;
@@ -741,6 +757,16 @@ function animate() {
             if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
                 // =============== VR MODE ===============
                 isVRActive = true;
+
+                // Only log this once when VR mode first becomes active
+                if (!srhydraDetected) {
+                    srhydraDetected = true;
+                    console.warn("VR mode active - using SRHydra parameters:",
+                        useDisplayCentric ? "display-centric" : "camera-centric",
+                        "convergence:", convergenceOffset,
+                        "perspective:", perspectiveFactor,
+                        "scale:", sceneScale);
+                }
 
                 // Create left/right planes if needed
                 if (!planeLeft || !planeRight) {

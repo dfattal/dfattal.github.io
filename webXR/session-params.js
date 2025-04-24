@@ -53,20 +53,32 @@ export class SRHydraSessionParams {
      * @returns {Object} The modified session init object
      */
     static applyToSessionInit(sessionInit, srhydraParams) {
-        // Create a field that exactly matches what the OpenXR runtime expects
-        sessionInit.srhydra = srhydraParams;     // Keep original approach
-
-        // Add a compatibility approach that Chrome/Meta browsers might recognize
-        if (!sessionInit.xrExtensions) {
-            sessionInit.xrExtensions = [];
+        // Method 1: Apply our parameters in multiple formats to increase chances of propagation
+        
+        // Original approach
+        sessionInit.srhydra = srhydraParams;
+        
+        // Method 2: Try a format with type field that might be passed through to OpenXR
+        sessionInit.srhydraSettings = {
+            type: 1000110000, // XR_TYPE_SRHYDRA_SESSION_SETTINGS_INFO
+            next: null,
+            projectionMode: srhydraParams.projectionMode,
+            convergenceOffset: srhydraParams.convergenceOffset || 0.5,
+            perspectiveFactor: srhydraParams.perspectiveFactor || 1.0,
+            sceneScale: srhydraParams.sceneScale || 1.0
+        };
+        
+        // Method 3: Try a format similar to other WebXR extensions
+        if (!sessionInit.optionalExtensions) {
+            sessionInit.optionalExtensions = [];
         }
-
-        // Add our extension information in a format browsers might recognize
-        sessionInit.xrExtensions.push({
+        
+        sessionInit.optionalExtensions.push({
             name: "XR_SRHYDRA_session_settings",
+            // Some browsers might support a structure like this
             parameters: srhydraParams
         });
-
+        
         console.log("Session init with SRHydra settings:", sessionInit);
         return sessionInit;
     }
@@ -90,7 +102,26 @@ export class SRHydraSessionParams {
     }
 
     /**
-     * Example usage with a WebXR session
+     * Creates an XrSessionInit object optimized for SRHydra compatibility
+     * @param {string} mode - XR session mode ('immersive-vr', etc.)
+     * @param {Object} options - Configuration including SRHydra settings
+     * @returns {Object} WebXR SessionInit object with SRHydra settings
+     */
+    static createSRHydraSessionInit(mode, options = {}) {
+        const { requiredFeatures = [], optionalFeatures = [], srhydra = {} } = options;
+        
+        // Start with standard WebXR session init
+        const sessionInit = {
+            requiredFeatures: [...requiredFeatures],
+            optionalFeatures: [...optionalFeatures]
+        };
+        
+        // Apply all our parameter formats
+        return this.applyToSessionInit(sessionInit, srhydra);
+    }
+
+    /**
+     * Request a WebXR session with SRHydra parameters
      * @param {string} mode - XR session mode ('immersive-vr', etc.)
      * @param {Object} config - Configuration including SRHydra settings
      * @returns {Promise<XRSession>} WebXR session with SRHydra parameters
@@ -98,16 +129,63 @@ export class SRHydraSessionParams {
     static async requestSession(mode = 'immersive-vr', config = {}) {
         const { requiredFeatures = [], optionalFeatures = [], srhydra = {} } = config;
 
-        const sessionInit = this.createSessionInit(
+        const sessionInit = this.createSRHydraSessionInit(mode, {
             requiredFeatures,
             optionalFeatures,
             srhydra
-        );
+        });
 
         if (!navigator.xr) {
             throw new Error('WebXR not supported in this browser');
         }
 
+        // Also try to set local storage as a fallback approach
+        try {
+            localStorage.setItem('srhydra_projection_mode', srhydra.projectionMode || '');
+            localStorage.setItem('srhydra_convergence_offset', srhydra.convergenceOffset?.toString() || '');
+            localStorage.setItem('srhydra_perspective_factor', srhydra.perspectiveFactor?.toString() || '');
+            localStorage.setItem('srhydra_scene_scale', srhydra.sceneScale?.toString() || '');
+            console.log("Stored SRHydra settings in localStorage as fallback");
+        } catch (e) {
+            console.warn("Could not store SRHydra settings in localStorage", e);
+        }
+
         return navigator.xr.requestSession(mode, sessionInit);
     }
-} 
+    
+    /**
+     * Utility function to detect if running in SRHydra
+     * @returns {Promise<boolean>} Promise resolving to true if running in SRHydra
+     */
+    static async isSRHydraRuntime() {
+        // This is a simple heuristic - could be improved with actual runtime detection
+        if (!navigator.xr) return false;
+        
+        try {
+            // Check if supported
+            const supported = await navigator.xr.isSessionSupported('immersive-vr');
+            if (!supported) return false;
+            
+            // More advanced detection could be added here
+            return true;
+        } catch (e) {
+            console.error("Error detecting XR runtime:", e);
+            return false;
+        }
+    }
+
+    /**
+     * Print SRHydra configuration to console
+     * @param {Object} config - SRHydra configuration
+     */
+    static logConfiguration(config) {
+        console.group("SRHydra Configuration");
+        console.log("Projection Mode:", config.projectionMode || "Default");
+        console.log("Convergence Offset:", config.convergenceOffset || "Default");
+        console.log("Perspective Factor:", config.perspectiveFactor || "Default");
+        console.log("Scene Scale:", config.sceneScale || "Default");
+        console.log("Parallax Strength:", config.parallaxStrength || "Default");
+        console.log("IPD Scale:", config.ipdScale || "Default");
+        console.groupEnd();
+    }
+}
