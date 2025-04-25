@@ -1,7 +1,6 @@
 // LifRender.js -- test renderer for LIF files in webXR
 import { LifLoader } from '../LIF/LifLoader.js';
 import { MN2MNRenderer, ST2MNRenderer } from '../VIZ/Renderers.js';
-import { SRHydraSessionParams } from './session-params.js';
 
 // Get the full URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -229,31 +228,9 @@ async function init() {
     // Set up WebXR with SRHydra parameters
     renderer.xr.enabled = true;
 
-    // Configure the SRHydra session parameters
-    const srhydraConfig = {
-        projectionMode: useDisplayCentric ? 'display-centric' : 'camera-centric',
-        convergenceOffset: convergenceOffset,
-        perspectiveFactor: perspectiveFactor,
-        sceneScale: sceneScale
-    };
-
-    // Log the configuration for debugging
-    console.warn("SRHydra configuration:", srhydraConfig);
-
-    // Save to localStorage as a fallback approach
-    try {
-        localStorage.setItem('SRHYDRA_PROJECTION_MODE', srhydraConfig.projectionMode);
-        localStorage.setItem('SRHYDRA_CONVERGENCE_OFFSET', srhydraConfig.convergenceOffset.toString());
-        localStorage.setItem('SRHYDRA_PERSPECTIVE_FACTOR', srhydraConfig.perspectiveFactor.toString());
-        localStorage.setItem('SRHYDRA_SCENE_SCALE', srhydraConfig.sceneScale.toString());
-    } catch (e) {
-        console.warn("Could not store settings in localStorage:", e);
-    }
-
     // Create VR button with SRHydra parameters
-    const vrButton = createVRButton(renderer, srhydraConfig);
+    const vrButton = createVRButton(renderer);
     document.body.appendChild(vrButton);
-
     // Override background to semi-transparent black
     vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
 
@@ -323,7 +300,7 @@ async function init() {
 }
 
 // Create a custom VR button that uses SRHydra parameters
-function createVRButton(renderer, srhydraConfig) {
+function createVRButton(renderer) {
     const button = document.createElement('button');
     button.style.display = 'none';
 
@@ -341,14 +318,10 @@ function createVRButton(renderer, srhydraConfig) {
         function onSessionStart() {
             button.removeEventListener('click', onSessionStart);
 
-            // Log the exact configuration being sent
-            console.warn("Requesting XR session with SRHydra parameters:", srhydraConfig);
-
             // Use the updated session params module
-            SRHydraSessionParams.requestSession('immersive-vr', {
+            navigator.xr.requestSession('immersive-vr', {
                 requiredFeatures: ['local-floor'],
                 optionalFeatures: ['hand-tracking'],
-                srhydra: srhydraConfig
             })
                 .then(session => {
                     currentSession = session;
@@ -672,9 +645,6 @@ function animate() {
     let isAnimating = true;
     let loadEventDispatched = false;
 
-    // Check if we're running in SRHydra runtime once VR mode becomes active
-    let srhydraDetected = false;
-
     // Listen for reset event to stop animation
     document.addEventListener('reset-viewer', () => {
         isAnimating = false;
@@ -757,16 +727,6 @@ function animate() {
             if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
                 // =============== VR MODE ===============
                 isVRActive = true;
-
-                // Only log this once when VR mode first becomes active
-                if (!srhydraDetected) {
-                    srhydraDetected = true;
-                    console.warn("VR mode active - using SRHydra parameters:",
-                        useDisplayCentric ? "display-centric" : "camera-centric",
-                        "convergence:", convergenceOffset,
-                        "perspective:", perspectiveFactor,
-                        "scale:", sceneScale);
-                }
 
                 // Create left/right planes if needed
                 if (!planeLeft || !planeRight) {
@@ -869,8 +829,8 @@ function animate() {
                 rL.renderCam.pos.x = localLeftCamPos.x / IPD;
                 rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
                 rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
-                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd );
-                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd );
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd * is3D, 0);
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
@@ -878,8 +838,8 @@ function animate() {
                 rR.renderCam.pos.x = localRightCamPos.x / IPD;
                 rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
                 rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
-                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd );
-                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd );
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd * is3D, 0);
                 rR.drawScene(uTime % glowPulsePeriod);
                 texR.needsUpdate = true;
