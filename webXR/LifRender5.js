@@ -7,15 +7,6 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
-// Default to display-centric mode unless explicitly set to false
-const useDisplayCentric = urlParams.get('displayCentric') !== 'false';
-
-// SRHydra parameters from URL or default values
-const convergenceOffset = parseFloat(urlParams.get('convergenceOffset')) || 1.0;
-const perspectiveFactor = parseFloat(urlParams.get('perspectiveFactor')) || 1.0;
-const sceneScale = parseFloat(urlParams.get('sceneScale')) || 1.0;
-const parallaxStrength = parseFloat(urlParams.get('parallaxStrength')) || 1.0;
-const ipdScale = parseFloat(urlParams.get('ipdScale')) || 1.0;
 
 let views = null;
 let stereo_render_data = null;
@@ -239,8 +230,6 @@ async function init() {
         isVRActive = true;
         canvas.style.display = 'none'; // Hide non-VR canvas when in VR
         setupVRControllers();
-        console.log('XR session started with mode:',
-            useDisplayCentric ? 'display-centric' : 'camera-centric');
     });
 
     renderer.xr.addEventListener('sessionend', () => {
@@ -301,7 +290,7 @@ async function init() {
 
 // Create a custom VR button that uses SRHydra parameters
 function createVRButton(renderer) {
-    const button = document.createElement('button');
+    let button = document.createElement('button');
     button.style.display = 'none';
 
     function showEnterVR() {
@@ -564,8 +553,8 @@ function locateConvergencePlane(leftCam, rightCam) {
         console.warn("RENDERING for VR");
         is3D = 0;
         // Fallback to symmetric calculation
-        const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft) / 2;
-        const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown) / 2;
+        const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
+        const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
         const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
         // Remove roll from quaternion by extracting yaw and pitch only
@@ -831,7 +820,7 @@ function animate() {
                 rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
                 rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd);
                 rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd * is3D, 0);
+                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd * is3D, 0) / (2 - is3D);
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
 
@@ -840,7 +829,7 @@ function animate() {
                 rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
                 rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd);
                 rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd * is3D, 0);
+                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd * is3D, 0) / (2 - is3D);
                 rR.drawScene(uTime % glowPulsePeriod);
                 texR.needsUpdate = true;
 
