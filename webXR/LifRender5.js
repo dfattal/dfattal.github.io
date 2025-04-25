@@ -38,6 +38,7 @@ let mouseX = 0, mouseY = 0;
 let windowHalfX, windowHalfY;
 let isVRActive = false;
 let is3D = 1;
+let focus = 0.01
 
 let startTime;
 
@@ -553,9 +554,11 @@ function locateConvergencePlane(leftCam, rightCam) {
         console.warn("RENDERING for VR");
         is3D = 0;
         // Fallback to symmetric calculation
-        const width = DISTANCE * Math.abs(leftFov.tanRight - leftFov.tanLeft);
-        const height = DISTANCE * Math.abs(leftFov.tanUp - leftFov.tanDown);
-        const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
+        const d = views[0].focal_px/views[0].width_px*.063/views[0].inv_z_map.min/focus; // focus 0.01
+        console.log(views[0]);
+        const width = d / views[0].focal_px * views[0].width_px;
+        const height = d / views[0].focal_px * views[0].height_px;
+        const pos = new THREE.Vector3(0, 0, -d).applyQuaternion(leftQuat).add(centerCam);
 
         // Remove roll from quaternion by extracting yaw and pitch only
         const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
