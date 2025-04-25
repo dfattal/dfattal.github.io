@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>SRHydra Example | sceneScale=1.5;show3D=true;enableParallax=true;parallaxStrength=0.8</title>
+    <title>SRHydra WebXR Parameter Example</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <style>
@@ -78,6 +78,13 @@
             border-left: 4px solid #ffc107;
             margin: 15px 0;
         }
+
+        .warning {
+            background-color: #f8d7da;
+            padding: 10px;
+            border-left: 4px solid #dc3545;
+            margin: 15px 0;
+        }
     </style>
 </head>
 
@@ -87,14 +94,19 @@
 
         <div class="note">
             <strong>Note:</strong> This example demonstrates how to pass parameters to the SRHydra OpenXR runtime
-            via the document title. Parameters in the title are used to configure the runtime session.
+            via URL parameters. Parameters in the URL are used to configure the runtime session.
+        </div>
+
+        <div class="warning">
+            <strong>Important Update:</strong> SRHydra now uses URL parameters instead of document titles for WebXR
+            applications. The runtime will look for the <code>xrparams</code> parameter in your URL.
         </div>
 
         <h2>How It Works</h2>
-        <p>Parameters are encoded in the document title with the following format:</p>
-        <pre><code>Your App Name | param1=value1;param2=value2;param3=value3</code></pre>
+        <p>Parameters are encoded in the URL with the following format:</p>
+        <pre><code>https://your-webxr-app.com/?xrparams=param1=value1;param2=value2;param3=value3</code></pre>
 
-        <p>The current parameters in the page title are:</p>
+        <p>The current parameters in the URL are:</p>
         <pre id="current-params"></pre>
 
         <h2>Try Different Parameters</h2>
@@ -131,7 +143,7 @@
                 <option value="1">Display Centric (1)</option>
             </select>
 
-            <button id="update-params">Update Parameters</button>
+            <button id="update-params">Update Parameters & Reload</button>
         </div>
 
         <h2>Available Parameters</h2>
@@ -155,11 +167,37 @@
     </div>
 
     <script>
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            var results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
         // Update the current parameters display
         function updateCurrentParamsDisplay() {
-            const title = document.title;
-            const paramsPart = title.split('|')[1]?.trim() || "No parameters set";
-            document.getElementById('current-params').textContent = paramsPart;
+            const xrparams = getUrlParameter('xrparams');
+            if (xrparams) {
+                document.getElementById('current-params').textContent = xrparams;
+
+                // Parse URL parameters and update form
+                const paramPairs = xrparams.split(';');
+                paramPairs.forEach(pair => {
+                    const [key, value] = pair.split('=');
+                    const element = document.getElementById(key);
+                    if (element) {
+                        if (element.type === 'range') {
+                            element.value = value;
+                            document.getElementById(key + 'Value').textContent = value;
+                        } else if (element.tagName === 'SELECT') {
+                            element.value = value;
+                        }
+                    }
+                });
+            } else {
+                document.getElementById('current-params').textContent = "No parameters set in URL";
+            }
         }
 
         // Initialize the page
@@ -176,8 +214,6 @@
 
         // Update parameters button
         document.getElementById('update-params').addEventListener('click', function () {
-            const appName = "SRHydra Example";
-
             // Collect all parameter values
             const sceneScale = document.getElementById('sceneScale').value;
             const show3D = document.getElementById('show3D').value;
@@ -189,13 +225,12 @@
             // Build parameters string
             const params = `sceneScale=${sceneScale};show3D=${show3D};enableParallax=${enableParallax};parallaxStrength=${parallaxStrength};controlMethod=${controlMethod};projectionMethod=${projectionMethod}`;
 
-            // Update document title
-            document.title = `${appName} | ${params}`;
+            // Construct the new URL with parameters
+            const url = new URL(window.location);
+            url.searchParams.set('xrparams', params);
 
-            // Update the display
-            updateCurrentParamsDisplay();
-
-            alert("Parameters updated! Refresh the page or enter VR to apply them.");
+            // Reload the page with the new URL
+            window.location.href = url.toString();
         });
 
         // WebXR support

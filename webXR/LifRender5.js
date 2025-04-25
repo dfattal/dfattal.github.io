@@ -38,7 +38,8 @@ let mouseX = 0, mouseY = 0;
 let windowHalfX, windowHalfY;
 let isVRActive = false;
 let is3D = 1;
-let focus = 0.01
+let focus = 0.01;
+let viewportScale = 1.2;
 
 let startTime;
 
@@ -433,9 +434,9 @@ function locateConvergencePlane(leftCam, rightCam) {
     const leftFov = computeFovTanAngles(leftCam);
     const rightFov = computeFovTanAngles(rightCam);
 
-    console.log("FOV angles:",
-        "leftFov:", leftFov,
-        "rightFov:", rightFov);
+    // console.log("FOV angles:",
+    //     "leftFov:", leftFov,
+    //     "rightFov:", rightFov);
 
     // Check if FOVs are equal and symmetric
     const isSymmetric = Math.abs(leftFov.tanUp) === Math.abs(leftFov.tanDown) &&
@@ -481,10 +482,11 @@ function locateConvergencePlane(leftCam, rightCam) {
     if (Math.abs(denomX) < 0.0001 || isMirror) {
         console.warn("RENDERING for VR");
         is3D = 0;
+        console.log("viewportScale:", viewportScale);
         // Fallback to symmetric calculation
         DISTANCE = .063 / views[0].inv_z_map.min / focus; // focus 0.01
-        const width = 1.2*DISTANCE / views[0].focal_px * views[0].width_px;
-        const height = 1.2*DISTANCE / views[0].focal_px * views[0].height_px;
+        const width = viewportScale * DISTANCE / views[0].focal_px * views[0].width_px;
+        const height = viewportScale * DISTANCE / views[0].focal_px * views[0].height_px;
         // console.log("distance:", d, "width:", width, "height:", height);
         // const pos = new THREE.Vector3(0, 0, -d).applyQuaternion(leftQuat).add(centerCam);
         // const width = DISTANCE*Math.abs(leftFov.tanRight - leftFov.tanLeft);
@@ -661,9 +663,9 @@ function animate() {
                             const leftCam = xrCam.cameras[0];
                             const rightCam = xrCam.cameras[1];
 
-                            console.log("Trying to initialize convergence plane with:",
-                                "leftCam exists:", !!leftCam,
-                                "rightCam exists:", !!rightCam);
+                            // console.log("Trying to initialize convergence plane with:",
+                            //     "leftCam exists:", !!leftCam,
+                            //     "rightCam exists:", !!rightCam);
 
                             if (leftCam && rightCam && leftCam.projectionMatrix && rightCam.projectionMatrix) {
                                 convergencePlane = locateConvergencePlane(leftCam, rightCam);
@@ -708,12 +710,21 @@ function animate() {
 
                 // Set canvas dimensions once when XR cameras are available
                 if (!xrCanvasInitialized) {
-                    const pixScale = 1.2;
-                    rL.gl.canvas.width = views[0].width_px * pixScale;
-                    rL.gl.canvas.height = views[0].height_px * pixScale;
-                    rR.gl.canvas.width = views[0].width_px * pixScale;
-                    rR.gl.canvas.height = views[0].height_px * pixScale;
-
+                    if (is3D > 0.5) { // 3D display
+                        rL.gl.canvas.width = leftCam.viewport.width;
+                        rL.gl.canvas.height = leftCam.viewport.height;
+                        rR.gl.canvas.width = rightCam.viewport.width;
+                        rR.gl.canvas.height = rightCam.viewport.height;
+                        viewportScale = 1;
+                    } else { // VR
+                        rL.gl.canvas.width = views[0].width_px * viewportScale;
+                        rL.gl.canvas.height = views[0].height_px * viewportScale;
+                        rR.gl.canvas.width = views[0].width_px * viewportScale;
+                        rR.gl.canvas.height = views[0].height_px * viewportScale;
+                        rL.invd = focus * views[0].inv_z_map.min;
+                        rR.invd = focus * views[0].inv_z_map.min;
+                    }
+                    console.log("xrCanvasInitialized, width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height);
                     xrCanvasInitialized = true;
 
                     // Each eye sees only its plane
@@ -746,25 +757,23 @@ function animate() {
                     IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
                     console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                     console.log("convergencePlane position:", convergencePlane.position);
-                    console.log("C1:", convergencePlane.position.x, convergencePlane.position.y, convergencePlane.position.z + rL.views[0].f * rL.viewportScale() / leftCam.viewport.width * convergencePlane.width);
                 }
-
                 // Render the scene using local coordinates
                 rL.renderCam.pos.x = localLeftCamPos.x / IPD;
                 rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
                 rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
-                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd * is3D, 0) / (1.2 - .2*is3D);
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0) / viewportScale;
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
 
                 rR.renderCam.pos.x = localRightCamPos.x / IPD;
                 rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
                 rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
-                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd * is3D, 0) / (1.2 - .2*is3D);
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0) / viewportScale;
                 rR.drawScene(uTime % glowPulsePeriod);
                 texR.needsUpdate = true;
 
