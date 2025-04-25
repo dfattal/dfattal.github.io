@@ -42,7 +42,7 @@ let focus = 0.01
 
 let startTime;
 
-const DISTANCE = 100;       // how far from each eye to place the main SBS planes in VR
+let DISTANCE = 100;       // how far from each eye to place the main SBS planes in VR
 const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 
 // Temp re-usable vectors/quats
@@ -217,11 +217,11 @@ async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // Set up WebXR with SRHydra parameters
+    // Enable WebXR
     renderer.xr.enabled = true;
 
-    // Create VR button with SRHydra parameters
-    const vrButton = createVRButton(renderer);
+    // Create standard VR button
+    const vrButton = VRButton.createButton(renderer);
     document.body.appendChild(vrButton);
     // Override background to semi-transparent black
     vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
@@ -289,78 +289,6 @@ async function init() {
     window.addEventListener('resize', onWindowResize);
 }
 
-// Create a custom VR button that uses SRHydra parameters
-function createVRButton(renderer) {
-    let button = document.createElement('button');
-    button.style.display = 'none';
-
-    function showEnterVR() {
-        let currentSession = null;
-
-        async function onSessionEnded() {
-            currentSession.removeEventListener('end', onSessionEnded);
-            currentSession = null;
-            button.textContent = 'ENTER VR';
-            button.removeEventListener('click', onSessionEnd);
-            button.addEventListener('click', onSessionStart);
-        }
-
-        function onSessionStart() {
-            button.removeEventListener('click', onSessionStart);
-
-            // Use the updated session params module
-            navigator.xr.requestSession('immersive-vr', {
-                requiredFeatures: ['local-floor'],
-                optionalFeatures: ['hand-tracking'],
-            })
-                .then(session => {
-                    currentSession = session;
-                    console.log("WebXR Session created successfully!");
-                    renderer.xr.setSession(session);
-                    button.textContent = 'EXIT VR';
-                    button.addEventListener('click', onSessionEnd);
-                    currentSession.addEventListener('end', onSessionEnded);
-                })
-                .catch(error => {
-                    console.error('Error starting XR session:', error);
-                    button.addEventListener('click', onSessionStart);
-                });
-        }
-
-        function onSessionEnd() {
-            if (currentSession) {
-                currentSession.end();
-            }
-        }
-
-        button.style.display = '';
-        button.style.cursor = 'pointer';
-        button.style.padding = '10px';
-        button.style.position = 'absolute';
-        button.style.bottom = '20px';
-        button.style.right = '20px';
-        button.style.border = 'none';
-        button.style.borderRadius = '5px';
-        button.style.background = 'rgba(0, 0, 0, 0.5)';
-        button.style.color = 'white';
-        button.style.font = 'bold 16px sans-serif';
-        button.textContent = 'ENTER VR';
-        button.addEventListener('click', onSessionStart);
-
-        return button;
-    }
-
-    if (navigator.xr) {
-        navigator.xr.isSessionSupported('immersive-vr')
-            .then(supported => {
-                if (supported) {
-                    button = showEnterVR();
-                }
-            });
-    }
-
-    return button;
-}
 
 // Create and set up VR controllers
 function setupVRControllers() {
@@ -554,11 +482,14 @@ function locateConvergencePlane(leftCam, rightCam) {
         console.warn("RENDERING for VR");
         is3D = 0;
         // Fallback to symmetric calculation
-        const d = views[0].focal_px/views[0].width_px*.063/views[0].inv_z_map.min/focus; // focus 0.01
-        console.log(views[0]);
-        const width = d / views[0].focal_px * views[0].width_px;
-        const height = d / views[0].focal_px * views[0].height_px;
-        const pos = new THREE.Vector3(0, 0, -d).applyQuaternion(leftQuat).add(centerCam);
+        DISTANCE = .063 / views[0].inv_z_map.min / focus; // focus 0.01
+        const width = 2*DISTANCE / views[0].focal_px * views[0].width_px;
+        const height = 4*DISTANCE / views[0].focal_px * views[0].height_px;
+        // console.log("distance:", d, "width:", width, "height:", height);
+        // const pos = new THREE.Vector3(0, 0, -d).applyQuaternion(leftQuat).add(centerCam);
+        // const width = DISTANCE*Math.abs(leftFov.tanRight - leftFov.tanLeft);
+        // const height = DISTANCE*Math.abs(leftFov.tanUp - leftFov.tanDown);
+        const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
 
         // Remove roll from quaternion by extracting yaw and pitch only
         const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
