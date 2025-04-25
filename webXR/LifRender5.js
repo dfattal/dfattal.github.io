@@ -869,8 +869,8 @@ function animate() {
                 rL.renderCam.pos.x = localLeftCamPos.x / IPD;
                 rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
                 rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
-                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd * is3D);
-                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd * is3D);
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd );
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd * is3D / (1 - rL.renderCam.pos.z * rL.invd );
                 rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd * is3D, 0);
                 rL.drawScene(uTime % glowPulsePeriod);
                 texL.needsUpdate = true;
@@ -878,8 +878,8 @@ function animate() {
                 rR.renderCam.pos.x = localRightCamPos.x / IPD;
                 rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
                 rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
-                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd * is3D);
-                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd * is3D);
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd );
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd * is3D / (1 - rR.renderCam.pos.z * rR.invd );
                 rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd * is3D, 0);
                 rR.drawScene(uTime % glowPulsePeriod);
                 texR.needsUpdate = true;
