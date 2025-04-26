@@ -33,13 +33,22 @@
             line-height: 1.5;
         }
     </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+      }
+    }
+    </script>
 </head>
 
 <body>
     <div id="info">
         <h1>WebXR Projection Control</h1>
         <p>This example demonstrates how to control SRHydra's projection mode using WebXR's
-            <code>updateRenderState()</code> method.</p>
+            <code>updateRenderState()</code> method.
+        </p>
         <p>The projection mode is encoded in the decimal part of the <code>depthFar</code> parameter:</p>
         <ul>
             <li><strong>Camera Centric (XXX.0):</strong> Traditional projection from eye position</li>
@@ -47,7 +56,7 @@
         </ul>
     </div>
 
-    <script src="webxr_projection_control.js"></script>
+    <script type="module" src="webxr_projection_control.js"></script>
 </body>
 
 </html>
