@@ -7,7 +7,7 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 // The integer part (1000) is the actual far clipping plane in meters
 // The decimal part (0 or 0.1) encodes the projection mode
 const CAMERA_CENTRIC_MODE = 1500.0; // Integer value for camera-centric projection
-const DISPLAY_CENTRIC_MODE = 10001.1; // .1 decimal for display-centric projection
+const DISPLAY_CENTRIC_MODE = 1000.1; // .1 decimal for display-centric projection
 
 // Debug function to test how JavaScript and C++ handle float values
 function debugParseDepthFar(depthFar) {
@@ -94,6 +94,8 @@ async function initWebXR() {
 
         // Session reference
         let xrSession = null;
+        let xrGl = null;
+        let xrWebGLLayer = null;
 
         // Start XR session with camera-centric mode
         cameraCentricButton.addEventListener('click', async () => {
@@ -103,8 +105,8 @@ async function initWebXR() {
                     requiredFeatures: ['viewer']
                 });
 
-                // Initialize the session with camera-centric settings
-                await setupWebXRSession(xrSession, CAMERA_CENTRIC_MODE);
+                // Use pure WebXR setup instead of Three.js XR integration
+                await setupPureWebXRSession(xrSession, CAMERA_CENTRIC_MODE);
                 statusIndicator.textContent = 'Current: Camera Centric';
 
                 // When the session ends, clean up
@@ -126,8 +128,8 @@ async function initWebXR() {
                     requiredFeatures: ['viewer']
                 });
 
-                // Initialize the session with display-centric settings
-                await setupWebXRSession(xrSession, DISPLAY_CENTRIC_MODE);
+                // Use pure WebXR setup instead of Three.js XR integration
+                await setupPureWebXRSession(xrSession, DISPLAY_CENTRIC_MODE);
                 statusIndicator.textContent = 'Current: Display Centric';
 
                 // When the session ends, clean up
@@ -171,14 +173,14 @@ async function initWebXR() {
         // Set up the projection control buttons to change mode during VR
         toggleCameraCentricButton.addEventListener('click', () => {
             if (xrSession) {
-                setProjectionMode(xrSession, CAMERA_CENTRIC_MODE);
+                setRawProjectionMode(xrSession, xrGl, xrWebGLLayer, CAMERA_CENTRIC_MODE);
                 statusIndicator.textContent = 'Current: Camera Centric';
             }
         });
 
         toggleDisplayCentricButton.addEventListener('click', () => {
             if (xrSession) {
-                setProjectionMode(xrSession, DISPLAY_CENTRIC_MODE);
+                setRawProjectionMode(xrSession, xrGl, xrWebGLLayer, DISPLAY_CENTRIC_MODE);
                 statusIndicator.textContent = 'Current: Display Centric';
             }
         });
@@ -197,7 +199,7 @@ function initThreeJS() {
     scene.background = new THREE.Color(0x505050);
 
     // Create a camera
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 105.1);
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1200);
     camera.position.z = 3;
 
     // Create a WebGL renderer
@@ -240,36 +242,30 @@ function animateThreeJS() {
 }
 
 /**
- * Sets up the basic WebXR session
+ * Sets up a pure WebXR session without using Three.js XR integration
  */
-async function setupWebXRSession(session, initialProjectionMode) {
-    // Enable XR in our renderer
-    renderer.xr.enabled = true;
-    renderer.xr.setReferenceSpaceType('local');
-    renderer.xr.setSession(session);
-
-    // Test how JavaScript parses our depth values
-    debugParseDepthFar(CAMERA_CENTRIC_MODE);
-    debugParseDepthFar(DISPLAY_CENTRIC_MODE);
+async function setupPureWebXRSession(session, initialProjectionMode) {
+    // Debug our values
     debugParseDepthFar(initialProjectionMode);
 
-    // IMPORTANT: Set the render state directly with WebXR API
-    // Do this AFTER Three.js setup but BEFORE requesting reference space
-    console.log(`Setting initial projection mode: ${initialProjectionMode}`);
+    // Create WebGL context and configure
+    const gl = renderer.getContext();
 
-    // Use setTimeout to ensure our settings override Three.js defaults
-    setTimeout(() => {
-        console.log(`Applying depthFar=${initialProjectionMode} directly via WebXR API`);
+    // Create XRWebGLLayer directly
+    const xrGlLayer = new XRWebGLLayer(session, gl);
 
-        // Ensure the value is properly formatted with toString() to preserve the decimal precision
-        const preciseValue = initialProjectionMode;
-        console.log(`Precise value: ${preciseValue.toFixed(8)}`);
+    console.log(`Setting pure WebXR render state with depthFar = ${initialProjectionMode}`);
 
-        session.updateRenderState({
-            depthNear: 0.1,
-            depthFar: preciseValue
-        });
-    }, 100);
+    // Set the render state directly with WebXR API
+    session.updateRenderState({
+        baseLayer: xrGlLayer,
+        depthNear: 0.1,
+        depthFar: initialProjectionMode  // Use precise floating point value
+    });
+
+    // Store these for later use with mode switching
+    window.xrGl = gl;
+    window.xrWebGLLayer = xrGlLayer;
 
     // Position the cube in front of the user
     cube.position.set(0, 0, -2);
@@ -277,42 +273,16 @@ async function setupWebXRSession(session, initialProjectionMode) {
     // Create a reference space for rendering
     const referenceSpace = await session.requestReferenceSpace('local');
 
-    // Set up the XR render loop
-    session.requestAnimationFrame((time, frame) => renderFrameXR(session, frame, referenceSpace));
+    // Set up our own custom XR render loop instead of using Three.js's
+    session.requestAnimationFrame((time, frame) => renderCustomXRFrame(session, frame, referenceSpace, gl, xrGlLayer));
 }
 
 /**
- * Sets the projection mode by encoding it in the depthFar value
+ * Custom XR render loop that doesn't rely on Three.js XR integration
  */
-function setProjectionMode(session, projectionValue) {
-    if (!session) return;
-
-    console.log(`Setting projection mode with depthFar = ${projectionValue}`);
-
-    // Debug how JavaScript parses this value
-    debugParseDepthFar(projectionValue);
-
-    // Update render state with our encoded depthFar value
-    // Use direct WebXR API call to ensure it's not overridden
-    session.updateRenderState({
-        depthFar: projectionValue
-    });
-
-    // Add a second call with timeout to ensure it takes effect
-    setTimeout(() => {
-        session.updateRenderState({
-            depthFar: projectionValue
-        });
-        console.log(`Projection mode set again with depthFar = ${projectionValue}`);
-    }, 100);
-}
-
-/**
- * XR render loop
- */
-function renderFrameXR(session, frame, referenceSpace) {
+function renderCustomXRFrame(session, frame, referenceSpace, gl, glLayer) {
     // Continue the render loop
-    session.requestAnimationFrame((time, frame) => renderFrameXR(session, frame, referenceSpace));
+    session.requestAnimationFrame((time, frame) => renderCustomXRFrame(session, frame, referenceSpace, gl, glLayer));
 
     // Rotate cube
     cube.rotation.x += 0.01;
@@ -320,10 +290,36 @@ function renderFrameXR(session, frame, referenceSpace) {
 
     // Get the session's view
     const pose = frame.getViewerPose(referenceSpace);
-    if (pose) {
-        // Render the scene
-        renderer.render(scene, camera);
-    }
+    if (!pose) return;
+
+    // Begin rendering
+    const viewport = glLayer.getViewport(pose.views[0]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
+
+    // Render scene using Three.js
+    renderer.xr.enabled = false; // Disable Three.js XR rendering
+    renderer.setSize(viewport.width, viewport.height, false);
+    renderer.setViewport(0, 0, viewport.width, viewport.height);
+    renderer.render(scene, camera);
+}
+
+/**
+ * Sets the projection mode directly using WebXR API without Three.js interference
+ */
+function setRawProjectionMode(session, gl, glLayer, projectionValue) {
+    if (!session) return;
+
+    console.log(`Setting raw projection mode: ${projectionValue}`);
+    debugParseDepthFar(projectionValue);
+
+    // Force precise decimal value
+    const preciseValue = Number(projectionValue.toFixed(1));
+    console.log(`Precise value after formatting: ${preciseValue}`);
+
+    // Update the render state directly
+    session.updateRenderState({
+        depthFar: preciseValue
+    });
 }
 
 // Initialize when the document is loaded
