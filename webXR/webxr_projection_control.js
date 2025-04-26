@@ -6,8 +6,8 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 // Format: farClippingPlane.projectionMode
 // The integer part (1000) is the actual far clipping plane in meters
 // The decimal part (0 or 0.1) encodes the projection mode
-const CAMERA_CENTRIC_MODE = 1000.0; // Integer value for camera-centric projection
-const DISPLAY_CENTRIC_MODE = 1001.1; // .1 decimal for display-centric projection
+const CAMERA_CENTRIC_MODE = 1500.0; // Integer value for camera-centric projection
+const DISPLAY_CENTRIC_MODE = 10001.1; // .1 decimal for display-centric projection
 
 // Debug function to test how JavaScript and C++ handle float values
 function debugParseDepthFar(depthFar) {
@@ -197,7 +197,7 @@ function initThreeJS() {
     scene.background = new THREE.Color(0x505050);
 
     // Create a camera
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1005.1);
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 105.1);
     camera.position.z = 3;
 
     // Create a WebGL renderer
