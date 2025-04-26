@@ -234,7 +234,6 @@ async function setupWebXRSession(session, initialProjectionMode) {
 
     // Set the render state with a depthFar value that encodes our desired projection
     session.updateRenderState({
-        baseLayer: new XRWebGLLayer(session, renderer.context),
         depthNear: 0.1,
         depthFar: initialProjectionMode // Use the provided projection mode
     });
