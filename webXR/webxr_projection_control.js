@@ -33,62 +33,137 @@ async function initWebXR() {
             return;
         }
 
-        // Create a button to start the XR session
-        const enterButton = document.createElement('button');
-        enterButton.textContent = 'Enter VR';
-        enterButton.style.position = 'absolute';
-        enterButton.style.top = '20px';
-        enterButton.style.left = '20px';
-        enterButton.style.padding = '10px';
-        document.body.appendChild(enterButton);
+        // Create a container for VR buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.position = 'absolute';
+        buttonContainer.style.top = '20px';
+        buttonContainer.style.left = '20px';
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.flexDirection = 'column';
+        buttonContainer.style.gap = '10px';
+        document.body.appendChild(buttonContainer);
 
-        // Create buttons to change projection mode
+        // Create a button to start the XR session with camera-centric projection
         const cameraCentricButton = document.createElement('button');
-        cameraCentricButton.textContent = 'Camera Centric';
-        cameraCentricButton.style.position = 'absolute';
-        cameraCentricButton.style.top = '60px';
-        cameraCentricButton.style.left = '20px';
+        cameraCentricButton.textContent = 'Enter VR (Camera Centric)';
         cameraCentricButton.style.padding = '10px';
-        document.body.appendChild(cameraCentricButton);
+        cameraCentricButton.style.backgroundColor = '#4285F4';
+        cameraCentricButton.style.color = 'white';
+        cameraCentricButton.style.border = 'none';
+        cameraCentricButton.style.borderRadius = '4px';
+        cameraCentricButton.style.cursor = 'pointer';
+        buttonContainer.appendChild(cameraCentricButton);
 
+        // Create a button to start the XR session with display-centric projection
         const displayCentricButton = document.createElement('button');
-        displayCentricButton.textContent = 'Display Centric';
-        displayCentricButton.style.position = 'absolute';
-        displayCentricButton.style.top = '100px';
-        displayCentricButton.style.left = '20px';
+        displayCentricButton.textContent = 'Enter VR (Display Centric)';
         displayCentricButton.style.padding = '10px';
-        document.body.appendChild(displayCentricButton);
+        displayCentricButton.style.backgroundColor = '#34A853';
+        displayCentricButton.style.color = 'white';
+        displayCentricButton.style.border = 'none';
+        displayCentricButton.style.borderRadius = '4px';
+        displayCentricButton.style.cursor = 'pointer';
+        buttonContainer.appendChild(displayCentricButton);
+
+        // Create a status indicator showing current mode
+        const statusIndicator = document.createElement('div');
+        statusIndicator.style.marginTop = '10px';
+        statusIndicator.style.padding = '5px';
+        statusIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        statusIndicator.style.color = 'white';
+        statusIndicator.style.borderRadius = '4px';
+        statusIndicator.style.fontSize = '14px';
+        statusIndicator.textContent = 'Current: Not in VR';
+        buttonContainer.appendChild(statusIndicator);
 
         // Session reference
         let xrSession = null;
 
-        // Start XR session when the button is clicked
-        enterButton.addEventListener('click', async () => {
+        // Start XR session with camera-centric mode
+        cameraCentricButton.addEventListener('click', async () => {
             try {
                 // Request a session with viewer reference space
                 xrSession = await navigator.xr.requestSession('immersive-vr', {
                     requiredFeatures: ['viewer']
                 });
 
-                // Initialize the session with default settings
-                await setupWebXRSession(xrSession);
-
-                // Set up the projection control buttons
-                cameraCentricButton.addEventListener('click', () => {
-                    setProjectionMode(xrSession, CAMERA_CENTRIC_MODE);
-                });
-
-                displayCentricButton.addEventListener('click', () => {
-                    setProjectionMode(xrSession, DISPLAY_CENTRIC_MODE);
-                });
+                // Initialize the session with camera-centric settings
+                await setupWebXRSession(xrSession, CAMERA_CENTRIC_MODE);
+                statusIndicator.textContent = 'Current: Camera Centric';
 
                 // When the session ends, clean up
                 xrSession.addEventListener('end', () => {
                     xrSession = null;
+                    statusIndicator.textContent = 'Current: Not in VR';
                 });
 
             } catch (error) {
                 console.error("Error starting XR session:", error);
+            }
+        });
+
+        // Start XR session with display-centric mode
+        displayCentricButton.addEventListener('click', async () => {
+            try {
+                // Request a session with viewer reference space
+                xrSession = await navigator.xr.requestSession('immersive-vr', {
+                    requiredFeatures: ['viewer']
+                });
+
+                // Initialize the session with display-centric settings
+                await setupWebXRSession(xrSession, DISPLAY_CENTRIC_MODE);
+                statusIndicator.textContent = 'Current: Display Centric';
+
+                // When the session ends, clean up
+                xrSession.addEventListener('end', () => {
+                    xrSession = null;
+                    statusIndicator.textContent = 'Current: Not in VR';
+                });
+
+            } catch (error) {
+                console.error("Error starting XR session:", error);
+            }
+        });
+
+        // Create toggle buttons for changing mode during VR
+        const inVRContainer = document.createElement('div');
+        inVRContainer.style.position = 'absolute';
+        inVRContainer.style.bottom = '20px';
+        inVRContainer.style.left = '20px';
+        inVRContainer.style.display = 'flex';
+        inVRContainer.style.gap = '10px';
+        document.body.appendChild(inVRContainer);
+
+        const toggleCameraCentricButton = document.createElement('button');
+        toggleCameraCentricButton.textContent = 'Switch to Camera Centric';
+        toggleCameraCentricButton.style.padding = '8px';
+        toggleCameraCentricButton.style.backgroundColor = '#4285F4';
+        toggleCameraCentricButton.style.color = 'white';
+        toggleCameraCentricButton.style.border = 'none';
+        toggleCameraCentricButton.style.borderRadius = '4px';
+        inVRContainer.appendChild(toggleCameraCentricButton);
+
+        const toggleDisplayCentricButton = document.createElement('button');
+        toggleDisplayCentricButton.textContent = 'Switch to Display Centric';
+        toggleDisplayCentricButton.style.padding = '8px';
+        toggleDisplayCentricButton.style.backgroundColor = '#34A853';
+        toggleDisplayCentricButton.style.color = 'white';
+        toggleDisplayCentricButton.style.border = 'none';
+        toggleDisplayCentricButton.style.borderRadius = '4px';
+        inVRContainer.appendChild(toggleDisplayCentricButton);
+
+        // Set up the projection control buttons to change mode during VR
+        toggleCameraCentricButton.addEventListener('click', () => {
+            if (xrSession) {
+                setProjectionMode(xrSession, CAMERA_CENTRIC_MODE);
+                statusIndicator.textContent = 'Current: Camera Centric';
+            }
+        });
+
+        toggleDisplayCentricButton.addEventListener('click', () => {
+            if (xrSession) {
+                setProjectionMode(xrSession, DISPLAY_CENTRIC_MODE);
+                statusIndicator.textContent = 'Current: Display Centric';
             }
         });
 
@@ -151,7 +226,7 @@ function animateThreeJS() {
 /**
  * Sets up the basic WebXR session
  */
-async function setupWebXRSession(session) {
+async function setupWebXRSession(session, initialProjectionMode) {
     // Enable XR in our renderer
     renderer.xr.enabled = true;
     renderer.xr.setReferenceSpaceType('local');
@@ -161,7 +236,7 @@ async function setupWebXRSession(session) {
     session.updateRenderState({
         baseLayer: new XRWebGLLayer(session, renderer.context),
         depthNear: 0.1,
-        depthFar: CAMERA_CENTRIC_MODE // Default to camera-centric projection
+        depthFar: initialProjectionMode // Use the provided projection mode
     });
 
     // Position the cube in front of the user
@@ -208,10 +283,4 @@ function renderFrameXR(session, frame, referenceSpace) {
 }
 
 // Initialize when the document is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Add Three.js script
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js';
-    script.onload = initWebXR;
-    document.head.appendChild(script);
-}); 
+document.addEventListener('DOMContentLoaded', initWebXR); 
