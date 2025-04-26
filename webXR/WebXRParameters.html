@@ -2,271 +2,52 @@
 <html>
 
 <head>
-    <title>SRHydra WebXR Parameter Example</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR Projection Control Example for SRHydra</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             background-color: #f0f0f0;
         }
 
-        h1 {
-            color: #333;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
+        #info {
+            position: absolute;
+            top: 150px;
+            left: 20px;
+            width: 300px;
             padding: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
             border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
 
-        pre {
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 3px;
-            overflow-x: auto;
+        h1 {
+            font-size: 1.5em;
+            margin-top: 0;
         }
 
-        code {
-            font-family: monospace;
-        }
-
-        button {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 10px 0;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
-        .param-form {
-            margin-top: 20px;
-        }
-
-        .param-form label {
-            display: block;
-            margin-top: 10px;
-        }
-
-        .param-form input,
-        .param-form select {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            box-sizing: border-box;
-        }
-
-        .note {
-            background-color: #fff3cd;
-            padding: 10px;
-            border-left: 4px solid #ffc107;
-            margin: 15px 0;
-        }
-
-        .warning {
-            background-color: #f8d7da;
-            padding: 10px;
-            border-left: 4px solid #dc3545;
-            margin: 15px 0;
+        p {
+            line-height: 1.5;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>SRHydra WebXR Parameter Example</h1>
-
-        <div class="note">
-            <strong>Note:</strong> This example demonstrates how to pass parameters to the SRHydra OpenXR runtime
-            via URL parameters. Parameters in the URL are used to configure the runtime session.
-        </div>
-
-        <div class="warning">
-            <strong>Important Update:</strong> SRHydra now uses URL parameters instead of document titles for WebXR
-            applications. The runtime will look for the <code>xrparams</code> parameter in your URL.
-        </div>
-
-        <h2>How It Works</h2>
-        <p>Parameters are encoded in the URL with the following format:</p>
-        <pre><code>https://your-webxr-app.com/?xrparams=param1=value1;param2=value2;param3=value3</code></pre>
-
-        <p>The current parameters in the URL are:</p>
-        <pre id="current-params"></pre>
-
-        <h2>Try Different Parameters</h2>
-        <div class="param-form">
-            <label for="sceneScale">Scene Scale (0.1 - 5.0):</label>
-            <input type="range" id="sceneScale" min="0.1" max="5" step="0.1" value="1.5">
-            <span id="sceneScaleValue">1.5</span>
-
-            <label for="show3D">Enable 3D:</label>
-            <select id="show3D">
-                <option value="true" selected>true</option>
-                <option value="false">false</option>
-            </select>
-
-            <label for="enableParallax">Enable Parallax:</label>
-            <select id="enableParallax">
-                <option value="true" selected>true</option>
-                <option value="false">false</option>
-            </select>
-
-            <label for="parallaxStrength">Parallax Strength (0.0 - 1.0):</label>
-            <input type="range" id="parallaxStrength" min="0" max="1" step="0.1" value="0.8">
-            <span id="parallaxStrengthValue">0.8</span>
-
-            <label for="controlMethod">Control Method:</label>
-            <select id="controlMethod">
-                <option value="0">First Person (0)</option>
-                <option value="1" selected>Fly (1)</option>
-            </select>
-
-            <label for="projectionMethod">Projection Method:</label>
-            <select id="projectionMethod">
-                <option value="0" selected>Camera Centric (0)</option>
-                <option value="1">Display Centric (1)</option>
-            </select>
-
-            <button id="update-params">Update Parameters & Reload</button>
-        </div>
-
-        <h2>Available Parameters</h2>
+    <div id="info">
+        <h1>WebXR Projection Control</h1>
+        <p>This example demonstrates how to control SRHydra's projection mode using WebXR's
+            <code>updateRenderState()</code> method.</p>
+        <p>The projection mode is encoded in the decimal part of the <code>depthFar</code> parameter:</p>
         <ul>
-            <li><strong>sceneScale</strong> - Scale factor for the scene (float, default: 1.0)</li>
-            <li><strong>ipdScale</strong> - IPD scale factor (float, default: 1.0)</li>
-            <li><strong>show3D</strong> - Enable 3D rendering (boolean: true/false, default: true)</li>
-            <li><strong>enableParallax</strong> - Enable parallax effect (boolean: true/false, default: true)</li>
-            <li><strong>parallaxStrength</strong> - Strength of parallax effect (float: 0.0-1.0, default: 1.0)</li>
-            <li><strong>controlMethod</strong> - Control method (int: 0=FirstPerson, 1=Fly, default: 1)</li>
-            <li><strong>projectionMethod</strong> - Projection method (int: 0=CameraCentric, 1=DisplayCentric, default:
-                0)</li>
-            <li><strong>convergenceOffset</strong> - Convergence offset (float, default: 0.5)</li>
-            <li><strong>perspectiveFactor</strong> - Perspective factor (float, default: 1.0)</li>
-            <li><strong>inputProfile</strong> - Input profile name (string, default: "Default")</li>
+            <li><strong>Camera Centric (XXX.0):</strong> Traditional projection from eye position</li>
+            <li><strong>Display Centric (XXX.1):</strong> Projection from display center for better parallax</li>
         </ul>
-
-        <h2>WebXR Test</h2>
-        <button id="xr-button">Enter VR</button>
-        <div id="xr-info">WebXR not available</div>
     </div>
 
-    <script>
-        // Function to get URL parameters
-        function getUrlParameter(name) {
-            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-            var results = regex.exec(location.search);
-            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-        }
-
-        // Update the current parameters display
-        function updateCurrentParamsDisplay() {
-            const xrparams = getUrlParameter('xrparams');
-            if (xrparams) {
-                document.getElementById('current-params').textContent = xrparams;
-
-                // Parse URL parameters and update form
-                const paramPairs = xrparams.split(';');
-                paramPairs.forEach(pair => {
-                    const [key, value] = pair.split('=');
-                    const element = document.getElementById(key);
-                    if (element) {
-                        if (element.type === 'range') {
-                            element.value = value;
-                            document.getElementById(key + 'Value').textContent = value;
-                        } else if (element.tagName === 'SELECT') {
-                            element.value = value;
-                        }
-                    }
-                });
-            } else {
-                document.getElementById('current-params').textContent = "No parameters set in URL";
-            }
-        }
-
-        // Initialize the page
-        updateCurrentParamsDisplay();
-
-        // Add event listeners for sliders
-        document.getElementById('sceneScale').addEventListener('input', function (e) {
-            document.getElementById('sceneScaleValue').textContent = e.target.value;
-        });
-
-        document.getElementById('parallaxStrength').addEventListener('input', function (e) {
-            document.getElementById('parallaxStrengthValue').textContent = e.target.value;
-        });
-
-        // Update parameters button
-        document.getElementById('update-params').addEventListener('click', function () {
-            // Collect all parameter values
-            const sceneScale = document.getElementById('sceneScale').value;
-            const show3D = document.getElementById('show3D').value;
-            const enableParallax = document.getElementById('enableParallax').value;
-            const parallaxStrength = document.getElementById('parallaxStrength').value;
-            const controlMethod = document.getElementById('controlMethod').value;
-            const projectionMethod = document.getElementById('projectionMethod').value;
-
-            // Build parameters string
-            const params = `sceneScale=${sceneScale};show3D=${show3D};enableParallax=${enableParallax};parallaxStrength=${parallaxStrength};controlMethod=${controlMethod};projectionMethod=${projectionMethod}`;
-
-            // Construct the new URL with parameters
-            const url = new URL(window.location);
-            url.searchParams.set('xrparams', params);
-
-            // Reload the page with the new URL
-            window.location.href = url.toString();
-        });
-
-        // WebXR support
-        const xrButton = document.getElementById('xr-button');
-        const xrInfo = document.getElementById('xr-info');
-
-        // Check if WebXR is available
-        if ('xr' in navigator) {
-            navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-                if (supported) {
-                    xrInfo.textContent = "WebXR is supported! Click 'Enter VR' to test.";
-                    xrButton.disabled = false;
-
-                    // Set up WebXR session
-                    xrButton.addEventListener('click', () => {
-                        navigator.xr.requestSession('immersive-vr').then((session) => {
-                            // Handle the XR session (simplified for this example)
-                            xrInfo.textContent = "WebXR session started!";
-
-                            session.addEventListener('end', () => {
-                                xrInfo.textContent = "WebXR session ended.";
-                            });
-                        }).catch(err => {
-                            xrInfo.textContent = `Error starting WebXR session: ${err}`;
-                        });
-                    });
-                } else {
-                    xrInfo.textContent = "WebXR is supported, but immersive-vr is not available.";
-                    xrButton.disabled = true;
-                }
-            });
-        } else {
-            xrInfo.textContent = "WebXR is not supported in this browser.";
-            xrButton.disabled = true;
-        }
-    </script>
+    <script src="webxr_projection_control.js"></script>
 </body>
 
 </html>
