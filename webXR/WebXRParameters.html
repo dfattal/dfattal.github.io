@@ -17,7 +17,7 @@
             position: absolute;
             top: 150px;
             left: 20px;
-            width: 300px;
+            width: 350px;
             padding: 20px;
             background-color: rgba(255, 255, 255, 0.8);
             border-radius: 5px;
@@ -31,6 +31,20 @@
 
         p {
             line-height: 1.5;
+        }
+
+        code {
+            background-color: #e0e0e0;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .note {
+            background-color: #ffffbb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-size: 0.9em;
         }
     </style>
     <script type="importmap">
@@ -54,6 +68,14 @@
             <li><strong>Camera Centric (XXX.0):</strong> Traditional projection from eye position</li>
             <li><strong>Display Centric (XXX.1):</strong> Projection from display center for better parallax</li>
         </ul>
+        <div class="note">
+            <p><strong>Note:</strong> For reliable operation, this example:</p>
+            <ol>
+                <li>Uses a depth buffer (<code>depthFormat: 'depth-component'</code>)</li>
+                <li>Sets precise far values (10000.0 vs 1200.1)</li>
+                <li>Calls <code>updateRenderState()</code> at the right time</li>
+            </ol>
+        </div>
     </div>
 
     <script type="module" src="webxr_projection_control.js"></script>
