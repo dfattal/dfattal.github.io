@@ -27,6 +27,7 @@ function debugParseDepthFar(depthFar) {
 
 // Three.js globals
 let scene, camera, renderer, cube;
+let animationFrameId = null;
 
 /**
  * Initializes WebXR session and controls projection mode
@@ -100,6 +101,12 @@ async function initWebXR() {
         // Start XR session with camera-centric mode
         cameraCentricButton.addEventListener('click', async () => {
             try {
+                // If we already have a session, end it first
+                if (xrSession) {
+                    await xrSession.end();
+                    xrSession = null;
+                }
+
                 // Request a session with viewer reference space and depth-sensing
                 xrSession = await navigator.xr.requestSession('immersive-vr', {
                     requiredFeatures: ['viewer'],
@@ -118,16 +125,27 @@ async function initWebXR() {
                 xrSession.addEventListener('end', () => {
                     xrSession = null;
                     statusIndicator.textContent = 'Current: Not in VR';
+                    // Resume non-VR animation
+                    if (!animationFrameId) {
+                        animateThreeJS();
+                    }
                 });
 
             } catch (error) {
                 console.error("Error starting XR session:", error);
+                alert("Error starting VR: " + error.message);
             }
         });
 
         // Start XR session with display-centric mode
         displayCentricButton.addEventListener('click', async () => {
             try {
+                // If we already have a session, end it first
+                if (xrSession) {
+                    await xrSession.end();
+                    xrSession = null;
+                }
+
                 // Request a session with viewer reference space and depth-sensing
                 xrSession = await navigator.xr.requestSession('immersive-vr', {
                     requiredFeatures: ['viewer'],
@@ -146,10 +164,15 @@ async function initWebXR() {
                 xrSession.addEventListener('end', () => {
                     xrSession = null;
                     statusIndicator.textContent = 'Current: Not in VR';
+                    // Resume non-VR animation
+                    if (!animationFrameId) {
+                        animateThreeJS();
+                    }
                 });
 
             } catch (error) {
                 console.error("Error starting XR session:", error);
+                alert("Error starting VR: " + error.message);
             }
         });
 
@@ -197,6 +220,7 @@ async function initWebXR() {
 
     } catch (error) {
         console.error("Error initializing WebXR:", error);
+        alert("Error initializing WebXR: " + error.message);
     }
 }
 
@@ -222,6 +246,13 @@ function initThreeJS() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
     // Add a cube to the scene
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshNormalMaterial();
@@ -244,77 +275,96 @@ function initThreeJS() {
  * Animation loop for Three.js
  */
 function animateThreeJS() {
-    if (!renderer.xr.isPresenting) {
-        requestAnimationFrame(animateThreeJS);
-
-        // Rotate cube
-        cube.rotation.x += 0.01;
-        cube.rotation.y += 0.01;
-
-        // Render scene
-        renderer.render(scene, camera);
+    if (renderer.xr.isPresenting) {
+        // Don't run the non-VR animation loop if in VR
+        animationFrameId = null;
+        return;
     }
+
+    // Store animation frame ID so we can cancel it if needed
+    animationFrameId = requestAnimationFrame(animateThreeJS);
+
+    // Rotate cube
+    cube.rotation.x += 0.01;
+    cube.rotation.y += 0.01;
+
+    // Render scene
+    renderer.render(scene, camera);
 }
 
 /**
  * Sets up the basic WebXR session
  */
 async function setupWebXRSession(session, initialProjectionMode) {
-    // Enable XR in our renderer with depth buffer
-    renderer.xr.enabled = true;
+    try {
+        // Cancel any existing non-VR animation loop
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
 
-    // IMPORTANT: Set up proper depth buffer format for WebXR
-    // This will ensure the depthFar parameter is correctly passed
-    const gl = renderer.getContext();
+        // Enable XR in our renderer with depth buffer
+        renderer.xr.enabled = true;
 
-    // Configure renderer for WebXR with depth-buffer support
-    renderer.xr.setFoveation(0);
-    renderer.xr.setReferenceSpaceType('local');
+        // IMPORTANT: Set up proper depth buffer format for WebXR
+        // This will ensure the depthFar parameter is correctly passed
+        const gl = renderer.getContext();
 
-    // Set the session with depth buffer enabled
-    renderer.xr.setSession(session, {
-        depthFormat: gl.DEPTH_COMPONENT24,
-        antialias: true,
-        alpha: true,
-        multiview: false // Make sure our depth values are processed individually
-    });
+        // Configure renderer for WebXR with depth-buffer support
+        renderer.xr.setFoveation(0);
+        renderer.xr.setReferenceSpaceType('local');
 
-    // Debug how JavaScript parses our depth values
-    debugParseDepthFar(CAMERA_CENTRIC_MODE);
-    debugParseDepthFar(DISPLAY_CENTRIC_MODE);
-    debugParseDepthFar(initialProjectionMode);
-
-    // Log the projection mode we're setting
-    console.log(`Setting projection mode: ${initialProjectionMode === CAMERA_CENTRIC_MODE ? 'Camera Centric' : 'Display Centric'}`);
-    console.log(`depthFar value: ${initialProjectionMode.toFixed(8)}`);
-
-    // First set extreme camera far plane
-    camera.far = 10000;
-    camera.updateProjectionMatrix();
-
-    // IMPORTANT: Set the render state with explicit depthFar encoding
-    // First with exact string representation to preserve decimal point
-    session.updateRenderState({
-        depthNear: 0.1,
-        depthFar: Number(initialProjectionMode.toFixed(8)),
-        baseLayer: new XRWebGLLayer(session, gl, {
-            alpha: true,
+        // Set the session with depth buffer enabled
+        renderer.xr.setSession(session, {
+            depthFormat: gl.DEPTH_COMPONENT24,
             antialias: true,
-            depth: true,
-            stencil: false,
-            ignoreDepthValues: false, // Make sure depth values are processed
-            framebufferScaleFactor: 1.0
-        })
-    });
+            alpha: true,
+            multiview: false // Make sure our depth values are processed individually
+        });
 
-    // Position the cube in front of the user
-    cube.position.set(0, 0, -2);
+        // Debug how JavaScript parses our depth values
+        debugParseDepthFar(CAMERA_CENTRIC_MODE);
+        debugParseDepthFar(DISPLAY_CENTRIC_MODE);
+        debugParseDepthFar(initialProjectionMode);
 
-    // Create a reference space for rendering
-    const referenceSpace = await session.requestReferenceSpace('local');
+        // Log the projection mode we're setting
+        console.log(`Setting projection mode: ${initialProjectionMode === CAMERA_CENTRIC_MODE ? 'Camera Centric' : 'Display Centric'}`);
+        console.log(`depthFar value: ${initialProjectionMode.toFixed(8)}`);
 
-    // Set up the XR render loop
-    session.requestAnimationFrame((time, frame) => renderFrameXR(session, frame, referenceSpace));
+        // First set extreme camera far plane
+        camera.far = 10000;
+        camera.updateProjectionMatrix();
+
+        // IMPORTANT: Set the render state with explicit depthFar encoding
+        // First with exact string representation to preserve decimal point
+        session.updateRenderState({
+            depthNear: 0.1,
+            depthFar: Number(initialProjectionMode.toFixed(8)),
+            baseLayer: new XRWebGLLayer(session, gl, {
+                alpha: true,
+                antialias: true,
+                depth: true,
+                stencil: false,
+                ignoreDepthValues: false, // Make sure depth values are processed
+                framebufferScaleFactor: 1.0
+            })
+        });
+
+        // Position the cube in front of the user
+        cube.position.set(0, 0, -2);
+
+        // Create a reference space for rendering
+        const referenceSpace = await session.requestReferenceSpace('local');
+
+        // Set up the XR render loop
+        session.requestAnimationFrame((time, frame) => renderFrameXR(session, frame, referenceSpace));
+
+        return true;
+    } catch (error) {
+        console.error("Error setting up WebXR session:", error);
+        alert("Error setting up WebXR: " + error.message);
+        return false;
+    }
 }
 
 /**
@@ -323,42 +373,62 @@ async function setupWebXRSession(session, initialProjectionMode) {
 function setProjectionMode(session, projectionValue) {
     if (!session) return;
 
-    console.log(`Setting projection mode: ${projectionValue === CAMERA_CENTRIC_MODE ? 'Camera Centric' : 'Display Centric'}`);
-    console.log(`depthFar value: ${projectionValue.toFixed(8)}`);
+    try {
+        console.log(`Setting projection mode: ${projectionValue === CAMERA_CENTRIC_MODE ? 'Camera Centric' : 'Display Centric'}`);
+        console.log(`depthFar value: ${projectionValue.toFixed(8)}`);
 
-    // Debug how JavaScript parses this value
-    debugParseDepthFar(projectionValue);
+        // Debug how JavaScript parses this value
+        debugParseDepthFar(projectionValue);
 
-    // Use precise string conversion to preserve decimal point exactly
-    const preciseValue = Number(projectionValue.toFixed(8));
+        // Use precise string conversion to preserve decimal point exactly
+        const preciseValue = Number(projectionValue.toFixed(8));
 
-    // Call updateRenderState with our encoded depthFar value
-    session.updateRenderState({
-        depthNear: 0.1,
-        depthFar: preciseValue
-    });
+        // Call updateRenderState with our encoded depthFar value
+        session.updateRenderState({
+            depthNear: 0.1,
+            depthFar: preciseValue
+        });
 
-    console.log("Render state updated with projection mode");
+        console.log("Render state updated with projection mode");
+    } catch (error) {
+        console.error("Error setting projection mode:", error);
+    }
 }
 
 /**
  * XR render loop
  */
 function renderFrameXR(session, frame, referenceSpace) {
-    // Continue the render loop
-    session.requestAnimationFrame((time, frame) => renderFrameXR(session, frame, referenceSpace));
+    // Safety check - only continue if session is valid
+    if (!session || session.ended) {
+        console.log("Session ended, stopping XR rendering");
+        return;
+    }
 
-    // Rotate cube
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
+    try {
+        // Continue the render loop - wrapped in try/catch to prevent infinite loops on errors
+        session.requestAnimationFrame((time, frame) => renderFrameXR(session, frame, referenceSpace));
 
-    // Get the session's view
-    const pose = frame.getViewerPose(referenceSpace);
-    if (pose) {
-        // Render the scene
-        renderer.render(scene, camera);
+        // Rotate cube
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+
+        // Get the session's view
+        const pose = frame.getViewerPose(referenceSpace);
+        if (pose) {
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+    } catch (error) {
+        console.error("Error in XR render loop:", error);
+        // Try to end the session gracefully rather than freeze
+        try {
+            session.end().catch(e => console.error("Error ending session:", e));
+        } catch (endError) {
+            console.error("Could not end session:", endError);
+        }
     }
 }
 
 // Initialize when the document is loaded
-document.addEventListener('DOMContentLoaded', initWebXR); 
+window.addEventListener('DOMContentLoaded', initWebXR); 
