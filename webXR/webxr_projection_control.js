@@ -9,6 +9,22 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 const CAMERA_CENTRIC_MODE = 1000.0; // Integer value for camera-centric projection
 const DISPLAY_CENTRIC_MODE = 1000.1; // .1 decimal for display-centric projection
 
+// Debug function to test how JavaScript and C++ handle float values
+function debugParseDepthFar(depthFar) {
+    const integerPart = Math.floor(depthFar);
+    const decimalPart = depthFar - integerPart;
+
+    console.log(`JS parsing of depthFar=${depthFar}:`);
+    console.log(`  - Integer part: ${integerPart}`);
+    console.log(`  - Decimal part: ${decimalPart}`);
+    console.log(`  - Is display-centric? ${Math.abs(decimalPart - 0.1) < 0.01}`);
+    console.log(`  - Is camera-centric? ${decimalPart < 0.01}`);
+
+    // Verify precision using toFixed()
+    console.log(`  - Raw value in 8 decimals: ${depthFar.toFixed(8)}`);
+    return depthFar;
+}
+
 // Three.js globals
 let scene, camera, renderer, cube;
 
@@ -232,11 +248,28 @@ async function setupWebXRSession(session, initialProjectionMode) {
     renderer.xr.setReferenceSpaceType('local');
     renderer.xr.setSession(session);
 
-    // Set the render state with a depthFar value that encodes our desired projection
-    session.updateRenderState({
-        depthNear: 0.1,
-        depthFar: initialProjectionMode // Use the provided projection mode
-    });
+    // Test how JavaScript parses our depth values
+    debugParseDepthFar(CAMERA_CENTRIC_MODE);
+    debugParseDepthFar(DISPLAY_CENTRIC_MODE);
+    debugParseDepthFar(initialProjectionMode);
+
+    // IMPORTANT: Set the render state directly with WebXR API
+    // Do this AFTER Three.js setup but BEFORE requesting reference space
+    console.log(`Setting initial projection mode: ${initialProjectionMode}`);
+
+    // Use setTimeout to ensure our settings override Three.js defaults
+    setTimeout(() => {
+        console.log(`Applying depthFar=${initialProjectionMode} directly via WebXR API`);
+
+        // Ensure the value is properly formatted with toString() to preserve the decimal precision
+        const preciseValue = initialProjectionMode;
+        console.log(`Precise value: ${preciseValue.toFixed(8)}`);
+
+        session.updateRenderState({
+            depthNear: 0.1,
+            depthFar: preciseValue
+        });
+    }, 100);
 
     // Position the cube in front of the user
     cube.position.set(0, 0, -2);
@@ -256,10 +289,22 @@ function setProjectionMode(session, projectionValue) {
 
     console.log(`Setting projection mode with depthFar = ${projectionValue}`);
 
+    // Debug how JavaScript parses this value
+    debugParseDepthFar(projectionValue);
+
     // Update render state with our encoded depthFar value
+    // Use direct WebXR API call to ensure it's not overridden
     session.updateRenderState({
         depthFar: projectionValue
     });
+
+    // Add a second call with timeout to ensure it takes effect
+    setTimeout(() => {
+        session.updateRenderState({
+            depthFar: projectionValue
+        });
+        console.log(`Projection mode set again with depthFar = ${projectionValue}`);
+    }, 100);
 }
 
 /**
