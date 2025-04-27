@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Projection Control Example for SRHydra</title>
+    <title>Simple WebXR Cube</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -15,36 +15,12 @@
 
         #info {
             position: absolute;
-            top: 150px;
+            top: 20px;
             left: 20px;
-            width: 350px;
-            padding: 20px;
+            padding: 15px;
             background-color: rgba(255, 255, 255, 0.8);
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            font-size: 1.5em;
-            margin-top: 0;
-        }
-
-        p {
-            line-height: 1.5;
-        }
-
-        code {
-            background-color: #e0e0e0;
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
-
-        .note {
-            background-color: #ffffbb;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 15px;
-            font-size: 0.9em;
         }
     </style>
     <script type="importmap">
@@ -59,23 +35,9 @@
 
 <body>
     <div id="info">
-        <h1>WebXR Projection Control</h1>
-        <p>This example demonstrates how to control SRHydra's projection mode using WebXR's
-            <code>updateRenderState()</code> method.
-        </p>
-        <p>The projection mode is encoded in the decimal part of the <code>depthFar</code> parameter:</p>
-        <ul>
-            <li><strong>Camera Centric (XXX.0):</strong> Traditional projection from eye position</li>
-            <li><strong>Display Centric (XXX.1):</strong> Projection from display center for better parallax</li>
-        </ul>
-        <div class="note">
-            <p><strong>Note:</strong> For reliable operation, this example:</p>
-            <ol>
-                <li>Uses a depth buffer (<code>depthFormat: 'depth-component'</code>)</li>
-                <li>Sets precise far values (10000.0 vs 1200.1)</li>
-                <li>Calls <code>updateRenderState()</code> at the right time</li>
-            </ol>
-        </div>
+        <h2>Simple WebXR Cube</h2>
+        <p>Near plane: 0.1234</p>
+        <p>Far plane: 1234</p>
     </div>
 
     <script type="module" src="webxr_projection_control.js"></script>
