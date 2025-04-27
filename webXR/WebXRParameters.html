@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple WebXR Cube</title>
+    <title>WebXR Texture Message Example</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,6 +21,36 @@
             background-color: rgba(255, 255, 255, 0.8);
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        #messageButton {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        #messageButton:hover {
+            background-color: #45a049;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        #details {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
         }
     </style>
     <script type="importmap">
@@ -35,12 +65,17 @@
 
 <body>
     <div id="info">
-        <h2>Simple WebXR Cube</h2>
-        <p>Near plane: 0.1234</p>
-        <p>Far plane: 1234</p>
+        <h2>WebXR Texture Message</h2>
+        <p>This example demonstrates encoded messages in WebXR textures</p>
+        <button id="messageButton">Send Texture Message</button>
+        <div id="status">Status: No message sent</div>
+        <div id="details">
+            This demo uses WebXR post-processing to add a hidden pattern to the
+            final rendered frames right before they're sent to OpenXR.
+        </div>
     </div>
 
-    <script type="module" src="webxr_projection_control.js"></script>
+    <script type="module" src="webxr_texture_message.js"></script>
 </body>
 
 </html>
