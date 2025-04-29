@@ -221,6 +221,9 @@ async function init() {
     // Enable WebXR
     renderer.xr.enabled = true;
 
+    // Prevent XR framebuffer rendering outside of XR session
+    renderer.autoClear = false;  // Let animation loop handle clearing
+
     // Create standard VR button
     const vrButton = VRButton.createButton(renderer);
     document.body.appendChild(vrButton);
@@ -608,222 +611,226 @@ function animate() {
         // Check if renderer still exists
         if (!renderer) return;
 
-        renderer.setAnimationLoop(() => {
-            // Additional check inside loop
-            if (!renderer || !isAnimating) {
-                renderer?.setAnimationLoop(null);
-                return;
+        // Only use setAnimationLoop for WebXR mode
+        if (renderer.xr.isPresenting) {
+            renderer.setAnimationLoop(renderFrame);
+        } else {
+            renderer.setAnimationLoop(null); // Disable XR loop when not in XR
+            requestAnimationFrame(animateFrame);
+            renderFrame(); // Call render frame directly for non-XR mode
+        }
+    }
+
+    function renderFrame() {
+        // Additional check inside loop
+        if (!renderer || !isAnimating) {
+            renderer?.setAnimationLoop(null);
+            return;
+        }
+
+        // Get XR camera first so it's available for all subsequent code
+        const xrCam = renderer.xr.getCamera(camera);
+
+        // Check X button state if in VR mode
+        if (isVRActive) {
+            const newXButtonState = checkXButtonState();
+
+            // Detect when X button is first pressed (transition from false to true)
+            leftXButtonJustPressed = newXButtonState && !leftXButtonPressed;
+
+            // Only log changes in button state to avoid console spam
+            if (newXButtonState !== leftXButtonPressed) {
+                leftXButtonPressed = newXButtonState;
+                console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
             }
 
-            // Get XR camera first so it's available for all subsequent code
-            const xrCam = renderer.xr.getCamera(camera);
-
-            // Check X button state if in VR mode
-            if (isVRActive) {
-                const newXButtonState = checkXButtonState();
-
-                // Detect when X button is first pressed (transition from false to true)
-                leftXButtonJustPressed = newXButtonState && !leftXButtonPressed;
-
-                // Only log changes in button state to avoid console spam
-                if (newXButtonState !== leftXButtonPressed) {
-                    leftXButtonPressed = newXButtonState;
-                    console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
-                }
-
-                // If X button was just pressed, reset convergence plane
-                if (leftXButtonJustPressed && xrCam && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
-                    const leftCam = xrCam.cameras[0];
-                    const rightCam = xrCam.cameras[1];
-
-                    const resetSuccess = resetConvergencePlane(leftCam, rightCam);
-                    console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
-                }
-            }
-
-            // Get the current time in seconds
-            const currentTime = performance.now() / 1000;
-            if (startTime === undefined) {
-                startTime = currentTime;
-            }
-
-            const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1;
-
-            if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
-                // =============== VR MODE ===============
-                isVRActive = true;
-
-                // Create left/right planes if needed
-                if (!planeLeft || !planeRight) {
-                    createPlanesVR();
-                    // Initialize planes with convergence plane data immediately
-                    try {
-                        // Make sure xrCam and its cameras array exist and are valid
-                        if (xrCam && xrCam.isArrayCamera && xrCam.cameras.length >= 2) {
-                            const leftCam = xrCam.cameras[0];
-                            const rightCam = xrCam.cameras[1];
-
-                            // console.log("Trying to initialize convergence plane with:",
-                            //     "leftCam exists:", !!leftCam,
-                            //     "rightCam exists:", !!rightCam);
-
-                            if (leftCam && rightCam && leftCam.projectionMatrix && rightCam.projectionMatrix) {
-                                convergencePlane = locateConvergencePlane(leftCam, rightCam);
-                                console.log("Convergence plane initial result:", convergencePlane);
-
-                                // Only apply if we got valid values
-                                if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
-                                    !isNaN(convergencePlane.position.x)) {
-                                    planeLeft.position.copy(convergencePlane.position);
-                                    planeLeft.quaternion.copy(convergencePlane.quaternion);
-                                    planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
-                                    planeLeft.visible = true;
-
-                                    planeRight.position.copy(convergencePlane.position);
-                                    planeRight.quaternion.copy(convergencePlane.quaternion);
-                                    planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
-                                    planeRight.visible = true;
-                                } else {
-                                    console.warn("Invalid convergence plane values, falling back to default");
-                                    // Use simple default values
-                                    planeLeft.position.set(0, 0, -DISTANCE);
-                                    planeRight.position.set(0, 0, -DISTANCE);
-                                    planeLeft.scale.set(2, 2, 1);
-                                    planeRight.scale.set(2, 2, 1);
-                                    planeLeft.visible = false;  // Will be shown later in animation loop
-                                    planeRight.visible = false; // Will be shown later in animation loop
-                                }
-                            } else {
-                                console.warn("XR cameras don't have valid projection matrices yet");
-                            }
-                        } else {
-                            console.warn("XR camera array not ready yet:", xrCam);
-                        }
-                    } catch (error) {
-                        console.error("Error during initial convergence plane setup:", error);
-                    }
-                }
-
-                // Access the sub-cameras
+            // If X button was just pressed, reset convergence plane
+            if (leftXButtonJustPressed && xrCam && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
                 const leftCam = xrCam.cameras[0];
                 const rightCam = xrCam.cameras[1];
 
-                // Set canvas dimensions once when XR cameras are available
-                if (!xrCanvasInitialized) {
-                    if (is3D > 0.5) { // 3D display
-                        rL.gl.canvas.width = leftCam.viewport.width;
-                        rL.gl.canvas.height = leftCam.viewport.height;
-                        rR.gl.canvas.width = rightCam.viewport.width;
-                        rR.gl.canvas.height = rightCam.viewport.height;
-                        viewportScale = 1;
-                    } else { // VR
-                        rL.gl.canvas.width = views[0].width_px * viewportScale;
-                        rL.gl.canvas.height = views[0].height_px * viewportScale;
-                        rR.gl.canvas.width = views[0].width_px * viewportScale;
-                        rR.gl.canvas.height = views[0].height_px * viewportScale;
-                        rL.invd = focus * views[0].inv_z_map.min;
-                        rR.invd = focus * views[0].inv_z_map.min;
+                const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+            }
+        }
+
+        // Get the current time in seconds
+        const currentTime = performance.now() / 1000;
+        if (startTime === undefined) {
+            startTime = currentTime;
+        }
+
+        const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1;
+
+        if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+            // =============== VR MODE ===============
+            isVRActive = true;
+
+            // Create left/right planes if needed
+            if (!planeLeft || !planeRight) {
+                createPlanesVR();
+                // Initialize planes with convergence plane data immediately
+                try {
+                    // Make sure xrCam and its cameras array exist and are valid
+                    if (xrCam && xrCam.isArrayCamera && xrCam.cameras.length >= 2) {
+                        const leftCam = xrCam.cameras[0];
+                        const rightCam = xrCam.cameras[1];
+
+                        // console.log("Trying to initialize convergence plane with:",
+                        //     "leftCam exists:", !!leftCam,
+                        //     "rightCam exists:", !!rightCam);
+
+                        if (leftCam && rightCam && leftCam.projectionMatrix && rightCam.projectionMatrix) {
+                            convergencePlane = locateConvergencePlane(leftCam, rightCam);
+                            console.log("Convergence plane initial result:", convergencePlane);
+
+                            // Only apply if we got valid values
+                            if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
+                                !isNaN(convergencePlane.position.x)) {
+                                planeLeft.position.copy(convergencePlane.position);
+                                planeLeft.quaternion.copy(convergencePlane.quaternion);
+                                planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
+                                planeLeft.visible = true;
+
+                                planeRight.position.copy(convergencePlane.position);
+                                planeRight.quaternion.copy(convergencePlane.quaternion);
+                                planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
+                                planeRight.visible = true;
+                            } else {
+                                console.warn("Invalid convergence plane values, falling back to default");
+                                // Use simple default values
+                                planeLeft.position.set(0, 0, -DISTANCE);
+                                planeRight.position.set(0, 0, -DISTANCE);
+                                planeLeft.scale.set(2, 2, 1);
+                                planeRight.scale.set(2, 2, 1);
+                                planeLeft.visible = false;  // Will be shown later in animation loop
+                                planeRight.visible = false; // Will be shown later in animation loop
+                            }
+                        } else {
+                            console.warn("XR cameras don't have valid projection matrices yet");
+                        }
+                    } else {
+                        console.warn("XR camera array not ready yet:", xrCam);
                     }
-                    console.log("xrCanvasInitialized, width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height);
-                    xrCanvasInitialized = true;
-
-                    // Each eye sees only its plane
-                    leftCam.layers.enable(1);
-                    rightCam.layers.enable(2);
-                }
-
-                // Create HUD overlay for each VR plane if not already created
-                if (!planeLeft.userData.hudOverlay) {
-                    createHUDOverlayForVR(planeLeft, leftCam);
-                }
-                if (!planeRight.userData.hudOverlay) {
-                    createHUDOverlayForVR(planeRight, rightCam);
-                }
-
-                // Update HUD text
-                updateHUD(leftCam, rightCam);
-
-                // Calculate camera positions in convergence plane's local coordinate system
-                const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
-                localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
-
-                const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(convergencePlane.position);
-                localRightCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
-
-                // Capture the initial head positions once (in local coordinates)
-                if (initialY === undefined) {
-                    initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
-                    initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
-                    IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
-                    console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
-                    console.log("convergencePlane position:", convergencePlane.position);
-                }
-                // Render the scene using local coordinates
-                rL.renderCam.pos.x = localLeftCamPos.x / IPD;
-                rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
-                rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
-                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0) / viewportScale;
-                rL.drawScene(uTime % glowPulsePeriod);
-                texL.needsUpdate = true;
-
-                rR.renderCam.pos.x = localRightCamPos.x / IPD;
-                rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
-                rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
-                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0) / viewportScale;
-                rR.drawScene(uTime % glowPulsePeriod);
-                texR.needsUpdate = true;
-
-                // Hide non-VR canvas
-                canvas.style.display = 'none';
-
-            } else {
-                // ============ NOT IN VR ============
-                isVRActive = false;
-
-                // Hide VR planes if they exist
-                if (planeLeft) planeLeft.visible = false;
-                if (planeRight) planeRight.visible = false;
-                xrCanvasInitialized = false; // Reset initialization if exiting VR
-
-                // Show non-VR canvas
-                canvas.style.display = 'block';
-
-                // Render to non-VR canvas using mouse position
-                if (nonVRRenderer) {
-                    // Use mouse position to control camera pos
-                    // Scale mouse influence (0.5 gives a good range of motion)
-                    const scale = 0.5;
-                    nonVRRenderer.renderCam.pos.x = -0.5 + mouseX * scale;
-                    nonVRRenderer.renderCam.pos.y = mouseY * scale;
-                    nonVRRenderer.renderCam.pos.z = 0; // No Z movement with mouse
-
-                    // Apply the same skew corrections as in VR mode
-                    nonVRRenderer.renderCam.sk.x = -nonVRRenderer.renderCam.pos.x * nonVRRenderer.invd /
-                        (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
-                    nonVRRenderer.renderCam.sk.y = -nonVRRenderer.renderCam.pos.y * nonVRRenderer.invd /
-                        (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
-
-                    // Set focal length - no need to adjust for z since it's 0
-                    nonVRRenderer.renderCam.f = nonVRRenderer.views[0].f * nonVRRenderer.viewportScale();
-
-                    // Draw the scene
-                    nonVRRenderer.drawScene(uTime % glowPulsePeriod);
+                } catch (error) {
+                    console.error("Error during initial convergence plane setup:", error);
                 }
             }
 
-            if (renderer) {
-                renderer.render(scene, camera);
+            // Access the sub-cameras
+            const leftCam = xrCam.cameras[0];
+            const rightCam = xrCam.cameras[1];
+
+            // Set canvas dimensions once when XR cameras are available
+            if (!xrCanvasInitialized) {
+                if (is3D > 0.5) { // 3D display
+                    rL.gl.canvas.width = leftCam.viewport.width;
+                    rL.gl.canvas.height = leftCam.viewport.height;
+                    rR.gl.canvas.width = rightCam.viewport.width;
+                    rR.gl.canvas.height = rightCam.viewport.height;
+                    viewportScale = 1;
+                } else { // VR
+                    rL.gl.canvas.width = views[0].width_px * viewportScale;
+                    rL.gl.canvas.height = views[0].height_px * viewportScale;
+                    rR.gl.canvas.width = views[0].width_px * viewportScale;
+                    rR.gl.canvas.height = views[0].height_px * viewportScale;
+                    rL.invd = focus * views[0].inv_z_map.min;
+                    rR.invd = focus * views[0].inv_z_map.min;
+                }
+                console.log("xrCanvasInitialized, width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height);
+                xrCanvasInitialized = true;
+
+                // Each eye sees only its plane
+                leftCam.layers.enable(1);
+                rightCam.layers.enable(2);
             }
 
-            // Request next frame (for non-XR mode)
-            if (!isVRActive && isAnimating) {
-                requestAnimationFrame(animateFrame);
+            // Create HUD overlay for each VR plane if not already created
+            if (!planeLeft.userData.hudOverlay) {
+                createHUDOverlayForVR(planeLeft, leftCam);
             }
-        });
+            if (!planeRight.userData.hudOverlay) {
+                createHUDOverlayForVR(planeRight, rightCam);
+            }
+
+            // Update HUD text
+            updateHUD(leftCam, rightCam);
+
+            // Calculate camera positions in convergence plane's local coordinate system
+            const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
+            localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+            const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(convergencePlane.position);
+            localRightCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+            // Capture the initial head positions once (in local coordinates)
+            if (initialY === undefined) {
+                initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+                initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+                IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
+                console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+                console.log("convergencePlane position:", convergencePlane.position);
+            }
+            // Render the scene using local coordinates
+            rL.renderCam.pos.x = localLeftCamPos.x / IPD;
+            rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
+            rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
+            rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+            rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+            rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0) / viewportScale;
+            rL.drawScene(uTime % glowPulsePeriod);
+            texL.needsUpdate = true;
+
+            rR.renderCam.pos.x = localRightCamPos.x / IPD;
+            rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
+            rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
+            rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+            rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+            rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0) / viewportScale;
+            rR.drawScene(uTime % glowPulsePeriod);
+            texR.needsUpdate = true;
+
+            // Hide non-VR canvas
+            canvas.style.display = 'none';
+
+        } else {
+            // ============ NOT IN VR ============
+            isVRActive = false;
+
+            // Hide VR planes if they exist
+            if (planeLeft) planeLeft.visible = false;
+            if (planeRight) planeRight.visible = false;
+            xrCanvasInitialized = false; // Reset initialization if exiting VR
+
+            // Show non-VR canvas
+            canvas.style.display = 'block';
+
+            // Render to non-VR canvas using mouse position
+            if (nonVRRenderer) {
+                // Use mouse position to control camera pos
+                // Scale mouse influence (0.5 gives a good range of motion)
+                const scale = 0.5;
+                nonVRRenderer.renderCam.pos.x = -0.5 + mouseX * scale;
+                nonVRRenderer.renderCam.pos.y = mouseY * scale;
+                nonVRRenderer.renderCam.pos.z = 0; // No Z movement with mouse
+
+                // Apply the same skew corrections as in VR mode
+                nonVRRenderer.renderCam.sk.x = -nonVRRenderer.renderCam.pos.x * nonVRRenderer.invd /
+                    (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
+                nonVRRenderer.renderCam.sk.y = -nonVRRenderer.renderCam.pos.y * nonVRRenderer.invd /
+                    (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
+
+                // Set focal length - no need to adjust for z since it's 0
+                nonVRRenderer.renderCam.f = nonVRRenderer.views[0].f * nonVRRenderer.viewportScale();
+
+                // Draw the scene
+                nonVRRenderer.drawScene(uTime % glowPulsePeriod);
+            }
+        }
+
+        if (renderer) {
+            renderer.render(scene, camera);
+        }
     }
 
     // Start the animation
