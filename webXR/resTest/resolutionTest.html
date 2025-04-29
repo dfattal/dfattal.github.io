@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resolution Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        #scaleSlider {
+            width: 200px;
+            margin: 10px 0;
+        }
+
+        #scaleValue {
+            font-weight: bold;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+            /* Prevents blurring when scaling */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">
+        <h2>Resolution Test</h2>
+        <p>Scale: <span id="scaleValue">1.0</span></p>
+        <input type="range" id="scaleSlider" min="0" max="1" step="0.01" value="1">
+    </div>
+    <canvas id="glCanvas"></canvas>
+    <script type="module" src="resolutionTest.js"></script>
+</body>
+
+</html>
