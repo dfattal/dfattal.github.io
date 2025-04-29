@@ -238,6 +238,8 @@ async function init() {
     });
 
     renderer.xr.addEventListener('sessionend', () => {
+        // Immediately stop animation loop to prevent any rendering during transition
+        renderer.setAnimationLoop(null);
         isVRActive = false;
         canvas.style.display = 'block'; // Show non-VR canvas when exiting VR
         resizeCanvasToContainer(); // Make sure canvas is properly sized
@@ -829,7 +831,15 @@ function animate() {
         }
 
         if (renderer) {
-            renderer.render(scene, camera);
+            // Only render if we're in a valid rendering state
+            // (either properly in XR mode or definitely not in XR mode)
+            if (renderer.xr.isPresenting || (!renderer.xr.isPresenting && !isVRActive)) {
+                // In non-VR mode, manually clear the renderer before rendering
+                if (!renderer.xr.isPresenting) {
+                    renderer.clear();
+                }
+                renderer.render(scene, camera);
+            }
         }
     }
 
