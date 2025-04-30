@@ -9,12 +9,15 @@ export class BaseRenderer {
      * @param {string} fragmentShaderSource - The fragment shader source.
      * @param {Object} views - The processed views from LifLoader.
      * @param {boolean} [debug=false] - Whether to display debug images.
+     * @param {boolean} [limitSize=false] - Whether to limit image size to 512px width max.
      */
-    constructor(gl, fragmentShaderSource, views, debug = false) {
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
         this.gl = gl;
         this.views = null;
         this._debugCount = 0;
         this.debug = debug;
+        this.limitSize = limitSize;
+        console.log("Limit size:", this.limitSize);
         this.windowEffect = false;
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // Default camera position
@@ -107,10 +110,10 @@ export class BaseRenderer {
      * @param {Object} views - The processed views from LifLoader.
      * @returns {Promise<BaseRenderer>} - A promise resolving to an instance of BaseRenderer.
      */
-    static async createInstance(gl, fragmentShaderUrl, views, debug = false) {
+    static async createInstance(gl, fragmentShaderUrl, views, debug = false, limitSize = false) {
         const response = await fetch(fragmentShaderUrl + "?t=" + Date.now());
         const fragmentShaderSource = await response.text();
-        return new this(gl, fragmentShaderSource, views, debug);
+        return new this(gl, fragmentShaderSource, views, debug, limitSize);
     }
 
     /**
@@ -309,7 +312,34 @@ export class BaseRenderer {
             const img = new Image();
             img.crossOrigin = "anonymous";
             img.src = url;
-            img.onload = () => resolve(img);
+            img.onload = () => {
+                // If limitSize is false or image is already small enough, return original
+                if (!this.limitSize || img.width <= 512) {
+                    resolve(img);
+                    // console.log("Image size is already small enough");
+                    return;
+                }
+                // console.log("Limiting image size to 512px");
+                // Calculate new dimensions, preserving aspect ratio
+                const scale = 512 / img.width;
+                const newWidth = 512;
+                const newHeight = Math.round(img.height * scale);
+
+                // Create a canvas for downsampling
+                const canvas = document.createElement('canvas');
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+
+                // Draw the resized image on the canvas
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                // Create a new image from the canvas
+                const downsampledImg = new Image();
+                downsampledImg.crossOrigin = "anonymous";
+                downsampledImg.onload = () => resolve(downsampledImg);
+                downsampledImg.src = canvas.toDataURL();
+            };
             img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
         });
     }
@@ -388,8 +418,8 @@ export class BaseRenderer {
 // (Formerly setupWebGL & drawScene)
 // ================================
 export class MN2MNRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false) {
-        super(gl, fragmentShaderSource, views, debug);
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+        super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
         this.uniformLocations = {
@@ -423,7 +453,7 @@ export class MN2MNRenderer extends BaseRenderer {
      *                        image.texture, invZ.texture, f, invZ.min, invZ.max, width, height.
      * @param {Object} renderCam - Camera object with properties: pos, sk, sl, roll, f.
      */
-    drawScene(t=1.0) {
+    drawScene(t = 1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCam = this.renderCam;
@@ -481,8 +511,9 @@ export class MN2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGLST & drawSceneST)
 // ================================
 export class ST2MNRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false) {
-        super(gl, fragmentShaderSource, views, debug);
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+        
+        super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
         this.uniformLocations = {
@@ -531,7 +562,7 @@ export class ST2MNRenderer extends BaseRenderer {
      *   views[0] as left view and views[1] as right view.
      *   renderCam is a mono camera for output.
      */
-    drawScene(t=1.0) {
+    drawScene(t = 1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCam = this.renderCam;
@@ -602,8 +633,8 @@ export class ST2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGL2ST & drawScene2ST)
 // ================================
 export class MN2STRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false) {
-        super(gl, fragmentShaderSource, views, debug);
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false  ) {
+        super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
         this.renderCamL = {
@@ -658,7 +689,7 @@ export class MN2STRenderer extends BaseRenderer {
      *   views[0] as mono input.
      *   renderCamL and renderCamR as stereo rendering camera parameters.
      */
-    drawScene(t=1.0) {
+    drawScene(t = 1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCamL = this.renderCamL;
@@ -727,8 +758,8 @@ export class MN2STRenderer extends BaseRenderer {
 // (Former setupWebGLST2ST & drawSceneST2ST)
 // ---------------------------
 export class ST2STRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false) {
-        super(gl, fragmentShaderSource, views, debug);
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+        super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
         this.renderCamL = {
@@ -799,7 +830,7 @@ export class ST2STRenderer extends BaseRenderer {
      *   views[0] as left view, views[1] as right view.
      *   renderCamL and renderCamR as the left and right rendering camera parameters.
      */
-    drawScene(t=1.0) {
+    drawScene(t = 1.0) {
         const gl = this.gl;
         const views = this.views;
         const renderCamL = this.renderCamL;
