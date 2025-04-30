@@ -199,11 +199,11 @@ async function init() {
 
     // Create non-VR renderer using the canvas
     if (views.length == 1) {
-        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow.glsl', views, false,false); // TEST: limitSize = false for mono
+        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow.glsl', views, false, 3840); // limit image size to 3840px
         nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     } else if (views.length == 2) {
-        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow.glsl', views, false,false); // TEST: limitSize = false for stereo
+        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow.glsl', views, false, 2560); // limit image size to 2560px
         nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     }
@@ -234,6 +234,16 @@ async function init() {
     renderer.xr.addEventListener('sessionstart', () => {
         isVRActive = true;
         canvas.style.display = 'none'; // Hide non-VR canvas when in VR
+
+        // Dispose of nonVRRenderer to free GPU resources
+        if (nonVRRenderer) {
+            console.log('Disposing nonVRRenderer to free GPU resources');
+            // First lose the context to free GPU resources
+            nonVRRenderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
+            // Then set to null for garbage collection
+            nonVRRenderer = null;
+        }
+
         setupVRControllers();
     });
 
@@ -259,26 +269,27 @@ async function init() {
 
     // create offscreen canvases
     const offscreenCanvasL = document.createElement('canvas');
-    offscreenCanvasL.width = views[0].width_px;
-    offscreenCanvasL.height = views[0].height_px;
+    const aspectRatio = views[0].height_px / views[0].width_px;
+    offscreenCanvasL.width = Math.min(1920, views[0].width_px);
+    offscreenCanvasL.height = Math.round(offscreenCanvasL.width * aspectRatio);
     const offscreenCanvasR = document.createElement('canvas');
-    offscreenCanvasR.width = views[0].width_px;
-    offscreenCanvasR.height = views[0].height_px;
+    offscreenCanvasR.width = offscreenCanvasL.width;
+    offscreenCanvasR.height = offscreenCanvasL.height;
 
     // Get a WebGL context from the offscreen canvas.
     const glL = offscreenCanvasL.getContext('webgl');
     const glR = offscreenCanvasR.getContext('webgl');
 
     if (views.length == 1) {
-        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI.glsl', views, false,false); // TEST: limitSize = false for mono
-        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI.glsl', views, false,false); // TEST: limitSize = false for mono
+        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI.glsl', views, false, 3840); // limit image size to 3840px
+        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI.glsl', views, false, 3840); // 
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         rR.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
     } else if (views.length == 2) {
-        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI.glsl', views, false,true); // TEST: limitSize = true for stereo
-        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI.glsl', views, false,true); // TEST: limitSize = true for stereo
+        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI.glsl', views, false, 1920); // limit image size to 1920px
+        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI.glsl', views, false, 1920); // 
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
@@ -726,16 +737,27 @@ function animate() {
             // Set canvas dimensions once when XR cameras are available
             if (!xrCanvasInitialized) {
                 if (is3D > 0.5) { // 3D display
-                    rL.gl.canvas.width = leftCam.viewport.width;
-                    rL.gl.canvas.height = leftCam.viewport.height;
-                    rR.gl.canvas.width = rightCam.viewport.width;
-                    rR.gl.canvas.height = rightCam.viewport.height;
+                    rL.gl.canvas.width = leftCam.viewport.width/2; // 3D resolution about half of viewport for 3D display
+                    rL.gl.canvas.height = leftCam.viewport.height/2;
+                    rR.gl.canvas.width = rightCam.viewport.width/2;
+                    rR.gl.canvas.height = rightCam.viewport.height/2;
                     viewportScale = 1;
                 } else { // VR
-                    rL.gl.canvas.width = views[0].width_px * viewportScale;
-                    rL.gl.canvas.height = views[0].height_px * viewportScale;
-                    rR.gl.canvas.width = views[0].width_px * viewportScale;
-                    rR.gl.canvas.height = views[0].height_px * viewportScale;
+                    // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
+                    const aspectRatio = views[0].height_px / views[0].width_px;
+                    let width = views[0].width_px * viewportScale;
+                    let height = views[0].height_px * viewportScale;
+                    if (width > 2560) {
+                        width = 2560;
+                        height = width * aspectRatio;
+                    } else if (height > 2560) {
+                        height = 2560;
+                        width = height / aspectRatio;
+                    }
+                    rL.gl.canvas.width = width;
+                    rL.gl.canvas.height = height;
+                    rR.gl.canvas.width = width;
+                    rR.gl.canvas.height = height;
                     rL.invd = focus * views[0].inv_z_map.min;
                     rR.invd = focus * views[0].inv_z_map.min;
                 }

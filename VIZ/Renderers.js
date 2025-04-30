@@ -11,7 +11,7 @@ export class BaseRenderer {
      * @param {boolean} [debug=false] - Whether to display debug images.
      * @param {boolean} [limitSize=false] - Whether to limit image size to 1024px width max.
      */
-    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null) {
         this.gl = gl;
         this.views = null;
         this._debugCount = 0;
@@ -110,7 +110,7 @@ export class BaseRenderer {
      * @param {Object} views - The processed views from LifLoader.
      * @returns {Promise<BaseRenderer>} - A promise resolving to an instance of BaseRenderer.
      */
-    static async createInstance(gl, fragmentShaderUrl, views, debug = false, limitSize = false) {
+    static async createInstance(gl, fragmentShaderUrl, views, debug = false, limitSize = null) {
         const response = await fetch(fragmentShaderUrl + "?t=" + Date.now());
         const fragmentShaderSource = await response.text();
         return new this(gl, fragmentShaderSource, views, debug, limitSize);
@@ -314,16 +314,23 @@ export class BaseRenderer {
             img.src = url;
             img.onload = () => {
                 // If limitSize is false or image is already small enough, return original
-                if (!this.limitSize || img.width <= 1024) {
+                if (this.limitSize === null || Math.max(img.width, img.height) <= this.limitSize) {
                     resolve(img);
                     // console.log("Image size is already small enough");
                     return;
                 }
-                // console.log("Limiting image size to 1024px");
+                
                 // Calculate new dimensions, preserving aspect ratio
-                const scale = 1024 / img.width;
-                const newWidth = 1024;
-                const newHeight = Math.round(img.height * scale);
+                const aspectRatio = img.height / img.width;
+                let newWidth = img.width;
+                let newHeight = img.height;
+                if (img.width > img.height) {
+                    newWidth = this.limitSize;
+                    newHeight = Math.round(this.limitSize * aspectRatio);
+                } else {
+                    newHeight = this.limitSize;
+                    newWidth = Math.round(this.limitSize / aspectRatio);
+                }
 
                 // Create a canvas for downsampling
                 const canvas = document.createElement('canvas');
@@ -418,7 +425,7 @@ export class BaseRenderer {
 // (Formerly setupWebGL & drawScene)
 // ================================
 export class MN2MNRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null) {
         super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
@@ -511,7 +518,7 @@ export class MN2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGLST & drawSceneST)
 // ================================
 export class ST2MNRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null) {
         
         super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
@@ -633,7 +640,7 @@ export class ST2MNRenderer extends BaseRenderer {
 // (Formerly setupWebGL2ST & drawScene2ST)
 // ================================
 export class MN2STRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false  ) {
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null) {
         super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
@@ -758,7 +765,7 @@ export class MN2STRenderer extends BaseRenderer {
 // (Former setupWebGLST2ST & drawSceneST2ST)
 // ---------------------------
 export class ST2STRenderer extends BaseRenderer {
-    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
+    constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null) {
         super(gl, fragmentShaderSource, views, debug, limitSize);
         const ctx = this.gl;
         this.windowEffect = false;
