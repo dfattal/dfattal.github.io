@@ -9,7 +9,7 @@ export class BaseRenderer {
      * @param {string} fragmentShaderSource - The fragment shader source.
      * @param {Object} views - The processed views from LifLoader.
      * @param {boolean} [debug=false] - Whether to display debug images.
-     * @param {boolean} [limitSize=false] - Whether to limit image size to 512px width max.
+     * @param {boolean} [limitSize=false] - Whether to limit image size to 1024px width max.
      */
     constructor(gl, fragmentShaderSource, views, debug = false, limitSize = false) {
         this.gl = gl;
@@ -314,15 +314,15 @@ export class BaseRenderer {
             img.src = url;
             img.onload = () => {
                 // If limitSize is false or image is already small enough, return original
-                if (!this.limitSize || img.width <= 512) {
+                if (!this.limitSize || img.width <= 1024) {
                     resolve(img);
                     // console.log("Image size is already small enough");
                     return;
                 }
-                // console.log("Limiting image size to 512px");
+                // console.log("Limiting image size to 1024px");
                 // Calculate new dimensions, preserving aspect ratio
-                const scale = 512 / img.width;
-                const newWidth = 512;
+                const scale = 1024 / img.width;
+                const newWidth = 1024;
                 const newHeight = Math.round(img.height * scale);
 
                 // Create a canvas for downsampling
