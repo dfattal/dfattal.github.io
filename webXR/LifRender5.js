@@ -40,6 +40,7 @@ let isVRActive = false;
 let is3D = 1;
 let focus = 0.01;
 let viewportScale = 1.2;
+const MAX_TEX_SIZE_VR = 1920;
 
 let startTime;
 
@@ -747,11 +748,11 @@ function animate() {
                     const aspectRatio = views[0].height_px / views[0].width_px;
                     let width = views[0].width_px * viewportScale;
                     let height = views[0].height_px * viewportScale;
-                    if (width > 2560) {
-                        width = 2560;
+                    if (width > MAX_TEX_SIZE_VR) {
+                        width = MAX_TEX_SIZE_VR;
                         height = width * aspectRatio;
-                    } else if (height > 2560) {
-                        height = 2560;
+                    } else if (height > MAX_TEX_SIZE_VR) {
+                        height = MAX_TEX_SIZE_VR;
                         width = height / aspectRatio;
                     }
                     rL.gl.canvas.width = width;
