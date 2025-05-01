@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `Renderers` module provides WebGL-based rendering for **Leia Image Format (LIF)** files. It processes **multi-view, depth-aware images** and renders them using custom WebGL shaders. The module supports both **mono and stereo rendering**, making it compatible with Leia’s **glasses-free 3D displays**.
+The `Renderers` module provides WebGL-based rendering for **Leia Image Format (LIF)** files. It processes **multi-view, depth-aware images** and renders them using custom WebGL shaders. The module supports both **mono and stereo rendering**, making it compatible with Leia's **glasses-free 3D displays**.
 
 This module works in conjunction with the `LifLoader` module to extract and display **LIF images** in a WebGL canvas.
 
@@ -13,7 +13,7 @@ This module works in conjunction with the `LifLoader` module to extract and disp
 ### Constructor
 
 ```javascript
-constructor(gl, fragmentShaderSource, views, debug = false)
+constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null)
 ```
 
 Initializes a renderer with WebGL context, shader programs, and extracted **LIF views**.
@@ -24,6 +24,22 @@ Initializes a renderer with WebGL context, shader programs, and extracted **LIF 
 - `fragmentShaderSource` (`string`): GLSL fragment shader source code.
 - `views` (`Object`): Extracted views from a LIF file.
 - `debug` (`boolean`, optional): Enables debug rendering.
+- `limitSize` (`number|null`, optional): Maximum size in pixels for image textures. When set, images will be downsampled while preserving aspect ratio. Use smaller values for better performance, especially in VR.
+
+### Image Size Limiting
+
+When the `limitSize` parameter is set to a numeric value, all loaded images will be automatically downsampled to have their maximum dimension (width or height) not exceed this limit. This feature helps:
+
+- Improve rendering performance, especially on mobile devices or in VR
+- Reduce GPU memory usage
+- Prevent WebGL texture size limitations on some devices
+
+The aspect ratio of all images is preserved during downsampling.
+
+Recommended values:
+- For non-VR desktop: 2560-3840
+- For VR: 1024-1920
+- For mobile: 1024-2048
 
 ### Methods
 
@@ -35,7 +51,7 @@ Processes and standardizes views by replacing deprecated keys and loading textur
 
 Recursively replaces outdated keys in LIF metadata.
 
-#### `static async createInstance(gl, fragmentShaderUrl, views, debug = false): Promise<BaseRenderer>`
+#### `static async createInstance(gl, fragmentShaderUrl, views, debug = false, limitSize = null): Promise<BaseRenderer>`
 
 Asynchronously loads the fragment shader and creates a new renderer instance.
 
@@ -58,7 +74,7 @@ Displays a texture in an HTML image element for debugging purposes.
 #### Constructor
 
 ```javascript
-constructor(gl, fragmentShaderSource, views, debug = false)
+constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null)
 ```
 
 #### `drawScene()`
@@ -74,7 +90,7 @@ Renders a **mono image** using depth-based synthesis.
 #### Constructor
 
 ```javascript
-constructor(gl, fragmentShaderSource, views, debug = false)
+constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null)
 ```
 
 #### `drawScene()`
@@ -90,7 +106,7 @@ Renders a **stereo image** into a monoscopic output.
 #### Constructor
 
 ```javascript
-constructor(gl, fragmentShaderSource, views, debug = false)
+constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null)
 ```
 
 #### `drawScene()`
@@ -106,7 +122,7 @@ Generates **stereo output** from a **mono depth** source.
 #### Constructor
 
 ```javascript
-constructor(gl, fragmentShaderSource, views, debug = false)
+constructor(gl, fragmentShaderSource, views, debug = false, limitSize = null)
 ```
 
 #### `drawScene()`
@@ -142,7 +158,9 @@ const gl = document.getElementById('glCanvas').getContext('webgl');
 const loader = new LifLoader();
 await loader.load(file);
 const views = loader.views;
-const renderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views);
+
+// Create a renderer with image size limiting for better performance
+const renderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDI.glsl', views, false, 2048);
 requestAnimationFrame(() => renderer.drawScene());
 ```
 
@@ -155,7 +173,9 @@ requestAnimationFrame(() => renderer.drawScene());
 
 ---
 
-## Notes
+## Performance Considerations
 
-- Supports **multi-layered depth maps** for **de-occlusion handling**.
-- Optimized for **Leia’s 3D display technology**.
+- For optimal performance, especially in VR, use the `limitSize` parameter to downsample large images
+- Different target devices may require different `limitSize` values
+- Supports **multi-layered depth maps** for **de-occlusion handling**
+- Optimized for **Leia's 3D display technology**
