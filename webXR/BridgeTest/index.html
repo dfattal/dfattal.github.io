@@ -146,12 +146,40 @@
             }, 5000);
         }
 
-        // Check if the WebXR-OpenXR Bridge is available
-        document.addEventListener('DOMContentLoaded', () => {
+        // Wait for WebXR-OpenXR Bridge API to be available
+        function waitForAPI(timeout = 5000) {
+            return new Promise((resolve, reject) => {
+                // If API is already available, resolve immediately
+                if (window.WebXROpenXRBridge) {
+                    return resolve(window.WebXROpenXRBridge);
+                }
+
+                // Set a timeout to eventually reject
+                const timeoutId = setTimeout(() => {
+                    clearInterval(checkInterval);
+                    reject(new Error('Timed out waiting for WebXR-OpenXR Bridge API'));
+                }, timeout);
+
+                // Create a listener that checks for the API periodically
+                const checkInterval = setInterval(() => {
+                    if (window.WebXROpenXRBridge) {
+                        clearInterval(checkInterval);
+                        clearTimeout(timeoutId);
+                        resolve(window.WebXROpenXRBridge);
+                    }
+                }, 100);
+            });
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', async () => {
             const statusPanel = document.getElementById('statusPanel');
             const controlPanel = document.getElementById('controlPanel');
 
-            if (window.WebXROpenXRBridge) {
+            try {
+                logMessage('Waiting for WebXR-OpenXR Bridge API...');
+                await waitForAPI();
+
                 logMessage('WebXR-OpenXR Bridge API detected');
                 statusPanel.innerHTML = '<p class="success">WebXR-OpenXR Bridge is available. You can control OpenXR runtime settings below.</p>';
                 controlPanel.style.display = 'block';
@@ -168,8 +196,8 @@
                 document.getElementById('ipdScale').addEventListener('input', function () {
                     document.getElementById('ipdScaleValue').textContent = this.value;
                 });
-            } else {
-                logMessage('WebXR-OpenXR Bridge API not detected', true);
+            } catch (error) {
+                logMessage(`WebXR-OpenXR Bridge API not detected: ${error.message}`, true);
                 statusPanel.innerHTML = `
                     <p class="error">WebXR-OpenXR Bridge is not available.</p>
                     <p>Please make sure that:</p>
