@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR-OpenXR Bridge Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .control-panel {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .setting {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .value-display {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+        }
+
+        .log {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            font-family: monospace;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>WebXR-OpenXR Bridge Demo</h1>
+
+    <div class="status" id="statusPanel">
+        <p>Checking WebXR-OpenXR Bridge availability...</p>
+    </div>
+
+    <div class="control-panel" id="controlPanel" style="display: none;">
+        <h2>OpenXR Runtime Settings</h2>
+
+        <div class="setting">
+            <label for="ipdScale">IPD Scale: <span id="ipdScaleValue" class="value-display">1.0</span></label>
+            <input type="range" id="ipdScale" min="0.5" max="1.5" step="0.01" value="1.0">
+            <button id="setIpdScale">Set IPD Scale</button>
+            <button id="getIpdScale">Get Current Value</button>
+        </div>
+
+        <div class="setting">
+            <label for="refreshSettings">Refresh All Settings</label>
+            <button id="refreshSettings">Refresh</button>
+        </div>
+
+        <div id="messageBox"></div>
+    </div>
+
+    <div class="log" id="logPanel">
+        <div>Console Log:</div>
+    </div>
+
+    <script>
+        // Helper function to log messages
+        function logMessage(message, isError = false) {
+            const logPanel = document.getElementById('logPanel');
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (isError) {
+                logEntry.style.color = 'red';
+            }
+            logPanel.appendChild(logEntry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+        }
+
+        // Helper function to show messages
+        function showMessage(message, isError = false) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.innerHTML = `<div class="${isError ? 'error' : 'success'}">${message}</div>`;
+            setTimeout(() => {
+                messageBox.innerHTML = '';
+            }, 5000);
+        }
+
+        // Check if the WebXR-OpenXR Bridge is available
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusPanel = document.getElementById('statusPanel');
+            const controlPanel = document.getElementById('controlPanel');
+
+            if (window.webxrOpenXRBridge) {
+                logMessage('WebXR-OpenXR Bridge API detected');
+                statusPanel.innerHTML = '<p class="success">WebXR-OpenXR Bridge is available. You can control OpenXR runtime settings below.</p>';
+                controlPanel.style.display = 'block';
+
+                // Initialize with current values
+                refreshAllSettings();
+
+                // Setup event listeners
+                document.getElementById('setIpdScale').addEventListener('click', setIpdScale);
+                document.getElementById('getIpdScale').addEventListener('click', getIpdScale);
+                document.getElementById('refreshSettings').addEventListener('click', refreshAllSettings);
+
+                // Update value display when slider changes
+                document.getElementById('ipdScale').addEventListener('input', function () {
+                    document.getElementById('ipdScaleValue').textContent = this.value;
+                });
+            } else {
+                logMessage('WebXR-OpenXR Bridge API not detected', true);
+                statusPanel.innerHTML = `
+                    <p class="error">WebXR-OpenXR Bridge is not available.</p>
+                    <p>Please make sure that:</p>
+                    <ol>
+                        <li>The WebXR-OpenXR Bridge extension is installed in Chrome</li>
+                        <li>The SRHydra OpenXR Runtime is installed and running</li>
+                        <li>You're using a Chromium-based browser</li>
+                    </ol>
+                    <p>See the <a href="../install.md">installation guide</a> for more information.</p>
+                `;
+            }
+        });
+
+        // Function to get IPD scale
+        function getIpdScale() {
+            logMessage('Getting IPD Scale...');
+            window.webxrOpenXRBridge.getIPDScale()
+                .then(scale => {
+                    logMessage(`Received IPD Scale: ${scale}`);
+                    document.getElementById('ipdScale').value = scale;
+                    document.getElementById('ipdScaleValue').textContent = scale;
+                    showMessage(`Current IPD Scale: ${scale}`);
+                })
+                .catch(err => {
+                    logMessage(`Error getting IPD Scale: ${err}`, true);
+                    showMessage(`Error getting IPD Scale: ${err}`, true);
+                });
+        }
+
+        // Function to set IPD scale
+        function setIpdScale() {
+            const scale = parseFloat(document.getElementById('ipdScale').value);
+            logMessage(`Setting IPD Scale to ${scale}...`);
+
+            window.webxrOpenXRBridge.setIPDScale(scale)
+                .then(() => {
+                    logMessage('IPD Scale set successfully');
+                    showMessage(`IPD Scale set to ${scale}`);
+                })
+                .catch(err => {
+                    logMessage(`Error setting IPD Scale: ${err}`, true);
+                    showMessage(`Error setting IPD Scale: ${err}`, true);
+                });
+        }
+
+        // Function to refresh all settings
+        function refreshAllSettings() {
+            getIpdScale();
+            // Add other settings here as they're implemented
+        }
+    </script>
+</body>
+
+</html>
