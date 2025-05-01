@@ -151,7 +151,7 @@
             const statusPanel = document.getElementById('statusPanel');
             const controlPanel = document.getElementById('controlPanel');
 
-            if (window.webxrOpenXRBridge) {
+            if (window.WebXROpenXRBridge) {
                 logMessage('WebXR-OpenXR Bridge API detected');
                 statusPanel.innerHTML = '<p class="success">WebXR-OpenXR Bridge is available. You can control OpenXR runtime settings below.</p>';
                 controlPanel.style.display = 'block';
@@ -186,7 +186,7 @@
         // Function to get IPD scale
         function getIpdScale() {
             logMessage('Getting IPD Scale...');
-            window.webxrOpenXRBridge.getIPDScale()
+            window.WebXROpenXRBridge.getIPDScale()
                 .then(scale => {
                     logMessage(`Received IPD Scale: ${scale}`);
                     document.getElementById('ipdScale').value = scale;
@@ -204,7 +204,7 @@
             const scale = parseFloat(document.getElementById('ipdScale').value);
             logMessage(`Setting IPD Scale to ${scale}...`);
 
-            window.webxrOpenXRBridge.setIPDScale(scale)
+            window.WebXROpenXRBridge.setIPDScale(scale)
                 .then(() => {
                     logMessage('IPD Scale set successfully');
                     showMessage(`IPD Scale set to ${scale}`);
