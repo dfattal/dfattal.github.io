@@ -92,36 +92,113 @@
             font-family: monospace;
             background-color: #f9f9f9;
         }
+
+        .docs-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 8px;
+        }
+
+        .docs-section pre {
+            background-color: #272822;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        .docs-section code {
+            font-family: monospace;
+        }
+
+        .docs-section h1,
+        .docs-section h2 {
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .docs-section h3,
+        .docs-section h4 {
+            margin-top: 15px;
+        }
+
+        nav {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #eee;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        nav a {
+            margin: 0 15px;
+            text-decoration: none;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        nav a:hover {
+            text-decoration: underline;
+        }
     </style>
+    <!-- Add marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
     <h1>WebXR-OpenXR Bridge Demo</h1>
 
-    <div class="status" id="statusPanel">
-        <p>Checking WebXR-OpenXR Bridge availability...</p>
-    </div>
+    <nav>
+        <a href="#" id="showDemo">Demo</a>
+        <a href="#" id="showInstall">Installation Guide</a>
+        <a href="#" id="showAPI">API Documentation</a>
+    </nav>
 
-    <div class="control-panel" id="controlPanel" style="display: none;">
-        <h2>OpenXR Runtime Settings</h2>
-
-        <div class="setting">
-            <label for="ipdScale">IPD Scale: <span id="ipdScaleValue" class="value-display">1.0</span></label>
-            <input type="range" id="ipdScale" min="0.5" max="1.5" step="0.01" value="1.0">
-            <button id="setIpdScale">Set IPD Scale</button>
-            <button id="getIpdScale">Get Current Value</button>
+    <div id="demoSection">
+        <div class="status" id="statusPanel">
+            <p>Checking WebXR-OpenXR Bridge availability...</p>
         </div>
 
-        <div class="setting">
-            <label for="refreshSettings">Refresh All Settings</label>
-            <button id="refreshSettings">Refresh</button>
+        <div class="control-panel" id="controlPanel" style="display: none;">
+            <h2>OpenXR Runtime Settings</h2>
+
+            <div class="setting">
+                <label for="ipdScale">IPD Scale: <span id="ipdScaleValue" class="value-display">1.0</span></label>
+                <input type="range" id="ipdScale" min="0.5" max="1.5" step="0.01" value="1.0">
+                <button id="setIpdScale">Set IPD Scale</button>
+                <button id="getIpdScale">Get Current Value</button>
+            </div>
+
+            <div class="setting">
+                <label for="sceneScale">Scene Scale: <span id="sceneScaleValue" class="value-display">1.0</span></label>
+                <input type="range" id="sceneScale" min="0.1" max="10.0" step="0.1" value="1.0">
+                <button id="setSceneScale">Set Scene Scale</button>
+                <button id="getSceneScale">Get Current Value</button>
+            </div>
+
+            <div class="setting">
+                <label for="refreshSettings">Refresh All Settings</label>
+                <button id="refreshSettings">Refresh</button>
+            </div>
+
+            <div id="messageBox"></div>
         </div>
 
-        <div id="messageBox"></div>
+        <div class="log" id="logPanel">
+            <div>Console Log:</div>
+        </div>
     </div>
 
-    <div class="log" id="logPanel">
-        <div>Console Log:</div>
+    <div id="installSection" class="docs-section" style="display: none;">
+        <h2>Installation Guide</h2>
+        <div id="markdownContent"></div>
+    </div>
+
+    <div id="apiSection" class="docs-section" style="display: none;">
+        <h2>API Documentation</h2>
+        <div id="apiContent"></div>
     </div>
 
     <script>
@@ -151,6 +228,7 @@
             return new Promise((resolve, reject) => {
                 // If API is already available, resolve immediately
                 if (window.WebXROpenXRBridge) {
+                    logMessage('WebXROpenXRBridge API already available', false);
                     return resolve(window.WebXROpenXRBridge);
                 }
 
@@ -163,18 +241,70 @@
                 // Create a listener that checks for the API periodically
                 const checkInterval = setInterval(() => {
                     if (window.WebXROpenXRBridge) {
+                        logMessage('WebXROpenXRBridge API became available', false);
                         clearInterval(checkInterval);
                         clearTimeout(timeoutId);
+
+                        // Log the API methods
+                        logMessage('Available methods: ' + Object.keys(window.WebXROpenXRBridge).join(', '), false);
+
                         resolve(window.WebXROpenXRBridge);
                     }
                 }, 100);
             });
         }
 
+        // Function to fetch and render markdown
+        async function fetchAndRenderMarkdown(url, targetElement) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to fetch markdown');
+
+                const markdown = await response.text();
+                targetElement.innerHTML = marked.parse(markdown);
+            } catch (error) {
+                console.error('Error loading markdown:', error);
+                targetElement.innerHTML = `<p class="error">Error loading content: ${error.message}</p>`;
+            }
+        }
+
         // Initialize the app
         document.addEventListener('DOMContentLoaded', async () => {
             const statusPanel = document.getElementById('statusPanel');
             const controlPanel = document.getElementById('controlPanel');
+            const demoSection = document.getElementById('demoSection');
+            const installSection = document.getElementById('installSection');
+            const markdownContent = document.getElementById('markdownContent');
+            const apiSection = document.getElementById('apiSection');
+            const apiContent = document.getElementById('apiContent');
+
+            // Navigation handlers
+            document.getElementById('showDemo').addEventListener('click', (e) => {
+                e.preventDefault();
+                demoSection.style.display = 'block';
+                installSection.style.display = 'none';
+                apiSection.style.display = 'none';
+            });
+
+            document.getElementById('showInstall').addEventListener('click', (e) => {
+                e.preventDefault();
+                demoSection.style.display = 'none';
+                installSection.style.display = 'block';
+                apiSection.style.display = 'none';
+
+                // Load and render markdown
+                fetchAndRenderMarkdown('./install.md', markdownContent);
+            });
+
+            document.getElementById('showAPI').addEventListener('click', (e) => {
+                e.preventDefault();
+                demoSection.style.display = 'none';
+                installSection.style.display = 'none';
+                apiSection.style.display = 'block';
+
+                // Load and render API documentation
+                fetchAndRenderMarkdown('./API.md', apiContent);
+            });
 
             try {
                 logMessage('Waiting for WebXR-OpenXR Bridge API...');
@@ -190,11 +320,17 @@
                 // Setup event listeners
                 document.getElementById('setIpdScale').addEventListener('click', setIpdScale);
                 document.getElementById('getIpdScale').addEventListener('click', getIpdScale);
+                document.getElementById('setSceneScale').addEventListener('click', setSceneScale);
+                document.getElementById('getSceneScale').addEventListener('click', getSceneScale);
                 document.getElementById('refreshSettings').addEventListener('click', refreshAllSettings);
 
                 // Update value display when slider changes
                 document.getElementById('ipdScale').addEventListener('input', function () {
                     document.getElementById('ipdScaleValue').textContent = this.value;
+                });
+
+                document.getElementById('sceneScale').addEventListener('input', function () {
+                    document.getElementById('sceneScaleValue').textContent = this.value;
                 });
             } catch (error) {
                 logMessage(`WebXR-OpenXR Bridge API not detected: ${error.message}`, true);
@@ -206,15 +342,45 @@
                         <li>The SRHydra OpenXR Runtime is installed and running</li>
                         <li>You're using a Chromium-based browser</li>
                     </ol>
-                    <p>See the <a href="./install.md">installation guide</a> for more information.</p>
+                    <p>See the <a href="#" id="showInstallLink">installation guide</a> for more information.</p>
                 `;
+
+                // Add event listener for the installation guide link
+                document.getElementById('showInstallLink').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    demoSection.style.display = 'none';
+                    installSection.style.display = 'block';
+                    apiSection.style.display = 'none';
+
+                    // Load and render markdown
+                    fetchAndRenderMarkdown('./install.md', markdownContent);
+                });
             }
         });
 
         // Function to get IPD scale
         function getIpdScale() {
             logMessage('Getting IPD Scale...');
-            window.WebXROpenXRBridge.getIPDScale()
+
+            // Check if method exists and show its type
+            if (window.WebXROpenXRBridge.getIPDScale) {
+                logMessage(`getIPDScale method type: ${typeof window.WebXROpenXRBridge.getIPDScale}`);
+            } else {
+                logMessage('getIPDScale method not found!', true);
+                showMessage('getIPDScale method not found in the API', true);
+                return;
+            }
+
+            // Add a timeout to the promise
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Request timed out after 5 seconds')), 5000);
+            });
+
+            // Race the actual request against the timeout
+            Promise.race([
+                window.WebXROpenXRBridge.getIPDScale(),
+                timeoutPromise
+            ])
                 .then(scale => {
                     logMessage(`Received IPD Scale: ${scale}`);
                     document.getElementById('ipdScale').value = scale;
@@ -224,6 +390,13 @@
                 .catch(err => {
                     logMessage(`Error getting IPD Scale: ${err}`, true);
                     showMessage(`Error getting IPD Scale: ${err}`, true);
+
+                    // Log additional information about the API
+                    logMessage('API state check:', false);
+                    logMessage('WebXROpenXRBridge: ' + (window.WebXROpenXRBridge ? 'exists' : 'missing'), false);
+                    if (window.WebXROpenXRBridge) {
+                        logMessage('Available methods: ' + Object.keys(window.WebXROpenXRBridge).join(', '), false);
+                    }
                 });
         }
 
@@ -232,7 +405,25 @@
             const scale = parseFloat(document.getElementById('ipdScale').value);
             logMessage(`Setting IPD Scale to ${scale}...`);
 
-            window.WebXROpenXRBridge.setIPDScale(scale)
+            // Check if method exists and show its type
+            if (window.WebXROpenXRBridge.setIPDScale) {
+                logMessage(`setIPDScale method type: ${typeof window.WebXROpenXRBridge.setIPDScale}`);
+            } else {
+                logMessage('setIPDScale method not found!', true);
+                showMessage('setIPDScale method not found in the API', true);
+                return;
+            }
+
+            // Add a timeout to the promise
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Request timed out after 5 seconds')), 5000);
+            });
+
+            // Race the actual request against the timeout
+            Promise.race([
+                window.WebXROpenXRBridge.setIPDScale(scale),
+                timeoutPromise
+            ])
                 .then(() => {
                     logMessage('IPD Scale set successfully');
                     showMessage(`IPD Scale set to ${scale}`);
@@ -240,12 +431,109 @@
                 .catch(err => {
                     logMessage(`Error setting IPD Scale: ${err}`, true);
                     showMessage(`Error setting IPD Scale: ${err}`, true);
+
+                    // Check case sensitivity - maybe the function name is different
+                    const bridgeAPI = window.WebXROpenXRBridge;
+                    const methods = Object.keys(bridgeAPI);
+                    logMessage('Checking for similar method names:', false);
+                    methods.forEach(method => {
+                        if (method.toLowerCase().includes('ipd') || method.toLowerCase().includes('scale')) {
+                            logMessage(`Found potential method: ${method}`, false);
+                        }
+                    });
+                });
+        }
+
+        // Function to get scene scale
+        function getSceneScale() {
+            logMessage('Getting Scene Scale...');
+
+            // Check if method exists and show its type
+            if (window.WebXROpenXRBridge.getSceneScale) {
+                logMessage(`getSceneScale method type: ${typeof window.WebXROpenXRBridge.getSceneScale}`);
+            } else {
+                logMessage('getSceneScale method not found!', true);
+                showMessage('getSceneScale method not found in the API', true);
+                return;
+            }
+
+            // Add a timeout to the promise
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Request timed out after 5 seconds')), 5000);
+            });
+
+            // Race the actual request against the timeout
+            Promise.race([
+                window.WebXROpenXRBridge.getSceneScale(),
+                timeoutPromise
+            ])
+                .then(scale => {
+                    logMessage(`Received Scene Scale: ${scale}`);
+                    document.getElementById('sceneScale').value = scale;
+                    document.getElementById('sceneScaleValue').textContent = scale;
+                    showMessage(`Current Scene Scale: ${scale}`);
+                })
+                .catch(err => {
+                    logMessage(`Error getting Scene Scale: ${err}`, true);
+                    showMessage(`Error getting Scene Scale: ${err}`, true);
+
+                    // Log additional information about the API
+                    logMessage('API state check:', false);
+                    logMessage('WebXROpenXRBridge: ' + (window.WebXROpenXRBridge ? 'exists' : 'missing'), false);
+                    if (window.WebXROpenXRBridge) {
+                        logMessage('Available methods: ' + Object.keys(window.WebXROpenXRBridge).join(', '), false);
+                    }
+                });
+        }
+
+        // Function to set scene scale
+        function setSceneScale() {
+            const scale = parseFloat(document.getElementById('sceneScale').value);
+            logMessage(`Setting Scene Scale to ${scale}...`);
+
+            // Check if method exists and show its type
+            if (window.WebXROpenXRBridge.setSceneScale) {
+                logMessage(`setSceneScale method type: ${typeof window.WebXROpenXRBridge.setSceneScale}`);
+            } else {
+                logMessage('setSceneScale method not found!', true);
+                showMessage('setSceneScale method not found in the API', true);
+                return;
+            }
+
+            // Add a timeout to the promise
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Request timed out after 5 seconds')), 5000);
+            });
+
+            // Race the actual request against the timeout
+            Promise.race([
+                window.WebXROpenXRBridge.setSceneScale(scale),
+                timeoutPromise
+            ])
+                .then(() => {
+                    logMessage('Scene Scale set successfully');
+                    showMessage(`Scene Scale set to ${scale}`);
+                })
+                .catch(err => {
+                    logMessage(`Error setting Scene Scale: ${err}`, true);
+                    showMessage(`Error setting Scene Scale: ${err}`, true);
+
+                    // Check case sensitivity - maybe the function name is different
+                    const bridgeAPI = window.WebXROpenXRBridge;
+                    const methods = Object.keys(bridgeAPI);
+                    logMessage('Checking for similar method names:', false);
+                    methods.forEach(method => {
+                        if (method.toLowerCase().includes('scene') || method.toLowerCase().includes('scale')) {
+                            logMessage(`Found potential method: ${method}`, false);
+                        }
+                    });
                 });
         }
 
         // Function to refresh all settings
         function refreshAllSettings() {
             getIpdScale();
+            getSceneScale();
             // Add other settings here as they're implemented
         }
     </script>
