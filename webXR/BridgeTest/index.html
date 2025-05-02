@@ -258,11 +258,22 @@
                 window.WebXROpenXRBridge.getIPDScale()
                     .then(value => {
                         clearTimeout(timeoutId);
-                        logMessage(`OpenXR runtime responded with IPD scale: ${value}`);
-                        resolve({
-                            success: true,
-                            details: `OpenXR runtime is connected. Current IPD scale is ${value}.`
-                        });
+
+                        // Check if value is -1.0, which indicates fallback mode
+                        if (value === -1.0) {
+                            logMessage("Detected fallback mode: IPD scale is -1.0");
+                            resolve({
+                                success: true,
+                                isFallback: true,
+                                details: "The native messaging host is connected but cannot connect to the OpenXR runtime. Check if the SRHydra OpenXR Runtime is installed and running."
+                            });
+                        } else {
+                            logMessage(`OpenXR runtime responded with IPD scale: ${value}`);
+                            resolve({
+                                success: true,
+                                details: `OpenXR runtime is connected. Current IPD scale is ${value}.`
+                            });
+                        }
                     })
                     .catch(err => {
                         clearTimeout(timeoutId);
@@ -293,7 +304,19 @@
                 // Only test runtime if native host is available
                 if (nativeHostResult.success) {
                     const runtimeResult = await testRuntime();
-                    displayTestResult("OpenXR Runtime", runtimeResult.success, runtimeResult.details);
+                    if (runtimeResult.success && runtimeResult.isFallback) {
+                        // If in fallback mode, display a warning rather than success
+                        const resultDiv = document.createElement('div');
+                        resultDiv.className = "status warning";
+                        resultDiv.textContent = "OpenXR Runtime: FALLBACK MODE";
+                        const detailsP = document.createElement('p');
+                        detailsP.textContent = runtimeResult.details;
+                        detailsP.style.fontSize = '0.9em';
+                        resultDiv.appendChild(detailsP);
+                        document.getElementById('testResults').appendChild(resultDiv);
+                    } else {
+                        displayTestResult("OpenXR Runtime", runtimeResult.success, runtimeResult.details);
+                    }
                 }
             }
 
@@ -317,7 +340,19 @@
 
             document.getElementById('testRuntime').addEventListener('click', async () => {
                 const result = await testRuntime();
-                displayTestResult("OpenXR Runtime", result.success, result.details);
+                if (result.success && result.isFallback) {
+                    // If in fallback mode, display a warning rather than success
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = "status warning";
+                    resultDiv.textContent = "OpenXR Runtime: FALLBACK MODE";
+                    const detailsP = document.createElement('p');
+                    detailsP.textContent = result.details;
+                    detailsP.style.fontSize = '0.9em';
+                    resultDiv.appendChild(detailsP);
+                    document.getElementById('testResults').appendChild(resultDiv);
+                } else {
+                    displayTestResult("OpenXR Runtime", result.success, result.details);
+                }
             });
 
             document.getElementById('runAllTests').addEventListener('click', runAllTests);
