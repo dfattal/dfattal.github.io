@@ -92,7 +92,12 @@
             <button id="testExtension">Test Extension Presence</button>
             <button id="testNativeHost">Test Native Messaging Host</button>
             <button id="testRuntime">Test OpenXR Runtime</button>
-            <button id="setIpdScale">Set IPD Scale to 0.5</button>
+            <div style="margin: 15px 0;">
+                <label for="ipdSlider">IPD Scale (0-1): <span id="ipdValue">0.5</span></label>
+                <div style="display: flex; align-items: center;">
+                    <input type="range" id="ipdSlider" min="0" max="1" step="0.01" value="0.5" style="flex-grow: 1;">
+                </div>
+            </div>
             <button id="runAllTests">Run All Tests</button>
         </div>
 
@@ -288,8 +293,8 @@
         }
 
         // Test setting IPD scale to 0.5
-        function setIPDScale() {
-            logMessage("Setting IPD scale to 0.5...");
+        function setIPDScale(value) {
+            logMessage(`Setting IPD scale to ${value}...`);
             return new Promise((resolve) => {
                 if (!window.WebXROpenXRBridge) {
                     logMessage("Cannot set IPD scale: Extension not found", true);
@@ -308,24 +313,24 @@
                     });
                 }, 3000);
 
-                // Set IPD Scale to 0.5
-                window.WebXROpenXRBridge.setIPDScale(0.5)
+                // Set IPD Scale to the provided value
+                window.WebXROpenXRBridge.setIPDScale(value)
                     .then(() => {
                         clearTimeout(timeoutId);
-                        logMessage("IPD scale successfully set to 0.5");
+                        logMessage(`IPD scale successfully set to ${value}`);
 
                         // Get the current value to confirm it was set
                         return window.WebXROpenXRBridge.getIPDScale();
                     })
-                    .then(value => {
-                        logMessage(`Current IPD scale is now: ${value}`);
-                        const isClose = Math.abs(value - 0.5) < 0.01; // Allow small floating point difference
+                    .then(actualValue => {
+                        logMessage(`Current IPD scale is now: ${actualValue}`);
+                        const isClose = Math.abs(actualValue - value) < 0.01; // Allow small floating point difference
 
                         resolve({
                             success: isClose,
                             details: isClose
-                                ? `IPD scale successfully set to ${value}`
-                                : `IPD scale value (${value}) doesn't match requested value (0.5)`
+                                ? `IPD scale successfully set to ${actualValue}`
+                                : `IPD scale value (${actualValue}) doesn't match requested value (${value})`
                         });
                     })
                     .catch(err => {
@@ -408,9 +413,17 @@
                 }
             });
 
-            document.getElementById('setIpdScale').addEventListener('click', async () => {
-                const result = await setIPDScale();
-                displayTestResult("Set IPD Scale to 0.5", result.success, result.details);
+            // Update the displayed value when slider is moved and apply the change when slider is released
+            document.getElementById('ipdSlider').addEventListener('input', () => {
+                const value = document.getElementById('ipdSlider').value;
+                document.getElementById('ipdValue').textContent = value;
+            });
+
+            document.getElementById('ipdSlider').addEventListener('change', async () => {
+                const sliderValue = parseFloat(document.getElementById('ipdSlider').value);
+                logMessage(`Applying IPD Scale: ${sliderValue}`);
+                const result = await setIPDScale(sliderValue);
+                displayTestResult(`Set IPD Scale to ${sliderValue}`, result.success, result.details);
             });
 
             document.getElementById('runAllTests').addEventListener('click', runAllTests);
