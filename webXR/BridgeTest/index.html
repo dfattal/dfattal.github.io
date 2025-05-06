@@ -92,6 +92,7 @@
             <button id="testExtension">Test Extension Presence</button>
             <button id="testNativeHost">Test Native Messaging Host</button>
             <button id="testRuntime">Test OpenXR Runtime</button>
+            <button id="setIpdScale">Set IPD Scale to 0.5</button>
             <button id="runAllTests">Run All Tests</button>
         </div>
 
@@ -286,6 +287,58 @@
             });
         }
 
+        // Test setting IPD scale to 0.5
+        function setIPDScale() {
+            logMessage("Setting IPD scale to 0.5...");
+            return new Promise((resolve) => {
+                if (!window.WebXROpenXRBridge) {
+                    logMessage("Cannot set IPD scale: Extension not found", true);
+                    resolve({
+                        success: false,
+                        details: "Cannot set IPD scale because the extension is not available."
+                    });
+                    return;
+                }
+
+                const timeoutId = setTimeout(() => {
+                    logMessage("OpenXR runtime didn't respond to IPD scale change (timeout)", true);
+                    resolve({
+                        success: false,
+                        details: "No response when setting IPD scale. Check if the SRHydra OpenXR Runtime is installed and running."
+                    });
+                }, 3000);
+
+                // Set IPD Scale to 0.5
+                window.WebXROpenXRBridge.setIPDScale(0.5)
+                    .then(() => {
+                        clearTimeout(timeoutId);
+                        logMessage("IPD scale successfully set to 0.5");
+
+                        // Get the current value to confirm it was set
+                        return window.WebXROpenXRBridge.getIPDScale();
+                    })
+                    .then(value => {
+                        logMessage(`Current IPD scale is now: ${value}`);
+                        const isClose = Math.abs(value - 0.5) < 0.01; // Allow small floating point difference
+
+                        resolve({
+                            success: isClose,
+                            details: isClose
+                                ? `IPD scale successfully set to ${value}`
+                                : `IPD scale value (${value}) doesn't match requested value (0.5)`
+                        });
+                    })
+                    .catch(err => {
+                        clearTimeout(timeoutId);
+                        logMessage(`Error setting IPD scale: ${err}`, true);
+                        resolve({
+                            success: false,
+                            details: `Failed to set IPD scale: ${err}`
+                        });
+                    });
+            });
+        }
+
         // Run all tests sequentially
         async function runAllTests() {
             logMessage("Running all connectivity tests...");
@@ -353,6 +406,11 @@
                 } else {
                     displayTestResult("OpenXR Runtime", result.success, result.details);
                 }
+            });
+
+            document.getElementById('setIpdScale').addEventListener('click', async () => {
+                const result = await setIPDScale();
+                displayTestResult("Set IPD Scale to 0.5", result.success, result.details);
             });
 
             document.getElementById('runAllTests').addEventListener('click', runAllTests);
