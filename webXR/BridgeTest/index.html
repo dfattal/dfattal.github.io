@@ -413,14 +413,12 @@
                 }
             });
 
-            // Update the displayed value when slider is moved and apply the change when slider is released
-            document.getElementById('ipdSlider').addEventListener('input', () => {
+            // Apply the IPD scale as the slider is being moved
+            document.getElementById('ipdSlider').addEventListener('input', async () => {
                 const value = document.getElementById('ipdSlider').value;
                 document.getElementById('ipdValue').textContent = value;
-            });
 
-            document.getElementById('ipdSlider').addEventListener('change', async () => {
-                const sliderValue = parseFloat(document.getElementById('ipdSlider').value);
+                const sliderValue = parseFloat(value);
                 logMessage(`Applying IPD Scale: ${sliderValue}`);
                 const result = await setIPDScale(sliderValue);
                 displayTestResult(`Set IPD Scale to ${sliderValue}`, result.success, result.details);
