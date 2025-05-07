@@ -96,6 +96,7 @@
                 <label for="ipdSlider">IPD Scale (0-1): <span id="ipdValue">0.5</span></label>
                 <div style="display: flex; align-items: center;">
                     <input type="range" id="ipdSlider" min="0" max="1" step="0.01" value="0.5" style="flex-grow: 1;">
+                    <button id="readIpdScale" style="margin-left: 10px;">Read Current IPD</button>
                 </div>
             </div>
             <button id="runAllTests">Run All Tests</button>
@@ -422,6 +423,24 @@
                 logMessage(`Applying IPD Scale: ${sliderValue}`);
                 const result = await setIPDScale(sliderValue);
                 displayTestResult(`Set IPD Scale to ${sliderValue}`, result.success, result.details);
+            });
+
+            // Add event listener for the read IPD scale button
+            document.getElementById('readIpdScale').addEventListener('click', async () => {
+                if (!window.WebXROpenXRBridge) {
+                    logMessage("Cannot read IPD scale: Extension not found", true);
+                    displayTestResult("Read IPD Scale", false, "Cannot read IPD scale because the extension is not available.");
+                    return;
+                }
+
+                try {
+                    const value = await window.WebXROpenXRBridge.getIPDScale();
+                    logMessage(`Current IPD scale: ${value}`);
+                    displayTestResult("Read IPD Scale", true, `Current IPD scale is ${value}`);
+                } catch (err) {
+                    logMessage(`Error reading IPD scale: ${err}`, true);
+                    displayTestResult("Read IPD Scale", false, `Failed to read IPD scale: ${err}`);
+                }
             });
 
             document.getElementById('runAllTests').addEventListener('click', runAllTests);
