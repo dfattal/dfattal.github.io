@@ -386,6 +386,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             logMessage("Diagnostic page loaded");
 
+            // Track the last set IPD scale value to avoid redundant updates
+            let lastSetIpdScale = null;
+
             // Set up button event listeners
             document.getElementById('testExtension').addEventListener('click', async () => {
                 const result = await testExtensionPresence();
@@ -420,9 +423,16 @@
                 document.getElementById('ipdValue').textContent = value;
 
                 const sliderValue = parseFloat(value);
-                logMessage(`Applying IPD Scale: ${sliderValue}`);
-                const result = await setIPDScale(sliderValue);
-                displayTestResult(`Set IPD Scale to ${sliderValue}`, result.success, result.details);
+
+                // Only apply if the value has changed from the last set value
+                if (lastSetIpdScale === null || Math.abs(sliderValue - lastSetIpdScale) >= 0.001) {
+                    logMessage(`Applying IPD Scale: ${sliderValue}`);
+                    const result = await setIPDScale(sliderValue);
+                    if (result.success) {
+                        lastSetIpdScale = sliderValue;
+                    }
+                    displayTestResult(`Set IPD Scale to ${sliderValue}`, result.success, result.details);
+                }
             });
 
             // Add event listener for the read IPD scale button
