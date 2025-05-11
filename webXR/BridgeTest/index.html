@@ -4,465 +4,390 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR-OpenXR Bridge Connectivity Test</title>
+    <title>WebXR-OpenXR Bridge Settings Panel</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         h1,
         h2 {
-            color: #333;
+            color: #2c3e50;
+            margin-top: 0;
         }
 
-        .test-panel {
-            background-color: #f5f5f5;
+        .settings-group {
+            margin-bottom: 20px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .setting-label {
+            flex: 1;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .setting-value {
+            width: 60px;
+            text-align: right;
+            font-family: monospace;
+            color: #666;
+        }
+
+        .slider {
+            flex: 2;
+            margin: 0 15px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.toggle-slider {
+            background-color: #2196F3;
+        }
+
+        input:checked+.toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        .status-panel {
+            background-color: #fff;
             border-radius: 8px;
             padding: 20px;
-            margin: 20px 0;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        button {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 10px 15px;
-            text-align: center;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
         }
 
-        .status {
+        .status-item {
+            background-color: #f8f9fa;
             padding: 10px;
-            margin: 10px 0;
             border-radius: 4px;
+            border-left: 4px solid #2196F3;
         }
 
-        .success {
-            background-color: #dff0d8;
-            color: #3c763d;
+        .status-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
         }
 
-        .warning {
-            background-color: #fcf8e3;
-            color: #8a6d3b;
-        }
-
-        .error {
-            background-color: #f2dede;
-            color: #a94442;
-        }
-
-        .info {
-            background-color: #d9edf7;
-            color: #31708f;
+        .status-value {
+            font-family: monospace;
+            font-size: 1.1em;
+            color: #2c3e50;
         }
 
         .log {
             height: 200px;
             overflow-y: auto;
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
             padding: 10px;
             margin-top: 20px;
             font-family: monospace;
-            background-color: #f9f9f9;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+
+        .log-entry.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .log-entry.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
         }
     </style>
 </head>
 
 <body>
-    <h1>WebXR-OpenXR Bridge Connectivity Test</h1>
-    <p>This page tests each component of the WebXR-OpenXR Bridge to help identify connection issues.</p>
+    <h1>WebXR-OpenXR Bridge Settings Panel</h1>
 
-    <div class="test-panel">
-        <h2>Extension Connectivity Tests</h2>
+    <div class="container">
+        <div class="panel">
+            <h2>Session Settings</h2>
+            <div class="settings-group">
+                <div class="setting-row">
+                    <span class="setting-label">IPD Scale</span>
+                    <input type="range" class="slider" id="ipdScale" min="0" max="2" step="0.001" value="1">
+                    <span class="setting-value" id="ipdScaleValue">1.000</span>
+                </div>
 
-        <div id="extensionStatus" class="status info">
-            Checking for WebXR-OpenXR Bridge extension...
-        </div>
+                <div class="setting-row">
+                    <span class="setting-label">Scene Scale</span>
+                    <input type="range" class="slider" id="sceneScale" min="0" max="2" step="0.001" value="1">
+                    <span class="setting-value" id="sceneScaleValue">1.000</span>
+                </div>
 
-        <div id="testControls">
-            <button id="testExtension">Test Extension Presence</button>
-            <button id="testNativeHost">Test Native Messaging Host</button>
-            <button id="testRuntime">Test OpenXR Runtime</button>
-            <div style="margin: 15px 0;">
-                <label for="ipdSlider">IPD Scale (0-1): <span id="ipdValue">0.5</span></label>
-                <div style="display: flex; align-items: center;">
-                    <input type="range" id="ipdSlider" min="0" max="1" step="0.01" value="0.5" style="flex-grow: 1;">
-                    <button id="readIpdScale" style="margin-left: 10px;">Read Current IPD</button>
+                <div class="setting-row">
+                    <span class="setting-label">Parallax Strength</span>
+                    <input type="range" class="slider" id="parallaxStrength" min="0" max="2" step="0.001" value="1">
+                    <span class="setting-value" id="parallaxStrengthValue">1.000</span>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Convergence</span>
+                    <input type="range" class="slider" id="convergence" min="0" max="2" step="0.001" value="1">
+                    <span class="setting-value" id="convergenceValue">1.000</span>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Perspective Factor</span>
+                    <input type="range" class="slider" id="perspectiveFactor" min="0" max="2" step="0.001" value="1">
+                    <span class="setting-value" id="perspectiveFactorValue">1.000</span>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Projection Method</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="projectionMethod">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="setting-value" id="projectionMethodValue">Display Centric</span>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Control Mode</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="controlMode">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="setting-value" id="controlModeValue">First Person</span>
                 </div>
             </div>
-            <button id="runAllTests">Run All Tests</button>
         </div>
 
-        <div id="testResults">
-            <!-- Test results will appear here -->
+        <div class="panel">
+            <h2>Live Settings</h2>
+            <div class="status-grid" id="liveSettings">
+                <!-- Live settings will be populated here -->
+            </div>
         </div>
     </div>
 
     <div class="log" id="logPanel">
-        <div>Diagnostic Log:</div>
+        <div>Event Log:</div>
     </div>
 
     <script>
         // Helper function to log messages
-        function logMessage(message, isError = false) {
+        function logMessage(message, type = 'info') {
             const logPanel = document.getElementById('logPanel');
             const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
             logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            if (isError) {
-                logEntry.style.color = 'red';
-            }
             logPanel.appendChild(logEntry);
             logPanel.scrollTop = logPanel.scrollHeight;
         }
 
-        // Helper function to update status display
-        function updateStatus(elementId, message, type) {
-            const element = document.getElementById(elementId);
-            element.textContent = message;
-            element.className = `status ${type}`;
-        }
+        // Helper function to update live settings display
+        function updateLiveSettings(settings) {
+            const liveSettings = document.getElementById('liveSettings');
+            liveSettings.innerHTML = '';
 
-        // Helper function to display test results
-        function displayTestResult(test, result, details = "") {
-            const testResults = document.getElementById('testResults');
-            const resultDiv = document.createElement('div');
-            resultDiv.className = `status ${result ? 'success' : 'error'}`;
-            resultDiv.textContent = `${test}: ${result ? 'PASSED' : 'FAILED'}`;
-            if (details) {
-                const detailsP = document.createElement('p');
-                detailsP.textContent = details;
-                detailsP.style.fontSize = '0.9em';
-                resultDiv.appendChild(detailsP);
+            for (const [key, value] of Object.entries(settings)) {
+                const statusItem = document.createElement('div');
+                statusItem.className = 'status-item';
+
+                const label = document.createElement('div');
+                label.className = 'status-label';
+                label.textContent = key;
+
+                const valueDiv = document.createElement('div');
+                valueDiv.className = 'status-value';
+                valueDiv.textContent = typeof value === 'number' ? value.toFixed(3) : value;
+
+                statusItem.appendChild(label);
+                statusItem.appendChild(valueDiv);
+                liveSettings.appendChild(statusItem);
             }
-            testResults.appendChild(resultDiv);
         }
 
-        // Test for extension presence
-        function testExtensionPresence() {
-            logMessage("Testing extension presence...");
-            return new Promise((resolve) => {
-                // Check if the bridge object is injected by the extension
-                if (window.WebXROpenXRBridge) {
-                    logMessage("Extension found: WebXROpenXRBridge API is available");
-                    resolve({
-                        success: true,
-                        details: "WebXROpenXRBridge API found with methods: " +
-                            Object.keys(window.WebXROpenXRBridge).join(", ")
-                    });
-                } else {
-                    // Wait a short time to see if it loads asynchronously
-                    setTimeout(() => {
-                        if (window.WebXROpenXRBridge) {
-                            logMessage("Extension found after delay");
-                            resolve({
-                                success: true,
-                                details: "WebXROpenXRBridge API found with methods: " +
-                                    Object.keys(window.WebXROpenXRBridge).join(", ")
-                            });
-                        } else {
-                            logMessage("Extension not found", true);
-                            resolve({
-                                success: false,
-                                details: "WebXROpenXRBridge API is not available. Check if the extension is installed and enabled."
-                            });
-                        }
-                    }, 1000);
-                }
-            });
-        }
-
-        // Test native messaging host connectivity
-        function testNativeHost() {
-            logMessage("Testing native messaging host connectivity...");
-            return new Promise((resolve) => {
-                if (!window.WebXROpenXRBridge) {
-                    logMessage("Cannot test native host: Extension not found", true);
-                    resolve({
-                        success: false,
-                        details: "Cannot test native messaging host because the extension is not available."
-                    });
-                    return;
-                }
-
-                // Create a simple ping message to test the connection
-                // We're not expecting real OpenXR functionality, just checking if messages go through
-                const requestId = Date.now().toString();
-
-                // Set a timeout for the response
-                const timeoutId = setTimeout(() => {
-                    // Clean up the message listener
-                    window.removeEventListener('message', messageListener);
-
-                    logMessage("Native messaging host didn't respond (timeout)", true);
-                    resolve({
-                        success: false,
-                        details: "No response from native messaging host. Check if it's installed properly and the browser has permission to run it."
-                    });
-                }, 3000);
-
-                // Listen for the response
-                const messageListener = (event) => {
-                    if (event.data &&
-                        event.data.type === 'webxr-openxr-bridge-response' &&
-                        event.data.ping === 'pong') {
-
-                        // Clean up
-                        clearTimeout(timeoutId);
-                        window.removeEventListener('message', messageListener);
-
-                        logMessage("Native messaging host responded successfully");
-                        resolve({
-                            success: true,
-                            details: "Native messaging host is connected and responding."
-                        });
-                    }
+        // Helper function to debounce slider input
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
                 };
-                window.addEventListener('message', messageListener);
-
-                // Send a ping message
-                logMessage("Sending ping to native messaging host...");
-                window.postMessage({
-                    type: 'webxr-openxr-bridge',
-                    requestId: requestId,
-                    ping: 'ping'
-                }, '*');
-            });
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
         }
 
-        // Test OpenXR runtime connectivity
-        function testRuntime() {
-            logMessage("Testing OpenXR runtime connectivity...");
-            return new Promise((resolve) => {
-                if (!window.WebXROpenXRBridge) {
-                    logMessage("Cannot test runtime: Extension not found", true);
-                    resolve({
-                        success: false,
-                        details: "Cannot test OpenXR runtime because the extension is not available."
-                    });
-                    return;
-                }
+        // Function to update all settings
+        async function updateAllSettings() {
+            if (!window.WebXROpenXRBridge) return;
 
-                // Try to get a simple setting - we don't care about the actual value,
-                // just whether the IPC connection to the runtime works
-                const timeoutId = setTimeout(() => {
-                    logMessage("OpenXR runtime didn't respond (timeout)", true);
-                    resolve({
-                        success: false,
-                        details: "No response from OpenXR runtime. Check if the SRHydra OpenXR Runtime is installed and running."
-                    });
-                }, 3000);
+            try {
+                const settings = {
+                    'IPD Scale': await window.WebXROpenXRBridge.getIPDScale(),
+                    'Scene Scale': await window.WebXROpenXRBridge.getSceneScale(),
+                    'Parallax Strength': await window.WebXROpenXRBridge.getParallaxStrength(),
+                    'Convergence': await window.WebXROpenXRBridge.getConvergence(),
+                    'Perspective Factor': await window.WebXROpenXRBridge.getPerspectiveFactor(),
+                    'Projection Method': (await window.WebXROpenXRBridge.getProjectionMethod()) === 0 ? 'Display Centric' : 'Camera Centric',
+                    'Control Mode': (await window.WebXROpenXRBridge.getControlMode()) === 0 ? 'First Person' : 'Fly'
+                };
 
-                // Try to get IPD Scale as a test
-                window.WebXROpenXRBridge.getIPDScale()
-                    .then(value => {
-                        clearTimeout(timeoutId);
+                updateLiveSettings(settings);
 
-                        // Check if value is -1.0, which indicates fallback mode
-                        if (value === -1.0) {
-                            logMessage("Detected fallback mode: IPD scale is -1.0");
-                            resolve({
-                                success: true,
-                                isFallback: true,
-                                details: "The native messaging host is connected but cannot connect to the OpenXR runtime. Check if the SRHydra OpenXR Runtime is installed and running."
-                            });
-                        } else {
-                            logMessage(`OpenXR runtime responded with IPD scale: ${value}`);
-                            resolve({
-                                success: true,
-                                details: `OpenXR runtime is connected. Current IPD scale is ${value}.`
-                            });
-                        }
-                    })
-                    .catch(err => {
-                        clearTimeout(timeoutId);
-                        logMessage(`Error connecting to OpenXR runtime: ${err}`, true);
-                        resolve({
-                            success: false,
-                            details: `Failed to connect to OpenXR runtime: ${err}`
-                        });
-                    });
-            });
-        }
-
-        // Test setting IPD scale to 0.5
-        function setIPDScale(value) {
-            logMessage(`Setting IPD scale to ${value}...`);
-            return new Promise((resolve) => {
-                if (!window.WebXROpenXRBridge) {
-                    logMessage("Cannot set IPD scale: Extension not found", true);
-                    resolve({
-                        success: false,
-                        details: "Cannot set IPD scale because the extension is not available."
-                    });
-                    return;
-                }
-
-                const timeoutId = setTimeout(() => {
-                    logMessage("OpenXR runtime didn't respond to IPD scale change (timeout)", true);
-                    resolve({
-                        success: false,
-                        details: "No response when setting IPD scale. Check if the SRHydra OpenXR Runtime is installed and running."
-                    });
-                }, 3000);
-
-                // Set IPD Scale to the provided value
-                window.WebXROpenXRBridge.setIPDScale(value)
-                    .then(() => {
-                        clearTimeout(timeoutId);
-                        logMessage(`IPD scale successfully set to ${value}`);
-
-                        // Get the current value to confirm it was set
-                        return window.WebXROpenXRBridge.getIPDScale();
-                    })
-                    .then(actualValue => {
-                        logMessage(`Current IPD scale is now: ${actualValue}`);
-                        const isClose = Math.abs(actualValue - value) < 0.01; // Allow small floating point difference
-
-                        resolve({
-                            success: isClose,
-                            details: isClose
-                                ? `IPD scale successfully set to ${actualValue}`
-                                : `IPD scale value (${actualValue}) doesn't match requested value (${value})`
-                        });
-                    })
-                    .catch(err => {
-                        clearTimeout(timeoutId);
-                        logMessage(`Error setting IPD scale: ${err}`, true);
-                        resolve({
-                            success: false,
-                            details: `Failed to set IPD scale: ${err}`
-                        });
-                    });
-            });
-        }
-
-        // Run all tests sequentially
-        async function runAllTests() {
-            logMessage("Running all connectivity tests...");
-            document.getElementById('testResults').innerHTML = '';
-
-            // Test extension
-            const extensionResult = await testExtensionPresence();
-            displayTestResult("Extension Presence", extensionResult.success, extensionResult.details);
-
-            // Only proceed if extension is available
-            if (extensionResult.success) {
-                // Test native host
-                const nativeHostResult = await testNativeHost();
-                displayTestResult("Native Messaging Host", nativeHostResult.success, nativeHostResult.details);
-
-                // Only test runtime if native host is available
-                if (nativeHostResult.success) {
-                    const runtimeResult = await testRuntime();
-                    if (runtimeResult.success && runtimeResult.isFallback) {
-                        // If in fallback mode, display a warning rather than success
-                        const resultDiv = document.createElement('div');
-                        resultDiv.className = "status warning";
-                        resultDiv.textContent = "OpenXR Runtime: FALLBACK MODE";
-                        const detailsP = document.createElement('p');
-                        detailsP.textContent = runtimeResult.details;
-                        detailsP.style.fontSize = '0.9em';
-                        resultDiv.appendChild(detailsP);
-                        document.getElementById('testResults').appendChild(resultDiv);
-                    } else {
-                        displayTestResult("OpenXR Runtime", runtimeResult.success, runtimeResult.details);
-                    }
-                }
+                // Update UI controls to match current values
+                document.getElementById('ipdScale').value = settings['IPD Scale'];
+                document.getElementById('ipdScaleValue').textContent = settings['IPD Scale'].toFixed(3);
+                document.getElementById('sceneScale').value = settings['Scene Scale'];
+                document.getElementById('sceneScaleValue').textContent = settings['Scene Scale'].toFixed(3);
+                document.getElementById('parallaxStrength').value = settings['Parallax Strength'];
+                document.getElementById('parallaxStrengthValue').textContent = settings['Parallax Strength'].toFixed(3);
+                document.getElementById('convergence').value = settings['Convergence'];
+                document.getElementById('convergenceValue').textContent = settings['Convergence'].toFixed(3);
+                document.getElementById('perspectiveFactor').value = settings['Perspective Factor'];
+                document.getElementById('perspectiveFactorValue').textContent = settings['Perspective Factor'].toFixed(3);
+                document.getElementById('projectionMethod').checked = settings['Projection Method'] === 'Camera Centric';
+                document.getElementById('projectionMethodValue').textContent = settings['Projection Method'];
+                document.getElementById('controlMode').checked = settings['Control Mode'] === 'Fly';
+                document.getElementById('controlModeValue').textContent = settings['Control Mode'];
+            } catch (error) {
+                logMessage(`Error updating settings: ${error}`, 'error');
             }
-
-            logMessage("All tests completed");
         }
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', () => {
-            logMessage("Diagnostic page loaded");
+            logMessage("Settings panel loaded");
 
-            // Track the last set IPD scale value to avoid redundant updates
-            let lastSetIpdScale = null;
+            // Set up slider event listeners with debouncing
+            const sliders = {
+                'ipdScale': window.WebXROpenXRBridge?.setIPDScale,
+                'sceneScale': window.WebXROpenXRBridge?.setSceneScale,
+                'parallaxStrength': window.WebXROpenXRBridge?.setParallaxStrength,
+                'convergence': window.WebXROpenXRBridge?.setConvergence,
+                'perspectiveFactor': window.WebXROpenXRBridge?.setPerspectiveFactor
+            };
 
-            // Set up button event listeners
-            document.getElementById('testExtension').addEventListener('click', async () => {
-                const result = await testExtensionPresence();
-                displayTestResult("Extension Presence", result.success, result.details);
-            });
+            for (const [id, setter] of Object.entries(sliders)) {
+                const slider = document.getElementById(id);
+                const valueDisplay = document.getElementById(`${id}Value`);
 
-            document.getElementById('testNativeHost').addEventListener('click', async () => {
-                const result = await testNativeHost();
-                displayTestResult("Native Messaging Host", result.success, result.details);
-            });
+                slider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    valueDisplay.textContent = value.toFixed(3);
+                });
 
-            document.getElementById('testRuntime').addEventListener('click', async () => {
-                const result = await testRuntime();
-                if (result.success && result.isFallback) {
-                    // If in fallback mode, display a warning rather than success
-                    const resultDiv = document.createElement('div');
-                    resultDiv.className = "status warning";
-                    resultDiv.textContent = "OpenXR Runtime: FALLBACK MODE";
-                    const detailsP = document.createElement('p');
-                    detailsP.textContent = result.details;
-                    detailsP.style.fontSize = '0.9em';
-                    resultDiv.appendChild(detailsP);
-                    document.getElementById('testResults').appendChild(resultDiv);
-                } else {
-                    displayTestResult("OpenXR Runtime", result.success, result.details);
-                }
-            });
-
-            // Apply the IPD scale as the slider is being moved
-            document.getElementById('ipdSlider').addEventListener('input', async () => {
-                const value = document.getElementById('ipdSlider').value;
-                document.getElementById('ipdValue').textContent = value;
-
-                const sliderValue = parseFloat(value);
-
-                // Only apply if the value has changed from the last set value
-                if (lastSetIpdScale === null || Math.abs(sliderValue - lastSetIpdScale) >= 0.001) {
-                    logMessage(`Applying IPD Scale: ${sliderValue}`);
-                    const result = await setIPDScale(sliderValue);
-                    if (result.success) {
-                        lastSetIpdScale = sliderValue;
+                slider.addEventListener('change', debounce(async (e) => {
+                    const value = parseFloat(e.target.value);
+                    try {
+                        await setter(value);
+                        logMessage(`${id} set to ${value.toFixed(3)}`, 'success');
+                    } catch (error) {
+                        logMessage(`Error setting ${id}: ${error}`, 'error');
                     }
-                    displayTestResult(`Set IPD Scale to ${sliderValue}`, result.success, result.details);
-                }
-            });
+                }, 100));
+            }
 
-            // Add event listener for the read IPD scale button
-            document.getElementById('readIpdScale').addEventListener('click', async () => {
-                if (!window.WebXROpenXRBridge) {
-                    logMessage("Cannot read IPD scale: Extension not found", true);
-                    displayTestResult("Read IPD Scale", false, "Cannot read IPD scale because the extension is not available.");
-                    return;
-                }
-
+            // Set up toggle event listeners
+            document.getElementById('projectionMethod').addEventListener('change', async (e) => {
                 try {
-                    const value = await window.WebXROpenXRBridge.getIPDScale();
-                    logMessage(`Current IPD scale: ${value}`);
-                    displayTestResult("Read IPD Scale", true, `Current IPD scale is ${value}`);
-                } catch (err) {
-                    logMessage(`Error reading IPD scale: ${err}`, true);
-                    displayTestResult("Read IPD Scale", false, `Failed to read IPD scale: ${err}`);
+                    const newMethod = e.target.checked ? 1 : 0;
+                    await window.WebXROpenXRBridge.setProjectionMethod(newMethod);
+                    const method = newMethod === 0 ? 'Display Centric' : 'Camera Centric';
+                    document.getElementById('projectionMethodValue').textContent = method;
+                    logMessage(`Projection Method set to ${method}`, 'success');
+                } catch (error) {
+                    logMessage(`Error setting Projection Method: ${error}`, 'error');
                 }
             });
 
-            document.getElementById('runAllTests').addEventListener('click', runAllTests);
-
-            // Run the first test automatically
-            testExtensionPresence().then(result => {
-                if (result.success) {
-                    updateStatus('extensionStatus', 'Extension found! Click "Run All Tests" to check the complete connection.', 'success');
-                } else {
-                    updateStatus('extensionStatus', 'Extension not detected. Make sure the WebXR-OpenXR Bridge extension is installed.', 'error');
+            document.getElementById('controlMode').addEventListener('change', async (e) => {
+                try {
+                    const newMode = e.target.checked ? 1 : 0;
+                    await window.WebXROpenXRBridge.setControlMode(newMode);
+                    const mode = newMode === 0 ? 'First Person' : 'Fly';
+                    document.getElementById('controlModeValue').textContent = mode;
+                    logMessage(`Control Mode set to ${mode}`, 'success');
+                } catch (error) {
+                    logMessage(`Error setting Control Mode: ${error}`, 'error');
                 }
             });
+
+            // Update settings every second
+            setInterval(updateAllSettings, 1000);
+
+            // Initial update
+            updateAllSettings();
         });
     </script>
 </body>
