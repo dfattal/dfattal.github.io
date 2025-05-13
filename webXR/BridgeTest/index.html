@@ -298,7 +298,7 @@
                     'Scene Scale': await window.WebXROpenXRBridge.getSceneScale(),
                     'Parallax Strength': await window.WebXROpenXRBridge.getParallaxStrength(),
                     'Convergence': await window.WebXROpenXRBridge.getConvergence(),
-                    'Perspective Factor': await window.WebXROpenXRBridge.getPerspectiveFactor(),
+                    'Perspective Factor': await window.WebXROpenXRBridge.getSessionPerspectiveFactor(),
                     'Projection Method': (await window.WebXROpenXRBridge.getProjectionMethod()) === 0 ? 'Display Centric' : 'Camera Centric',
                     'Control Mode': (await window.WebXROpenXRBridge.getControlMode()) === 0 ? 'First Person' : 'Fly'
                 };
@@ -327,6 +327,32 @@
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', () => {
+
+
+            document.getElementById('ipdScale').addEventListener('input', function () {
+                document.getElementById('ipdScaleValue').textContent = this.value;
+                window.WebXROpenXRBridge.setIPDScale(parseFloat(this.value))
+            });
+            document.getElementById('sceneScale').addEventListener('input', function () {
+                document.getElementById('sceneScaleValue').textContent = this.value;
+                window.WebXROpenXRBridge.setSceneScale(parseFloat(this.value))
+            });
+            document.getElementById('parallaxStrength').addEventListener('input', function () {
+                document.getElementById('parallaxStrengthValue').textContent = this.value;
+                window.WebXROpenXRBridge.setParallaxStrength(parseFloat(this.value))
+            });
+            document.getElementById('convergence').addEventListener('input', function () {
+                document.getElementById('convergenceValue').textContent = this.value;
+                window.WebXROpenXRBridge.setConvergence(parseFloat(this.value))
+            });
+            document.getElementById('perspectiveFactor').addEventListener('input', function () {
+                document.getElementById('perspectiveFactorValue').textContent = this.value;
+                window.WebXROpenXRBridge.setSessionPerspectiveFactor(parseFloat(this.value))
+            });
+
+
+           /*
+
             logMessage("Settings panel loaded");
 
             // Set up slider event listeners with debouncing
@@ -357,12 +383,13 @@
                     }
                 }, 100));
             }
+            */
 
             // Set up toggle event listeners
-            document.getElementById('projectionMethod').addEventListener('change', async (e) => {
+            document.getElementById('projectionMethod').addEventListener('change', (e) => {
                 try {
                     const newMethod = e.target.checked ? 1 : 0;
-                    await window.WebXROpenXRBridge.setProjectionMethod(newMethod);
+                    window.WebXROpenXRBridge.setProjectionMethod(newMethod);
                     const method = newMethod === 0 ? 'Display Centric' : 'Camera Centric';
                     document.getElementById('projectionMethodValue').textContent = method;
                     logMessage(`Projection Method set to ${method}`, 'success');
@@ -371,10 +398,10 @@
                 }
             });
 
-            document.getElementById('controlMode').addEventListener('change', async (e) => {
+            document.getElementById('controlMode').addEventListener('change', (e) => {
                 try {
                     const newMode = e.target.checked ? 1 : 0;
-                    await window.WebXROpenXRBridge.setControlMode(newMode);
+                    window.WebXROpenXRBridge.setControlMode(newMode);
                     const mode = newMode === 0 ? 'First Person' : 'Fly';
                     document.getElementById('controlModeValue').textContent = mode;
                     logMessage(`Control Mode set to ${mode}`, 'success');
