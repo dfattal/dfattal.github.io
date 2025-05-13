@@ -299,7 +299,7 @@
                     'Parallax Strength': await window.WebXROpenXRBridge.getParallaxStrength(),
                     'Convergence': await window.WebXROpenXRBridge.getConvergence(),
                     'Perspective Factor': await window.WebXROpenXRBridge.getSessionPerspectiveFactor(),
-                    'Projection Method': (await window.WebXROpenXRBridge.getProjectionMethod()) === 0 ? 'Display Centric' : 'Camera Centric',
+                    'Projection Method': (await window.WebXROpenXRBridge.getProjectionMethod()) === 1 ? 'Display Centric' : 'Camera Centric',
                     'Control Mode': (await window.WebXROpenXRBridge.getControlMode()) === 0 ? 'First Person' : 'Fly'
                 };
 
@@ -327,8 +327,6 @@
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', () => {
-
-
             document.getElementById('ipdScale').addEventListener('input', function () {
                 document.getElementById('ipdScaleValue').textContent = this.value;
                 window.WebXROpenXRBridge.setIPDScale(parseFloat(this.value))
@@ -388,9 +386,9 @@
             // Set up toggle event listeners
             document.getElementById('projectionMethod').addEventListener('change', (e) => {
                 try {
-                    const newMethod = e.target.checked ? 1 : 0;
+                    const newMethod = e.target.checked ? 0 : 1;
                     window.WebXROpenXRBridge.setProjectionMethod(newMethod);
-                    const method = newMethod === 0 ? 'Display Centric' : 'Camera Centric';
+                    const method = newMethod === 1 ? 'Display Centric' : 'Camera Centric';
                     document.getElementById('projectionMethodValue').textContent = method;
                     logMessage(`Projection Method set to ${method}`, 'success');
                 } catch (error) {
