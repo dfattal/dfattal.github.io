@@ -143,6 +143,10 @@
             color: #2c3e50;
         }
 
+        #resetSettingsButton:hover {
+            background-color: #d32f2f;
+        }
+
         .log {
             height: 200px;
             overflow-y: auto;
@@ -225,6 +229,12 @@
                         <span class="toggle-slider"></span>
                     </label>
                     <span class="setting-value" id="controlModeValue">First Person</span>
+                </div>
+
+                <div class="setting-row">
+                    <button id="resetSettingsButton"
+                        style="width: 100%; padding: 10px; margin-top: 15px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset
+                        Settings</button>
                 </div>
             </div>
         </div>
@@ -348,41 +358,6 @@
                 window.WebXROpenXRBridge.setSessionPerspectiveFactor(parseFloat(this.value))
             });
 
-
-           /*
-
-            logMessage("Settings panel loaded");
-
-            // Set up slider event listeners with debouncing
-            const sliders = {
-                'ipdScale': window.WebXROpenXRBridge?.setIPDScale,
-                'sceneScale': window.WebXROpenXRBridge?.setSceneScale,
-                'parallaxStrength': window.WebXROpenXRBridge?.setParallaxStrength,
-                'convergence': window.WebXROpenXRBridge?.setConvergence,
-                'perspectiveFactor': window.WebXROpenXRBridge?.setPerspectiveFactor
-            };
-
-            for (const [id, setter] of Object.entries(sliders)) {
-                const slider = document.getElementById(id);
-                const valueDisplay = document.getElementById(`${id}Value`);
-
-                slider.addEventListener('input', (e) => {
-                    const value = parseFloat(e.target.value);
-                    valueDisplay.textContent = value.toFixed(3);
-                });
-
-                slider.addEventListener('change', debounce(async (e) => {
-                    const value = parseFloat(e.target.value);
-                    try {
-                        await setter(value);
-                        logMessage(`${id} set to ${value.toFixed(3)}`, 'success');
-                    } catch (error) {
-                        logMessage(`Error setting ${id}: ${error}`, 'error');
-                    }
-                }, 100));
-            }
-            */
-
             // Set up toggle event listeners
             document.getElementById('projectionMethod').addEventListener('change', (e) => {
                 try {
@@ -413,6 +388,17 @@
 
             // Initial update
             updateAllSettings();
+
+            // Add reset settings button
+            document.getElementById('resetSettingsButton').addEventListener('click', () => {
+                if (confirm('Are you sure you want to reset all settings to default values?')) {
+                    window.WebXROpenXRBridge.resetSettings(1.0);
+                    logMessage('All settings reset to default', 'success');
+
+                    // Update the UI after a short delay to allow the reset to apply
+                    setTimeout(updateAllSettings, 500);
+                }
+            });
         });
     </script>
 </body>
