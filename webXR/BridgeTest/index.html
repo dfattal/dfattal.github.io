@@ -308,7 +308,7 @@
                     'Scene Scale': await window.WebXROpenXRBridge.getSceneScale(),
                     'Parallax Strength': await window.WebXROpenXRBridge.getParallaxStrength(),
                     'Convergence': await window.WebXROpenXRBridge.getConvergence(),
-                    'Perspective Factor': await window.WebXROpenXRBridge.getSessionPerspectiveFactor(),
+                    'Perspective Factor': await window.WebXROpenXRBridge.getPerspectiveFactor(),
                     'Projection Method': (await window.WebXROpenXRBridge.getProjectionMethod()) === 1 ? 'Display Centric' : 'Camera Centric',
                     'Control Mode': (await window.WebXROpenXRBridge.getControlMode()) === 0 ? 'First Person' : 'Fly'
                 };
