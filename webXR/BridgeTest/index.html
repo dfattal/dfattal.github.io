@@ -355,7 +355,7 @@
             });
             document.getElementById('perspectiveFactor').addEventListener('input', function () {
                 document.getElementById('perspectiveFactorValue').textContent = this.value;
-                window.WebXROpenXRBridge.setSessionPerspectiveFactor(parseFloat(this.value))
+                window.WebXROpenXRBridge.setPerspectiveFactor(parseFloat(this.value))
             });
 
             // Set up toggle event listeners
