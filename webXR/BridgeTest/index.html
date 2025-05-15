@@ -391,13 +391,13 @@
 
             // Add reset settings button
             document.getElementById('resetSettingsButton').addEventListener('click', () => {
-                if (confirm('Are you sure you want to reset all settings to default values?')) {
-                    window.WebXROpenXRBridge.resetSettings(1.0);
-                    logMessage('All settings reset to default', 'success');
 
-                    // Update the UI after a short delay to allow the reset to apply
-                    setTimeout(updateAllSettings, 500);
-                }
+                window.WebXROpenXRBridge.resetSettings(1.0);
+                logMessage('All settings reset to default', 'success');
+
+                // Update the UI after a short delay to allow the reset to apply
+                setTimeout(updateAllSettings, 500);
+
             });
         });
     </script>
