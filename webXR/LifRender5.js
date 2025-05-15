@@ -235,6 +235,17 @@ async function init() {
     renderer.xr.addEventListener('sessionstart', () => {
         isVRActive = true;
         canvas.style.display = 'none'; // Hide non-VR canvas when in VR
+        if (window.WebXROpenXRBridge) {
+            console.log("WebXR Bride Extension found");
+            try {
+                window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                window.WebXROpenXRBridge.resetSettings(1.0); // reset settings to default for display centric
+                const PMafterReset = window.WebXROpenXRBridge.getProjectionMethod() === 1 ? 'Display Centric' : 'Camera Centric';
+                console.log("Projection Method after reset:", PMafterReset);
+            } catch (error) {
+                console.error("Leia OpenXR runtime not available:", error);
+            }
+        }
 
         // Dispose of nonVRRenderer to free GPU resources
         if (nonVRRenderer) {
@@ -582,7 +593,7 @@ function computeFovTanAngles(subcam) {
 }
 
 /** Our main animation/render loop (WebXR). */
-async function animate() {
+function animate() {
     // Flag to track if animation should continue
     let isAnimating = true;
     let loadEventDispatched = false;
@@ -635,7 +646,7 @@ async function animate() {
         }
     }
 
-    async function renderFrame() {
+    function renderFrame() {
         // Additional check inside loop
         if (!renderer || !isAnimating) {
             renderer?.setAnimationLoop(null);
@@ -790,13 +801,6 @@ async function animate() {
 
             // Capture the initial head positions once (in local coordinates)
             if (initialY === undefined) {
-                if (window.WebXROpenXRBridge) {
-                    console.log("WebXR Bride Extension found !");
-                    window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
-                    window.WebXROpenXRBridge.resetSettings(1.0); // reset settings to default for display centric
-                    const PMafterReset = (await window.WebXROpenXRBridge.getProjectionMethod()) === 1 ? 'Display Centric' : 'Camera Centric';
-                    console.log("Projection Method after reset:", PMafterReset);
-                }
                 initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
                 initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
                 IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
