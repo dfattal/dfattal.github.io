@@ -582,7 +582,7 @@ function computeFovTanAngles(subcam) {
 }
 
 /** Our main animation/render loop (WebXR). */
-function animate() {
+async function animate() {
     // Flag to track if animation should continue
     let isAnimating = true;
     let loadEventDispatched = false;
@@ -635,7 +635,7 @@ function animate() {
         }
     }
 
-    function renderFrame() {
+    async function renderFrame() {
         // Additional check inside loop
         if (!renderer || !isAnimating) {
             renderer?.setAnimationLoop(null);
@@ -790,11 +790,19 @@ function animate() {
 
             // Capture the initial head positions once (in local coordinates)
             if (initialY === undefined) {
+                if (window.WebXROpenXRBridge) {
+                    console.log("WebXR Bride Extension found !");
+                    window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                    window.WebXROpenXRBridge.resetSettings(1.0); // reset settings to default for display centric
+                    const PMafterReset = (await window.WebXROpenXRBridge.getProjectionMethod()) === 1 ? 'Display Centric' : 'Camera Centric';
+                    console.log("Projection Method after reset:", PMafterReset);
+                }
                 initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
                 initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
                 IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
                 console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                 console.log("convergencePlane position:", convergencePlane.position);
+                
             }
             // Render the scene using local coordinates
             rL.renderCam.pos.x = localLeftCamPos.x / IPD;
