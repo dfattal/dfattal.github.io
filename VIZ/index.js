@@ -999,7 +999,7 @@ async function main() {
           const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI.glsl');
           ({ programInfo, buffers } = setupWebGL2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI-test.glsl');
           ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
         }
       } else {
@@ -1007,7 +1007,7 @@ async function main() {
           const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI.glsl');
           ({ programInfo, buffers } = setupWebGLST2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI-test.glsl');
           ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
         }
       }

@@ -7,6 +7,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+const test = urlParams.get('test') ? urlParams.get('test') : false; // Default to false
 
 let views = null;
 let stereo_render_data = null;
@@ -200,11 +201,11 @@ async function init() {
 
     // Create non-VR renderer using the canvas
     if (views.length == 1) {
-        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow.glsl', views, false, 3840); // limit image size to 3840px
+        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
         nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     } else if (views.length == 2) {
-        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow.glsl', views, false, 2560); // limit image size to 2560px
+        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow' + (test ? '-test' : '') + '.glsl', views, false, 2560); // limit image size to 2560px
         nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     }
@@ -282,15 +283,15 @@ async function init() {
     const glR = offscreenCanvasR.getContext('webgl');
 
     if (views.length == 1) {
-        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI.glsl', views, false, 3840); // limit image size to 3840px
-        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI.glsl', views, false, 3840); // 
+        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
+        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // 
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         rR.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
     } else if (views.length == 2) {
-        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI.glsl', views, false, 1920); // limit image size to 1920px
-        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI.glsl', views, false, 1920); // 
+        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // limit image size to 1920px
+        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // 
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
