@@ -153,7 +153,7 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
 
     // s2 is normalized xy coordinate for synthesized view, centered at 0 so values in -0.5..0.5
 
-    const int numCoarseSteps = 5; // Reduced number of coarse steps
+    const int numCoarseSteps = 8; // Reduced number of coarse steps
     const int numBinarySteps = 5; // Number of binary search refinement steps
     float numsteps_float = float(numCoarseSteps);
 
