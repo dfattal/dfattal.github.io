@@ -8,6 +8,7 @@ let baseline = 1.0; // Global variable
 const urlParams = new URLSearchParams(window.location.search);
 const stereo = urlParams.get('stereo') ? urlParams.get('stereo') : false; // default to mono rendering
 let background = urlParams.get('background') ? urlParams.get('background').split(',').map(Number) : [0.1, 0.1, 0.1, 1.0]; // default to dark grey opaque background
+let test = urlParams.get('test') ? urlParams.get('test') : false; // default to false
 
 function setupWebGL(gl, fragmentShaderSource) {
 
@@ -996,18 +997,18 @@ async function main() {
       // Now that we know if mono or stereo setup webGL
       if (views.length < 2) {
         if (stereo) {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGL2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI-test.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
         }
       } else {
         if (stereo) {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGLST2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI-test.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
         }
       }

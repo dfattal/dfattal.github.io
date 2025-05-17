@@ -21,6 +21,7 @@ const glow = urlParams.get('glow') ? urlParams.get('glow') : false; // Default t
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
 const colorPop = urlParams.get('colorPop') ? urlParams.get('colorPop') : false; // Default to false
+const test = urlParams.get('test') ? urlParams.get('test') : false; // default to false
 
 // Function to recursively update IDs of cloned elements
 function updateClonedElementIDs(originalElement, clonedElement) {
@@ -1147,18 +1148,18 @@ async function main() {
       // Now that we know if mono or stereo setup webGL
       if (views.length < 2) {
         if (stereo) {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastMono2StereoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGL2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile(colorPop ? '../Shaders/rayCastMonoLDIColorPop.glsl' : '../Shaders/rayCastMonoLDIGlow.glsl');
+          const fragmentShaderSource = await loadShaderFile(colorPop ? '../Shaders/rayCastMonoLDIColorPop' + (test ? '-test' : '') + '.glsl' : '../Shaders/rayCastMonoLDIGlow' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGL(gl, fragmentShaderSource));
         }
       } else {
         if (stereo) {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGLST2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDIGlow.glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDIGlow' + (test ? '-test' : '') + ' .glsl');
           ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
         }
       }
