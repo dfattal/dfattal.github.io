@@ -749,10 +749,10 @@ function animate() {
             // Set canvas dimensions once when XR cameras are available
             if (!xrCanvasInitialized) {
                 if (is3D > 0.5) { // 3D display
-                    rL.gl.canvas.width = leftCam.viewport.width/2; // 3D resolution about half of viewport for 3D display
-                    rL.gl.canvas.height = leftCam.viewport.height/2;
-                    rR.gl.canvas.width = rightCam.viewport.width/2;
-                    rR.gl.canvas.height = rightCam.viewport.height/2;
+                    rL.gl.canvas.width = leftCam.viewport.width / 2; // 3D resolution about half of viewport for 3D display
+                    rL.gl.canvas.height = leftCam.viewport.height / 2;
+                    rR.gl.canvas.width = rightCam.viewport.width / 2;
+                    rR.gl.canvas.height = rightCam.viewport.height / 2;
                     viewportScale = 1;
                 } else { // VR
                     // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
@@ -789,6 +789,24 @@ function animate() {
                 createHUDOverlayForVR(planeRight, rightCam);
             }
 
+            setTimeout(() => {
+                if (window.WebXROpenXRBridge) {
+                    console.log("Setting WebXROpenXRBridge projection method after 1 second delay");
+                    try {
+                        window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                        console.log("Projection Method set to Display Centric");
+                        window.WebXROpenXRBridge.resetSettings(1.0);
+                        console.log("Settings reset to default");
+                        setTimeout(() => {
+                            const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                            console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+                        }, 500);
+                    } catch (error) {
+                        console.error("Error setting projection method:", error);
+                    }
+                }
+            }, 1000); // 1 second delay
+
             // Update HUD text
             updateHUD(leftCam, rightCam);
 
@@ -806,7 +824,7 @@ function animate() {
                 IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
                 console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                 console.log("convergencePlane position:", convergencePlane.position);
-                
+
             }
             // Render the scene using local coordinates
             rL.renderCam.pos.x = localLeftCamPos.x / IPD;
