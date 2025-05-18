@@ -804,8 +804,8 @@ function animate() {
                                 setTimeout(() => {
                                     const resetSuccess = resetConvergencePlane(leftCam, rightCam);
                                     console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
-                                }, 100);
-                            }, 100);
+                                }, 500);
+                            }, 500);
 
                         } catch (error) {
                             console.error("Error setting projection method:", error);
