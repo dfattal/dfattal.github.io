@@ -7,7 +7,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
-const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to false
+const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to true
 
 let views = null;
 let stereo_render_data = null;
