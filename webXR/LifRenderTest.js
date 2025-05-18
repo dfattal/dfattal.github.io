@@ -7,6 +7,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to false
 
 let views = null;
 let stereo_render_data = null;
@@ -32,6 +33,8 @@ let rightController = null;
 let leftButtonPressed = false;
 let leftXButtonPressed = false; // Track X button state
 let leftXButtonJustPressed = false; // Track when X button is first pressed
+let leftControllerMesh = null;  // Visual mesh for left controller
+let rightControllerMesh = null; // Visual mesh for right controller
 
 // Non-VR WebGL canvas variables
 let container, canvas, gl, nonVRRenderer = null;
@@ -86,6 +89,38 @@ function disposeResources() {
         planeRight.material.dispose();
         planeRight = null;
     }
+
+    // Clean up controller meshes
+    if (leftControllerMesh) {
+        // Dispose of all geometries and materials
+        leftControllerMesh.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
+        leftControllerMesh = null;
+    }
+
+    if (rightControllerMesh) {
+        // Dispose of all geometries and materials
+        rightControllerMesh.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
+        rightControllerMesh = null;
+    }
+
     if (rL) {
         rL.gl.getExtension('WEBGL_lose_context')?.loseContext();
         rL = null;
@@ -106,6 +141,7 @@ function disposeResources() {
     initialY = undefined;
     initialZ = undefined;
     IPD = undefined;
+    displaySwitch = false;
 
     console.log('Resources disposed.');
 }
@@ -201,11 +237,11 @@ async function init() {
 
     // Create non-VR renderer using the canvas
     if (views.length == 1) {
-        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow.glsl', views, false, 3840); // limit image size to 3840px
+        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
         nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     } else if (views.length == 2) {
-        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow.glsl', views, false, 2560); // limit image size to 2560px
+        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow' + (test ? '-test' : '') + '.glsl', views, false, 2560); // limit image size to 2560px
         nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
     }
@@ -213,12 +249,23 @@ async function init() {
     // Three.js scene setup for VR mode
     scene = new THREE.Scene();
 
+    // Add scene lighting for controller visualization
+    const ambientLight = new THREE.AmbientLight(0x404040, 2);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(1, 1, 1).normalize();
+    scene.add(directionalLight);
+
     // Camera used outside VR; in VR, Three.js uses an internal ArrayCamera.
     camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
     scene.add(camera);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Enable shadow mapping
+    renderer.shadowMap.enabled = true;
 
     // Enable WebXR
     renderer.xr.enabled = true;
@@ -236,17 +283,6 @@ async function init() {
     renderer.xr.addEventListener('sessionstart', () => {
         isVRActive = true;
         canvas.style.display = 'none'; // Hide non-VR canvas when in VR
-        if (window.WebXROpenXRBridge) {
-            console.log("WebXR Bride Extension found");
-            try {
-                window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
-                window.WebXROpenXRBridge.resetSettings(1.0); // reset settings to default for display centric
-                const PMafterReset = window.WebXROpenXRBridge.getProjectionMethod() === 1 ? 'Display Centric' : 'Camera Centric';
-                console.log("Projection Method after reset:", PMafterReset);
-            } catch (error) {
-                console.error("Leia OpenXR runtime not available:", error);
-            }
-        }
 
         // Dispose of nonVRRenderer to free GPU resources
         if (nonVRRenderer) {
@@ -294,15 +330,15 @@ async function init() {
     const glR = offscreenCanvasR.getContext('webgl');
 
     if (views.length == 1) {
-        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI.glsl', views, false, 3840); // limit image size to 3840px
-        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI.glsl', views, false, 3840); // 
+        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
+        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // 
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
         rR.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
     } else if (views.length == 2) {
-        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI.glsl', views, false, 1920); // limit image size to 1920px
-        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI.glsl', views, false, 1920); // 
+        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // limit image size to 1920px
+        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // 
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
@@ -345,6 +381,16 @@ function setupVRControllers() {
             scene.remove(rightController);
         }
 
+        // Remove existing controller meshes if they exist
+        if (leftControllerMesh) {
+            scene.remove(leftControllerMesh);
+            leftControllerMesh = null;
+        }
+        if (rightControllerMesh) {
+            scene.remove(rightControllerMesh);
+            rightControllerMesh = null;
+        }
+
         // Find controllers by handedness
         session.inputSources.forEach((inputSource, index) => {
             const controller = renderer.xr.getController(index);
@@ -354,11 +400,19 @@ function setupVRControllers() {
                 leftController = controller;
                 leftController.userData.inputSource = inputSource; // Store reference to inputSource
                 scene.add(leftController);
+
+                // Create a visual representation for the left controller
+                leftControllerMesh = createControllerMesh(0x0088ff); // Blue for left
+                leftController.add(leftControllerMesh);
             }
             else if (inputSource.handedness === 'right') {
                 console.log('Found right controller');
                 rightController = controller;
                 scene.add(rightController);
+
+                // Create a visual representation for the right controller
+                rightControllerMesh = createControllerMesh(0xff2200); // Red for right
+                rightController.add(rightControllerMesh);
             }
         });
     }
@@ -368,6 +422,44 @@ function setupVRControllers() {
 
     // Also listen for inputsourceschange event to handle controller reconnection
     session.addEventListener('inputsourceschange', setupControllersByHandedness);
+}
+
+// Create a visual mesh for the controller
+function createControllerMesh(color) {
+    // Create a controller group to hold all parts
+    const controllerGroup = new THREE.Group();
+
+    // Create the main body of the controller
+    const bodyGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.08, 16);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: color });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = -0.04;
+    body.rotation.x = Math.PI / 2;
+    controllerGroup.add(body);
+
+    // Create a handle part
+    const handleGeometry = new THREE.CylinderGeometry(0.015, 0.015, 0.1, 16);
+    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+    const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+    handle.position.y = -0.1;
+    handle.rotation.x = Math.PI / 2;
+    controllerGroup.add(handle);
+
+    // Add a button on top
+    const buttonGeometry = new THREE.CylinderGeometry(0.005, 0.005, 0.01, 12);
+    const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    button.position.z = -0.025;
+    button.position.y = -0.03;
+    button.rotation.x = Math.PI / 2;
+    controllerGroup.add(button);
+
+    // Add a light to make it more visible
+    const light = new THREE.PointLight(color, 0.5, 0.2);
+    light.position.set(0, -0.05, 0);
+    controllerGroup.add(light);
+
+    return controllerGroup;
 }
 
 // Function to check X button state on left controller
@@ -668,6 +760,9 @@ function animate() {
             if (newXButtonState !== leftXButtonPressed) {
                 leftXButtonPressed = newXButtonState;
                 console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
+
+                // Update controller visuals to reflect button state
+                updateControllerVisuals();
             }
 
             // If X button was just pressed, reset convergence plane
@@ -679,6 +774,9 @@ function animate() {
                 console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
             }
         }
+
+        // Update controller rotations if needed
+        updateControllers();
 
         // Get the current time in seconds
         const currentTime = performance.now() / 1000;
@@ -1141,4 +1239,40 @@ function updateHUD(leftCam, rightCam) {
     hudCtx.fillText(`Right: (${rx}, ${ry}, ${rz})`, 10, 90);
 
     hudTexture.needsUpdate = true;
+}
+
+// Function to update controller visuals based on button states
+function updateControllerVisuals() {
+    // Update left controller visuals based on button state
+    if (leftControllerMesh) {
+        // Find the button (third child in our controller mesh)
+        const button = leftControllerMesh.children[2];
+        if (button) {
+            // Change button color based on pressed state
+            if (leftXButtonPressed) {
+                button.material.color.setHex(0xff0000); // Red when pressed
+            } else {
+                button.material.color.setHex(0xffffff); // White when not pressed
+            }
+        }
+
+        // Update the light intensity
+        const light = leftControllerMesh.children[3];
+        if (light && light.isLight) {
+            light.intensity = leftXButtonPressed ? 1.0 : 0.5;
+        }
+    }
+}
+
+// Function to update controller positions/orientations
+function updateControllers() {
+    // This function is called every frame to ensure controller visuals match the actual controllers
+    if (leftController && leftControllerMesh) {
+        // The controller's position/rotation is already automatically updated by Three.js
+        // So we don't need to do anything here as we've parented the mesh to the controller
+    }
+
+    if (rightController && rightControllerMesh) {
+        // Same for right controller
+    }
 }
