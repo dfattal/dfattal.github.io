@@ -798,12 +798,15 @@ function animate() {
                         try {
                             window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
                             console.log("Projection Method set to Display Centric");
-                            window.WebXROpenXRBridge.resetSettings(1.0);
-                            console.log("Settings reset to default");
                             setTimeout(() => {
-                                const resetSuccess = resetConvergencePlane(leftCam, rightCam);
-                                console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
-                            }, 500);
+                                window.WebXROpenXRBridge.resetSettings(1.0);
+                                console.log("Settings reset to default");
+                                setTimeout(() => {
+                                    const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                                    console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+                                }, 100);
+                            }, 100);
+
                         } catch (error) {
                             console.error("Error setting projection method:", error);
                         }
