@@ -7,12 +7,13 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
-const test = urlParams.get('test') ? urlParams.get('test') : false; // Default to false
+const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to false
 
 let views = null;
 let stereo_render_data = null;
 let xrCanvasInitialized = false;
 let convergencePlane = null;
+let displaySwitch = false;
 
 // Three.js renderer
 import * as THREE from 'three';
@@ -777,6 +778,30 @@ function animate() {
             }
             if (!planeRight.userData.hudOverlay) {
                 createHUDOverlayForVR(planeRight, rightCam);
+            }
+
+            if (!displaySwitch) {
+                displaySwitch = true;
+                setTimeout(() => {
+                    if (window.WebXROpenXRBridge) {
+                        console.log("Setting WebXROpenXRBridge projection method after 1 second delay");
+                        try {
+                            window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                            console.log("Projection Method set to Display Centric");
+                            setTimeout(() => {
+                                window.WebXROpenXRBridge.resetSettings(1.0);
+                                console.log("Settings reset to default");
+                                setTimeout(() => {
+                                    const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                                    console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+                                }, 500);
+                            }, 500);
+
+                        } catch (error) {
+                            console.error("Error setting projection method:", error);
+                        }
+                    }
+                }, 1000); // 1 second delay
             }
 
             // Update HUD text
