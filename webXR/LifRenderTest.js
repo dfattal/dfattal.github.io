@@ -7,7 +7,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
-const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to false
+const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to true
 
 let views = null;
 let stereo_render_data = null;
@@ -92,33 +92,36 @@ function disposeResources() {
 
     // Clean up controller meshes
     if (leftControllerMesh) {
-        // Dispose of all geometries and materials
-        leftControllerMesh.traverse(child => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => mat.dispose());
-                } else {
-                    child.material.dispose();
-                }
-            }
-        });
+        if (leftControllerMesh.geometry) leftControllerMesh.geometry.dispose();
+        if (leftControllerMesh.material) leftControllerMesh.material.dispose();
         leftControllerMesh = null;
     }
 
     if (rightControllerMesh) {
-        // Dispose of all geometries and materials
-        rightControllerMesh.traverse(child => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => mat.dispose());
-                } else {
-                    child.material.dispose();
-                }
-            }
-        });
+        if (rightControllerMesh.geometry) rightControllerMesh.geometry.dispose();
+        if (rightControllerMesh.material) rightControllerMesh.material.dispose();
         rightControllerMesh = null;
+    }
+
+    // Clean up controllers and their child objects
+    if (leftController) {
+        // Dispose of all attached children (including ray geometry)
+        leftController.children.forEach(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+        scene.remove(leftController);
+        leftController = null;
+    }
+
+    if (rightController) {
+        // Dispose of all attached children (including ray geometry)
+        rightController.children.forEach(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+        scene.remove(rightController);
+        rightController = null;
     }
 
     if (rL) {
@@ -358,108 +361,136 @@ async function init() {
 
 // Create and set up VR controllers
 function setupVRControllers() {
-    // Create controller objects - use InputSources to check handedness
+    // Log XR session info for debugging
     const session = renderer.xr.getSession();
+    if (session) {
+        console.log('XR Session established:', session);
+        console.log('Input sources at init:', session.inputSources);
 
-    if (!session) {
-        console.warn('No XR session available for controller setup');
-        return;
-    }
-
-    // Function to set up controllers once input sources are available
-    function setupControllersByHandedness() {
-        if (!session.inputSources || session.inputSources.length === 0) {
-            // Try again in the next frame if no input sources are available yet
-            return requestAnimationFrame(setupControllersByHandedness);
-        }
-
-        // Clear any existing controllers
-        if (leftController) {
-            scene.remove(leftController);
-        }
-        if (rightController) {
-            scene.remove(rightController);
-        }
-
-        // Remove existing controller meshes if they exist
-        if (leftControllerMesh) {
-            scene.remove(leftControllerMesh);
-            leftControllerMesh = null;
-        }
-        if (rightControllerMesh) {
-            scene.remove(rightControllerMesh);
-            rightControllerMesh = null;
-        }
-
-        // Find controllers by handedness
-        session.inputSources.forEach((inputSource, index) => {
-            const controller = renderer.xr.getController(index);
-
-            if (inputSource.handedness === 'left') {
-                console.log('Found left controller');
-                leftController = controller;
-                leftController.userData.inputSource = inputSource; // Store reference to inputSource
-                scene.add(leftController);
-
-                // Create a visual representation for the left controller
-                leftControllerMesh = createControllerMesh(0x0088ff); // Blue for left
-                leftController.add(leftControllerMesh);
-            }
-            else if (inputSource.handedness === 'right') {
-                console.log('Found right controller');
-                rightController = controller;
-                scene.add(rightController);
-
-                // Create a visual representation for the right controller
-                rightControllerMesh = createControllerMesh(0xff2200); // Red for right
-                rightController.add(rightControllerMesh);
-            }
+        // Also log whenever input sources change
+        session.addEventListener('inputsourceschange', (event) => {
+            console.log('Input sources changed:',
+                'Added:', event.added,
+                'Removed:', event.removed,
+                'Current:', session.inputSources);
         });
+    } else {
+        console.warn('No XR session available when setting up controllers');
     }
 
-    // Set up controllers
-    setupControllersByHandedness();
+    // Create controller objects
+    leftController = renderer.xr.getController(0);
+    rightController = renderer.xr.getController(1);
 
-    // Also listen for inputsourceschange event to handle controller reconnection
-    session.addEventListener('inputsourceschange', setupControllersByHandedness);
+    // Create simple geometry for controllers
+    const controllerGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.1, 8);
+    const leftControllerMaterial = new THREE.MeshBasicMaterial({ color: 0x0088ff }); // Blue for left
+    const rightControllerMaterial = new THREE.MeshBasicMaterial({ color: 0xff2200 }); // Red for right
+
+    // Create meshes
+    leftControllerMesh = new THREE.Mesh(controllerGeometry, leftControllerMaterial);
+    rightControllerMesh = new THREE.Mesh(controllerGeometry, rightControllerMaterial);
+
+    // Add aim rays
+    const rayMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    // Create a longer ray by extending the end point
+    const rayGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -5)  // Make ray 5 units long
+    ]);
+
+    const leftRay = new THREE.Line(rayGeometry, rayMaterial);
+    const rightRay = new THREE.Line(rayGeometry, rayMaterial);
+
+    // Position and rotate controllers to align with aim direction
+    leftControllerMesh.rotation.x = -Math.PI / 2; // Rotate to point forward
+    rightControllerMesh.rotation.x = -Math.PI / 2;
+
+    // Add meshes to controllers
+    leftController.add(leftControllerMesh);
+    rightController.add(rightControllerMesh);
+
+    // Add rays to controllers
+    leftController.add(leftRay);
+    rightController.add(rightRay);
+
+    // Add controllers to scene
+    scene.add(leftController);
+    scene.add(rightController);
+
+    console.log('Controllers set up with direct visualization approach and aim rays');
 }
 
-// Create a visual mesh for the controller
-function createControllerMesh(color) {
-    // Create a controller group to hold all parts
-    const controllerGroup = new THREE.Group();
+// Function to update controller rotations if needed
+function updateControllers() {
+    if (!renderer.xr.isPresenting) return;
 
-    // Create the main body of the controller
-    const bodyGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.08, 16);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: color });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = -0.04;
-    body.rotation.x = Math.PI / 2;
-    controllerGroup.add(body);
+    const session = renderer.xr.getSession();
+    const xrFrame = renderer.xr.getFrame();
 
-    // Create a handle part
-    const handleGeometry = new THREE.CylinderGeometry(0.015, 0.015, 0.1, 16);
-    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
-    const handle = new THREE.Mesh(handleGeometry, handleMaterial);
-    handle.position.y = -0.1;
-    handle.rotation.x = Math.PI / 2;
-    controllerGroup.add(handle);
+    if (!session || !xrFrame) return;
 
-    // Add a button on top
-    const buttonGeometry = new THREE.CylinderGeometry(0.005, 0.005, 0.01, 12);
-    const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
-    button.position.z = -0.025;
-    button.position.y = -0.03;
-    button.rotation.x = Math.PI / 2;
-    controllerGroup.add(button);
+    // Debug log input sources periodically (once per second)
+    const currentTime = performance.now();
+    if (!updateControllers.lastLogTime || currentTime - updateControllers.lastLogTime > 1000) {
+        updateControllers.lastLogTime = currentTime;
+        if (session.inputSources && session.inputSources.length > 0) {
+            console.log(`Active input sources (${session.inputSources.length}):`,
+                session.inputSources.map(src => `${src.handedness} (${src.targetRayMode})`));
+        } else {
+            console.warn('No input sources available');
+        }
+    }
 
-    // Add a light to make it more visible
-    const light = new THREE.PointLight(color, 0.5, 0.2);
-    light.position.set(0, -0.05, 0);
-    controllerGroup.add(light);
+    const referenceSpace = renderer.xr.getReferenceSpace();
 
-    return controllerGroup;
+    if (!referenceSpace) return;
+
+    session.inputSources.forEach((inputSource) => {
+        const targetRayPose = xrFrame.getPose(inputSource.targetRaySpace, referenceSpace);
+
+        if (targetRayPose) {
+            const gripSpace = inputSource.gripSpace;
+            const controller = (inputSource.handedness === "left") ? leftController : rightController;
+
+            if (gripSpace) {
+                const gripPose = xrFrame.getPose(gripSpace, referenceSpace);
+                if (gripPose) {
+                    const { position, orientation } = gripPose.transform;
+                    controller.position.set(position.x, position.y, position.z);
+                    controller.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
+
+                    // Log every 3 seconds to avoid console spam
+                    if (updateControllers.lastLogTime && currentTime - updateControllers.lastLogTime < 100) {
+                        console.log(`${inputSource.handedness} controller position:`,
+                            `(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
+                    }
+                } else {
+                    // Log when we can't get the pose
+                    if (updateControllers.lastLogTime && currentTime - updateControllers.lastLogTime < 100) {
+                        console.warn(`No grip pose for ${inputSource.handedness} controller`);
+                    }
+                }
+            }
+
+            // Store input source in controller userData for button checks
+            controller.userData.inputSource = inputSource;
+        }
+    });
+
+    // Check X button state if controllers are available
+    if (leftController && leftController.userData.inputSource && leftController.userData.inputSource.gamepad) {
+        const newXButtonState = checkXButtonState();
+
+        // Detect when X button is first pressed (transition from false to true)
+        leftXButtonJustPressed = newXButtonState && !leftXButtonPressed;
+
+        // Only log changes in button state to avoid console spam
+        if (newXButtonState !== leftXButtonPressed) {
+            leftXButtonPressed = newXButtonState;
+            console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
+        }
+    }
 }
 
 // Function to check X button state on left controller
@@ -596,9 +627,9 @@ function locateConvergencePlane(leftCam, rightCam) {
     // Calculate display position denominators - check for division by zero
     const denomX = (r1 - l1 - r0 + l0);
     const denomY = (u1 - d1 - u0 + d0);
-    console.log("Denominators for position calculation:",
-        "denomX:", denomX,
-        "denomY:", denomY);
+    // console.log("Denominators for position calculation:",
+    //     "denomX:", denomX,
+    //     "denomY:", denomY);
 
     if (Math.abs(denomX) < 0.0001 || isMirror) {
         console.warn("RENDERING for VR");
@@ -632,8 +663,8 @@ function locateConvergencePlane(leftCam, rightCam) {
     const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
     const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
 
-    console.log("Display position calculation:",
-        "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
+    // console.log("Display position calculation:",
+    //     "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
 
     // Calculate display size
     const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
@@ -760,9 +791,6 @@ function animate() {
             if (newXButtonState !== leftXButtonPressed) {
                 leftXButtonPressed = newXButtonState;
                 console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
-
-                // Update controller visuals to reflect button state
-                updateControllerVisuals();
             }
 
             // If X button was just pressed, reset convergence plane
@@ -1241,38 +1269,4 @@ function updateHUD(leftCam, rightCam) {
     hudTexture.needsUpdate = true;
 }
 
-// Function to update controller visuals based on button states
-function updateControllerVisuals() {
-    // Update left controller visuals based on button state
-    if (leftControllerMesh) {
-        // Find the button (third child in our controller mesh)
-        const button = leftControllerMesh.children[2];
-        if (button) {
-            // Change button color based on pressed state
-            if (leftXButtonPressed) {
-                button.material.color.setHex(0xff0000); // Red when pressed
-            } else {
-                button.material.color.setHex(0xffffff); // White when not pressed
-            }
-        }
-
-        // Update the light intensity
-        const light = leftControllerMesh.children[3];
-        if (light && light.isLight) {
-            light.intensity = leftXButtonPressed ? 1.0 : 0.5;
-        }
-    }
-}
-
-// Function to update controller positions/orientations
-function updateControllers() {
-    // This function is called every frame to ensure controller visuals match the actual controllers
-    if (leftController && leftControllerMesh) {
-        // The controller's position/rotation is already automatically updated by Three.js
-        // So we don't need to do anything here as we've parented the mesh to the controller
-    }
-
-    if (rightController && rightControllerMesh) {
-        // Same for right controller
-    }
-}
+// Controller visualization is now handled directly in updateControllers()
