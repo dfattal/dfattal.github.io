@@ -435,8 +435,10 @@ function updateControllers() {
     if (!updateControllers.lastLogTime || currentTime - updateControllers.lastLogTime > 1000) {
         updateControllers.lastLogTime = currentTime;
         if (session.inputSources && session.inputSources.length > 0) {
-            console.log(`Active input sources (${session.inputSources.length}):`,
-                session.inputSources.map(src => `${src.handedness} (${src.targetRayMode})`));
+            // Convert XRInputSourceArray to regular array for logging
+            const inputSourcesArray = Array.from(session.inputSources);
+            console.log(`Active input sources (${inputSourcesArray.length}):`,
+                inputSourcesArray.map(src => `${src.handedness} (${src.targetRayMode})`));
         } else {
             console.warn('No input sources available');
         }
@@ -446,7 +448,9 @@ function updateControllers() {
 
     if (!referenceSpace) return;
 
-    session.inputSources.forEach((inputSource) => {
+    // Convert XRInputSourceArray to regular array for iteration
+    const inputSourcesArray = Array.from(session.inputSources);
+    inputSourcesArray.forEach((inputSource) => {
         const targetRayPose = xrFrame.getPose(inputSource.targetRaySpace, referenceSpace);
 
         if (targetRayPose) {
