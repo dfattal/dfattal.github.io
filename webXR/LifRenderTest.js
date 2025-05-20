@@ -18,6 +18,7 @@ let displaySwitch = false;
 // Three.js renderer
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 
 let scene, camera, renderer;
 let planeLeft = null, planeRight = null;  // VR planes
@@ -367,33 +368,45 @@ function setupVRControllers() {
         console.log('XR Session established:', session);
         console.log('Input sources at init:', session.inputSources);
 
+        // Log interaction profiles for initial input sources
+        session.inputSources.forEach(inputSource => {
+            logInteractionProfile(inputSource);
+        });
+
         // Also log whenever input sources change
         session.addEventListener('inputsourceschange', (event) => {
             console.log('Input sources changed:',
                 'Added:', event.added,
                 'Removed:', event.removed,
                 'Current:', session.inputSources);
+
+            // Log interaction profiles for new input sources
+            event.added.forEach(inputSource => {
+                logInteractionProfile(inputSource);
+            });
         });
     } else {
         console.warn('No XR session available when setting up controllers');
     }
 
+    // Create controller model factory
+    const controllerModelFactory = new XRControllerModelFactory();
+
     // Create controller objects
     leftController = renderer.xr.getController(0);
     rightController = renderer.xr.getController(1);
 
-    // Create simple geometry for controllers
-    const controllerGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.1, 8);
-    const leftControllerMaterial = new THREE.MeshBasicMaterial({ color: 0x0088ff }); // Blue for left
-    const rightControllerMaterial = new THREE.MeshBasicMaterial({ color: 0xff2200 }); // Red for right
+    // Create controller grips and attach models
+    const leftControllerGrip = renderer.xr.getControllerGrip(0);
+    leftControllerGrip.add(controllerModelFactory.createControllerModel(leftControllerGrip));
+    scene.add(leftControllerGrip);
 
-    // Create meshes
-    leftControllerMesh = new THREE.Mesh(controllerGeometry, leftControllerMaterial);
-    rightControllerMesh = new THREE.Mesh(controllerGeometry, rightControllerMaterial);
+    const rightControllerGrip = renderer.xr.getControllerGrip(1);
+    rightControllerGrip.add(controllerModelFactory.createControllerModel(rightControllerGrip));
+    scene.add(rightControllerGrip);
 
     // Add aim rays
     const rayMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-    // Create a longer ray by extending the end point
     const rayGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 0, 0),
         new THREE.Vector3(0, 0, -5)  // Make ray 5 units long
@@ -401,14 +414,6 @@ function setupVRControllers() {
 
     const leftRay = new THREE.Line(rayGeometry, rayMaterial);
     const rightRay = new THREE.Line(rayGeometry, rayMaterial);
-
-    // Position and rotate controllers to align with aim direction
-    leftControllerMesh.rotation.x = -Math.PI / 2; // Rotate to point forward
-    rightControllerMesh.rotation.x = -Math.PI / 2;
-
-    // Add meshes to controllers
-    leftController.add(leftControllerMesh);
-    rightController.add(rightControllerMesh);
 
     // Add rays to controllers
     leftController.add(leftRay);
@@ -418,7 +423,19 @@ function setupVRControllers() {
     scene.add(leftController);
     scene.add(rightController);
 
-    console.log('Controllers set up with direct visualization approach and aim rays');
+    console.log('Controllers set up with 3D models and aim rays');
+}
+
+// Function to log interaction profiles for an input source
+function logInteractionProfile(inputSource) {
+    if (inputSource.profiles) {
+        console.log(`Interaction Profiles for ${inputSource.handedness} controller:`);
+        inputSource.profiles.forEach((profile) => {
+            console.log(`  - ${profile}`);
+        });
+    } else {
+        console.warn(`No profiles found for ${inputSource.handedness} controller`);
+    }
 }
 
 // Function to update controller rotations if needed
@@ -430,19 +447,6 @@ function updateControllers() {
 
     if (!session || !xrFrame) return;
 
-    // Debug log input sources periodically (once per second)
-    const currentTime = performance.now();
-    if (!updateControllers.lastLogTime || currentTime - updateControllers.lastLogTime > 1000) {
-        updateControllers.lastLogTime = currentTime;
-        if (session.inputSources && session.inputSources.length > 0) {
-            // Convert XRInputSourceArray to regular array for logging
-            const inputSourcesArray = Array.from(session.inputSources);
-            console.log(`Active input sources (${inputSourcesArray.length}):`,
-                inputSourcesArray.map(src => `${src.handedness} (${src.targetRayMode})`));
-        } else {
-            console.warn('No input sources available');
-        }
-    }
 
     const referenceSpace = renderer.xr.getReferenceSpace();
 
@@ -464,11 +468,7 @@ function updateControllers() {
                     controller.position.set(position.x, position.y, position.z);
                     controller.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
 
-                    // Log every 3 seconds to avoid console spam
-                    if (updateControllers.lastLogTime && currentTime - updateControllers.lastLogTime < 100) {
-                        console.log(`${inputSource.handedness} controller position:`,
-                            `(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
-                    }
+
                 } else {
                     // Log when we can't get the pose
                     if (updateControllers.lastLogTime && currentTime - updateControllers.lastLogTime < 100) {
