@@ -189,12 +189,49 @@ function createAnaglyph(contextLeft, contextRight, width, height) {
     const rightImageData = contextRight.getImageData(0, 0, width, height);
     const anaglyphData = anaglyphContext.createImageData(width, height);
 
-    // Blend channels to create an anaglyph effect
+    // Apply Dubois method for better anaglyph with reduced crosstalk
+    // Dubois transformation matrices for red-cyan anaglyphs
+    const leftMatrix = [
+        [0.437, 0.449, 0.164],  // Red output coefficients for left eye
+        [-0.062, -0.062, -0.024], // Green output coefficients for left eye
+        [-0.048, -0.050, -0.017]  // Blue output coefficients for left eye
+    ];
+
+    const rightMatrix = [
+        [-0.011, -0.032, -0.007], // Red output coefficients for right eye
+        [0.377, 0.761, 0.009],    // Green output coefficients for right eye
+        [-0.026, -0.093, 1.234]   // Blue output coefficients for right eye
+    ];
+
     for (let i = 0; i < leftImageData.data.length; i += 4) {
-        anaglyphData.data[i] = leftImageData.data[i];         // Red from left image
-        anaglyphData.data[i + 1] = rightImageData.data[i + 1]; // Green from right image
-        anaglyphData.data[i + 2] = rightImageData.data[i + 2]; // Blue from right image
-        anaglyphData.data[i + 3] = 255;                       // Full opacity
+        // Get RGB values for left and right images
+        const leftR = leftImageData.data[i] / 255.0;
+        const leftG = leftImageData.data[i + 1] / 255.0;
+        const leftB = leftImageData.data[i + 2] / 255.0;
+
+        const rightR = rightImageData.data[i] / 255.0;
+        const rightG = rightImageData.data[i + 1] / 255.0;
+        const rightB = rightImageData.data[i + 2] / 255.0;
+
+        // Apply Dubois transformation for left eye contribution
+        const leftContribR = leftMatrix[0][0] * leftR + leftMatrix[0][1] * leftG + leftMatrix[0][2] * leftB;
+        const leftContribG = leftMatrix[1][0] * leftR + leftMatrix[1][1] * leftG + leftMatrix[1][2] * leftB;
+        const leftContribB = leftMatrix[2][0] * leftR + leftMatrix[2][1] * leftG + leftMatrix[2][2] * leftB;
+
+        // Apply Dubois transformation for right eye contribution
+        const rightContribR = rightMatrix[0][0] * rightR + rightMatrix[0][1] * rightG + rightMatrix[0][2] * rightB;
+        const rightContribG = rightMatrix[1][0] * rightR + rightMatrix[1][1] * rightG + rightMatrix[1][2] * rightB;
+        const rightContribB = rightMatrix[2][0] * rightR + rightMatrix[2][1] * rightG + rightMatrix[2][2] * rightB;
+
+        // Combine contributions and clamp to valid range
+        const finalR = Math.max(0, Math.min(255, (leftContribR + rightContribR) * 255));
+        const finalG = Math.max(0, Math.min(255, (leftContribG + rightContribG) * 255));
+        const finalB = Math.max(0, Math.min(255, (leftContribB + rightContribB) * 255));
+
+        anaglyphData.data[i] = finalR;
+        anaglyphData.data[i + 1] = finalG;
+        anaglyphData.data[i + 2] = finalB;
+        anaglyphData.data[i + 3] = 255; // Full opacity
     }
 
     // Draw anaglyph and show the container
