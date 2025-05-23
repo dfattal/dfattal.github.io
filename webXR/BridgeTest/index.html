@@ -8,68 +8,195 @@
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
+            padding: 15px;
+            line-height: 1.4;
             background-color: #f5f5f5;
+            font-size: 14px;
         }
 
-        .container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        h1 {
+            color: #2c3e50;
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
         }
 
-        .panel {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
+        .extension-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .extension-status.installed {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .extension-status.not-installed {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+
+        .extension-status.not-installed:hover {
+            background-color: #ffcdd2;
+            transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        h1,
-        h2 {
-            color: #2c3e50;
-            margin-top: 0;
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
         }
 
-        .settings-group {
-            margin-bottom: 20px;
+        .status-indicator.green {
+            background-color: #4caf50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+        }
+
+        .status-indicator.red {
+            background-color: #f44336;
+            box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.3);
+        }
+
+        .extension-status .install-text {
+            display: none;
+        }
+
+        .extension-status.not-installed .install-text {
+            display: inline;
+        }
+
+        .extension-status.not-installed .status-text {
+            display: none;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 15px;
+            height: calc(100vh - 100px);
+        }
+
+        .left-panel {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 15px;
+        }
+
+        .controls-panel {
+            background-color: white;
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .control-section {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 12px;
+            background-color: #fafafa;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 12px 0;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #e0e0e0;
         }
 
         .setting-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: 120px 1fr 60px;
             align-items: center;
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 6px;
+            background-color: white;
+            border-radius: 3px;
+            border: 1px solid #e8e8e8;
         }
 
         .setting-label {
-            flex: 1;
             font-weight: 500;
             color: #2c3e50;
+            font-size: 13px;
         }
 
         .setting-value {
-            width: 60px;
             text-align: right;
             font-family: monospace;
             color: #666;
+            font-size: 12px;
+            font-weight: 500;
         }
 
         .slider {
-            flex: 2;
-            margin: 0 15px;
+            width: 100%;
+            height: 4px;
+            background: #ddd;
+            outline: none;
+            border-radius: 2px;
+        }
+
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #2196F3;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #2196F3;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .toggle-row {
+            display: grid;
+            grid-template-columns: 120px 50px 1fr;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 6px;
+            background-color: white;
+            border-radius: 3px;
+            border: 1px solid #e8e8e8;
         }
 
         .toggle-switch {
             position: relative;
             display: inline-block;
-            width: 60px;
-            height: 34px;
+            width: 44px;
+            height: 24px;
         }
 
         .toggle-switch input {
@@ -86,19 +213,19 @@
             right: 0;
             bottom: 0;
             background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
+            transition: .3s;
+            border-radius: 24px;
         }
 
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
             background-color: white;
-            transition: .4s;
+            transition: .3s;
             border-radius: 50%;
         }
 
@@ -107,61 +234,126 @@
         }
 
         input:checked+.toggle-slider:before {
-            transform: translateX(26px);
+            transform: translateX(20px);
         }
 
-        .status-panel {
-            background-color: #fff;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
+        .button-row {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1976D2;
+        }
+
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #d32f2f;
+        }
+
+        .right-panel {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 15px;
+        }
+
+        .monitor-panel {
+            background-color: white;
+            border-radius: 6px;
+            padding: 12px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .monitor-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 10px 0;
+            text-align: center;
         }
 
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
         }
 
         .status-item {
             background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            border-left: 4px solid #2196F3;
+            padding: 6px;
+            border-radius: 3px;
+            border-left: 3px solid #2196F3;
         }
 
         .status-label {
-            font-size: 0.9em;
+            font-size: 11px;
             color: #666;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
+            font-weight: 500;
         }
 
         .status-value {
             font-family: monospace;
-            font-size: 1.1em;
+            font-size: 12px;
             color: #2c3e50;
+            font-weight: 600;
         }
 
-        #resetSettingsButton:hover {
-            background-color: #d32f2f;
+        .log-panel {
+            background-color: white;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 10px 0;
         }
 
         .log {
-            height: 200px;
+            flex: 1;
             overflow-y: auto;
             border: 1px solid #ddd;
-            padding: 10px;
-            margin-top: 20px;
+            padding: 8px;
             font-family: monospace;
             background-color: #f8f9fa;
             border-radius: 4px;
+            font-size: 11px;
+            line-height: 1.3;
+            min-height: 150px;
+            max-height: 300px;
         }
 
         .log-entry {
-            margin: 5px 0;
-            padding: 5px;
-            border-radius: 3px;
+            margin: 3px 0;
+            padding: 3px 6px;
+            border-radius: 2px;
         }
 
         .log-entry.error {
@@ -174,129 +366,211 @@
             color: #2e7d32;
         }
 
-        /* Responsive design for smaller screens */
-        @media (max-width: 768px) {
-            .container {
+        /* Responsive design */
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .controls-grid {
                 grid-template-columns: 1fr;
             }
 
-            body {
-                padding: 10px;
+            .right-panel {
+                grid-template-rows: auto auto auto;
+                grid-template-columns: 1fr 1fr;
+                grid-column: 1;
             }
 
-            .panel {
-                padding: 15px;
+            .log-panel {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                font-size: 13px;
+            }
+
+            .setting-row {
+                grid-template-columns: 100px 1fr 50px;
+                gap: 6px;
+            }
+
+            .toggle-row {
+                grid-template-columns: 100px 44px 1fr;
+                gap: 6px;
+            }
+
+            .right-panel {
+                grid-template-columns: 1fr;
+            }
+
+            .status-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 
 <body>
-    <h1>WebXR-OpenXR Bridge Settings Panel</h1>
+    <h1>WebXR-OpenXR Bridge Settings
+        <span class="extension-status">
+            <span class="status-indicator"></span>
+            <span class="status-text">Extension Installed</span>
+        </span>
+    </h1>
 
-    <div class="container">
-        <div class="panel">
-            <h2>Session Settings</h2>
-            <div class="settings-group">
-                <div class="setting-row">
-                    <span class="setting-label">IPD Scale</span>
-                    <input type="range" class="slider" id="ipdScale" min="0" max="2" step="0.001" value="1">
-                    <span class="setting-value" id="ipdScaleValue">1.000</span>
-                </div>
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="controls-panel">
+                <div class="controls-grid">
+                    <!-- Session Settings -->
+                    <div class="control-section">
+                        <h3 class="section-title">Session Settings</h3>
 
-                <div class="setting-row">
-                    <span class="setting-label">Scene Scale</span>
-                    <input type="range" class="slider" id="sceneScale" min="0" max="2" step="0.001" value="1">
-                    <span class="setting-value" id="sceneScaleValue">1.000</span>
-                </div>
+                        <div class="setting-row">
+                            <span class="setting-label">IPD Scale</span>
+                            <input type="range" class="slider" id="ipdScale" min="0" max="2" step="0.001" value="1">
+                            <span class="setting-value" id="ipdScaleValue">1.000</span>
+                        </div>
 
-                <div class="setting-row">
-                    <span class="setting-label">Parallax Strength</span>
-                    <input type="range" class="slider" id="parallaxStrength" min="0" max="2" step="0.001" value="1">
-                    <span class="setting-value" id="parallaxStrengthValue">1.000</span>
-                </div>
+                        <div class="setting-row">
+                            <span class="setting-label">Scene Scale</span>
+                            <input type="range" class="slider" id="sceneScale" min="0" max="2" step="0.001" value="1">
+                            <span class="setting-value" id="sceneScaleValue">1.000</span>
+                        </div>
 
-                <div class="setting-row">
-                    <span class="setting-label">Convergence</span>
-                    <input type="range" class="slider" id="convergence" min="0" max="2" step="0.001" value="1">
-                    <span class="setting-value" id="convergenceValue">1.000</span>
-                </div>
+                        <div class="setting-row">
+                            <span class="setting-label">Parallax</span>
+                            <input type="range" class="slider" id="parallaxStrength" min="0" max="2" step="0.001"
+                                value="1">
+                            <span class="setting-value" id="parallaxStrengthValue">1.000</span>
+                        </div>
 
-                <div class="setting-row">
-                    <span class="setting-label">Perspective Factor</span>
-                    <input type="range" class="slider" id="perspectiveFactor" min="0" max="2" step="0.001" value="1">
-                    <span class="setting-value" id="perspectiveFactorValue">1.000</span>
-                </div>
+                        <div class="setting-row">
+                            <span class="setting-label">Convergence</span>
+                            <input type="range" class="slider" id="convergence" min="0" max="2" step="0.001" value="1">
+                            <span class="setting-value" id="convergenceValue">1.000</span>
+                        </div>
 
-                <div class="setting-row">
-                    <span class="setting-label">Projection Method</span>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="projectionMethod">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span class="setting-value" id="projectionMethodValue">Display Centric</span>
-                </div>
+                        <div class="setting-row">
+                            <span class="setting-label">Perspective</span>
+                            <input type="range" class="slider" id="perspectiveFactor" min="0" max="2" step="0.001"
+                                value="1">
+                            <span class="setting-value" id="perspectiveFactorValue">1.000</span>
+                        </div>
 
-                <div class="setting-row">
-                    <span class="setting-label">Control Mode</span>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="controlMode">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span class="setting-value" id="controlModeValue">First Person</span>
-                </div>
+                        <div class="toggle-row">
+                            <span class="setting-label">Projection</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="projectionMethod">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="setting-value" id="projectionMethodValue">Display</span>
+                        </div>
 
-                <div class="setting-row">
-                    <button id="resetSettingsButton"
-                        style="width: 100%; padding: 10px; margin-top: 15px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset
-                        Settings</button>
+                        <div class="toggle-row">
+                            <span class="setting-label">Control</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="controlMode">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="setting-value" id="controlModeValue">First Person</span>
+                        </div>
+                    </div>
+
+                    <!-- Head Pose Controls -->
+                    <div class="control-section">
+                        <h3 class="section-title">Head Pose Control</h3>
+
+                        <div class="setting-row">
+                            <span class="setting-label">Height</span>
+                            <input type="range" class="slider" id="displayHeight" min="0" max="2" step="0.01"
+                                value="1.75">
+                            <span class="setting-value" id="displayHeightValue">1.75m</span>
+                        </div>
+
+                        <div class="setting-row">
+                            <span class="setting-label">Yaw</span>
+                            <input type="range" class="slider" id="displayYaw" min="0" max="360" step="1" value="0">
+                            <span class="setting-value" id="displayYawValue">0°</span>
+                        </div>
+
+                        <div class="button-row">
+                            <button class="btn btn-primary" id="resetPoseButton">Reset Pose</button>
+                            <button class="btn btn-danger" id="resetSettingsButton">Reset All</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="panel">
-            <h2>Head Pose Control</h2>
-            <div class="settings-group">
-                <div class="setting-row">
-                    <span class="setting-label">Display Height</span>
-                    <input type="range" class="slider" id="displayHeight" min="0" max="2" step="0.01" value="1.75">
-                    <span class="setting-value" id="displayHeightValue">1.75m</span>
+        <div class="right-panel">
+            <!-- Live Settings Monitor -->
+            <div class="monitor-panel">
+                <h3 class="monitor-title">Live Settings</h3>
+                <div class="status-grid" id="liveSettings">
+                    <!-- Live settings will be populated here -->
                 </div>
+            </div>
 
-                <div class="setting-row">
-                    <span class="setting-label">Display Yaw</span>
-                    <input type="range" class="slider" id="displayYaw" min="0" max="360" step="1" value="0">
-                    <span class="setting-value" id="displayYawValue">0°</span>
+            <!-- Head Pose Monitor -->
+            <div class="monitor-panel">
+                <h3 class="monitor-title">Head Pose Monitor</h3>
+                <div class="status-grid" id="headPoseMonitor">
+                    <!-- Head pose values will be populated here -->
                 </div>
+            </div>
 
-                <div class="setting-row">
-                    <button id="resetPoseButton"
-                        style="width: 100%; padding: 10px; margin-top: 15px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset
-                        Pose</button>
+            <!-- Event Log -->
+            <div class="log-panel">
+                <h3 class="log-title">Event Log</h3>
+                <div class="log" id="logPanel">
+                    <div>Ready...</div>
                 </div>
             </div>
         </div>
-
-        <div class="panel">
-            <h2>Head Pose Monitor</h2>
-            <div class="status-grid" id="headPoseMonitor">
-                <!-- Head pose values will be populated here -->
-            </div>
-        </div>
-
-        <div class="panel">
-            <h2>Live Settings</h2>
-            <div class="status-grid" id="liveSettings">
-                <!-- Live settings will be populated here -->
-            </div>
-        </div>
-    </div>
-
-    <div class="log" id="logPanel">
-        <div>Event Log:</div>
     </div>
 
     <script>
+        // Extension detection and status update
+        function checkExtensionStatus() {
+            const statusElement = document.querySelector('.extension-status');
+            const statusIndicator = document.querySelector('.status-indicator');
+
+            // Check if the WebXROpenXRBridge object exists (injected by the extension)
+            if (window.WebXROpenXRBridge) {
+                // Extension is installed and working
+                statusElement.className = 'extension-status installed';
+                statusElement.innerHTML = `
+                    <span class="status-indicator green"></span>
+                    <span class="status-text">Extension Ready</span>
+                `;
+                logMessage('WebXR-OpenXR Bridge extension detected', 'success');
+            } else {
+                // Extension not found - show install link
+                statusElement.className = 'extension-status not-installed';
+                statusElement.innerHTML = `
+                    <span class="status-indicator red"></span>
+                    <span class="install-text">Install Extension</span>
+                `;
+
+                // Make it clickable to open Chrome Web Store
+                statusElement.onclick = () => {
+                    window.open('https://chromewebstore.google.com/detail/webxr-openxr-bridge/kbhoohhidfimoheieoibjlecmkcodipm', '_blank');
+                    logMessage('Opening Chrome Web Store to install extension', 'info');
+                };
+
+                statusElement.style.cursor = 'pointer';
+                statusElement.title = 'Click to install the WebXR-OpenXR Bridge extension';
+
+                logMessage('WebXR-OpenXR Bridge extension not found. Click the red indicator to install.', 'error');
+            }
+        }
+
         // Helper function to log messages
         function logMessage(message, type = 'info') {
             const logPanel = document.getElementById('logPanel');
@@ -337,13 +611,13 @@
 
             if (headPose && headPose.position && headPose.orientation) {
                 const poseData = {
-                    'Position X': headPose.position.x,
-                    'Position Y': headPose.position.y,
-                    'Position Z': headPose.position.z,
-                    'Orientation X': headPose.orientation.x,
-                    'Orientation Y': headPose.orientation.y,
-                    'Orientation Z': headPose.orientation.z,
-                    'Orientation W': headPose.orientation.w
+                    'Pos X': headPose.position.x,
+                    'Pos Y': headPose.position.y,
+                    'Pos Z': headPose.position.z,
+                    'Rot X': headPose.orientation.x,
+                    'Rot Y': headPose.orientation.y,
+                    'Rot Z': headPose.orientation.z,
+                    'Rot W': headPose.orientation.w
                 };
 
                 for (const [key, value] of Object.entries(poseData)) {
@@ -378,9 +652,18 @@
             };
         }
 
+        // Helper function to check if extension is available before API calls
+        function checkExtensionAvailable(functionName = 'API call') {
+            if (!window.WebXROpenXRBridge) {
+                logMessage(`${functionName} failed: Extension not installed`, 'error');
+                return false;
+            }
+            return true;
+        }
+
         // Function to set head pose based on UI controls
         function setHeadPoseFromUI() {
-            if (!window.WebXROpenXRBridge) return;
+            if (!checkExtensionAvailable('Set head pose')) return;
 
             const height = parseFloat(document.getElementById('displayHeight').value);
             const yaw = parseFloat(document.getElementById('displayYaw').value);
@@ -396,128 +679,144 @@
 
             try {
                 window.WebXROpenXRBridge.setHeadPose(headPose);
-                logMessage(`Head pose set - Height: ${height}m, Yaw: ${yaw}°`, 'success');
+                logMessage(`Pose: ${height}m, ${yaw}°`, 'success');
             } catch (error) {
-                logMessage(`Error setting head pose: ${error}`, 'error');
+                logMessage(`Error: ${error}`, 'error');
             }
         }
 
         // Function to get and display current head pose
         async function updateHeadPoseFromRuntime() {
-            if (!window.WebXROpenXRBridge) return;
+            if (!checkExtensionAvailable()) return;
 
             try {
                 const headPose = await window.WebXROpenXRBridge.getHeadPose();
                 updateHeadPoseMonitor(headPose);
             } catch (error) {
-                logMessage(`Error getting head pose: ${error}`, 'error');
+                logMessage(`Get pose error: ${error}`, 'error');
             }
-        }
-
-        // Helper function to debounce slider input
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
         }
 
         // Function to update all settings
         async function updateAllSettings() {
-            if (!window.WebXROpenXRBridge) return;
+            if (!checkExtensionAvailable()) return;
 
             try {
                 const settings = {
-                    'IPD Scale': await window.WebXROpenXRBridge.getIPDScale(),
-                    'Scene Scale': await window.WebXROpenXRBridge.getSceneScale(),
-                    'Parallax Strength': await window.WebXROpenXRBridge.getParallaxStrength(),
+                    'IPD': await window.WebXROpenXRBridge.getIPDScale(),
+                    'Scene': await window.WebXROpenXRBridge.getSceneScale(),
+                    'Parallax': await window.WebXROpenXRBridge.getParallaxStrength(),
                     'Convergence': await window.WebXROpenXRBridge.getConvergence(),
-                    'Perspective Factor': await window.WebXROpenXRBridge.getPerspectiveFactor(),
-                    'Projection Method': (await window.WebXROpenXRBridge.getProjectionMethod()) === 1 ? 'Display Centric' : 'Camera Centric',
-                    'Control Mode': (await window.WebXROpenXRBridge.getControlMode()) === 0 ? 'First Person' : 'Fly'
+                    'Perspective': await window.WebXROpenXRBridge.getPerspectiveFactor(),
+                    'Projection': (await window.WebXROpenXRBridge.getProjectionMethod()) === 1 ? 'Display' : 'Camera',
+                    'Control': (await window.WebXROpenXRBridge.getControlMode()) === 0 ? 'FP' : 'Fly'
                 };
 
                 updateLiveSettings(settings);
 
                 // Update UI controls to match current values
-                document.getElementById('ipdScale').value = settings['IPD Scale'];
-                document.getElementById('ipdScaleValue').textContent = settings['IPD Scale'].toFixed(3);
-                document.getElementById('sceneScale').value = settings['Scene Scale'];
-                document.getElementById('sceneScaleValue').textContent = settings['Scene Scale'].toFixed(3);
-                document.getElementById('parallaxStrength').value = settings['Parallax Strength'];
-                document.getElementById('parallaxStrengthValue').textContent = settings['Parallax Strength'].toFixed(3);
+                document.getElementById('ipdScale').value = settings['IPD'];
+                document.getElementById('ipdScaleValue').textContent = settings['IPD'].toFixed(3);
+                document.getElementById('sceneScale').value = settings['Scene'];
+                document.getElementById('sceneScaleValue').textContent = settings['Scene'].toFixed(3);
+                document.getElementById('parallaxStrength').value = settings['Parallax'];
+                document.getElementById('parallaxStrengthValue').textContent = settings['Parallax'].toFixed(3);
                 document.getElementById('convergence').value = settings['Convergence'];
                 document.getElementById('convergenceValue').textContent = settings['Convergence'].toFixed(3);
-                document.getElementById('perspectiveFactor').value = settings['Perspective Factor'];
-                document.getElementById('perspectiveFactorValue').textContent = settings['Perspective Factor'].toFixed(3);
-                document.getElementById('projectionMethod').checked = settings['Projection Method'] === 'Camera Centric';
-                document.getElementById('projectionMethodValue').textContent = settings['Projection Method'];
-                document.getElementById('controlMode').checked = settings['Control Mode'] === 'Fly';
-                document.getElementById('controlModeValue').textContent = settings['Control Mode'];
+                document.getElementById('perspectiveFactor').value = settings['Perspective'];
+                document.getElementById('perspectiveFactorValue').textContent = settings['Perspective'].toFixed(3);
+                document.getElementById('projectionMethod').checked = settings['Projection'] === 'Camera';
+                document.getElementById('projectionMethodValue').textContent = settings['Projection'];
+                document.getElementById('controlMode').checked = settings['Control'] === 'Fly';
+                document.getElementById('controlModeValue').textContent = settings['Control'];
             } catch (error) {
-                logMessage(`Error updating settings: ${error}`, 'error');
+                logMessage(`Update error: ${error}`, 'error');
             }
         }
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', () => {
+            // Check extension status immediately
+            checkExtensionStatus();
+
+            // Recheck extension status every 2 seconds for the first 10 seconds
+            // This handles cases where the extension loads after the page
+            let recheckCount = 0;
+            const recheckInterval = setInterval(() => {
+                checkExtensionStatus();
+                recheckCount++;
+                if (recheckCount >= 5 || window.WebXROpenXRBridge) {
+                    clearInterval(recheckInterval);
+                }
+            }, 2000);
+
+            // Slider event listeners
             document.getElementById('ipdScale').addEventListener('input', function () {
                 document.getElementById('ipdScaleValue').textContent = this.value;
-                window.WebXROpenXRBridge.setIPDScale(parseFloat(this.value))
+                if (checkExtensionAvailable('IPD Scale')) {
+                    window.WebXROpenXRBridge.setIPDScale(parseFloat(this.value));
+                }
             });
             document.getElementById('sceneScale').addEventListener('input', function () {
                 document.getElementById('sceneScaleValue').textContent = this.value;
-                window.WebXROpenXRBridge.setSceneScale(parseFloat(this.value))
+                if (checkExtensionAvailable('Scene Scale')) {
+                    window.WebXROpenXRBridge.setSceneScale(parseFloat(this.value));
+                }
             });
             document.getElementById('parallaxStrength').addEventListener('input', function () {
                 document.getElementById('parallaxStrengthValue').textContent = this.value;
-                window.WebXROpenXRBridge.setParallaxStrength(parseFloat(this.value))
+                if (checkExtensionAvailable('Parallax Strength')) {
+                    window.WebXROpenXRBridge.setParallaxStrength(parseFloat(this.value));
+                }
             });
             document.getElementById('convergence').addEventListener('input', function () {
                 document.getElementById('convergenceValue').textContent = this.value;
-                window.WebXROpenXRBridge.setConvergence(parseFloat(this.value))
+                if (checkExtensionAvailable('Convergence')) {
+                    window.WebXROpenXRBridge.setConvergence(parseFloat(this.value));
+                }
             });
             document.getElementById('perspectiveFactor').addEventListener('input', function () {
                 document.getElementById('perspectiveFactorValue').textContent = this.value;
-                window.WebXROpenXRBridge.setSessionPerspectiveFactor(parseFloat(this.value))
+                if (checkExtensionAvailable('Perspective Factor')) {
+                    window.WebXROpenXRBridge.setSessionPerspectiveFactor(parseFloat(this.value));
+                }
             });
 
-            // Set up toggle event listeners
+            // Toggle event listeners
             document.getElementById('projectionMethod').addEventListener('change', (e) => {
+                if (!checkExtensionAvailable('Projection Method')) return;
+
                 try {
                     const newMethod = e.target.checked ? 0 : 1;
                     window.WebXROpenXRBridge.setProjectionMethod(newMethod);
-                    const method = newMethod === 1 ? 'Display Centric' : 'Camera Centric';
+                    const method = newMethod === 1 ? 'Display' : 'Camera';
                     document.getElementById('projectionMethodValue').textContent = method;
-                    logMessage(`Projection Method set to ${method}`, 'success');
+                    logMessage(`Projection: ${method}`, 'success');
                 } catch (error) {
-                    logMessage(`Error setting Projection Method: ${error}`, 'error');
+                    logMessage(`Projection error: ${error}`, 'error');
                 }
             });
 
             document.getElementById('controlMode').addEventListener('change', (e) => {
+                if (!checkExtensionAvailable('Control Mode')) return;
+
                 try {
                     const newMode = e.target.checked ? 1 : 0;
                     window.WebXROpenXRBridge.setControlMode(newMode);
                     const mode = newMode === 0 ? 'First Person' : 'Fly';
                     document.getElementById('controlModeValue').textContent = mode;
-                    logMessage(`Control Mode set to ${mode}`, 'success');
+                    logMessage(`Control: ${mode}`, 'success');
                 } catch (error) {
-                    logMessage(`Error setting Control Mode: ${error}`, 'error');
+                    logMessage(`Control error: ${error}`, 'error');
                 }
             });
 
-            // Add reset settings button
+            // Button event listeners
             document.getElementById('resetSettingsButton').addEventListener('click', () => {
-                window.WebXROpenXRBridge.resetSettings(1.0);
-                logMessage('All settings reset to default', 'success');
+                if (!checkExtensionAvailable('Reset Settings')) return;
 
-                // Update the UI after a short delay to allow the reset to apply
+                window.WebXROpenXRBridge.resetSettings(1.0);
+                logMessage('Settings reset', 'success');
                 setTimeout(updateAllSettings, 500);
             });
 
@@ -533,20 +832,16 @@
             });
 
             document.getElementById('resetPoseButton').addEventListener('click', () => {
-                // Reset to default pose (1.75m height, 0° yaw)
                 document.getElementById('displayHeight').value = 1.75;
                 document.getElementById('displayHeightValue').textContent = '1.75m';
                 document.getElementById('displayYaw').value = 0;
                 document.getElementById('displayYawValue').textContent = '0°';
-
                 setHeadPoseFromUI();
-                logMessage('Head pose reset to default', 'success');
+                logMessage('Pose reset', 'success');
             });
 
-            // Update settings every second
+            // Update intervals
             setInterval(updateAllSettings, 1000);
-
-            // Update head pose monitor every 500ms
             setInterval(updateHeadPoseFromRuntime, 500);
 
             // Initial updates
