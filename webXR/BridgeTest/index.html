@@ -88,15 +88,69 @@
 
         .main-container {
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 15px;
+            grid-template-rows: 1fr auto;
+            gap: 20px;
             height: calc(100vh - 100px);
+            max-height: 800px;
         }
 
-        .left-panel {
+        .quadrant-grid {
             display: grid;
-            grid-template-rows: auto auto 1fr;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 2fr 1fr;
             gap: 15px;
+            height: 100%;
+        }
+
+        .quadrant {
+            background-color: white;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .quadrant.bottom-row {
+            padding: 12px;
+        }
+
+        .quadrant-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e8f4fd;
+            text-align: center;
+        }
+
+        .top-left {
+            border-top: 4px solid #2196F3;
+        }
+
+        .top-right {
+            border-top: 4px solid #4caf50;
+        }
+
+        .bottom-left {
+            border-top: 4px solid #ff9800;
+        }
+
+        .bottom-right {
+            border-top: 4px solid #9c27b0;
+        }
+
+        .quadrant-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .settings-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .controls-panel {
@@ -130,13 +184,13 @@
 
         .setting-row {
             display: grid;
-            grid-template-columns: 120px 1fr 60px;
+            grid-template-columns: 100px 1fr 60px;
             align-items: center;
             gap: 8px;
             margin-bottom: 8px;
-            padding: 6px;
-            background-color: white;
-            border-radius: 3px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
             border: 1px solid #e8e8e8;
         }
 
@@ -182,13 +236,13 @@
 
         .toggle-row {
             display: grid;
-            grid-template-columns: 120px 50px 1fr;
+            grid-template-columns: 100px 50px 1fr;
             align-items: center;
             gap: 8px;
             margin-bottom: 8px;
-            padding: 6px;
-            background-color: white;
-            border-radius: 3px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
             border: 1px solid #e8e8e8;
         }
 
@@ -240,8 +294,12 @@
         .button-row {
             margin-top: 10px;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 10px;
+        }
+
+        .button-row.two-buttons {
+            grid-template-columns: 1fr 1fr;
         }
 
         .btn {
@@ -295,59 +353,67 @@
 
         .status-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 8px;
         }
 
         .status-item {
             background-color: #f8f9fa;
-            padding: 6px;
-            border-radius: 3px;
-            border-left: 3px solid #2196F3;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #2196F3;
+            transition: background-color 0.2s ease;
+        }
+
+        .status-item:hover {
+            background-color: #e3f2fd;
         }
 
         .status-label {
-            font-size: 11px;
+            font-size: 12px;
             color: #666;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
             font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .status-value {
             font-family: monospace;
-            font-size: 12px;
+            font-size: 14px;
             color: #2c3e50;
             font-weight: 600;
         }
 
         .log-panel {
             background-color: white;
-            border-radius: 6px;
-            padding: 12px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            display: flex;
-            flex-direction: column;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e0e0e0;
+            border-top: 4px solid #607d8b;
         }
 
         .log-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
             color: #2c3e50;
-            margin: 0 0 10px 0;
+            margin: 0 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e8f4fd;
+            text-align: center;
         }
 
         .log {
-            flex: 1;
             overflow-y: auto;
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             font-family: monospace;
             background-color: #f8f9fa;
             border-radius: 4px;
             font-size: 11px;
-            line-height: 1.3;
-            min-height: 150px;
-            max-height: 300px;
+            line-height: 1.4;
+            height: 120px;
         }
 
         .log-entry {
@@ -369,22 +435,22 @@
         /* Responsive design */
         @media (max-width: 1024px) {
             .main-container {
+                height: auto;
+                max-height: none;
+            }
+
+            .quadrant-grid {
                 grid-template-columns: 1fr;
+                grid-template-rows: repeat(4, auto);
                 height: auto;
             }
 
-            .controls-grid {
-                grid-template-columns: 1fr;
+            .quadrant {
+                min-height: 250px;
             }
 
-            .right-panel {
-                grid-template-rows: auto auto auto;
-                grid-template-columns: 1fr 1fr;
-                grid-column: 1;
-            }
-
-            .log-panel {
-                grid-column: 1 / -1;
+            .log {
+                height: 100px;
             }
         }
 
@@ -394,22 +460,52 @@
                 font-size: 13px;
             }
 
+            h1 {
+                font-size: 20px;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .quadrant {
+                padding: 12px;
+                min-height: 200px;
+            }
+
+            .quadrant-title {
+                font-size: 14px;
+            }
+
             .setting-row {
-                grid-template-columns: 100px 1fr 50px;
+                grid-template-columns: 80px 1fr 50px;
                 gap: 6px;
+                padding: 6px;
             }
 
             .toggle-row {
-                grid-template-columns: 100px 44px 1fr;
+                grid-template-columns: 80px 44px 1fr;
                 gap: 6px;
+                padding: 6px;
             }
 
-            .right-panel {
-                grid-template-columns: 1fr;
+            .setting-label {
+                font-size: 12px;
             }
 
-            .status-grid {
-                grid-template-columns: 1fr;
+            .setting-value {
+                font-size: 11px;
+            }
+
+            .status-label {
+                font-size: 11px;
+            }
+
+            .status-value {
+                font-size: 12px;
+            }
+
+            .log {
+                height: 80px;
+                font-size: 10px;
             }
         }
     </style>
@@ -424,113 +520,105 @@
     </h1>
 
     <div class="main-container">
-        <div class="left-panel">
-            <div class="controls-panel">
-                <div class="controls-grid">
-                    <!-- Session Settings -->
-                    <div class="control-section">
-                        <h3 class="section-title">Session Settings</h3>
-
-                        <div class="setting-row">
-                            <span class="setting-label">IPD Scale</span>
-                            <input type="range" class="slider" id="ipdScale" min="0" max="2" step="0.001" value="1">
-                            <span class="setting-value" id="ipdScaleValue">1.000</span>
-                        </div>
-
-                        <div class="setting-row">
-                            <span class="setting-label">Scene Scale</span>
-                            <input type="range" class="slider" id="sceneScale" min="0" max="2" step="0.001" value="1">
-                            <span class="setting-value" id="sceneScaleValue">1.000</span>
-                        </div>
-
-                        <div class="setting-row">
-                            <span class="setting-label">Parallax</span>
-                            <input type="range" class="slider" id="parallaxStrength" min="0" max="2" step="0.001"
-                                value="1">
-                            <span class="setting-value" id="parallaxStrengthValue">1.000</span>
-                        </div>
-
-                        <div class="setting-row">
-                            <span class="setting-label">Convergence</span>
-                            <input type="range" class="slider" id="convergence" min="0" max="2" step="0.001" value="1">
-                            <span class="setting-value" id="convergenceValue">1.000</span>
-                        </div>
-
-                        <div class="setting-row">
-                            <span class="setting-label">Perspective</span>
-                            <input type="range" class="slider" id="perspectiveFactor" min="0" max="2" step="0.001"
-                                value="1">
-                            <span class="setting-value" id="perspectiveFactorValue">1.000</span>
-                        </div>
-
-                        <div class="toggle-row">
-                            <span class="setting-label">Projection</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="projectionMethod">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="setting-value" id="projectionMethodValue">Display</span>
-                        </div>
-
-                        <div class="toggle-row">
-                            <span class="setting-label">Control</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="controlMode">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="setting-value" id="controlModeValue">First Person</span>
-                        </div>
+        <div class="quadrant-grid">
+            <div class="quadrant top-left">
+                <h2 class="quadrant-title">Session Settings</h2>
+                <div class="settings-grid">
+                    <div class="setting-row">
+                        <span class="setting-label">IPD Scale</span>
+                        <input type="range" class="slider" id="ipdScale" min="0" max="2" step="0.001" value="1">
+                        <span class="setting-value" id="ipdScaleValue">1.000</span>
                     </div>
 
-                    <!-- Head Pose Controls -->
-                    <div class="control-section">
-                        <h3 class="section-title">Head Pose Control</h3>
+                    <div class="setting-row">
+                        <span class="setting-label">Scene Scale</span>
+                        <input type="range" class="slider" id="sceneScale" min="0" max="2" step="0.001" value="1">
+                        <span class="setting-value" id="sceneScaleValue">1.000</span>
+                    </div>
 
-                        <div class="setting-row">
-                            <span class="setting-label">Height</span>
-                            <input type="range" class="slider" id="displayHeight" min="0" max="2" step="0.01"
-                                value="1.75">
-                            <span class="setting-value" id="displayHeightValue">1.75m</span>
-                        </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Parallax</span>
+                        <input type="range" class="slider" id="parallaxStrength" min="0" max="2" step="0.001" value="1">
+                        <span class="setting-value" id="parallaxStrengthValue">1.000</span>
+                    </div>
 
-                        <div class="setting-row">
-                            <span class="setting-label">Yaw</span>
-                            <input type="range" class="slider" id="displayYaw" min="0" max="360" step="1" value="0">
-                            <span class="setting-value" id="displayYawValue">0°</span>
-                        </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Convergence</span>
+                        <input type="range" class="slider" id="convergence" min="0" max="2" step="0.001" value="1">
+                        <span class="setting-value" id="convergenceValue">1.000</span>
+                    </div>
 
-                        <div class="button-row">
-                            <button class="btn btn-primary" id="resetPoseButton">Reset Pose</button>
-                            <button class="btn btn-danger" id="resetSettingsButton">Reset All</button>
-                        </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Perspective</span>
+                        <input type="range" class="slider" id="perspectiveFactor" min="0" max="2" step="0.001"
+                            value="1">
+                        <span class="setting-value" id="perspectiveFactorValue">1.000</span>
+                    </div>
+
+                    <div class="toggle-row">
+                        <span class="setting-label">Projection</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="projectionMethod">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="setting-value" id="projectionMethodValue">Display</span>
+                    </div>
+
+                    <div class="toggle-row">
+                        <span class="setting-label">Control</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="controlMode">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="setting-value" id="controlModeValue">First Person</span>
+                    </div>
+
+                    <div class="button-row">
+                        <button class="btn btn-danger" id="resetSettingsButton">Reset All Settings</button>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="right-panel">
-            <!-- Live Settings Monitor -->
-            <div class="monitor-panel">
-                <h3 class="monitor-title">Live Settings</h3>
+            <div class="quadrant top-right">
+                <h2 class="quadrant-title">Live Settings</h2>
                 <div class="status-grid" id="liveSettings">
                     <!-- Live settings will be populated here -->
                 </div>
             </div>
 
-            <!-- Head Pose Monitor -->
-            <div class="monitor-panel">
-                <h3 class="monitor-title">Head Pose Monitor</h3>
+            <div class="quadrant bottom-left bottom-row">
+                <h2 class="quadrant-title">Head Pose Control</h2>
+                <div class="settings-grid">
+                    <div class="setting-row">
+                        <span class="setting-label">Height</span>
+                        <input type="range" class="slider" id="displayHeight" min="0" max="2" step="0.01" value="1.75">
+                        <span class="setting-value" id="displayHeightValue">1.75m</span>
+                    </div>
+
+                    <div class="setting-row">
+                        <span class="setting-label">Yaw</span>
+                        <input type="range" class="slider" id="displayYaw" min="0" max="360" step="1" value="0">
+                        <span class="setting-value" id="displayYawValue">0°</span>
+                    </div>
+
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="resetPoseButton">Reset Pose</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quadrant bottom-right bottom-row">
+                <h2 class="quadrant-title">Head Pose Monitor</h2>
                 <div class="status-grid" id="headPoseMonitor">
                     <!-- Head pose values will be populated here -->
                 </div>
             </div>
+        </div>
 
-            <!-- Event Log -->
-            <div class="log-panel">
-                <h3 class="log-title">Event Log</h3>
-                <div class="log" id="logPanel">
-                    <div>Ready...</div>
-                </div>
+        <div class="log-panel">
+            <h2 class="log-title">Event Log</h2>
+            <div class="log" id="logPanel">
+                <div>Ready...</div>
             </div>
         </div>
     </div>
@@ -604,20 +692,43 @@
             }
         }
 
+        // Helper function to convert quaternion to euler angles
+        function quaternionToEuler(qx, qy, qz, qw) {
+            // Convert quaternion to yaw and pitch (in degrees)
+            // This reverses the conversion done in App.cpp
+
+            // Calculate yaw (rotation around Y axis)
+            const sinYaw = 2 * (qw * qz + qx * qy);
+            const cosYaw = 1 - 2 * (qy * qy + qz * qz);
+            const yaw = Math.atan2(sinYaw, cosYaw) * 180 / Math.PI;
+
+            // Calculate pitch (rotation around X axis)
+            const sinPitch = 2 * (qw * qy - qz * qx);
+            const pitch = Math.asin(Math.max(-1, Math.min(1, sinPitch))) * 180 / Math.PI;
+
+            return { yaw, pitch };
+        }
+
         // Helper function to update head pose monitor
         function updateHeadPoseMonitor(headPose) {
             const headPoseMonitor = document.getElementById('headPoseMonitor');
             headPoseMonitor.innerHTML = '';
 
             if (headPose && headPose.position && headPose.orientation) {
+                // Convert quaternion to euler angles
+                const euler = quaternionToEuler(
+                    headPose.orientation.x,
+                    headPose.orientation.y,
+                    headPose.orientation.z,
+                    headPose.orientation.w
+                );
+
                 const poseData = {
                     'Pos X': headPose.position.x,
                     'Pos Y': headPose.position.y,
                     'Pos Z': headPose.position.z,
-                    'Rot X': headPose.orientation.x,
-                    'Rot Y': headPose.orientation.y,
-                    'Rot Z': headPose.orientation.z,
-                    'Rot W': headPose.orientation.w
+                    'Yaw': euler.yaw,
+                    'Pitch': euler.pitch
                 };
 
                 for (const [key, value] of Object.entries(poseData)) {
@@ -630,7 +741,13 @@
 
                     const valueDiv = document.createElement('div');
                     valueDiv.className = 'status-value';
-                    valueDiv.textContent = typeof value === 'number' ? value.toFixed(3) : value;
+
+                    // Format angles with degree symbol
+                    if (key === 'Yaw' || key === 'Pitch') {
+                        valueDiv.textContent = value.toFixed(1) + '°';
+                    } else {
+                        valueDiv.textContent = typeof value === 'number' ? value.toFixed(3) : value;
+                    }
 
                     statusItem.appendChild(label);
                     statusItem.appendChild(valueDiv);
