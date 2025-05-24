@@ -734,19 +734,41 @@
 
         // Helper function to convert quaternion to euler angles
         function quaternionToEuler(qx, qy, qz, qw) {
-            // Convert OpenXR quaternion to yaw and pitch (in degrees)
-            // Based on testing, horizontal rotation (yaw) appears to be around X-axis
+            // This function receives an OpenXR quaternion and should return yaw, pitch, roll
+            // 
+            // Step 1: Convert OpenXR quaternion to Wyvern quaternion
+            // OpenXR (x,y,z,w) → Wyvern (x,-z,y,w) based on coordinate transformation in App.cpp
+            const wyvernQx = qx;    // X stays the same
+            const wyvernQy = -qz;   // OpenXR Z becomes -Wyvern Y  
+            const wyvernQz = qy;    // OpenXR Y becomes Wyvern Z
+            const wyvernQw = qw;    // W stays the same
 
-            // Calculate yaw (horizontal rotation - around X axis in this coordinate mapping)
-            const sinYaw = 2 * (qw * qx - qy * qz);
-            const yaw = Math.asin(Math.max(-1, Math.min(1, sinYaw))) * 180 / Math.PI;
+            // Step 2: Extract euler angles from Wyvern quaternion
+            // Based on Wyvern's CreateFromEuler, the stored quaternion (wyvernQx, wyvernQy, wyvernQz, wyvernQw)
+            // corresponds to the calculated (y, -x, z, w) from the original euler->quat conversion
+            // So to reverse: original_x = -wyvernQy, original_y = wyvernQx, original_z = wyvernQz, original_w = wyvernQw
 
-            // Calculate pitch (vertical rotation - around Y axis in this coordinate mapping)
-            const sinPitch = 2 * (qw * qy + qx * qz);
-            const cosPitch = 1 - 2 * (qy * qy + qx * qx);
-            const pitch = Math.atan2(sinPitch, cosPitch) * 180 / Math.PI;
+            const originalX = -wyvernQy;
+            const originalY = wyvernQx;
+            const originalZ = wyvernQz;
+            const originalW = wyvernQw;
 
-            return { yaw, pitch };
+            // Now extract euler angles from the original quaternion using standard formulas
+            // Yaw (around Z axis)
+            const sinYaw = 2 * (originalW * originalZ + originalX * originalY);
+            const cosYaw = 1 - 2 * (originalY * originalY + originalZ * originalZ);
+            const yaw = Math.atan2(sinYaw, cosYaw) * 180 / Math.PI;
+
+            // Pitch (around Y axis)  
+            const sinPitch = 2 * (originalW * originalY - originalZ * originalX);
+            const pitch = Math.asin(Math.max(-1, Math.min(1, sinPitch))) * 180 / Math.PI;
+
+            // Roll (around X axis)
+            const sinRoll = 2 * (originalW * originalX + originalY * originalZ);
+            const cosRoll = 1 - 2 * (originalX * originalX + originalY * originalY);
+            const roll = Math.atan2(sinRoll, cosRoll) * 180 / Math.PI;
+
+            return { yaw, pitch, roll };
         }
 
         // Helper function to update head pose monitor
@@ -776,7 +798,7 @@
                 `;
                 headPoseMonitor.appendChild(positionItem);
 
-                // Create grouped rotation display
+                // Create grouped rotation display with all three angles
                 const rotationItem = document.createElement('div');
                 rotationItem.className = 'status-item grouped';
                 rotationItem.innerHTML = `
@@ -784,6 +806,7 @@
                     <div class="group-values">
                         <span class="value-pair">Yaw: ${euler.yaw.toFixed(1)}°</span>
                         <span class="value-pair">Pitch: ${euler.pitch.toFixed(1)}°</span>
+                        <span class="value-pair">Roll: ${euler.roll.toFixed(1)}°</span>
                     </div>
                 `;
                 headPoseMonitor.appendChild(rotationItem);
@@ -795,11 +818,11 @@
             const yawRadians = yawDegrees * Math.PI / 180.0;
             const halfYaw = yawRadians * 0.5;
 
-            // Create quaternion in OpenXR coordinate system
-            // Based on testing, it seems like horizontal rotation maps to X-axis in this system
+            // Create quaternion for rotation around Y axis in OpenXR coordinate system
+            // This will become rotation around Z axis in Wyvern (which is yaw)
             return {
-                x: Math.sin(halfYaw), // Rotation around X axis for horizontal rotation
-                y: 0,
+                x: 0,
+                y: Math.sin(halfYaw), // Rotation around Y axis (up) in OpenXR
                 z: 0,
                 w: Math.cos(halfYaw)
             };
