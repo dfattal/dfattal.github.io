@@ -634,7 +634,7 @@
 
                         <div class="setting-row">
                             <span class="setting-label">Yaw</span>
-                            <input type="range" class="slider" id="displayYaw" min="0" max="360" step="1" value="0">
+                            <input type="range" class="slider" id="displayYaw" min="-180" max="180" step="1" value="0">
                             <span class="setting-value" id="displayYawValue">0°</span>
                         </div>
 
@@ -646,7 +646,7 @@
 
                         <div class="setting-row">
                             <span class="setting-label">Roll</span>
-                            <input type="range" class="slider" id="displayRoll" min="0" max="360" step="1" value="0">
+                            <input type="range" class="slider" id="displayRoll" min="-180" max="180" step="1" value="0">
                             <span class="setting-value" id="displayRollValue">0°</span>
                         </div>
 
@@ -819,40 +819,29 @@
             }
         }
 
-        // Function to convert euler angles to quaternion
+        // Function to convert euler angles to quaternion (OpenXR conventions)
         function eulerToQuaternion(yawDegrees, pitchDegrees, rollDegrees) {
-            // Convert to radians
-            const yawRadians = yawDegrees * Math.PI / 180.0;
-            const pitchRadians = pitchDegrees * Math.PI / 180.0;
-            const rollRadians = rollDegrees * Math.PI / 180.0;
+            // Convert degrees to radians
+            const yaw = yawDegrees * Math.PI / 180;
+            const pitch = pitchDegrees * Math.PI / 180;
+            const roll = rollDegrees * Math.PI / 180;
 
             // Calculate half angles
-            const halfYaw = yawRadians * 0.5;
-            const halfPitch = pitchRadians * 0.5;
-            const halfRoll = rollRadians * 0.5;
+            const cy = Math.cos(yaw * 0.5);
+            const sy = Math.sin(yaw * 0.5);
+            const cp = Math.cos(pitch * 0.5);
+            const sp = Math.sin(pitch * 0.5);
+            const cr = Math.cos(roll * 0.5);
+            const sr = Math.sin(roll * 0.5);
 
-            // Calculate sine and cosine of half angles
-            const cy = Math.cos(halfYaw);
-            const sy = Math.sin(halfYaw);
-            const cp = Math.cos(halfPitch);
-            const sp = Math.sin(halfPitch);
-            const cr = Math.cos(halfRoll);
-            const sr = Math.sin(halfRoll);
-
-            // Calculate quaternion components (standard ZYX rotation order)
+            // Create quaternion using ZYX rotation order (roll, pitch, yaw)
+            // This matches the inverse of the quaternionToEuler function above
             const qw = cr * cp * cy + sr * sp * sy;
             const qx = sr * cp * cy - cr * sp * sy;
             const qy = cr * sp * cy + sr * cp * sy;
             const qz = cr * cp * sy - sr * sp * cy;
 
-            // This produces a quaternion in standard form, but we need to convert it to OpenXR
-            // The above calculation gives us a "world" quaternion, now we need to map it to OpenXR coordinates
-            return {
-                x: qx,
-                y: qy,
-                z: qz,
-                w: qw
-            };
+            return { x: qx, y: qy, z: qz, w: qw };
         }
 
         // Helper function to check if extension is available before API calls
@@ -897,6 +886,33 @@
             try {
                 const headPose = await window.WebXROpenXRBridge.getHeadPose();
                 updateHeadPoseMonitor(headPose);
+
+                // Update sliders to match current pose
+                if (headPose && headPose.position && headPose.orientation) {
+                    // Update height slider
+                    document.getElementById('displayHeight').value = headPose.position.y.toFixed(2);
+                    document.getElementById('displayHeightValue').textContent = headPose.position.y.toFixed(2) + 'm';
+
+                    // Convert quaternion to euler and update rotation sliders
+                    const euler = quaternionToEuler(
+                        headPose.orientation.x,
+                        headPose.orientation.y,
+                        headPose.orientation.z,
+                        headPose.orientation.w
+                    );
+
+                    // Update yaw slider
+                    document.getElementById('displayYaw').value = Math.round(euler.yaw);
+                    document.getElementById('displayYawValue').textContent = Math.round(euler.yaw) + '°';
+
+                    // Update pitch slider
+                    document.getElementById('displayPitch').value = Math.round(euler.pitch);
+                    document.getElementById('displayPitchValue').textContent = Math.round(euler.pitch) + '°';
+
+                    // Update roll slider
+                    document.getElementById('displayRoll').value = Math.round(euler.roll);
+                    document.getElementById('displayRollValue').textContent = Math.round(euler.roll) + '°';
+                }
             } catch (error) {
                 logMessage(`Get pose error: ${error}`, 'error');
             }
