@@ -735,16 +735,16 @@
         // Helper function to convert quaternion to euler angles
         function quaternionToEuler(qx, qy, qz, qw) {
             // Convert OpenXR quaternion to yaw and pitch (in degrees)
-            // This works directly with OpenXR coordinate system (Y=up, Z=back)
+            // Based on testing, horizontal rotation (yaw) appears to be around X-axis
 
-            // Calculate yaw (rotation around Y axis - up)
-            const sinYaw = 2 * (qw * qz + qx * qy);
-            const cosYaw = 1 - 2 * (qy * qy + qz * qz);
-            const yaw = Math.atan2(sinYaw, cosYaw) * 180 / Math.PI;
+            // Calculate yaw (horizontal rotation - around X axis in this coordinate mapping)
+            const sinYaw = 2 * (qw * qx - qy * qz);
+            const yaw = Math.asin(Math.max(-1, Math.min(1, sinYaw))) * 180 / Math.PI;
 
-            // Calculate pitch (rotation around X axis - right)
-            const sinPitch = 2 * (qw * qy - qz * qx);
-            const pitch = Math.asin(Math.max(-1, Math.min(1, sinPitch))) * 180 / Math.PI;
+            // Calculate pitch (vertical rotation - around Y axis in this coordinate mapping)
+            const sinPitch = 2 * (qw * qy + qx * qz);
+            const cosPitch = 1 - 2 * (qy * qy + qx * qx);
+            const pitch = Math.atan2(sinPitch, cosPitch) * 180 / Math.PI;
 
             return { yaw, pitch };
         }
@@ -795,10 +795,11 @@
             const yawRadians = yawDegrees * Math.PI / 180.0;
             const halfYaw = yawRadians * 0.5;
 
-            // Create quaternion in OpenXR coordinate system (Y=up rotation)
+            // Create quaternion in OpenXR coordinate system
+            // Based on testing, it seems like horizontal rotation maps to X-axis in this system
             return {
-                x: 0,
-                y: Math.sin(halfYaw), // Rotation around Y axis (up) in OpenXR coordinates
+                x: Math.sin(halfYaw), // Rotation around X axis for horizontal rotation
+                y: 0,
                 z: 0,
                 w: Math.cos(halfYaw)
             };
