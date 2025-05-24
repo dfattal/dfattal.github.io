@@ -638,6 +638,18 @@
                             <span class="setting-value" id="displayYawValue">0°</span>
                         </div>
 
+                        <div class="setting-row">
+                            <span class="setting-label">Pitch</span>
+                            <input type="range" class="slider" id="displayPitch" min="-89" max="89" step="1" value="0">
+                            <span class="setting-value" id="displayPitchValue">0°</span>
+                        </div>
+
+                        <div class="setting-row">
+                            <span class="setting-label">Roll</span>
+                            <input type="range" class="slider" id="displayRoll" min="0" max="360" step="1" value="0">
+                            <span class="setting-value" id="displayRollValue">0°</span>
+                        </div>
+
                         <div class="button-row">
                             <button class="btn btn-primary" id="resetPoseButton">Reset Pose</button>
                         </div>
@@ -734,41 +746,34 @@
 
         // Helper function to convert quaternion to euler angles
         function quaternionToEuler(qx, qy, qz, qw) {
-            // This function receives an OpenXR quaternion and should return yaw, pitch, roll
-            // 
-            // Step 1: Convert OpenXR quaternion to Wyvern quaternion
-            // OpenXR (x,y,z,w) → Wyvern (x,-z,y,w) based on coordinate transformation in App.cpp
-            const wyvernQx = qx;    // X stays the same
-            const wyvernQy = -qz;   // OpenXR Z becomes -Wyvern Y  
-            const wyvernQz = qy;    // OpenXR Y becomes Wyvern Z
-            const wyvernQw = qw;    // W stays the same
+            // Use correct OpenXR quaternion to euler conversion (X Right, Y Up, Z Back)
 
-            // Step 2: Extract euler angles from Wyvern quaternion
-            // Based on Wyvern's CreateFromEuler, the stored quaternion (wyvernQx, wyvernQy, wyvernQz, wyvernQw)
-            // corresponds to the calculated (y, -x, z, w) from the original euler->quat conversion
-            // So to reverse: original_x = -wyvernQy, original_y = wyvernQx, original_z = wyvernQz, original_w = wyvernQw
+            // Yaw (around Y axis, up)
+            let siny_cosp = 2 * (qw * qy + qx * qz);
+            let cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+            let yaw = Math.atan2(siny_cosp, cosy_cosp);
 
-            const originalX = -wyvernQy;
-            const originalY = wyvernQx;
-            const originalZ = wyvernQz;
-            const originalW = wyvernQw;
+            // Pitch (around X axis, right)
+            let sinp = 2 * (qw * qx - qy * qz);
+            // Clamp sinp to [-1, 1] to avoid NaN due to floating point errors
+            let pitch;
+            if (Math.abs(sinp) >= 1) {
+                pitch = Math.sign(sinp) * Math.PI / 2; // use 90 degrees if out of range
+            } else {
+                pitch = Math.asin(sinp);
+            }
 
-            // Now extract euler angles from the original quaternion using standard formulas
-            // Yaw (around Z axis)
-            const sinYaw = 2 * (originalW * originalZ + originalX * originalY);
-            const cosYaw = 1 - 2 * (originalY * originalY + originalZ * originalZ);
-            const yaw = Math.atan2(sinYaw, cosYaw) * 180 / Math.PI;
+            // Roll (around Z axis, back)
+            let sinr_cosp = 2 * (qw * qz + qx * qy);
+            let cosr_cosp = 1 - 2 * (qx * qx + qz * qz);
+            let roll = Math.atan2(sinr_cosp, cosr_cosp);
 
-            // Pitch (around Y axis)  
-            const sinPitch = 2 * (originalW * originalY - originalZ * originalX);
-            const pitch = Math.asin(Math.max(-1, Math.min(1, sinPitch))) * 180 / Math.PI;
-
-            // Roll (around X axis)
-            const sinRoll = 2 * (originalW * originalX + originalY * originalZ);
-            const cosRoll = 1 - 2 * (originalX * originalX + originalY * originalY);
-            const roll = Math.atan2(sinRoll, cosRoll) * 180 / Math.PI;
-
-            return { yaw, pitch, roll };
+            // Convert from radians to degrees
+            return {
+                yaw: yaw * 180 / Math.PI,
+                pitch: pitch * 180 / Math.PI,
+                roll: roll * 180 / Math.PI
+            };
         }
 
         // Helper function to update head pose monitor
@@ -813,18 +818,39 @@
             }
         }
 
-        // Function to convert yaw angle to quaternion
-        function yawToQuaternion(yawDegrees) {
+        // Function to convert euler angles to quaternion
+        function eulerToQuaternion(yawDegrees, pitchDegrees, rollDegrees) {
+            // Convert to radians
             const yawRadians = yawDegrees * Math.PI / 180.0;
-            const halfYaw = yawRadians * 0.5;
+            const pitchRadians = pitchDegrees * Math.PI / 180.0;
+            const rollRadians = rollDegrees * Math.PI / 180.0;
 
-            // Create quaternion for rotation around Y axis in OpenXR coordinate system
-            // This will become rotation around Z axis in Wyvern (which is yaw)
+            // Calculate half angles
+            const halfYaw = yawRadians * 0.5;
+            const halfPitch = pitchRadians * 0.5;
+            const halfRoll = rollRadians * 0.5;
+
+            // Calculate sine and cosine of half angles
+            const cy = Math.cos(halfYaw);
+            const sy = Math.sin(halfYaw);
+            const cp = Math.cos(halfPitch);
+            const sp = Math.sin(halfPitch);
+            const cr = Math.cos(halfRoll);
+            const sr = Math.sin(halfRoll);
+
+            // Calculate quaternion components (standard ZYX rotation order)
+            const qw = cr * cp * cy + sr * sp * sy;
+            const qx = sr * cp * cy - cr * sp * sy;
+            const qy = cr * sp * cy + sr * cp * sy;
+            const qz = cr * cp * sy - sr * sp * cy;
+
+            // This produces a quaternion in standard form, but we need to convert it to OpenXR
+            // The above calculation gives us a "world" quaternion, now we need to map it to OpenXR coordinates
             return {
-                x: 0,
-                y: Math.sin(halfYaw), // Rotation around Y axis (up) in OpenXR
-                z: 0,
-                w: Math.cos(halfYaw)
+                x: qx,
+                y: qy,
+                z: qz,
+                w: qw
             };
         }
 
@@ -843,6 +869,8 @@
 
             const height = parseFloat(document.getElementById('displayHeight').value);
             const yaw = parseFloat(document.getElementById('displayYaw').value);
+            const pitch = parseFloat(document.getElementById('displayPitch').value);
+            const roll = parseFloat(document.getElementById('displayRoll').value);
 
             const headPose = {
                 position: {
@@ -850,12 +878,12 @@
                     y: height, // Height in OpenXR coordinates (Y is up)
                     z: 0.0
                 },
-                orientation: yawToQuaternion(yaw)
+                orientation: eulerToQuaternion(yaw, pitch, roll)
             };
 
             try {
                 window.WebXROpenXRBridge.setHeadPose(headPose);
-                logMessage(`Pose: ${height}m, ${yaw}°`, 'success');
+                logMessage(`Pose: ${height}m, Y:${yaw}° P:${pitch}° R:${roll}°`, 'success');
             } catch (error) {
                 logMessage(`Error: ${error}`, 'error');
             }
@@ -1007,11 +1035,25 @@
                 setHeadPoseFromUI();
             });
 
+            document.getElementById('displayPitch').addEventListener('input', function () {
+                document.getElementById('displayPitchValue').textContent = this.value + '°';
+                setHeadPoseFromUI();
+            });
+
+            document.getElementById('displayRoll').addEventListener('input', function () {
+                document.getElementById('displayRollValue').textContent = this.value + '°';
+                setHeadPoseFromUI();
+            });
+
             document.getElementById('resetPoseButton').addEventListener('click', () => {
                 document.getElementById('displayHeight').value = 1.75;
                 document.getElementById('displayHeightValue').textContent = '1.75m';
                 document.getElementById('displayYaw').value = 0;
                 document.getElementById('displayYawValue').textContent = '0°';
+                document.getElementById('displayPitch').value = 0;
+                document.getElementById('displayPitchValue').textContent = '0°';
+                document.getElementById('displayRoll').value = 0;
+                document.getElementById('displayRollValue').textContent = '0°';
                 setHeadPoseFromUI();
                 logMessage('Pose reset', 'success');
             });
