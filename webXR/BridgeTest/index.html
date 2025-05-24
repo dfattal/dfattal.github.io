@@ -782,6 +782,7 @@
             headPoseMonitor.innerHTML = '';
 
             if (headPose && headPose.position && headPose.orientation) {
+                console.log("headPose quaternion: ", headPose.orientation);
                 // Convert quaternion to euler angles
                 const euler = quaternionToEuler(
                     headPose.orientation.x,
