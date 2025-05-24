@@ -834,12 +834,13 @@
             const cr = Math.cos(roll * 0.5);
             const sr = Math.sin(roll * 0.5);
 
-            // Create quaternion using ZYX rotation order (roll, pitch, yaw)
-            // This matches the inverse of the quaternionToEuler function above
-            const qw = cr * cp * cy + sr * sp * sy;
-            const qx = sr * cp * cy - cr * sp * sy;
-            const qy = cr * sp * cy + sr * cp * sy;
-            const qz = cr * cp * sy - sr * sp * cy;
+            // Create quaternion using YXZ rotation order (yaw, pitch, roll)
+            // This exactly matches the inverse of the quaternionToEuler function above
+            // YXZ order: q = q_yaw * q_pitch * q_roll
+            const qw = cy * cp * cr + sy * sp * sr;
+            const qx = cy * sp * cr + sy * cp * sr;
+            const qy = sy * cp * cr - cy * sp * sr;
+            const qz = cy * cp * sr - sy * sp * cr;
 
             return { x: qx, y: qy, z: qz, w: qw };
         }
