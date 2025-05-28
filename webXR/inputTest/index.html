@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Three.js WebXR Controller Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .log {
+            background: #111;
+            border: 1px solid #333;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 5px;
+        }
+
+        .vr-button {
+            background: #333;
+            color: #0f0;
+            border: 2px solid #555;
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .vr-button:hover {
+            background: #444;
+        }
+
+        .controller-info {
+            background: #222;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+
+        .button-pressed {
+            color: #ff4444;
+            font-weight: bold;
+            background: rgba(255, 68, 68, 0.2);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .button-touched {
+            color: #ffaa00;
+            background: rgba(255, 170, 0, 0.2);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .button-active {
+            color: #44ff44;
+            background: rgba(68, 255, 68, 0.2);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .input-alert {
+            background: #ff4444;
+            color: #fff;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-weight: bold;
+            animation: flash 0.5s;
+        }
+
+        @keyframes flash {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+    </style>
+
+    <!-- Three.js imports -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎮 Three.js WebXR Controller Test</h1>
+        <p>This test uses Three.js WebXR (like your working index.js) to detect controller input</p>
+
+        <div id="vr-button-container"></div>
+
+        <button onclick="clearLog()">Clear Log</button>
+
+        <div id="input-alerts"></div>
+
+        <div id="controller-panels"></div>
+
+        <div id="log" class="log">
+            <div><strong>=== Three.js WebXR Controller Test ===</strong></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+        // Global variables
+        let scene, camera, renderer;
+        let leftController = null, rightController = null;
+        let controllerPanels = {};
+        let lastButtonStates = new Map(); // Track button states to detect changes
+
+        // OpenXR Action Path mappings (same as your original)
+        const ACTION_MAPPINGS = {
+            buttons: [
+                'trigger/click',      // 0
+                'grip/click',         // 1  
+                'touchpad/click',     // 2
+                'thumbstick/click',   // 3
+                'a/click',            // 4 - X button (left) / A button (right)
+                'b/click',            // 5 - Y button (left) / B button (right)
+                'thumbrest/touch',    // 6
+                'menu/click'          // 7
+            ],
+            axes: [
+                'thumbstick/x',       // 0
+                'thumbstick/y',       // 1
+                'touchpad/x',         // 2
+                'touchpad/y',         // 3
+                'trackpad/x',         // 4
+                'trackpad/y'          // 5
+            ]
+        };
+
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            const colors = {
+                'error': '#ff4444',
+                'warning': '#ffaa00',
+                'success': '#44ff44',
+                'info': '#4488ff',
+                'input': '#ff44ff'
+            };
+            div.style.color = colors[type] || '#0f0';
+            div.innerHTML = `[${time}] ${message}`;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+
+            // Enhanced console logging
+            const consoleMessage = `[${type.toUpperCase()}] [${time}] ${message}`;
+            if (type === 'error') {
+                console.error(consoleMessage);
+            } else if (type === 'warning') {
+                console.warn(consoleMessage);
+            } else if (type === 'input') {
+                console.log(`%c${consoleMessage}`, 'background: #ff44ff; color: white; padding: 2px 5px; border-radius: 3px;');
+            } else {
+                console.log(consoleMessage);
+            }
+        }
+
+        function addInputAlert(message) {
+            const alertsDiv = document.getElementById('input-alerts');
+            const alert = document.createElement('div');
+            alert.className = 'input-alert';
+            alert.textContent = message;
+            alertsDiv.appendChild(alert);
+
+            // Remove alert after 3 seconds
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 3000);
+
+            // Also log to console with special styling
+            console.log(`%c🚨 INPUT ALERT: ${message}`, 'background: #ff4444; color: white; padding: 5px; font-weight: bold; font-size: 14px;');
+        }
+
+        window.clearLog = function () {
+            document.getElementById('log').innerHTML = '<div><strong>=== Log Cleared ===</strong></div>';
+            document.getElementById('input-alerts').innerHTML = '';
+        }
+
+        function getActionPath(hand, type, index) {
+            if (type === 'button') {
+                const mapping = ACTION_MAPPINGS.buttons[index] || `button_${index}/click`;
+                return `/user/hand/${hand}/input/${mapping}`;
+            } else if (type === 'axis') {
+                const mapping = ACTION_MAPPINGS.axes[index] || `axis_${index}`;
+                return `/user/hand/${hand}/input/${mapping}`;
+            }
+            return `/user/hand/${hand}/input/unknown_${index}`;
+        }
+
+        function updateControllerPanel(controller, handedness) {
+            const inputSource = controller.userData.inputSource;
+            if (!inputSource || !inputSource.gamepad) return;
+
+            const gamepad = inputSource.gamepad;
+            const panelId = `panel-${handedness}`;
+
+            let panel = document.getElementById(panelId);
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = panelId;
+                panel.className = 'controller-info';
+                document.getElementById('controller-panels').appendChild(panel);
+            }
+
+            let html = `<h3>${handedness.toUpperCase()} Controller</h3>`;
+            html += `<div><strong>Gamepad ID:</strong> ${gamepad.id}</div>`;
+            html += `<div><strong>Connected:</strong> ${gamepad.connected}</div>`;
+            html += `<div><strong>Buttons:</strong> ${gamepad.buttons.length} | <strong>Axes:</strong> ${gamepad.axes.length}</div>`;
+
+            // Buttons
+            html += '<h4>🔘 Buttons:</h4>';
+            for (let i = 0; i < gamepad.buttons.length; i++) {
+                const button = gamepad.buttons[i];
+                const actionPath = getActionPath(handedness, 'button', i);
+                let className = '';
+                let state = `Value: ${button.value.toFixed(3)}`;
+
+                if (button.pressed) {
+                    className = 'button-pressed';
+                    state += ' PRESSED';
+                } else if (button.touched) {
+                    className = 'button-touched';
+                    state += ' TOUCHED';
+                } else if (button.value > 0) {
+                    className = 'button-active';
+                    state += ' ACTIVE';
+                }
+
+                html += `<div class="${className}">  ${actionPath} - ${state}</div>`;
+            }
+
+            // Axes  
+            html += '<h4>🎚️ Axes:</h4>';
+            for (let i = 0; i < gamepad.axes.length; i++) {
+                const axis = gamepad.axes[i];
+                const actionPath = getActionPath(handedness, 'axis', i);
+                const className = Math.abs(axis) > 0.1 ? 'button-active' : '';
+                html += `<div class="${className}">  ${actionPath} - ${axis.toFixed(3)}</div>`;
+            }
+
+            panel.innerHTML = html;
+        }
+
+        function setupVRControllers() {
+            addLog('🎮 Setting up VR controllers...', 'info');
+
+            const session = renderer.xr.getSession();
+            if (!session) {
+                addLog('❌ No XR session available', 'error');
+                return;
+            }
+
+            addLog(`📊 Session mode: ${session.mode}`, 'info');
+            addLog(`📊 Input sources at setup: ${session.inputSources.length}`, 'info');
+
+            function setupControllersByHandedness() {
+                if (!session.inputSources || session.inputSources.length === 0) {
+                    addLog('⏳ Waiting for input sources...', 'warning');
+                    return requestAnimationFrame(setupControllersByHandedness);
+                }
+
+                // Clear existing controllers
+                if (leftController) {
+                    scene.remove(leftController);
+                    leftController = null;
+                }
+                if (rightController) {
+                    scene.remove(rightController);
+                    rightController = null;
+                }
+
+                addLog(`🔍 Found ${session.inputSources.length} input sources`, 'info');
+
+                // Set up controllers by handedness
+                session.inputSources.forEach((inputSource, index) => {
+                    const controller = renderer.xr.getController(index);
+                    controller.userData.inputSource = inputSource;
+
+                    addLog(`  Source ${index}: ${inputSource.handedness}, gamepad: ${!!inputSource.gamepad}`, 'info');
+
+                    if (inputSource.handedness === 'left') {
+                        leftController = controller;
+                        scene.add(leftController);
+                        addLog('✅ Left controller set up', 'success');
+
+                        if (inputSource.gamepad) {
+                            addLog(`   Left gamepad: ${inputSource.gamepad.buttons.length} buttons, ${inputSource.gamepad.axes.length} axes`, 'info');
+                        }
+                    } else if (inputSource.handedness === 'right') {
+                        rightController = controller;
+                        scene.add(rightController);
+                        addLog('✅ Right controller set up', 'success');
+
+                        if (inputSource.gamepad) {
+                            addLog(`   Right gamepad: ${inputSource.gamepad.buttons.length} buttons, ${inputSource.gamepad.axes.length} axes`, 'info');
+                        }
+                    }
+                });
+
+                // Initialize button state tracking
+                lastButtonStates.clear();
+            }
+
+            setupControllersByHandedness();
+
+            // Listen for input source changes
+            session.addEventListener('inputsourceschange', (event) => {
+                addLog('🎮 INPUT SOURCES CHANGED!', 'success');
+                addLog(`  Added: ${event.added.length}, Removed: ${event.removed.length}`, 'info');
+                setupControllersByHandedness();
+            });
+        }
+
+        function checkControllerInput() {
+            // Check all controllers for input
+            [leftController, rightController].forEach(controller => {
+                if (controller && controller.userData.inputSource && controller.userData.inputSource.gamepad) {
+                    const gamepad = controller.userData.inputSource.gamepad;
+                    const hand = controller.userData.inputSource.handedness;
+                    const controllerId = `${hand}-controller`;
+
+                    // Check for button state changes
+                    for (let i = 0; i < gamepad.buttons.length; i++) {
+                        const button = gamepad.buttons[i];
+                        const buttonId = `${controllerId}-button-${i}`;
+                        const lastState = lastButtonStates.get(buttonId) || { pressed: false, touched: false, value: 0 };
+
+                        // Detect button press events
+                        if (button.pressed && !lastState.pressed) {
+                            const actionPath = getActionPath(hand, 'button', i);
+                            const message = `🚨 BUTTON PRESSED: ${actionPath} (Button ${i}) on ${hand} controller`;
+                            addLog(message, 'input');
+                            addInputAlert(message);
+
+                            // Special logging for X button (index 4) like your working app
+                            if (i === 4 && hand === 'left') {
+                                const xMessage = `🚨 LEFT X BUTTON PRESSED! (exactly like your working index.js)`;
+                                addLog(xMessage, 'success');
+                                addInputAlert(xMessage);
+                            }
+                        }
+
+                        // Detect button release events
+                        if (!button.pressed && lastState.pressed) {
+                            const actionPath = getActionPath(hand, 'button', i);
+                            const message = `🔄 BUTTON RELEASED: ${actionPath} (Button ${i}) on ${hand} controller`;
+                            addLog(message, 'info');
+                        }
+
+                        // Detect touch events
+                        if (button.touched && !lastState.touched) {
+                            const actionPath = getActionPath(hand, 'button', i);
+                            const message = `👆 BUTTON TOUCHED: ${actionPath} (Button ${i}) on ${hand} controller`;
+                            addLog(message, 'input');
+                        }
+
+                        // Update last state
+                        lastButtonStates.set(buttonId, {
+                            pressed: button.pressed,
+                            touched: button.touched,
+                            value: button.value
+                        });
+                    }
+
+                    // Check for significant axis movements
+                    for (let i = 0; i < gamepad.axes.length; i++) {
+                        const axis = gamepad.axes[i];
+                        const axisId = `${controllerId}-axis-${i}`;
+                        const lastValue = lastButtonStates.get(axisId) || 0;
+
+                        // Detect significant axis movement (threshold of 0.3 for initial movement)
+                        if (Math.abs(axis) > 0.3 && Math.abs(lastValue) <= 0.3) {
+                            const actionPath = getActionPath(hand, 'axis', i);
+                            const message = `🕹️ AXIS MOVED: ${actionPath} = ${axis.toFixed(3)} on ${hand} controller`;
+                            addLog(message, 'input');
+                        }
+
+                        lastButtonStates.set(axisId, axis);
+                    }
+
+                    // Update UI panel
+                    updateControllerPanel(controller, hand);
+                }
+            });
+        }
+
+        function init() {
+            addLog('🚀 Initializing Three.js WebXR...', 'info');
+
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x101010);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+            scene.add(camera);
+
+            // Add some basic lighting and geometry so we know VR is working
+            const light = new THREE.HemisphereLight(0xffffff, 0x444444);
+            light.position.set(1, 1, 1);
+            scene.add(light);
+
+            // Add a simple cube to see in VR
+            const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 1.6, -0.5);
+            scene.add(cube);
+
+            // WebGL renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+
+            // Enable WebXR
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Create VR button (same as your working app)
+            const vrButton = VRButton.createButton(renderer);
+            document.getElementById('vr-button-container').appendChild(vrButton);
+
+            addLog('✅ Three.js WebXR initialized', 'success');
+
+            // Add XR session event listeners (same pattern as your working app)
+            renderer.xr.addEventListener('sessionstart', () => {
+                addLog('🥽 VR session started', 'success');
+                setupVRControllers();
+            });
+
+            renderer.xr.addEventListener('sessionend', () => {
+                addLog('🔚 VR session ended', 'info');
+                leftController = null;
+                rightController = null;
+                lastButtonStates.clear();
+                document.getElementById('controller-panels').innerHTML = '';
+                document.getElementById('input-alerts').innerHTML = '';
+            });
+        }
+
+        function animate() {
+            renderer.setAnimationLoop(() => {
+                // Check controller input every frame (same as your working app)
+                checkControllerInput();
+
+                renderer.render(scene, camera);
+            });
+        }
+
+        // Initialize when page loads
+        addLog('🔍 System check...', 'info');
+        addLog(`   WebXR: ${navigator.xr ? 'Available' : 'Not Available'}`, navigator.xr ? 'success' : 'error');
+        addLog(`   Secure context: ${window.isSecureContext}`, window.isSecureContext ? 'success' : 'error');
+
+        if (navigator.xr) {
+            navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+                addLog(`   VR support: ${supported}`, supported ? 'success' : 'error');
+                if (supported) {
+                    init();
+                    animate();
+                }
+            });
+        }
+
+        addLog('✅ Test ready - click "Enter VR" to start', 'success');
+
+        // Enhanced console message on load
+        console.log('%c🎮 WebXR Controller Test Ready!', 'background: #4CAF50; color: white; padding: 10px; font-size: 16px; font-weight: bold;');
+        console.log('%cAll input actions will be logged here and in the web interface', 'color: #4CAF50; font-size: 14px;');
+    </script>
+</body>
+
+</html>
