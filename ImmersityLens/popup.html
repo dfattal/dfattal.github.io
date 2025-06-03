@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <style>
         body {
-            width: 300px;
+            width: 320px;
             padding: 20px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -49,11 +49,11 @@
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
         }
 
-        .toggle-btn.active {
+        .toggle-btn.disabled {
             background: #ff6b6b;
         }
 
-        .toggle-btn.active:hover {
+        .toggle-btn.disabled:hover {
             background: #ff5252;
         }
 
@@ -74,20 +74,46 @@
             font-size: 48px;
             margin-bottom: 10px;
         }
+
+        .feature-list {
+            text-align: left;
+            margin: 15px 0;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .feature-list li {
+            margin: 5px 0;
+        }
+
+        .powered-by {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 10px;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <div class="icon">🎨</div>
-        <h1>Image Inverter</h1>
-        <div class="status" id="status">Status: Disabled</div>
+        <div class="icon">🌐➡️🎭</div>
+        <h1>2D→3D Converter</h1>
+        <div class="status" id="status">Status: Enabled</div>
         <div class="toggle-container">
-            <button id="toggleBtn" class="toggle-btn">Enable Inversion</button>
+            <button id="toggleBtn" class="toggle-btn">Disable Extension</button>
         </div>
         <div class="description">
-            Click the button to toggle color inversion for all images on this page.
-            The effect applies to both regular images and background images.
+            This extension adds "2D3D" buttons to images on any website.
+            Click the button to convert any 2D image into an immersive 3D experience!
+        </div>
+        <ul class="feature-list">
+            <li>🎯 Auto-detects images on any webpage</li>
+            <li>🎨 Converts to LIF format using Immersity AI</li>
+            <li>🖱️ Interactive 3D hover effects</li>
+            <li>⚡ Real-time depth processing</li>
+        </ul>
+        <div class="powered-by">
+            Powered by Immersity AI & Leia Inc.
         </div>
     </div>
 

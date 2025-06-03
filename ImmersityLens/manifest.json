@@ -1,25 +1,37 @@
 {
   "manifest_version": 3,
-  "name": "Image Color Inverter",
-  "version": "1.0.0",
-  "description": "Automatically inverts the colors of all images on any website",
+  "name": "2D to 3D Image Converter",
+  "version": "2.0.0",
+  "description": "Converts 2D images to immersive 3D LIF files using Immersity AI",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.immersity.ai/*",
+    "https://api.dev.immersity.ai/*",
+    "https://*.lambda-url.us-east-1.on.aws/*"
   ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["libs/axios.min.js", "libs/heic2any.js", "libs/LIF.js", "content.js"],
       "run_at": "document_end"
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Image Color Inverter"
+    "default_title": "2D to 3D Image Converter"
   },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["libs/*", "shaders/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 } 
