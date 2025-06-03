@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            width: 300px;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .toggle-container {
+            margin: 20px 0;
+        }
+
+        .toggle-btn {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .toggle-btn.active {
+            background: #ff6b6b;
+        }
+
+        .toggle-btn.active:hover {
+            background: #ff5252;
+        }
+
+        .status {
+            margin: 15px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .description {
+            font-size: 12px;
+            opacity: 0.8;
+            line-height: 1.4;
+            margin-top: 15px;
+        }
+
+        .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="icon">🎨</div>
+        <h1>Image Inverter</h1>
+        <div class="status" id="status">Status: Disabled</div>
+        <div class="toggle-container">
+            <button id="toggleBtn" class="toggle-btn">Enable Inversion</button>
+        </div>
+        <div class="description">
+            Click the button to toggle color inversion for all images on this page.
+            The effect applies to both regular images and background images.
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
