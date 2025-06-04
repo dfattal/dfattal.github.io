@@ -1006,18 +1006,18 @@ async function convertTo3D(img, button) {
                     });
                 }
 
-                // Override LIF.js automatic resizing for padding-based layouts
-                if (isAbsolutelyPositioned) {
+                // Override LIF.js automatic resizing for padding-based layouts AND picture elements
+                // Note: We detect ALL picture elements because LIF.js tends to use intrinsic image dimensions
+                // (e.g., 8484x5656) instead of display dimensions (e.g., 305x171) for canvas sizing
+                const isPictureElement = img.closest('picture'); // Detect any picture element, not just ones with stored dimensions
+                if (isAbsolutelyPositioned || isPictureElement) {
                     // Store the correct dimensions
                     const correctWidth = effectiveWidth;
                     const correctHeight = effectiveHeight;
 
-                    console.log(`Forcing canvas dimensions to stay at: ${correctWidth}x${correctHeight}`);
-
                     // Override canvas dimensions immediately and repeatedly
                     const forceCorrectDimensions = () => {
                         if (this.canvas.width !== correctWidth || this.canvas.height !== correctHeight) {
-                            console.log(`Correcting canvas size from ${this.canvas.width}x${this.canvas.height} to ${correctWidth}x${correctHeight}`);
                             this.canvas.width = correctWidth;
                             this.canvas.height = correctHeight;
                             this.canvas.style.width = `${correctWidth}px`;
@@ -1088,9 +1088,9 @@ async function convertTo3D(img, button) {
                 };
 
                 // For picture elements, we need more robust event handling
-                const isPictureElement = img.closest('picture'); // Simplified detection - just check if it's in a picture element
+                const pictureElementForEvents = img.closest('picture'); // Simplified detection - just check if it's in a picture element
 
-                if (isPictureElement) {
+                if (pictureElementForEvents) {
                     console.log('Setting up enhanced picture element mouse events');
 
                     // Debug: Check the elements we're attaching events to
@@ -1284,7 +1284,7 @@ async function convertTo3D(img, button) {
                         parentElement: this.canvas.parentElement?.tagName,
                         inDOM: document.contains(this.canvas),
                         pointerEvents: this.canvas.style.pointerEvents,
-                        isPictureElement: isPictureElement
+                        isPictureElement: pictureElementForEvents
                     });
                 }, 150); // Slightly longer delay to ensure everything is set up
 
