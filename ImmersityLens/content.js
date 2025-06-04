@@ -120,6 +120,11 @@ let isExtensionEnabled = false; // Default to disabled - user must explicitly en
 let processingImages = new Set(); // Track which images are being processed
 let hasShownCorsInfo = false; // Track if we've shown CORS info to user
 
+// Extension initialization state to prevent duplicate setup
+let isExtensionInitialized = false;
+let mutationObserver = null;
+let messageListener = null;
+
 // Storage key for extension state
 const STORAGE_KEY = 'lifExtensionEnabled';
 const CORS_INFO_SHOWN_KEY = 'lifCorsInfoShown';
@@ -2471,7 +2476,13 @@ function processImages() {
 
 // Function to handle new images added dynamically
 function observeNewImages() {
-    const observer = new MutationObserver((mutations) => {
+    // Prevent duplicate observers
+    if (mutationObserver) {
+        console.log('Mutation observer already exists, skipping duplicate creation');
+        return;
+    }
+
+    mutationObserver = new MutationObserver((mutations) => {
         if (!isExtensionEnabled) return;
 
         mutations.forEach((mutation) => {
@@ -2566,10 +2577,12 @@ function observeNewImages() {
         });
     });
 
-    observer.observe(document.body, {
+    mutationObserver.observe(document.body, {
         childList: true,
         subtree: true
     });
+
+    console.log('Mutation observer created and started');
 }
 
 // Function to load extension state from storage
@@ -2594,43 +2607,104 @@ async function saveExtensionState() {
     }
 }
 
-// Listen for messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'toggleExtension') {
-        const wasEnabled = isExtensionEnabled;
-        isExtensionEnabled = !isExtensionEnabled;
-
-        // Save the new state
-        saveExtensionState();
-
-        if (isExtensionEnabled) {
-            // Extension was enabled
-            processImages();
-            console.log('Extension enabled - processing images');
-        } else {
-            // Extension was disabled - reload page for clean state
-            console.log('Extension disabled - reloading page for clean state');
-
-            // Send response before reloading
-            sendResponse({ enabled: isExtensionEnabled });
-
-            // Small delay to ensure response is sent, then reload
-            setTimeout(() => {
-                location.reload();
-            }, 100);
-
-            return; // Exit early since we're reloading
-        }
-
-        sendResponse({ enabled: isExtensionEnabled });
-    } else if (request.action === 'getStatus') {
-        sendResponse({ enabled: isExtensionEnabled });
+// Function to set up message listener with duplicate prevention
+function setupMessageListener() {
+    // Prevent duplicate listeners
+    if (messageListener) {
+        console.log('Message listener already exists, skipping duplicate creation');
+        return;
     }
-});
+
+    // Create the message listener function
+    messageListener = (request, sender, sendResponse) => {
+        console.log('Extension message received:', request.action, 'Current state:', isExtensionEnabled);
+
+        if (request.action === 'toggleExtension') {
+            const wasEnabled = isExtensionEnabled;
+            isExtensionEnabled = !isExtensionEnabled;
+
+            console.log(`Extension state changing from ${wasEnabled} to ${isExtensionEnabled}`);
+
+            // Save the new state
+            saveExtensionState();
+
+            if (isExtensionEnabled) {
+                // Extension was enabled
+                processImages();
+                console.log('Extension enabled - processing images');
+            } else {
+                // Extension was disabled - reload page for clean state
+                console.log('Extension disabled - reloading page for clean state');
+
+                // Send response before reloading
+                sendResponse({ enabled: isExtensionEnabled });
+
+                // Small delay to ensure response is sent, then reload
+                setTimeout(() => {
+                    location.reload();
+                }, 100);
+
+                return; // Exit early since we're reloading
+            }
+
+            sendResponse({ enabled: isExtensionEnabled });
+        } else if (request.action === 'getStatus') {
+            console.log('Status requested, responding with:', isExtensionEnabled);
+            sendResponse({ enabled: isExtensionEnabled });
+        }
+    };
+
+    // Add the listener
+    chrome.runtime.onMessage.addListener(messageListener);
+    console.log('Message listener created and added');
+}
+
+// Function to cleanup extension resources
+function cleanupExtension() {
+    console.log('Cleaning up extension resources...');
+
+    // Remove message listener
+    if (messageListener) {
+        try {
+            chrome.runtime.onMessage.removeListener(messageListener);
+            messageListener = null;
+            console.log('Message listener removed');
+        } catch (error) {
+            console.warn('Error removing message listener:', error);
+        }
+    }
+
+    // Disconnect mutation observer
+    if (mutationObserver) {
+        try {
+            mutationObserver.disconnect();
+            mutationObserver = null;
+            console.log('Mutation observer disconnected');
+        } catch (error) {
+            console.warn('Error disconnecting mutation observer:', error);
+        }
+    }
+
+    // Reset initialization state
+    isExtensionInitialized = false;
+    console.log('Extension cleanup completed');
+}
 
 // Initialize the extension
 async function initialize() {
+    // Prevent duplicate initialization
+    if (isExtensionInitialized) {
+        console.log('Extension already initialized, skipping duplicate initialization');
+        return;
+    }
+
     console.log('Initializing 2D to 3D Image Converter...');
+
+    // Mark as initialized early to prevent race conditions
+    isExtensionInitialized = true;
+
+    // Clean up any existing resources first (in case of reload during development)
+    cleanupExtension();
 
     // Add helpful CORS information for developers
     console.log(`
@@ -2661,24 +2735,35 @@ async function initialize() {
    and Facebook's complex CSS positioning. Try it on news sites and social media!
     `);
 
-    // Load saved state first
-    await loadExtensionState();
+    try {
+        // Load saved state first
+        await loadExtensionState();
 
-    // Inject CSS styles
-    injectStyles();
+        // Inject CSS styles
+        injectStyles();
 
-    // Only start processing images if extension is enabled
-    if (isExtensionEnabled) {
-        processImages();
-        console.log('Extension enabled - processing images');
-    } else {
-        console.log('Extension disabled - not processing images');
+        // Set up message listener for popup communication
+        setupMessageListener();
+
+        // Start observing new images (this also prevents duplicates)
+        observeNewImages();
+
+        // Only start processing images if extension is enabled
+        if (isExtensionEnabled) {
+            processImages();
+            console.log('Extension enabled - processing images');
+        } else {
+            console.log('Extension disabled - not processing images');
+        }
+
+        console.log('2D to 3D Image Converter initialized successfully!');
+
+    } catch (error) {
+        console.error('Error during extension initialization:', error);
+        // Reset initialization state on error
+        isExtensionInitialized = false;
+        cleanupExtension();
     }
-
-    // Start observing new images regardless of state (for when user re-enables)
-    observeNewImages();
-
-    console.log('2D to 3D Image Converter initialized successfully!');
 }
 
 // Wait for DOM to be ready
@@ -2686,4 +2771,10 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initialize);
 } else {
     initialize();
-} 
+}
+
+// Clean up when page unloads to prevent resource leaks
+window.addEventListener('beforeunload', () => {
+    console.log('Page unloading, cleaning up extension...');
+    cleanupExtension();
+}, { once: true }); 
