@@ -63,19 +63,25 @@
 
     <h2>Overview</h2>
     <p>ImmersityLens is a Chrome extension that converts 2D images into immersive 3D Light Field Images (LIF) using
-        artificial intelligence. This privacy policy explains how we handle data when you use our extension.</p>
+        artificial intelligence. This privacy policy explains how we handle data when you use our extension.
+        <strong>Note: ImmersityLens requires an active subscription to Immersity AI for image conversion
+            functionality.</strong>
+    </p>
 
     <h2>Data Collection</h2>
     <div class="highlight">
-        <strong>We do not collect, store, or transmit any personal information.</strong>
+        <strong>We do not collect, store, or transmit personal information beyond what's required for Immersity AI
+            subscription authentication.</strong>
     </div>
 
     <p>The extension operates with the following privacy principles:</p>
     <ul>
-        <li>No user accounts or registration required</li>
-        <li>No personal data collection</li>
+        <li>Immersity AI subscription credentials are required for functionality</li>
+        <li>API keys are stored locally and securely in your browser</li>
+        <li>No personal data collection beyond subscription authentication</li>
         <li>No tracking or analytics</li>
-        <li>No data sharing with third parties (except for necessary image processing)</li>
+        <li>No data sharing with third parties (except for necessary image processing and subscription verification)
+        </li>
     </ul>
 
     <h2>Image Processing</h2>
@@ -103,6 +109,7 @@
     <h3>What We Store</h3>
     <ul>
         <li>Your extension preference (enabled/disabled state)</li>
+        <li>Your Immersity AI API credentials (stored securely and locally)</li>
         <li>CORS information display status (whether you've seen the CORS help popup)</li>
     </ul>
 
@@ -119,7 +126,9 @@
     <h3>Immersity AI</h3>
     <ul>
         <li>We use Immersity AI's service for 2D to 3D image conversion</li>
+        <li>Your subscription credentials are used to authenticate with their API</li>
         <li>Images are sent to their servers only when you request conversion</li>
+        <li>Subscription verification occurs automatically to ensure service availability</li>
         <li>Please refer to <a href="https://www.immersity.ai/privacy" target="_blank">Immersity AI's privacy policy</a>
             for their data handling practices</li>
     </ul>
@@ -143,9 +152,9 @@
 
     <h3><code>storage</code></h3>
     <ul>
-        <li><strong>Purpose</strong>: To remember your extension preferences</li>
-        <li><strong>Data Stored</strong>: Only your enable/disable preference (boolean value)</li>
-        <li><strong>No Personal Data</strong>: No personal information is stored</li>
+        <li><strong>Purpose</strong>: To remember your extension preferences and API credentials</li>
+        <li><strong>Data Stored</strong>: Extension enable/disable preference and Immersity AI API credentials</li>
+        <li><strong>Security</strong>: API credentials are stored securely using Chrome's storage API encryption</li>
     </ul>
 
     <h3><code>host_permissions</code></h3>
@@ -155,10 +164,29 @@
         <li><strong>Data Sent</strong>: Only images you explicitly choose to convert</li>
     </ul>
 
+    <h2>Subscription and API Credentials</h2>
+
+    <h3>How We Handle Your Immersity AI Credentials</h3>
+    <ul>
+        <li>API keys are stored locally in your browser using Chrome's secure storage</li>
+        <li>Credentials are never transmitted to our servers</li>
+        <li>Only used for direct communication with Immersity AI's authenticated services</li>
+        <li>You can remove credentials at any time through the extension popup</li>
+    </ul>
+
+    <h3>Subscription Verification</h3>
+    <ul>
+        <li>The extension periodically verifies your subscription status with Immersity AI</li>
+        <li>This ensures conversion features work properly and within your plan limits</li>
+        <li>No subscription details are stored by our extension</li>
+        <li>All subscription management occurs directly with Immersity AI</li>
+    </ul>
+
     <h2>Data Security</h2>
     <ul>
         <li>All communications with external services use HTTPS encryption</li>
-        <li>No sensitive data is transmitted or stored</li>
+        <li>API credentials are encrypted using Chrome's built-in security model</li>
+        <li>No sensitive data is transmitted to our servers</li>
         <li>Local storage is limited to browser's built-in security model</li>
     </ul>
 
