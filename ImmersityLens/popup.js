@@ -20,11 +20,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Load initial state from storage
     chrome.storage.local.get([STORAGE_KEY]).then((result) => {
-        const isEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : true;
+        const isEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : false;
         updateUI(isEnabled);
     }).catch((error) => {
         console.error('Error loading extension state in popup:', error);
-        updateUI(true); // Default to enabled
+        updateUI(false);
     });
 
     // Handle toggle button click

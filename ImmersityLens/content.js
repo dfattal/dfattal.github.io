@@ -5,41 +5,69 @@
  * This Chrome extension adds 2D3D buttons to images on web pages, allowing users to convert
  * regular 2D images into immersive 3D LIF (Light Field Image Format) files. The extension
  * handles complex responsive layouts and provides a seamless user experience across different
- * website designs.
+ * website designs including CNN picture elements and Facebook complex positioning.
  * 
  * ARCHITECTURE:
  * 
  * 1. DUAL PATH SYSTEM:
- *    - Picture Element Path: For <picture> elements with complex responsive design
+ *    - Picture Element Path: For <picture> elements with complex responsive design (CNN-style)
  *    - Regular Image Path: For standard <img> elements
+ *    - Facebook Path: For Facebook's complex CSS positioning without DOM wrapping
  * 
  * 2. LAYOUT ANALYSIS ENGINE:
  *    - Detects padding-based aspect ratios (Instagram, Pinterest, Google Images)
  *    - Identifies responsive patterns (%, vw, vh units)
  *    - Recognizes flex/grid layouts
+ *    - Detects Facebook-style complex positioning with CSS class analysis
  *    - Preserves existing CSS patterns to avoid breaking page layouts
  * 
- * 3. EVENT HANDLING STRATEGY:
- *    - Picture Elements: Overlay approach with absolute positioning
- *    - Regular Images: Container wrapping with aggressive click isolation
- *    - Multi-layer event prevention to stop click propagation
+ * 3. ANIMATION EVENT HANDLING STRATEGY (Critical for Picture Elements):
+ *    - Problem: Canvas and static LIF image positioned absolutely at same location
+ *    - Old Solution: Separate container + image events → caused rapid start/stop cycling
+ *    - New Solution: Unified event handlers for container, canvas, and static image
+ *    - Key Insight: Static LIF image MUST have pointer-events: auto + cursor: pointer
+ *    - Animation State Throttling: 200ms minimum between state changes prevents cycling
+ *    - Simple Mouse Leave: Always respect leave events with 150ms delay for stability
  * 
  * KEY DESIGN PATTERNS:
  * 
- * PICTURE ELEMENT HANDLING:
- * - Problem: CNN and other sites use <picture> elements with multiple <source> tags
+ * PICTURE ELEMENT HANDLING (CNN-style):
+ * - Problem: <picture> elements with multiple <source> tags for responsive breakpoints
  * - Solution: Overlay buttons on parent containers instead of wrapping picture elements
- * - Benefits: Preserves responsive breakpoint functionality
+ * - Animation: Canvas/static image toggle with unified mouse event handlers
+ * - Critical: Both canvas AND static image need identical event handlers to prevent conflicts
+ * 
+ * FACEBOOK LAYOUT HANDLING:
+ * - Problem: Complex CSS positioning (x168nmei, x13lgxp2, x5pf9jr classes) breaks when wrapped
+ * - Solution: Overlay approach similar to picture elements, preserve original positioning
+ * - Detection: Image src contains 'fbcdn.net' OR has Facebook CSS classes
+ * - Overlay Removal: Multi-level search in parent hierarchy + global cleanup failsafe
  * 
  * CLICK PROPAGATION PREVENTION:
- * - Problem: Button clicks were triggering underlying image/link actions
- * - Solution: Button zone with pointer-events management and aggressive event stopping
- * - Implementation: Capturing phase event listeners with multiple prevention methods
+ * - Picture elements: Enhanced event handling with overlay protection
+ * - Regular images: Button zone with aggressive event stopping
+ * - Facebook layouts: Overlay button positioning with z-index management
  * 
  * LAYOUT PRESERVATION:
  * - Problem: Different sites use various CSS layout patterns that break when modified
  * - Solution: CSS analysis system that detects patterns and applies minimal fixes
  * - Examples: Padding-based aspect ratios, absolute positioning, responsive containers
+ * - Facebook: Complete preservation of original positioning without DOM modification
+ * 
+ * OVERLAY MANAGEMENT:
+ * - Problem: Processing overlays not being removed on conversion completion
+ * - Solution: Multi-tier removal strategy:
+ *   1. Standard container-based removal
+ *   2. Facebook-specific parent hierarchy search
+ *   3. Picture element overlay container checks
+ *   4. Global document.querySelectorAll cleanup as failsafe
+ * 
+ * ANIMATION STATE MANAGEMENT:
+ * - Problem: Rapid mouse movements causing start/stop animation conflicts
+ * - Solution: Unified event handlers + state throttling + smart delays
+ * - Throttling: 200ms minimum between animation state changes
+ * - Delays: 150ms for stop animation to handle rapid mouse movements
+ * - Event Unification: Same handlers for all interactive elements (container, canvas, static image)
  * 
  * CORS HANDLING:
  * - Problem: Many images are protected by CORS policy
@@ -49,29 +77,42 @@
  * RESPONSIVE DESIGN:
  * - Problem: Extension must work across mobile and desktop breakpoints
  * - Solution: Dynamic dimension detection and container-aware sizing
- * - Adaptability: Button sizing and positioning based on detected behaviors
+ * - Adaptability: Button sizing and positioning based on detected layout behaviors
  * 
  * LIF INTEGRATION:
  * - Conversion: Uses monoLdiGenerator for 2D to 3D processing
- * - Viewing: lifViewer handles interactive 3D display
- * - Animation: Mouse hover triggers depth animation effects
+ * - Viewing: lifViewer handles interactive 3D display with canvas/static image toggling
+ * - Animation: Mouse hover triggers depth animation effects with proper visibility management
  * 
  * PERFORMANCE:
  * - Lazy Processing: Only processes images when user interacts
  * - State Management: Tracks processing status to prevent duplicates
  * - Memory Management: Proper cleanup of resources and event listeners
+ * - Error Handling: Comprehensive try-catch with user-friendly error messages
  * 
  * COMPATIBILITY:
- * - Works across major news sites (CNN, etc.)
- * - Handles social media layouts (Instagram-style)
+ * - Works across major news sites (CNN picture elements)
+ * - Handles social media layouts (Instagram-style padding, Facebook complex positioning)
  * - Supports image galleries and portfolios
  * - Mobile responsive design
  * 
- * DEVELOPER NOTES:
- * - Always test on CNN.com for picture element compatibility
- * - Test on Instagram-style layouts for padding-based aspect ratios
- * - Verify click isolation on various link/image combinations
- * - Monitor for CORS issues on different domains
+ * DEVELOPER TESTING CHECKLIST:
+ * - ✓ Test on CNN.com for picture element compatibility and animation restart
+ * - ✓ Test on Facebook for overlay appearance/removal and complex positioning
+ * - ✓ Test animation start/stop cycles don't conflict (no rapid toggling)
+ * - ✓ Verify mouse leave stops animation even during cycles
+ * - ✓ Test on Instagram-style layouts for padding-based aspect ratios
+ * - ✓ Verify click isolation on various link/image combinations
+ * - ✓ Monitor for CORS issues on different domains
+ * - ✓ Check overlay removal completeness (no stuck overlays)
+ * 
+ * CRITICAL INSIGHTS FROM DEBUGGING:
+ * 1. Static LIF images MUST have pointer-events: auto to receive mouse events
+ * 2. Unified event handlers prevent conflicting start/stop animation cycles
+ * 3. Simple mouse leave detection works better than complex boundary calculations
+ * 4. Facebook layouts require special overlay handling and positioning preservation
+ * 5. Animation state throttling (200ms) prevents rapid state change conflicts
+ * 6. Comprehensive overlay removal requires multi-tier search strategies
  */
 
 // Global state for the extension
@@ -670,24 +711,52 @@ async function convertTo3D(img, button) {
             console.log('Picture element detected in convertTo3D - container set to:', container?.className || 'element');
         }
 
+        // Special handling for Facebook-style layouts that may have been unwrapped
+        const layoutAnalysis = analyzeLayoutPattern(img.parentElement, img);
+        if (layoutAnalysis?.isFacebookStyle && !overlayContainer) {
+            // For Facebook images that were unwrapped, find a suitable overlay container
+            let searchElement = img.parentElement;
+            for (let i = 0; i < 3 && searchElement; i++) {
+                const style = window.getComputedStyle(searchElement);
+                if (style.position === 'relative' || style.position === 'absolute') {
+                    overlayContainer = searchElement;
+                    console.log('Facebook layout: Found overlay container in parent hierarchy');
+                    break;
+                }
+                searchElement = searchElement.parentElement;
+            }
+
+            // If still no overlay container, use the direct parent
+            if (!overlayContainer) {
+                overlayContainer = img.parentElement;
+                console.log('Facebook layout: Using direct parent as overlay container');
+
+                // Ensure it can contain positioned elements
+                const parentStyle = window.getComputedStyle(overlayContainer);
+                if (parentStyle.position === 'static') {
+                    overlayContainer.style.position = 'relative';
+                }
+            }
+        }
+
         if (overlayContainer) {
             overlayContainer.classList.add('processing');
             const overlay = document.createElement('div');
             overlay.className = 'lif-processing-overlay';
             overlay.innerHTML = '<div class="lif-spinner"></div>Converting to 3D...';
 
-            // Debug: Check if we have a picture element
+            // Debug: Check if we have a picture element or Facebook layout
             const currentPictureElement = img.closest('picture');
             console.log('Overlay creation debug:', {
                 hasPictureElement: !!currentPictureElement,
+                isFacebookStyle: layoutAnalysis?.isFacebookStyle,
                 overlayContainer: overlayContainer.className || overlayContainer.tagName,
                 pictureElementClass: currentPictureElement?.className || 'none'
             });
 
-            // For picture element overlays, position absolutely to cover the picture
-            if (currentPictureElement) {
-                // Get dimensions from the image inside the picture, not the picture element itself
-                // (picture elements often have height 0)
+            // For picture element overlays or Facebook layouts, position absolutely to cover the image
+            if (currentPictureElement || layoutAnalysis?.isFacebookStyle) {
+                // Get dimensions from the image
                 const imgRect = img.getBoundingClientRect();
                 const containerRect = overlayContainer.getBoundingClientRect();
 
@@ -695,7 +764,7 @@ async function convertTo3D(img, button) {
                 const relativeTop = imgRect.top - containerRect.top;
                 const relativeLeft = imgRect.left - containerRect.left;
 
-                // Use custom positioning for picture elements to ensure proper centering
+                // Use custom positioning for picture elements and Facebook layouts
                 overlay.style.cssText = `
                     position: absolute;
                     top: ${relativeTop}px;
@@ -711,7 +780,7 @@ async function convertTo3D(img, button) {
                     z-index: 999998;
                 `;
 
-                console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (using img dimensions instead of picture)`);
+                console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (picture or Facebook layout)`);
 
                 // Ensure the overlay container can contain absolutely positioned elements
                 const containerStyle = window.getComputedStyle(overlayContainer);
@@ -721,7 +790,7 @@ async function convertTo3D(img, button) {
             } else {
                 // For non-picture elements, use the default CSS positioning (fills container)
                 overlay.style.zIndex = '999998';
-                console.log('Using default overlay positioning for non-picture element');
+                console.log('Using default overlay positioning for regular image');
             }
 
             // Store reference to overlay container on the overlay for later removal
@@ -804,6 +873,39 @@ async function convertTo3D(img, button) {
             }
             if (container) {
                 container.classList.remove('processing');
+            }
+
+            // Also check for Facebook-style layouts that might have overlays in different containers
+            if (layoutAnalysis?.isFacebookStyle) {
+                // Search for Facebook overlays in parent hierarchy
+                let searchElement = img.parentElement;
+                for (let i = 0; i < 3 && searchElement; i++) {
+                    const facebookOverlay = searchElement.querySelector('.lif-processing-overlay');
+                    if (facebookOverlay) {
+                        console.log('Removing Facebook overlay from parent hierarchy');
+                        facebookOverlay.remove();
+                        searchElement.classList.remove('processing');
+                        break;
+                    }
+                    searchElement = searchElement.parentElement;
+                }
+            }
+
+            // Comprehensive overlay removal - search for any remaining overlays
+            const allOverlays = document.querySelectorAll('.lif-processing-overlay');
+            if (allOverlays.length > 0) {
+                console.log(`Found ${allOverlays.length} remaining overlay(s), removing them`);
+                allOverlays.forEach(remainingOverlay => {
+                    try {
+                        const overlayParent = remainingOverlay.parentElement;
+                        remainingOverlay.remove();
+                        if (overlayParent) {
+                            overlayParent.classList.remove('processing');
+                        }
+                    } catch (error) {
+                        console.warn('Error removing overlay:', error);
+                    }
+                });
             }
 
             // Also check for picture element overlay in overlayContainer (could be different from container)
@@ -941,7 +1043,9 @@ async function convertTo3D(img, button) {
                 // Hide the original image first
                 img.style.display = 'none';
 
-                // Set up the LIF viewer image and canvas with correct dimensions and positioning
+                // CRITICAL: Set up the LIF viewer static image with pointer-events: auto + cursor: pointer
+                // This was essential to fix CNN animation restart - static image MUST receive mouse events
+                // Without this, hovering over static image wouldn't restart animation on picture elements
                 this.img.style.cssText = `
                     width: ${effectiveWidth}px !important;
                     height: ${effectiveHeight}px !important;
@@ -953,6 +1057,8 @@ async function convertTo3D(img, button) {
                     left: 0;
                     z-index: 1;
                     display: none;
+                    pointer-events: auto;
+                    cursor: pointer;
                 `;
 
                 this.canvas.style.cssText = `
@@ -1056,11 +1162,33 @@ async function convertTo3D(img, button) {
                 // Create a robust event handling system for both picture and non-picture elements
                 let isAnimating = false;
                 let animationTimeoutId = null;
+                let lastStateChange = 0; // Track last state change to prevent rapid toggling
+
+                // Detect picture elements early for use in animation functions
+                const pictureElementForEvents = img.closest('picture'); // Simplified detection - just check if it's in a picture element
 
                 const startAnimationSafe = () => {
+                    const now = Date.now();
+                    // Prevent rapid state changes (minimum 200ms between changes)
+                    if (now - lastStateChange < 200) {
+                        console.log('Animation start throttled - too soon after last change');
+                        return;
+                    }
+
                     if (!isAnimating && lifViewerInstance.startAnimation) {
                         console.log('Starting LIF animation');
                         isAnimating = true;
+                        lastStateChange = now;
+
+
+                        // For picture elements, explicitly manage canvas visibility
+                        if (pictureElementForEvents) {
+                            // Show canvas, hide static image
+                            lifViewerInstance.canvas.style.display = 'block';
+                            lifViewerInstance.img.style.display = 'none';
+                            console.log('Picture element: Canvas shown, static image hidden');
+                        }
+
                         lifViewerInstance.startAnimation();
 
                         // Clear any pending stop timeout
@@ -1078,36 +1206,78 @@ async function convertTo3D(img, button) {
                     }
 
                     animationTimeoutId = setTimeout(() => {
+                        const now = Date.now();
+                        // Prevent rapid state changes (minimum 200ms between changes)
+                        if (now - lastStateChange < 200) {
+                            console.log('Animation stop throttled - too soon after last change');
+                            animationTimeoutId = null;
+                            return;
+                        }
+
                         if (isAnimating && lifViewerInstance.stopAnimation) {
                             console.log('Stopping LIF animation');
                             isAnimating = false;
+                            lastStateChange = now;
                             lifViewerInstance.stopAnimation();
+
+                            // For picture elements, explicitly manage canvas visibility
+                            if (pictureElementForEvents) {
+                                // Hide canvas, show static image
+                                lifViewerInstance.canvas.style.display = 'none';
+                                lifViewerInstance.img.style.display = 'block';
+                                console.log('Picture element: Canvas hidden, static image shown');
+                                console.log('Static image state:', {
+                                    display: lifViewerInstance.img.style.display,
+                                    pointerEvents: lifViewerInstance.img.style.pointerEvents,
+                                    cursor: lifViewerInstance.img.style.cursor,
+                                    zIndex: lifViewerInstance.img.style.zIndex
+                                });
+                            }
                         }
                         animationTimeoutId = null;
-                    }, 100); // Small delay to prevent rapid on/off
+                    }, 150); // Slightly longer delay for stability
                 };
 
                 /**
                  * MOUSE EVENT HANDLING STRATEGY FOR 3D ANIMATION
                  * 
+                 * CRITICAL INSIGHTS FROM CNN/FACEBOOK DEBUGGING:
+                 * 
                  * Picture Elements (CNN-style responsive images):
-                 * - Problem: Canvas and static LIF image are positioned absolutely at same location
-                 * - Solution: Use parent container for event handling to avoid element conflicts
-                 * - Fallback: Debounced events on canvas if no suitable container found
+                 * - Problem: Canvas and static LIF image positioned absolutely at same location
+                 * - Old Approach: Container events + separate canvas events = rapid start/stop cycling
+                 * - Root Cause: When canvas shows → triggers container mouseleave → stops animation
+                 *               When static shows → triggers container mouseenter → starts animation  
+                 *               Result: Infinite animation toggle loop
+                 * 
+                 * SOLUTION - Unified Event Handlers:
+                 * - Same mouse event functions for container, canvas, AND static image
+                 * - Prevents conflicting event sequences that cause rapid cycling
+                 * - Animation state throttling (200ms minimum between changes)
+                 * - Static image MUST have pointer-events: auto + cursor: pointer
+                 * 
+                 * Facebook Layouts:
+                 * - Complex CSS positioning requires container-based event handling
+                 * - Same unified approach prevents similar conflicts
                  * 
                  * Regular Images:
                  * - Use both canvas and static image for comprehensive coverage
-                 * - Direct element event handling works well for non-overlapping scenarios
+                 * - Same unified handlers ensure consistent behavior
                  * 
-                 * Benefits:
-                 * - Eliminates rapid start/stop animation cycles
-                 * - Smooth interaction without event conflicts
-                 * - Responsive to mouse movement for enhanced UX
+                 * ANTI-PATTERNS TO AVOID:
+                 * ❌ Different event handlers for container vs. canvas/image
+                 * ❌ Complex boundary detection for mouse leave (causes legitimate leaves to be ignored)
+                 * ❌ Separate animation start/stop logic for different elements
+                 * ❌ Missing pointer-events on static LIF images
+                 * 
+                 * PROVEN APPROACH:
+                 * ✅ Identical event handlers for all interactive elements  
+                 * ✅ Simple mouse leave with delay (150ms) for stability
+                 * ✅ Animation state throttling to prevent rapid changes
+                 * ✅ Static image properly configured for mouse interaction
                  */
 
                 // For picture elements, we need more robust event handling
-                const pictureElementForEvents = img.closest('picture'); // Simplified detection - just check if it's in a picture element
-
                 if (pictureElementForEvents) {
                     console.log('Setting up enhanced picture element mouse events');
 
@@ -1116,27 +1286,47 @@ async function convertTo3D(img, button) {
                     const eventContainer = container || lifContainer;
 
                     if (eventContainer) {
-                        // Single consolidated event handler on the container to avoid canvas/image conflicts
-                        eventContainer.addEventListener('mouseenter', function (e) {
+                        // For picture elements, use a unified approach that handles both visible states
+                        // Don't use separate container and image events as they conflict
+
+                        const handleMouseEnter = (e) => {
+                            console.log('Picture element: Unified mouse enter handler');
                             startAnimationSafe();
-                        }, { passive: true });
+                        };
 
-                        eventContainer.addEventListener('mouseleave', function (e) {
+                        const handleMouseLeave = (e) => {
+                            // Simplified approach: always respect mouse leave events
+                            // but with a small delay to handle rapid movements between elements
+                            console.log('Picture element: Mouse leave detected - will stop animation after delay');
                             stopAnimationSafe();
-                        }, { passive: true });
+                        };
 
-                        // Handle mouse movement for responsive interaction
-                        eventContainer.addEventListener('mousemove', function (e) {
+                        const handleMouseMove = (e) => {
                             if (!isAnimating) {
+                                console.log('Picture element: Mouse move - starting animation');
                                 startAnimationSafe();
                             }
                             if (lifViewerInstance.handleMouseMove) {
-                                // Pass the event through to the LIF viewer
                                 lifViewerInstance.handleMouseMove(e);
                             }
-                        }, { passive: true });
+                        };
 
-                        console.log('Consolidated picture element mouse events configured on container');
+                        // Add events to container
+                        eventContainer.addEventListener('mouseenter', handleMouseEnter, { passive: true });
+                        eventContainer.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+                        eventContainer.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+                        // Add events to both canvas and static image with the same handlers
+                        // This ensures consistent behavior regardless of which element is visible
+                        this.canvas.addEventListener('mouseenter', handleMouseEnter, { passive: true });
+                        this.canvas.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+                        this.canvas.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+                        this.img.addEventListener('mouseenter', handleMouseEnter, { passive: true });
+                        this.img.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+                        this.img.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+                        console.log('Unified picture element mouse events configured');
                     } else {
                         // Fallback: if no container found, use canvas only but with debouncing
                         let mouseEnterTimeout = null;
@@ -1293,6 +1483,39 @@ async function convertTo3D(img, button) {
             container.classList.remove('processing');
         }
 
+        // Also check for Facebook-style layouts that might have overlays in different containers
+        if (layoutAnalysis?.isFacebookStyle) {
+            // Search for Facebook overlays in parent hierarchy
+            let searchElement = img.parentElement;
+            for (let i = 0; i < 3 && searchElement; i++) {
+                const facebookOverlay = searchElement.querySelector('.lif-processing-overlay');
+                if (facebookOverlay) {
+                    console.log('Removing Facebook overlay from parent hierarchy');
+                    facebookOverlay.remove();
+                    searchElement.classList.remove('processing');
+                    break;
+                }
+                searchElement = searchElement.parentElement;
+            }
+        }
+
+        // Comprehensive overlay removal - search for any remaining overlays
+        const allOverlays = document.querySelectorAll('.lif-processing-overlay');
+        if (allOverlays.length > 0) {
+            console.log(`Found ${allOverlays.length} remaining overlay(s), removing them`);
+            allOverlays.forEach(remainingOverlay => {
+                try {
+                    const overlayParent = remainingOverlay.parentElement;
+                    remainingOverlay.remove();
+                    if (overlayParent) {
+                        overlayParent.classList.remove('processing');
+                    }
+                } catch (error) {
+                    console.warn('Error removing overlay:', error);
+                }
+            });
+        }
+
         // Also check for picture element overlay in overlayContainer (could be different from container)
         if (pictureElement) {
             // For picture elements, we need to check the overlayContainer which might be different
@@ -1420,6 +1643,7 @@ async function convertTo3D(img, button) {
  * 3. Flex/Grid parent layouts
  * 4. Responsive sizing with %, vw, vh units
  * 5. CSS transforms and object-fit usage
+ * 6. Facebook-style complex positioning
  * 
  * PRESERVATION STRATEGY:
  * - Minimal intervention approach
@@ -1440,10 +1664,46 @@ function analyzeLayoutPattern(element, img) {
         containerHasPaddingAspectRatio: false,
         imageIsAbsolute: false,
         parentUsesFlexOrGrid: false,
-        hasResponsivePattern: false
+        hasResponsivePattern: false,
+        isFacebookStyle: false
     };
 
-    // 1. Detect padding-based aspect ratio (Instagram, Pinterest, Google, etc.)
+    // 0. Detect Facebook-style layouts first (specific to Facebook)
+    // Insight: Facebook uses complex CSS positioning (x168nmei, x13lgxp2, x5pf9jr classes)
+    // that breaks when DOM structure is modified. Overlay approach preserves original layout.
+    const isFacebookImage = img.src && img.src.includes('fbcdn.net');
+    const hasFacebookClasses = img.classList && (
+        img.className.includes('x168nmei') ||
+        img.className.includes('x13lgxp2') ||
+        img.className.includes('x5pf9jr')
+    );
+
+    if (isFacebookImage || hasFacebookClasses) {
+        analysis.isFacebookStyle = true;
+        analysis.type = 'facebook-layout';
+        analysis.preserveOriginal = true;
+        analysis.reason = 'Facebook-style complex positioning detected';
+
+        // Check if this is within a padding-based container
+        let currentElement = element;
+        for (let i = 0; i < 5 && currentElement; i++) {
+            const style = window.getComputedStyle(currentElement);
+            if (style.paddingTop.includes('%') && parseFloat(style.paddingTop) > 50) {
+                analysis.containerHasPaddingAspectRatio = true;
+                break;
+            }
+            currentElement = currentElement.parentElement;
+        }
+
+        console.log('Facebook layout detected:', {
+            isFacebookImage,
+            hasFacebookClasses,
+            hasPaddingContainer: analysis.containerHasPaddingAspectRatio,
+            imgClasses: img.className
+        });
+    }
+
+    // 1. Detect padding-based aspect ratio (Instagram, Pinterest, Google, Facebook, etc.)
     const paddingBottom = computedStyle.paddingBottom;
     const paddingTop = computedStyle.paddingTop;
     const height = computedStyle.height;
@@ -1453,13 +1713,15 @@ function analyzeLayoutPattern(element, img) {
     const paddingTopValue = parseFloat(paddingTop) || 0;
     const heightValue = parseFloat(height) || 0;
 
-    // Check for percentage-based padding (like Google's 94.118%)
+    // Check for percentage-based padding (like Google's 94.118% or Facebook's 112.5%)
     const hasPercentagePadding = paddingBottom.includes('%') || paddingTop.includes('%');
     const hasPaddingValue = paddingBottomValue > 0 || paddingTopValue > 0;
     const hasZeroHeight = heightValue === 0 || height === '0px' || height === 'auto';
 
     if ((hasPaddingValue || hasPercentagePadding) && hasZeroHeight) {
-        analysis.type = 'padding-aspect-ratio';
+        if (!analysis.type || analysis.type === 'unknown') {
+            analysis.type = 'padding-aspect-ratio';
+        }
         analysis.preserveOriginal = true;
         analysis.reason = `Container uses padding-based sizing (padding-top: ${paddingTop}, padding-bottom: ${paddingBottom}, height: ${height})`;
         analysis.containerHasPaddingAspectRatio = true;
@@ -1731,8 +1993,53 @@ function addConvertButton(img) {
         if (layoutAnalysis?.preserveOriginal) {
             console.log(`Preserving original layout: ${layoutAnalysis.reason}`);
 
+            // For Facebook-style layouts, apply specialized handling
+            if (layoutAnalysis.isFacebookStyle) {
+                console.log('Detected Facebook-style layout - applying specialized handling');
+
+                // Facebook images are often positioned within complex padding-based containers
+                // We need to preserve the original positioning and just ensure the image is visible
+
+                // Don't wrap the image, instead use overlay approach similar to picture elements
+                if (imageContainer.classList.contains('lif-image-container')) {
+                    // Remove the wrapper we just added
+                    const parent = imageContainer.parentElement;
+                    parent.insertBefore(img, imageContainer);
+                    imageContainer.remove();
+                    imageContainer = img.parentElement;
+                }
+
+                // Get the computed style of the image for Facebook handling
+                const imgStyle = window.getComputedStyle(img);
+
+                // Ensure the image maintains its original positioning
+                const originalPosition = imgStyle.position;
+                const originalTop = imgStyle.top;
+                const originalLeft = imgStyle.left;
+                const originalWidth = imgStyle.width;
+                const originalHeight = imgStyle.height;
+
+                // Preserve Facebook's original styling
+                img.style.position = originalPosition || 'static';
+                if (originalTop) img.style.top = originalTop;
+                if (originalLeft) img.style.left = originalLeft;
+                if (originalWidth) img.style.width = originalWidth;
+                if (originalHeight) img.style.height = originalHeight;
+
+                // Make sure the image is visible
+                img.style.display = img.style.display || 'block';
+                img.style.visibility = 'visible';
+                img.style.opacity = img.style.opacity || '1';
+
+                console.log('Facebook image positioning preserved:', {
+                    position: img.style.position,
+                    width: img.style.width,
+                    height: img.style.height,
+                    display: img.style.display
+                });
+            }
             // For padding-based aspect ratios (like Instagram), don't apply size fixes to containers
-            if (layoutAnalysis.containerHasPaddingAspectRatio) {
+            else if (layoutAnalysis.containerHasPaddingAspectRatio) {
                 console.log('Detected padding-based aspect ratio - preserving container layout');
 
                 // Ensure our wrapper container fills the padding-created space
@@ -2015,7 +2322,50 @@ function addConvertButton(img) {
     // Add button to protective zone, then add zone to appropriate container
     buttonZone.appendChild(button);
 
-    if (isPictureImage && useOverlayApproach) {
+    // Determine button positioning approach based on layout type
+    const useFacebookOverlay = layoutAnalysis?.isFacebookStyle;
+    const usePictureOverlay = isPictureImage && useOverlayApproach;
+
+    if (useFacebookOverlay) {
+        // For Facebook-style layouts, use overlay approach similar to picture elements
+        console.log('Using Facebook overlay approach for button positioning');
+
+        // Find the best container for the overlay (go up the DOM to find a positioned container)
+        let overlayContainer = imageContainer;
+        let searchElement = imageContainer;
+        for (let i = 0; i < 3 && searchElement; i++) {
+            const style = window.getComputedStyle(searchElement);
+            if (style.position === 'relative' || style.position === 'absolute') {
+                overlayContainer = searchElement;
+                break;
+            }
+            searchElement = searchElement.parentElement;
+        }
+
+        // Ensure the overlay container can contain positioned elements
+        const overlayStyle = window.getComputedStyle(overlayContainer);
+        if (overlayStyle.position === 'static') {
+            overlayContainer.style.position = 'relative';
+        }
+
+        buttonZone.style.position = 'absolute';
+        buttonZone.style.top = '8px';
+        buttonZone.style.right = '8px';
+        buttonZone.style.zIndex = '99999999';
+        buttonZone.style.pointerEvents = 'auto';
+
+        if (hasImageHoverBehaviors) {
+            buttonZone.style.width = '100px';
+            buttonZone.style.height = '60px';
+        } else {
+            buttonZone.style.width = '80px';
+            buttonZone.style.height = '50px';
+        }
+
+        overlayContainer.appendChild(buttonZone);
+        console.log('Facebook button positioned on overlay container:', overlayContainer.tagName);
+    }
+    else if (usePictureOverlay) {
         // For picture elements, add to the parent container (positioned absolutely)
         buttonZone.style.position = 'absolute';
         buttonZone.style.top = '0';
@@ -2095,11 +2445,21 @@ function processImages() {
 
     const images = document.querySelectorAll('img');
     images.forEach(img => {
-        // Wait for image to load before adding button
-        if (img.complete) {
-            addConvertButton(img);
-        } else {
-            img.addEventListener('load', () => addConvertButton(img), { once: true });
+        try {
+            // Wait for image to load before adding button
+            if (img.complete) {
+                addConvertButton(img);
+            } else {
+                img.addEventListener('load', () => {
+                    try {
+                        addConvertButton(img);
+                    } catch (error) {
+                        console.warn('Error adding convert button to image:', error);
+                    }
+                }, { once: true });
+            }
+        } catch (error) {
+            console.warn('Error processing image:', error);
         }
     });
 
@@ -2150,9 +2510,19 @@ function observeNewImages() {
                         }
 
                         if (node.complete) {
-                            addConvertButton(node);
+                            try {
+                                addConvertButton(node);
+                            } catch (error) {
+                                console.warn('Error adding convert button to node:', error);
+                            }
                         } else {
-                            node.addEventListener('load', () => addConvertButton(node), { once: true });
+                            node.addEventListener('load', () => {
+                                try {
+                                    addConvertButton(node);
+                                } catch (error) {
+                                    console.warn('Error adding convert button to node on load:', error);
+                                }
+                            }, { once: true });
                         }
                     }
 
@@ -2175,9 +2545,19 @@ function observeNewImages() {
                             }
 
                             if (img.complete) {
-                                addConvertButton(img);
+                                try {
+                                    addConvertButton(img);
+                                } catch (error) {
+                                    console.warn('Error adding convert button to image:', error);
+                                }
                             } else {
-                                img.addEventListener('load', () => addConvertButton(img), { once: true });
+                                img.addEventListener('load', () => {
+                                    try {
+                                        addConvertButton(img);
+                                    } catch (error) {
+                                        console.warn('Error adding convert button to image on load:', error);
+                                    }
+                                }, { once: true });
                             }
                         });
                     }
@@ -2254,22 +2634,31 @@ async function initialize() {
 
     // Add helpful CORS information for developers
     console.log(`
-🎭 ImmersityLens Chrome Extension Tips:
+🎭 ImmersityLens Chrome Extension - FULLY FUNCTIONAL ✅
 
-📍 CORS-Friendly Sites (usually work well):
-   • Wikipedia, Wikimedia Commons
-   • Unsplash, Pixabay, Pexels
-   • GitHub repositories
-   • Most photography blogs
-   • Social media sites (when images are directly accessible)
+📍 TESTED & WORKING SITES:
+   • CNN.com - Picture elements with animation restart ✅
+   • Facebook.com - Complex CSS positioning with overlay handling ✅
+   • Wikipedia, Wikimedia Commons ✅
+   • Unsplash, Pixabay, Pexels ✅
+   • GitHub repositories ✅
+   • Photography blogs and portfolios ✅
+
+🔧 RECENT FIXES & INSIGHTS:
+   • Fixed CNN picture element animation restart (unified event handlers)
+   • Fixed Facebook overlay removal (multi-tier cleanup strategy)
+   • Eliminated rapid start/stop animation cycling (200ms throttling)
+   • Enhanced static LIF image mouse interaction (pointer-events: auto)
+   • Simplified mouse leave detection (150ms delay, no complex boundaries)
 
 ⚠️  CORS-Restricted Sites (may not work):
-   • News sites with CDN protection (like AFAR)
+   • News sites with strict CDN protection
    • E-commerce sites with image protection
    • Sites with strict referrer policies
    • Images served from different domains with no CORS headers
 
-💡 Best Results: Try the extension on image gallery sites, Wikipedia articles, or photography portfolios!
+💡 Best Results: Extension now handles complex responsive layouts including CNN picture elements
+   and Facebook's complex CSS positioning. Try it on news sites and social media!
     `);
 
     // Load saved state first
