@@ -1,5 +1,5 @@
 // Global state for the extension
-let isExtensionEnabled = true; // Default value, will be overridden by stored state
+let isExtensionEnabled = false; // Default to disabled - user must explicitly enable
 let processingImages = new Set(); // Track which images are being processed
 let hasShownCorsInfo = false; // Track if we've shown CORS info to user
 
@@ -23,16 +23,22 @@ function injectStyles() {
             font-size: 12px;
             font-weight: bold;
             cursor: pointer;
-            z-index: 10000;
+            z-index: 999999;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             transition: all 0.3s ease;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            pointer-events: auto;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
         
         .lif-converter-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            z-index: 9999999;
         }
         
         .lif-converter-btn.processing {
@@ -74,6 +80,10 @@ function injectStyles() {
             display: inline-block;
             transition: all 0.3s ease;
             overflow: hidden;
+            margin: 0;
+            padding: 0;
+            border: none;
+            vertical-align: top;
         }
         
         .lif-image-container[data-lif-active="true"] {
@@ -120,6 +130,20 @@ function injectStyles() {
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        .lif-button-zone {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 80px;
+            height: 50px;
+            z-index: 999998;
+            pointer-events: none;
+        }
+        
+        .lif-button-zone .lif-converter-btn {
+            pointer-events: auto;
         }
     `;
     document.head.appendChild(style);
@@ -375,8 +399,23 @@ async function imageToFile(img) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
+        // Use intrinsic dimensions if available, fallback to rendered dimensions
+        const width = img.naturalWidth || img.width || 0;
+        const height = img.naturalHeight || img.height || 0;
+
+        console.log(`Converting image to file - dimensions: ${width}x${height} (natural: ${img.naturalWidth}x${img.naturalHeight}, rendered: ${img.width}x${img.height})`);
+
+        if (width === 0 || height === 0) {
+            console.error('Image has invalid dimensions, cannot convert');
+            // Create minimal placeholder
+            const placeholderBlob = new Blob(['invalid-dimensions'], { type: 'image/jpeg' });
+            const file = new File([placeholderBlob], 'invalid.jpg', { type: 'image/jpeg' });
+            resolve(file);
+            return;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
 
         // Method 1: Try direct canvas drawing if image is same-origin or already loaded
         try {
@@ -628,13 +667,47 @@ async function convertTo3D(img, button) {
                 container.classList.remove('processing');
             }
 
-            // Create the LIF viewer with exact original image dimensions
-            const originalWidth = img.width || img.naturalWidth;
-            const originalHeight = img.height || img.naturalHeight;
+            // Create the LIF viewer with effective dimensions
+            // For padding-based layouts, prioritize container dimensions over image dimensions
+            const containerRect = container?.getBoundingClientRect();
+            const containerStyle = container ? window.getComputedStyle(container) : null;
+            const isAbsolutelyPositioned = containerStyle?.position === 'absolute';
 
-            console.log(`Creating LIF viewer for image: ${originalWidth}x${originalHeight}`);
+            let effectiveWidth, effectiveHeight;
 
-            const viewer = new lifViewer(this.lifDownloadUrl, container || img.parentElement, originalHeight, true, true);
+            if (isAbsolutelyPositioned && containerRect && containerRect.width > 0 && containerRect.height > 0) {
+                // For padding-based layouts (absolute positioned containers), use container dimensions
+                effectiveWidth = Math.round(containerRect.width);
+                effectiveHeight = Math.round(containerRect.height);
+                console.log(`Using container dimensions for padding-based layout: ${effectiveWidth}x${effectiveHeight}`);
+            } else {
+                // For standard layouts, use image dimensions
+                const originalWidth = img.width || img.naturalWidth;
+                const originalHeight = img.height || img.naturalHeight;
+
+                effectiveWidth = originalWidth;
+                effectiveHeight = originalHeight;
+
+                if (originalWidth === 0 || originalHeight === 0) {
+                    // Fallback to container if image dimensions are problematic
+                    if (containerRect && containerRect.width > 0 && containerRect.height > 0) {
+                        effectiveWidth = Math.round(containerRect.width);
+                        effectiveHeight = Math.round(containerRect.height);
+                        console.log(`Using container dimensions as fallback: ${effectiveWidth}x${effectiveHeight}`);
+                    } else {
+                        // Last resort: use natural dimensions or reasonable defaults
+                        effectiveWidth = img.naturalWidth || 400;
+                        effectiveHeight = img.naturalHeight || 300;
+                        console.log(`Using fallback dimensions for LIF viewer: ${effectiveWidth}x${effectiveHeight}`);
+                    }
+                } else {
+                    console.log(`Using image dimensions for standard layout: ${effectiveWidth}x${effectiveHeight}`);
+                }
+            }
+
+            console.log(`Creating LIF viewer for image: ${effectiveWidth}x${effectiveHeight}`);
+
+            const viewer = new lifViewer(this.lifDownloadUrl, container || img.parentElement, effectiveHeight, true, true);
 
             // Store viewer reference on button for later use
             button.lifViewer = viewer;
@@ -652,21 +725,36 @@ async function convertTo3D(img, button) {
                     }
                 }, 100);
 
-                // Get the original image dimensions for proper sizing
-                const originalWidth = img.width || img.naturalWidth;
-                const originalHeight = img.height || img.naturalHeight;
+                console.log(`LIF viewer sizing: ${effectiveWidth}x${effectiveHeight}`);
 
-                console.log(`Original image size: ${originalWidth}x${originalHeight}`);
-
-                // Ensure the container maintains the original image dimensions
+                // Ensure the container maintains the proper dimensions - but preserve layout type
                 if (container) {
-                    container.style.cssText = `
-                        position: relative;
-                        display: inline-block;
-                        width: ${originalWidth}px;
-                        height: ${originalHeight}px;
-                        overflow: hidden;
-                    `;
+                    // Check if this is a padding-based layout by looking at the container's current positioning
+                    const containerStyle = window.getComputedStyle(container);
+                    const isAbsolutelyPositioned = containerStyle.position === 'absolute';
+
+                    if (isAbsolutelyPositioned) {
+                        // For padding-based layouts, preserve absolute positioning
+                        console.log('Preserving absolute positioning for padding-based layout');
+                        container.style.cssText = `
+                            position: absolute;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            overflow: hidden;
+                        `;
+                    } else {
+                        // For normal layouts, use explicit dimensions
+                        console.log('Using explicit dimensions for standard layout');
+                        container.style.cssText = `
+                            position: relative;
+                            display: inline-block;
+                            width: ${effectiveWidth}px;
+                            height: ${effectiveHeight}px;
+                            overflow: hidden;
+                        `;
+                    }
                 }
 
                 // Hide the original image first
@@ -674,8 +762,8 @@ async function convertTo3D(img, button) {
 
                 // Set up the LIF viewer image and canvas with correct dimensions and positioning
                 this.img.style.cssText = `
-                    width: ${originalWidth}px !important;
-                    height: ${originalHeight}px !important;
+                    width: ${effectiveWidth}px !important;
+                    height: ${effectiveHeight}px !important;
                     max-width: none !important;
                     max-height: none !important;
                     object-fit: cover;
@@ -687,8 +775,8 @@ async function convertTo3D(img, button) {
                 `;
 
                 this.canvas.style.cssText = `
-                    width: ${originalWidth}px !important;
-                    height: ${originalHeight}px !important;
+                    width: ${effectiveWidth}px !important;
+                    height: ${effectiveHeight}px !important;
                     max-width: none !important;
                     max-height: none !important;
                     position: absolute;
@@ -699,8 +787,8 @@ async function convertTo3D(img, button) {
                 `;
 
                 // Force canvas dimensions to match exactly
-                this.canvas.width = originalWidth;
-                this.canvas.height = originalHeight;
+                this.canvas.width = effectiveWidth;
+                this.canvas.height = effectiveHeight;
 
                 // Immediately show the LIF animation canvas
                 this.img.style.display = 'none';
@@ -708,6 +796,45 @@ async function convertTo3D(img, button) {
 
                 console.log(`Canvas is now visible with dimensions: ${this.canvas.width}x${this.canvas.height}`);
                 console.log(`Canvas style:`, this.canvas.style.cssText);
+
+                // Override LIF.js automatic resizing for padding-based layouts
+                if (isAbsolutelyPositioned) {
+                    // Store the correct dimensions
+                    const correctWidth = effectiveWidth;
+                    const correctHeight = effectiveHeight;
+
+                    console.log(`Forcing canvas dimensions to stay at: ${correctWidth}x${correctHeight}`);
+
+                    // Override canvas dimensions immediately and repeatedly
+                    const forceCorrectDimensions = () => {
+                        if (this.canvas.width !== correctWidth || this.canvas.height !== correctHeight) {
+                            console.log(`Correcting canvas size from ${this.canvas.width}x${this.canvas.height} to ${correctWidth}x${correctHeight}`);
+                            this.canvas.width = correctWidth;
+                            this.canvas.height = correctHeight;
+                            this.canvas.style.width = `${correctWidth}px`;
+                            this.canvas.style.height = `${correctHeight}px`;
+                        }
+                    };
+
+                    // Apply immediately
+                    forceCorrectDimensions();
+
+                    // Apply again after short delays to override LIF.js resizing
+                    setTimeout(forceCorrectDimensions, 50);
+                    setTimeout(forceCorrectDimensions, 100);
+                    setTimeout(forceCorrectDimensions, 200);
+                    setTimeout(forceCorrectDimensions, 500);
+
+                    // Set up observer to catch any future resizing attempts
+                    const observer = new MutationObserver(() => {
+                        forceCorrectDimensions();
+                    });
+
+                    observer.observe(this.canvas, {
+                        attributes: true,
+                        attributeFilter: ['width', 'height', 'style']
+                    });
+                }
 
                 // Fallback: ensure canvas is definitely visible after a short delay
                 setTimeout(() => {
@@ -753,10 +880,11 @@ async function convertTo3D(img, button) {
                     container.setAttribute('data-lif-active', 'true');
                 }
 
-                console.log(`LIF viewer initialized with dimensions: ${originalWidth}x${originalHeight}`);
+                console.log(`LIF viewer initialized with dimensions: ${effectiveWidth}x${effectiveHeight}`);
                 console.log('Container:', container);
                 console.log('Canvas parent:', this.canvas.parentElement);
             };
+
         };
 
         // Start the conversion process
@@ -868,10 +996,135 @@ async function convertTo3D(img, button) {
     }
 }
 
+// Comprehensive CSS layout analysis to avoid disrupting existing patterns
+function analyzeLayoutPattern(element, img) {
+    const computedStyle = window.getComputedStyle(element);
+    const parentStyle = element.parentElement ? window.getComputedStyle(element.parentElement) : null;
+    const imgStyle = window.getComputedStyle(img);
+
+    const analysis = {
+        type: 'unknown',
+        preserveOriginal: false,
+        reason: '',
+        containerHasPaddingAspectRatio: false,
+        imageIsAbsolute: false,
+        parentUsesFlexOrGrid: false,
+        hasResponsivePattern: false
+    };
+
+    // 1. Detect padding-based aspect ratio (Instagram, Pinterest, Google, etc.)
+    const paddingBottom = computedStyle.paddingBottom;
+    const paddingTop = computedStyle.paddingTop;
+    const height = computedStyle.height;
+
+    // Parse numeric values from CSS (handles both px and % values)
+    const paddingBottomValue = parseFloat(paddingBottom) || 0;
+    const paddingTopValue = parseFloat(paddingTop) || 0;
+    const heightValue = parseFloat(height) || 0;
+
+    // Check for percentage-based padding (like Google's 94.118%)
+    const hasPercentagePadding = paddingBottom.includes('%') || paddingTop.includes('%');
+    const hasPaddingValue = paddingBottomValue > 0 || paddingTopValue > 0;
+    const hasZeroHeight = heightValue === 0 || height === '0px' || height === 'auto';
+
+    if ((hasPaddingValue || hasPercentagePadding) && hasZeroHeight) {
+        analysis.type = 'padding-aspect-ratio';
+        analysis.preserveOriginal = true;
+        analysis.reason = `Container uses padding-based sizing (padding-top: ${paddingTop}, padding-bottom: ${paddingBottom}, height: ${height})`;
+        analysis.containerHasPaddingAspectRatio = true;
+
+        console.log('Padding-based aspect ratio detected:', {
+            paddingTop,
+            paddingBottom,
+            height,
+            paddingTopValue,
+            paddingBottomValue,
+            heightValue,
+            hasPercentagePadding
+        });
+    }
+
+    // 2. Detect absolutely positioned images within containers
+    if (imgStyle.position === 'absolute' || imgStyle.position === 'fixed') {
+        analysis.imageIsAbsolute = true;
+        if (!analysis.type || analysis.type === 'unknown') {
+            analysis.type = 'absolute-positioned';
+            analysis.preserveOriginal = true;
+            analysis.reason = 'Image is absolutely positioned';
+        }
+    }
+
+    // 3. Detect flex/grid parent layouts
+    if (parentStyle) {
+        const isFlexParent = parentStyle.display === 'flex' || parentStyle.display === 'inline-flex';
+        const isGridParent = parentStyle.display === 'grid' || parentStyle.display === 'inline-grid';
+
+        if (isFlexParent || isGridParent) {
+            analysis.parentUsesFlexOrGrid = true;
+            if (!analysis.preserveOriginal) {
+                analysis.type = isFlexParent ? 'flex-child' : 'grid-child';
+                analysis.preserveOriginal = true;
+                analysis.reason = `Parent uses ${isFlexParent ? 'flexbox' : 'grid'} layout`;
+            }
+        }
+    }
+
+    // 4. Detect responsive patterns (percentage sizing, viewport units)
+    const hasPercentageWidth = computedStyle.width.includes('%');
+    const hasPercentageHeight = computedStyle.height.includes('%');
+    const hasViewportUnits = computedStyle.width.includes('vw') || computedStyle.height.includes('vh');
+
+    if (hasPercentageWidth || hasPercentageHeight || hasViewportUnits) {
+        analysis.hasResponsivePattern = true;
+        if (!analysis.preserveOriginal) {
+            analysis.type = 'responsive-container';
+            analysis.preserveOriginal = true;
+            analysis.reason = 'Container uses responsive sizing (%, vw, vh)';
+        }
+    }
+
+    // 5. Detect CSS transforms that might affect sizing
+    if (imgStyle.transform && imgStyle.transform !== 'none') {
+        if (!analysis.preserveOriginal) {
+            analysis.type = 'transformed-image';
+            analysis.preserveOriginal = true;
+            analysis.reason = 'Image uses CSS transforms';
+        }
+    }
+
+    // 6. Detect object-fit usage (modern responsive image technique)
+    if (imgStyle.objectFit && imgStyle.objectFit !== 'fill') {
+        if (!analysis.preserveOriginal) {
+            analysis.type = 'object-fit-image';
+            analysis.reason = `Image uses object-fit: ${imgStyle.objectFit}`;
+        }
+    }
+
+    return analysis;
+}
+
 // Function to add 2D3D button to an image
 function addConvertButton(img) {
-    // Skip if image is too small or already has a button
-    if (img.width < 100 || img.height < 100 || img.dataset.lifButtonAdded) {
+    // Get both rendered and intrinsic dimensions
+    const renderedWidth = img.width || 0;
+    const renderedHeight = img.height || 0;
+    const intrinsicWidth = img.naturalWidth || 0;
+    const intrinsicHeight = img.naturalHeight || 0;
+
+    console.log(`Image dimensions - Rendered: ${renderedWidth}x${renderedHeight}, Intrinsic: ${intrinsicWidth}x${intrinsicHeight}`);
+
+    // Use intrinsic dimensions if rendered size is 0x0 or too small
+    const effectiveWidth = renderedWidth > 0 ? renderedWidth : intrinsicWidth;
+    const effectiveHeight = renderedHeight > 0 ? renderedHeight : intrinsicHeight;
+
+    // Skip if image is too small (using effective dimensions)
+    if (effectiveWidth < 100 || effectiveHeight < 100) {
+        console.log(`Skipping image - too small: ${effectiveWidth}x${effectiveHeight}`);
+        return;
+    }
+
+    // Skip if already has a button
+    if (img.dataset.lifButtonAdded) {
         return;
     }
 
@@ -898,7 +1151,14 @@ function addConvertButton(img) {
 
     // Create container if the image doesn't have one
     let imageContainer = img.parentElement;
+    let layoutAnalysis = null;
+
     if (!imageContainer.classList.contains('lif-image-container')) {
+        // Analyze the original container's layout before we modify anything
+        layoutAnalysis = analyzeLayoutPattern(imageContainer, img);
+
+        console.log('Layout analysis for container:', layoutAnalysis);
+
         const wrapper = document.createElement('div');
         wrapper.className = 'lif-image-container';
         img.parentNode.insertBefore(wrapper, img);
@@ -906,11 +1166,237 @@ function addConvertButton(img) {
         imageContainer = wrapper;
     }
 
-    // Ensure container has relative positioning
+    // Fix container sizing issues - now with layout awareness
     const computedStyle = window.getComputedStyle(imageContainer);
     if (computedStyle.position === 'static') {
         imageContainer.style.position = 'relative';
     }
+
+    // Apply sizing fixes based on layout analysis
+    const containerRect = imageContainer.getBoundingClientRect();
+    const needsSizeFix = containerRect.width === 0 || containerRect.height === 0;
+    const hasImageRenderingIssues = renderedWidth === 0 || renderedHeight === 0;
+
+    // Check if the parent already has reasonable dimensions to avoid double-sizing
+    const parentRect = imageContainer.parentElement?.getBoundingClientRect();
+    const parentHasValidSize = parentRect && parentRect.width > 0 && parentRect.height > 0;
+
+    console.log('Container analysis:', {
+        containerSize: `${containerRect.width}x${containerRect.height}`,
+        parentSize: parentRect ? `${parentRect.width}x${parentRect.height}` : 'none',
+        needsSizeFix,
+        hasImageRenderingIssues,
+        parentHasValidSize,
+        layoutType: layoutAnalysis?.type || 'new-container',
+        preserveOriginal: layoutAnalysis?.preserveOriginal || false
+    });
+
+    // Respect layout analysis - avoid fixes that would disrupt existing patterns
+    if (layoutAnalysis?.preserveOriginal) {
+        console.log(`Preserving original layout: ${layoutAnalysis.reason}`);
+
+        // For padding-based aspect ratios (like Instagram), don't apply size fixes to containers
+        if (layoutAnalysis.containerHasPaddingAspectRatio) {
+            console.log('Detected padding-based aspect ratio - preserving container layout');
+
+            // Ensure our wrapper container fills the padding-created space
+            imageContainer.style.position = 'absolute';
+            imageContainer.style.top = '0';
+            imageContainer.style.left = '0';
+            imageContainer.style.width = '100%';
+            imageContainer.style.height = '100%';
+            imageContainer.style.overflow = 'hidden';
+
+            // Handle different types of padding-based layouts
+            if (layoutAnalysis.imageIsAbsolute) {
+                console.log('Image is absolutely positioned in padding-based container (Google/Pinterest style)');
+                // Ensure the image maintains its absolute positioning and covers the container
+                img.style.position = 'absolute';
+                img.style.top = '0';
+                img.style.left = '0';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'cover';
+                img.style.display = 'block';
+            } else if (hasImageRenderingIssues) {
+                console.log('Fixing image display within padding-based container (Instagram style)');
+
+                // For padding-based layouts, the image should fill the container
+                // Try responsive approach first
+                img.style.width = '100%';
+                img.style.height = 'auto';
+                img.style.display = 'block';
+                img.style.objectFit = 'cover';
+
+                // If image still has no height, try to force it within the padding container
+                const imgRect = img.getBoundingClientRect();
+                if (imgRect.height === 0 && containerRect.height > 0) {
+                    console.log('Forcing image height to match container in padding-based layout');
+                    img.style.height = '100%';
+                    img.style.position = 'absolute';
+                    img.style.top = '0';
+                    img.style.left = '0';
+                }
+            }
+
+            // Additional check: if image is still 0x0 after fixes, apply more aggressive fix
+            setTimeout(() => {
+                const imgRect = img.getBoundingClientRect();
+                const containerRect = imageContainer.getBoundingClientRect();
+
+                console.log('Post-fix dimensions check:', {
+                    containerSize: `${containerRect.width}x${containerRect.height}`,
+                    imageSize: `${imgRect.width}x${imgRect.height}`
+                });
+
+                if (imgRect.width === 0 || imgRect.height === 0) {
+                    console.log('Image still 0x0 after padding-based fixes, applying fallback');
+                    img.style.position = 'absolute';
+                    img.style.top = '0';
+                    img.style.left = '0';
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'cover';
+                    img.style.display = 'block';
+                    console.log('Applied fallback positioning for padding-based layout');
+                }
+            }, 100);
+        }
+
+        // For responsive containers, minimal intervention
+        else if (layoutAnalysis.hasResponsivePattern) {
+            console.log('Responsive pattern detected - minimal intervention');
+            // Only fix if absolutely necessary and in a way that preserves responsiveness
+            if (needsSizeFix && effectiveWidth > 0 && effectiveHeight > 0) {
+                // Use max-width instead of width to preserve responsiveness
+                imageContainer.style.maxWidth = `${effectiveWidth}px`;
+                imageContainer.style.maxHeight = `${effectiveHeight}px`;
+            }
+        }
+
+        // For flex/grid children, even more minimal intervention
+        else if (layoutAnalysis.parentUsesFlexOrGrid) {
+            console.log('Flex/Grid layout detected - minimal intervention');
+            // Just ensure relative positioning for button placement
+            imageContainer.style.position = 'relative';
+        }
+    }
+
+    // Only apply aggressive fixes if no special layout patterns detected
+    else if (needsSizeFix && (effectiveWidth > 0 && effectiveHeight > 0)) {
+        console.log('No special layout detected - applying standard size fix:', effectiveWidth, 'x', effectiveHeight);
+
+        // Use more conservative sizing approach
+        imageContainer.style.width = `${effectiveWidth}px`;
+        imageContainer.style.height = `${effectiveHeight}px`;
+
+        // Only force display changes if absolutely necessary
+        if (computedStyle.display === 'none' || computedStyle.display === '') {
+            imageContainer.style.display = 'inline-block';
+        }
+
+        imageContainer.style.overflow = 'hidden';
+
+        // Be more careful with image sizing - only modify if it has issues
+        if (hasImageRenderingIssues) {
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'cover';
+            img.style.display = 'block';
+        }
+    }
+
+    // Handle image rendering issues separately and more conservatively
+    else if (hasImageRenderingIssues && intrinsicWidth > 0 && intrinsicHeight > 0 && !layoutAnalysis?.preserveOriginal) {
+        console.log('Image has rendering issues, applying conservative fixes');
+
+        // Calculate a reasonable display size but be more conservative
+        const maxDisplaySize = Math.min(600, parentHasValidSize ? Math.min(parentRect.width, parentRect.height) : 400);
+        const aspectRatio = intrinsicWidth / intrinsicHeight;
+
+        let displayWidth, displayHeight;
+        if (intrinsicWidth > intrinsicHeight) {
+            displayWidth = Math.min(intrinsicWidth, maxDisplaySize);
+            displayHeight = displayWidth / aspectRatio;
+        } else {
+            displayHeight = Math.min(intrinsicHeight, maxDisplaySize);
+            displayWidth = displayHeight * aspectRatio;
+        }
+
+        console.log(`Setting conservative image display size to: ${displayWidth}x${displayHeight}`);
+
+        // Only apply container sizing if it doesn't already have valid dimensions
+        if (containerRect.width === 0 || containerRect.height === 0) {
+            imageContainer.style.width = `${displayWidth}px`;
+            imageContainer.style.height = `${displayHeight}px`;
+
+            // Preserve existing display property if it's working
+            if (computedStyle.display === 'none' || computedStyle.display === '') {
+                imageContainer.style.display = 'inline-block';
+            }
+        }
+
+        // Apply image fixes more carefully
+        img.style.width = `${displayWidth}px`;
+        img.style.height = `${displayHeight}px`;
+        img.style.maxWidth = 'none';
+        img.style.maxHeight = 'none';
+        img.style.display = 'block';
+    }
+
+    // Create a protective zone for the button
+    const buttonZone = document.createElement('div');
+    buttonZone.className = 'lif-button-zone';
+
+    // Detect if image has existing hover/zoom behaviors
+    const hasImageHoverBehaviors = (
+        img.style.cursor === 'zoom-in' ||
+        img.style.cursor === 'pointer' ||
+        img.classList.contains('zoom') ||
+        img.classList.contains('zoomable') ||
+        img.dataset.zoom ||
+        img.onclick ||
+        getComputedStyle(img).cursor === 'zoom-in' ||
+        getComputedStyle(img).cursor === 'pointer'
+    );
+
+    if (hasImageHoverBehaviors) {
+        console.log('Detected existing hover/zoom behavior on image, applying enhanced protection');
+        // Make the protective zone larger for images with existing behaviors
+        buttonZone.style.width = '100px';
+        buttonZone.style.height = '60px';
+    }
+
+    // Disable image interactions in the button zone
+    buttonZone.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+        // Temporarily disable pointer events on the image
+        img.style.pointerEvents = 'none';
+
+        // Also disable on parent container if it has hover behaviors
+        const parent = img.parentElement;
+        if (parent && (parent.onclick || parent.style.cursor === 'pointer')) {
+            parent.style.pointerEvents = 'none';
+            buttonZone.dataset.parentDisabled = 'true';
+        }
+    });
+
+    buttonZone.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+        // Re-enable pointer events on the image
+        setTimeout(() => {
+            img.style.pointerEvents = '';
+
+            // Re-enable parent if we disabled it
+            if (buttonZone.dataset.parentDisabled) {
+                const parent = img.parentElement;
+                if (parent) {
+                    parent.style.pointerEvents = '';
+                }
+                delete buttonZone.dataset.parentDisabled;
+            }
+        }, 100);
+    });
 
     // Create the 2D3D button
     const button = document.createElement('button');
@@ -920,10 +1406,19 @@ function addConvertButton(img) {
     button.dataset.originalText = '2D3D'; // Store original state
     button.dataset.state = 'ready'; // Track button state
 
-    // Add click handler
-    button.addEventListener('click', (e) => {
+    // Add click handler with aggressive event handling
+    const handleButtonClick = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        // Temporarily disable all other interactions
+        const originalPointerEvents = img.style.pointerEvents;
+        img.style.pointerEvents = 'none';
+
+        setTimeout(() => {
+            img.style.pointerEvents = originalPointerEvents;
+        }, 300);
 
         // Only allow conversion if in ready state
         if (button.dataset.state === 'ready') {
@@ -939,10 +1434,26 @@ function addConvertButton(img) {
                 showDownloadNotification('LIF file not ready for download', 'error');
             }
         }
+    };
+
+    // Add multiple event listeners to ensure the button works
+    button.addEventListener('click', handleButtonClick, true); // Use capturing phase
+    button.addEventListener('mousedown', handleButtonClick, true);
+    button.addEventListener('touchstart', handleButtonClick, true);
+
+    // Add hover protection
+    button.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+        button.style.zIndex = '9999999';
     });
 
-    // Add button to container
-    imageContainer.appendChild(button);
+    button.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+    });
+
+    // Add button to protective zone, then add zone to container
+    buttonZone.appendChild(button);
+    imageContainer.appendChild(buttonZone);
 
     // Mark image as processed
     img.dataset.lifButtonAdded = 'true';
@@ -1022,11 +1533,11 @@ function observeNewImages() {
 async function loadExtensionState() {
     try {
         const result = await chrome.storage.local.get([STORAGE_KEY]);
-        isExtensionEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : true;
+        isExtensionEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : false;
         console.log('Loaded extension state:', isExtensionEnabled ? 'enabled' : 'disabled');
     } catch (error) {
         console.error('Error loading extension state:', error);
-        isExtensionEnabled = true; // Default to enabled on error
+        isExtensionEnabled = false; // Default to disabled on error
     }
 }
 
