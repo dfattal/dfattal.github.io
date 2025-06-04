@@ -1087,122 +1087,98 @@ async function convertTo3D(img, button) {
                     }, 100); // Small delay to prevent rapid on/off
                 };
 
+                /**
+                 * MOUSE EVENT HANDLING STRATEGY FOR 3D ANIMATION
+                 * 
+                 * Picture Elements (CNN-style responsive images):
+                 * - Problem: Canvas and static LIF image are positioned absolutely at same location
+                 * - Solution: Use parent container for event handling to avoid element conflicts
+                 * - Fallback: Debounced events on canvas if no suitable container found
+                 * 
+                 * Regular Images:
+                 * - Use both canvas and static image for comprehensive coverage
+                 * - Direct element event handling works well for non-overlapping scenarios
+                 * 
+                 * Benefits:
+                 * - Eliminates rapid start/stop animation cycles
+                 * - Smooth interaction without event conflicts
+                 * - Responsive to mouse movement for enhanced UX
+                 */
+
                 // For picture elements, we need more robust event handling
                 const pictureElementForEvents = img.closest('picture'); // Simplified detection - just check if it's in a picture element
 
                 if (pictureElementForEvents) {
                     console.log('Setting up enhanced picture element mouse events');
 
-                    // Debug: Check the elements we're attaching events to
-                    console.log('Picture element debug:', {
-                        canvas: canvasElement,
-                        staticImg: this.img,
-                        canvasVisible: canvasElement.style.display,
-                        staticImgVisible: this.img.style.display,
-                        canvasZIndex: canvasElement.style.zIndex,
-                        staticImgZIndex: this.img.style.zIndex
-                    });
+                    // For picture elements, use the parent container for event handling to avoid conflicts
+                    // between canvas and static image elements that are positioned on top of each other
+                    const eventContainer = container || lifContainer;
 
-                    // Ensure the static image has proper styling for event capture
-                    this.img.style.pointerEvents = 'auto';
-                    this.img.style.position = 'absolute';
-
-                    // Add events to the canvas
-                    canvasElement.addEventListener('mouseenter', function (e) {
-                        console.log('Picture: Mouse entered canvas');
-                        startAnimationSafe();
-                    }, { passive: true });
-                    canvasElement.addEventListener('mouseleave', function (e) {
-                        console.log('Picture: Mouse left canvas');
-                        stopAnimationSafe();
-                    }, { passive: true });
-
-                    // Also add events to the static LIF image (this.img) so animation can restart when hovering over static image
-                    this.img.addEventListener('mouseenter', function (e) {
-                        console.log('Picture: Mouse entered static LIF image');
-                        startAnimationSafe();
-                    }, { passive: true });
-                    this.img.addEventListener('mouseleave', function (e) {
-                        console.log('Picture: Mouse left static LIF image');
-                        stopAnimationSafe();
-                    }, { passive: true });
-
-                    // Also add events to the parent containers for better coverage
-                    const pictureElement = img.closest('picture');
-                    if (pictureElement) {
-                        pictureElement.addEventListener('mouseenter', function (e) {
-                            console.log('Picture: Mouse entered picture element');
+                    if (eventContainer) {
+                        // Single consolidated event handler on the container to avoid canvas/image conflicts
+                        eventContainer.addEventListener('mouseenter', function (e) {
                             startAnimationSafe();
                         }, { passive: true });
-                        pictureElement.addEventListener('mouseleave', function (e) {
-                            console.log('Picture: Mouse left picture element');
+
+                        eventContainer.addEventListener('mouseleave', function (e) {
                             stopAnimationSafe();
                         }, { passive: true });
-                    }
 
-                    // Add mousemove events for more responsive interaction
-                    canvasElement.addEventListener('mousemove', function (e) {
-                        // Ensure animation is running when mouse is moving over canvas
-                        if (!isAnimating) {
-                            console.log('Picture: Mouse moved over canvas - starting animation');
-                            startAnimationSafe();
-                        }
+                        // Handle mouse movement for responsive interaction
+                        eventContainer.addEventListener('mousemove', function (e) {
+                            if (!isAnimating) {
+                                startAnimationSafe();
+                            }
+                            if (lifViewerInstance.handleMouseMove) {
+                                // Pass the event through to the LIF viewer
+                                lifViewerInstance.handleMouseMove(e);
+                            }
+                        }, { passive: true });
 
-                        if (lifViewerInstance.handleMouseMove) {
-                            lifViewerInstance.handleMouseMove(e);
-                        }
-                    }, { passive: true });
+                        console.log('Consolidated picture element mouse events configured on container');
+                    } else {
+                        // Fallback: if no container found, use canvas only but with debouncing
+                        let mouseEnterTimeout = null;
+                        let mouseLeaveTimeout = null;
 
-                    // Also add mousemove to the static image
-                    this.img.addEventListener('mousemove', function (e) {
-                        // Ensure animation is running when mouse is moving over static image
-                        if (!isAnimating) {
-                            console.log('Picture: Mouse moved over static image - restarting animation');
-                            startAnimationSafe();
-                        }
-
-                        if (lifViewerInstance.handleMouseMove) {
-                            lifViewerInstance.handleMouseMove(e);
-                        }
-                    }, { passive: true });
-
-                    console.log('Enhanced picture element mouse events configured');
-
-                    // Additional debugging after a short delay
-                    setTimeout(() => {
-                        console.log('Picture element state after setup:', {
-                            canvasDisplay: canvasElement.style.display,
-                            staticImgDisplay: this.img.style.display,
-                            canvasInDOM: document.contains(canvasElement),
-                            staticImgInDOM: document.contains(this.img),
-                            isAnimating: isAnimating
-                        });
-
-                        // Add visual debugging - temporarily highlight elements when hovered
-                        const addVisualDebug = (element, name) => {
-                            if (element && document.contains(element)) {
-                                element.addEventListener('mouseenter', function () {
-                                    console.log(`Visual debug: Mouse entered ${name}`);
-                                    this.style.outline = '3px solid red';
-                                }, { passive: true });
-                                element.addEventListener('mouseleave', function () {
-                                    console.log(`Visual debug: Mouse left ${name}`);
-                                    this.style.outline = '';
-                                }, { passive: true });
+                        const debouncedEnter = () => {
+                            if (mouseLeaveTimeout) {
+                                clearTimeout(mouseLeaveTimeout);
+                                mouseLeaveTimeout = null;
+                            }
+                            if (!mouseEnterTimeout) {
+                                mouseEnterTimeout = setTimeout(() => {
+                                    startAnimationSafe();
+                                    mouseEnterTimeout = null;
+                                }, 50);
                             }
                         };
 
-                        // Add visual debugging to picture elements
-                        addVisualDebug(canvasElement, 'canvas');
-                        addVisualDebug(this.img, 'static image');
+                        const debouncedLeave = () => {
+                            if (mouseEnterTimeout) {
+                                clearTimeout(mouseEnterTimeout);
+                                mouseEnterTimeout = null;
+                            }
+                            if (!mouseLeaveTimeout) {
+                                mouseLeaveTimeout = setTimeout(() => {
+                                    stopAnimationSafe();
+                                    mouseLeaveTimeout = null;
+                                }, 100);
+                            }
+                        };
 
-                        const pictureElement = img.closest('picture');
-                        if (pictureElement) {
-                            addVisualDebug(pictureElement, 'picture element');
-                        }
+                        canvasElement.addEventListener('mouseenter', debouncedEnter, { passive: true });
+                        canvasElement.addEventListener('mouseleave', debouncedLeave, { passive: true });
+                        canvasElement.addEventListener('mousemove', function (e) {
+                            debouncedEnter(); // Reset the leave timeout on movement
+                            if (lifViewerInstance.handleMouseMove) {
+                                lifViewerInstance.handleMouseMove(e);
+                            }
+                        }, { passive: true });
 
-                        console.log('Visual debugging enabled - elements will have red outline on hover');
-                    }, 1000);
+                        console.log('Fallback debounced picture element mouse events configured');
+                    }
                 } else {
                     console.log('Setting up standard mouse events with state management');
 
@@ -1219,14 +1195,13 @@ async function convertTo3D(img, button) {
                         stopAnimationSafe();
                     }, { passive: true });
 
-                    // Also add events to the static LIF image for non-picture elements
+                    // Also add events to the static LIF image (this.img) so animation can restart when hovering over static image
                     this.img.addEventListener('mouseenter', function (e) {
-                        console.log('Mouse entered static LIF image - starting animation');
+                        console.log('Picture: Mouse entered static LIF image');
                         startAnimationSafe();
                     }, { passive: true });
-
                     this.img.addEventListener('mouseleave', function (e) {
-                        console.log('Mouse left static LIF image - stopping animation');
+                        console.log('Picture: Mouse left static LIF image');
                         stopAnimationSafe();
                     }, { passive: true });
 

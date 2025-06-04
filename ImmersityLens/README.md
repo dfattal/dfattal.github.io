@@ -105,6 +105,30 @@ if (hasPaddingValue && hasZeroHeight) {
 // Method 4: Placeholder generation with user education
 ```
 
+### Mouse Event Handling for 3D Animation
+
+**Problem**: Picture elements have canvas and static LIF image positioned absolutely at the same location, causing conflicting mouse events and rapid animation start/stop cycles.
+
+**Solution**: Intelligent event handling strategy:
+
+```javascript
+// For picture elements: Use parent container for event handling
+const eventContainer = container || lifContainer;
+eventContainer.addEventListener('mouseenter', startAnimation);
+eventContainer.addEventListener('mouseleave', stopAnimation);
+
+// Fallback: Debounced events if no container available
+const debouncedEnter = () => {
+    clearTimeout(mouseLeaveTimeout);
+    setTimeout(() => startAnimation(), 50);
+};
+```
+
+**Benefits**:
+- Eliminates rapid start/stop animation cycles on CNN-style responsive images
+- Smooth mouse interaction without element conflicts
+- Responsive animation triggers with proper timing
+
 ## 🎨 Responsive Design Patterns
 
 ### Detected Layout Types
@@ -126,14 +150,16 @@ if (hasPaddingValue && hasZeroHeight) {
 ## 🔄 Event Handling Strategy
 
 ### Picture Elements
-- Enhanced event handling with overlay protection
-- Multiple event layers for robustness
-- Mouse animation triggers for 3D effects
+- **Container-level event handling** to avoid canvas/image conflicts
+- **Debounced fallback system** for robust interaction
+- **Smooth animation triggers** without rapid start/stop cycles
+- Enhanced overlay protection for responsive layouts
 
 ### Regular Images
-- Container wrapping with button zone isolation
-- Aggressive click prevention
-- Pointer events management
+- **Dual-element coverage** using both canvas and static image
+- **Container wrapping** with button zone isolation
+- **Aggressive click prevention** with multi-layer event stopping
+- **Direct element handling** for non-overlapping scenarios
 
 ## 📊 Performance Optimizations
 
