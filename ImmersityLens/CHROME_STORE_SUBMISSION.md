@@ -30,7 +30,8 @@ Transform your browsing experience with ImmersityLens, the revolutionary Chrome 
 
 **🌟 Key Features:**
 • **Instant 3D Conversion**: Click any image to convert it into an immersive Leia Image Format (LIF)
-• **Universal Compatibility**: Works on virtually any website - social media, news sites, image galleries, and more
+• **Universal Compatibility**: Works on virtually any website - social media, news sites, image galleries, stock photo sites, and more
+• **Site-Specific Optimizations**: Special handling for Shutterstock, CNN, Instagram, and other complex layouts
 • **Intelligent Layout Preservation**: Advanced CSS analysis ensures your favorite sites remain perfectly functional
 • **Interactive 3D Viewing**: Hover over converted images to see stunning depth animations
 • **High-Quality Downloads**: Save your 3D creations as professional LIF files
@@ -39,6 +40,7 @@ Transform your browsing experience with ImmersityLens, the revolutionary Chrome 
 **🔧 Smart Technology:**
 • Dual-path processing system handles complex responsive layouts
 • Advanced layout analysis prevents breaking website designs
+• Site-specific dimension correction for stock photo platforms
 • CORS-aware processing with fallback strategies
 • Optimized for modern web technologies and single-page applications
 
@@ -83,7 +85,7 @@ Experience the web in a whole new dimension with ImmersityLens!
 
 Create these screenshots showing the extension in action:
 
-1. **Hero Screenshot**: CNN.com with 2D3D buttons visible on multiple images
+1. **Hero Screenshot**: Major website (CNN/Shutterstock) with 2D3D buttons visible on multiple images
 2. **Conversion Process**: Image being converted with processing overlay
 3. **3D Viewer**: Animated LIF image showing depth effect
 4. **Download Feature**: LIF download in progress
@@ -211,11 +213,12 @@ zip -r immersitylens-v2.0.0.zip . -x "*.git*" "*.DS_Store*" "CHROME_STORE_SUBMIS
 
 ### Final Testing Checklist
 - [ ] Test on Chrome latest version
-- [ ] Verify on major websites (CNN, Instagram-style layouts)
+- [ ] Verify on major websites (CNN, Instagram-style layouts, Shutterstock)
 - [ ] Confirm all permissions work correctly
 - [ ] Test enable/disable functionality
 - [ ] Verify 3D conversion and download features
 - [ ] Check responsive design on mobile/desktop
+- [ ] Test Shutterstock dimension correction
 - [ ] Confirm privacy policy accessibility
 
 ### Common Review Rejection Reasons

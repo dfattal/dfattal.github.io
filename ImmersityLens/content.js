@@ -1930,12 +1930,25 @@ function addConvertButton(img) {
             targetElement = imageContainer;
         }
 
-        // Get the actual current dimensions of the picture element
+        // Get the actual current dimensions of the picture element and image
         const pictureRect = pictureElement.getBoundingClientRect();
         const imgRect = img.getBoundingClientRect();
 
         // For picture elements, we don't want to wrap anything - just add overlay positioning
-        if (pictureRect.width > 0 && pictureRect.height > 0) {
+        let targetWidth = pictureRect.width;
+        let targetHeight = pictureRect.height;
+
+        // Special handling for Shutterstock: picture element has wrong dimensions, use image dimensions instead
+        const isShutterstock = window.location.hostname.includes('shutterstock.com');
+        if (isShutterstock && imgRect.width > 0 && imgRect.height > 0) {
+            console.log('Shutterstock detected - using image dimensions instead of picture dimensions');
+            console.log(`Picture dimensions: ${pictureRect.width}x${pictureRect.height}`);
+            console.log(`Image dimensions: ${imgRect.width}x${imgRect.height}`);
+            targetWidth = imgRect.width;
+            targetHeight = imgRect.height;
+        }
+
+        if (targetWidth > 0 && targetHeight > 0) {
             // Make sure the target container can contain positioned elements
             const parentStyle = window.getComputedStyle(targetElement);
             if (parentStyle.position === 'static') {
@@ -1943,8 +1956,9 @@ function addConvertButton(img) {
             }
 
             // Store dimensions for later use with LIF viewer
-            pictureElement.dataset.lifTargetWidth = Math.round(pictureRect.width);
-            pictureElement.dataset.lifTargetHeight = Math.round(pictureRect.height);
+            pictureElement.dataset.lifTargetWidth = Math.round(targetWidth);
+            pictureElement.dataset.lifTargetHeight = Math.round(targetHeight);
+            console.log(`Stored target dimensions: ${Math.round(targetWidth)}x${Math.round(targetHeight)}`);
         }
     }
 

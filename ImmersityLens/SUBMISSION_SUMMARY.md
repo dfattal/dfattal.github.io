@@ -8,6 +8,7 @@ Your extension package has been created: **`immersitylens-v2.0.0.zip`** (472KB)
 **Latest Status**: All major compatibility issues resolved! ✅
 - ✅ CNN.com picture elements working perfectly (animation restart fixed)
 - ✅ Facebook.com complex layouts working (overlay handling improved)  
+- ✅ Shutterstock.com dimension correction implemented (tiny canvas fix)
 - ✅ Animation state management optimized (no more rapid cycling)
 - ✅ Static LIF image interaction enhanced (pointer-events fixed)
 - ✅ Comprehensive overlay cleanup implemented
@@ -52,7 +53,7 @@ Photos
 ### 4. Required Visual Assets
 
 #### Screenshots Needed (1280×800px):
-1. **Hero Screenshot**: CNN.com with multiple 2D3D buttons visible
+1. **Hero Screenshot**: Major website (CNN/Shutterstock) with multiple 2D3D buttons visible
 2. **Conversion Process**: "Converting..." state with processing overlay
 3. **3D Viewer**: Final 3D result with "⬇️ LIF" button
 4. **Download Feature**: Success notification during download
@@ -87,6 +88,7 @@ Photos
 - [x] Test on Chrome latest version
 - [x] Verify on CNN.com (picture elements) ✅ WORKING - Animation restart fixed
 - [x] Test on Facebook.com complex layouts ✅ WORKING - Overlay handling improved
+- [x] Test on Shutterstock.com (picture elements) ✅ WORKING - Dimension correction implemented
 - [x] Test on Instagram-style layouts ✅ WORKING - Padding-based aspect ratios
 - [x] Confirm download functionality works ✅ WORKING
 - [x] Check enable/disable toggle in popup ✅ WORKING

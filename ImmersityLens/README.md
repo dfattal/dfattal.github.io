@@ -52,6 +52,25 @@ buttonZone.style.pointerEvents = 'auto';
 targetElement.appendChild(buttonZone);
 ```
 
+### Shutterstock Dimension Correction
+
+**Problem**: Shutterstock's `<picture>` elements report incorrect dimensions (e.g., 823x19) while the actual `<img>` inside has correct dimensions (e.g., 390x280), causing tiny canvas rendering.
+
+**Solution**: Site-specific dimension detection and correction:
+```javascript
+// Special handling for Shutterstock: picture element has wrong dimensions
+const isShutterstock = window.location.hostname.includes('shutterstock.com');
+if (isShutterstock && imgRect.width > 0 && imgRect.height > 0) {
+    targetWidth = imgRect.width;  // Use image dimensions instead
+    targetHeight = imgRect.height;
+}
+```
+
+**Benefits**:
+- Proper canvas sizing on Shutterstock images
+- No impact on other websites
+- Maintains existing picture element overlay approach
+
 ### Click Propagation Prevention
 
 **Problem**: Button clicks were triggering underlying image/link actions, causing unwanted navigation.
@@ -180,6 +199,7 @@ const debouncedEnter = () => {
 - ✅ CNN.com (picture elements)
 - ✅ Instagram-style layouts (padding-based aspect ratios)
 - ✅ Google Images (various responsive patterns)
+- ✅ Shutterstock.com (picture element dimension correction)
 - ✅ Photography portfolios
 - ✅ News websites with responsive images
 
