@@ -3,7 +3,7 @@
 **Last Updated**: December 2024
 
 ## Overview
-ImmersityLens is a Chrome extension that converts 2D images into immersive 3D Light Field Images (LIF) using artificial intelligence. This privacy policy explains how we handle data when you use our extension.
+ImmersityLens is a Chrome extension that converts 2D images into immersive 3D Leia Image Format (LIF) using artificial intelligence. This privacy policy explains how we handle data when you use our extension.
 
 ## Data Collection
 **We do not collect, store, or transmit any personal information.**

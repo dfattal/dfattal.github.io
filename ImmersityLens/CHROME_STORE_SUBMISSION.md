@@ -29,7 +29,7 @@ Convert any 2D image into immersive 3D depth maps instantly. Experience your pho
 Transform your browsing experience with ImmersityLens, the revolutionary Chrome extension that converts any 2D image into stunning 3D depth maps using advanced AI technology.
 
 **🌟 Key Features:**
-• **Instant 3D Conversion**: Click any image to convert it into an immersive Light Field Image (LIF) format
+• **Instant 3D Conversion**: Click any image to convert it into an immersive Leia Image Format (LIF)
 • **Universal Compatibility**: Works on virtually any website - social media, news sites, image galleries, and more
 • **Intelligent Layout Preservation**: Advanced CSS analysis ensures your favorite sites remain perfectly functional
 • **Interactive 3D Viewing**: Hover over converted images to see stunning depth animations

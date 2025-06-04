@@ -1,6 +1,6 @@
 # ImmersityLens Chrome Extension
 
-A Chrome extension that adds 2D3D conversion buttons to images on web pages, allowing users to convert regular 2D images into immersive 3D LIF (Light Field Image Format) files.
+A Chrome extension that adds 2D3D conversion buttons to images on web pages, allowing users to convert regular 2D images into immersive 3D LIF (Leia Image Format) files.
 
 ## 🎯 Overview
 
