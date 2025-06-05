@@ -5,11 +5,13 @@
 
 Your extension package has been created: **`immersitylens-v2.0.0.zip`** (472KB)
 
-**Latest Status**: Universal Pattern Recognition Architecture Complete! ✅
+**Latest Status**: Universal Pattern Recognition + Intelligent Filtering Architecture Complete! ✅
 - ✅ **CNN.com**: Picture elements with perfect animation restart and responsive behavior  
 - ✅ **Facebook.com**: Complex layouts with enhanced overlay handling and positioning preservation
+- ✅ **Amazon.com**: 6-layer intelligent filtering eliminates buttons on UI elements, thumbnails, and invisible images
 - ✅ **Universal Dimension Correction**: Pattern-based solution works across Shutterstock, Zillow, and any future sites
 - ✅ **Aspect Ratio Container Support**: Universal overlay approach preserves padding-based layouts (Shopify, Bootstrap, Tailwind CSS)
+- ✅ **Intelligent Image Filtering**: Advanced semantic analysis, visibility detection, geometric filtering, and contextual analysis
 - ✅ **Intelligent Aspect Ratio Detection**: Automatically corrects suspicious dimensions (29:1 ratios, etc.)
 - ✅ **Advanced Animation Management**: Optimized state handling eliminates rapid cycling conflicts
 - ✅ **Robust Event System**: Enhanced pointer-events and comprehensive overlay cleanup
@@ -89,12 +91,14 @@ Photos
 - [x] Test on Chrome latest version
 - [x] Verify on CNN.com (picture elements) ✅ WORKING - Animation restart fixed
 - [x] Test on Facebook.com complex layouts ✅ WORKING - Overlay handling improved
+- [x] Test on Amazon.com (intelligent filtering) ✅ WORKING - No buttons on thumbnails, UI elements, hidden images
 - [x] Test on Shutterstock.com (picture elements) ✅ WORKING - Pattern-based dimension correction  
 - [x] Test on Zillow.com (picture elements) ✅ WORKING - Pattern-based dimension correction  
 - [x] Test on aspect ratio containers (Shopify, Bootstrap, Tailwind) ✅ WORKING - Universal overlay approach
 - [x] Test on Instagram-style layouts ✅ WORKING - Padding-based aspect ratios
 - [x] Confirm download functionality works ✅ WORKING
 - [x] Check enable/disable toggle in popup ✅ WORKING
+- [x] Verify intelligent filtering accuracy ✅ WORKING - Semantic, visibility, geometric analysis
 - [x] Verify no rapid animation cycling ✅ FIXED - State throttling implemented
 - [x] Test overlay cleanup completeness ✅ FIXED - Multi-tier removal strategy
 

@@ -31,7 +31,8 @@ Transform your browsing experience with ImmersityLens, the revolutionary Chrome 
 **🌟 Key Features:**
 • **Instant 3D Conversion**: Click any image to convert it into an immersive Leia Image Format (LIF)
 • **Universal Compatibility**: Works on virtually any website - social media, news sites, image galleries, stock photo sites, and more
-• **Site-Specific Optimizations**: Special handling for Shutterstock, CNN, Instagram, and other complex layouts
+• **Intelligent Image Filtering**: Advanced 6-layer system automatically targets only content images while skipping UI elements, thumbnails, and invisible images
+• **Site-Specific Optimizations**: Special handling for Amazon, Shutterstock, CNN, Instagram, and other complex layouts
 • **Intelligent Layout Preservation**: Advanced CSS analysis ensures your favorite sites remain perfectly functional
 • **Interactive 3D Viewing**: Hover over converted images to see stunning depth animations
 • **High-Quality Downloads**: Save your 3D creations as professional LIF files
@@ -39,6 +40,7 @@ Transform your browsing experience with ImmersityLens, the revolutionary Chrome 
 
 **🔧 Smart Technology:**
 • **AI-Powered Conversion**: Advanced 2D to 3D processing via Immersity AI platform with depth estimation and LDI generation
+• **6-Layer Intelligent Filtering**: Semantic analysis, visibility detection, geometric filtering, and contextual analysis automatically identify content-worthy images
 • **Universal Pattern Recognition**: Intelligent aspect ratio analysis detects and corrects dimension issues across all websites without site-specific coding
 • **Adaptive Layout Preservation**: Advanced CSS analysis respects responsive designs, padding-based containers, and complex nested structures  
 • **Robust Event Management**: Multi-layer event handling prevents conflicts between 3D interactions and page navigation
@@ -214,7 +216,8 @@ zip -r immersitylens-v2.0.0.zip . -x "*.git*" "*.DS_Store*" "CHROME_STORE_SUBMIS
 
 ### Final Testing Checklist
 - [ ] Test on Chrome latest version
-- [ ] Verify on major websites (CNN, Instagram-style layouts, Shutterstock)
+- [ ] Verify on major websites (CNN, Instagram-style layouts, Shutterstock, Amazon)
+- [ ] Confirm intelligent filtering works (no buttons on UI elements, thumbnails, hidden images)
 - [ ] Confirm all permissions work correctly
 - [ ] Test enable/disable functionality
 - [ ] Verify 3D conversion and download features

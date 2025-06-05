@@ -730,6 +730,11 @@ async function convertTo3D(img, button) {
             for (let i = 0; i < 3 && searchElement; i++) {
                 if (searchElement.dataset.lifTargetWidth && searchElement.dataset.lifTargetHeight) {
                     overlayContainer = searchElement;
+                    // CRITICAL FIX: Also set container to the element with stored dimensions
+                    // This ensures dimension lookup works correctly for Instagram/Shopify aspect ratio containers
+                    if (!container) {
+                        container = searchElement;
+                    }
                     console.log('Found aspect ratio container with stored dimensions:', {
                         element: searchElement.className || searchElement.tagName,
                         targetWidth: searchElement.dataset.lifTargetWidth,
@@ -997,34 +1002,59 @@ async function convertTo3D(img, button) {
             if (container?.dataset.lifTargetWidth && container?.dataset.lifTargetHeight) {
                 effectiveWidth = parseInt(container.dataset.lifTargetWidth);
                 effectiveHeight = parseInt(container.dataset.lifTargetHeight);
+                console.log(`Using container stored dimensions: ${effectiveWidth}x${effectiveHeight}`);
             }
             // Check for picture element dimensions (overlay approach)
             else if (img.closest('picture')?.dataset.lifTargetWidth && img.closest('picture')?.dataset.lifTargetHeight) {
                 const pictureElement = img.closest('picture');
                 effectiveWidth = parseInt(pictureElement.dataset.lifTargetWidth);
                 effectiveHeight = parseInt(pictureElement.dataset.lifTargetHeight);
+                console.log(`Using picture element stored dimensions: ${effectiveWidth}x${effectiveHeight}`);
             }
-            else if (isAbsolutelyPositioned && containerRect && containerRect.width > 0 && containerRect.height > 0) {
-                // For padding-based layouts (absolute positioned containers), use container dimensions
-                effectiveWidth = Math.round(containerRect.width);
-                effectiveHeight = Math.round(containerRect.height);
-            } else {
-                // For standard layouts, use image dimensions
-                const originalWidth = img.width || img.naturalWidth;
-                const originalHeight = img.height || img.naturalHeight;
+            // Check for aspect ratio container stored dimensions in parent hierarchy (Instagram, Shopify, etc.)
+            else {
+                let foundStoredDimensions = false;
+                let searchElement = img.parentElement;
+                for (let i = 0; i < 3 && searchElement && !foundStoredDimensions; i++) {
+                    if (searchElement.dataset.lifTargetWidth && searchElement.dataset.lifTargetHeight) {
+                        effectiveWidth = parseInt(searchElement.dataset.lifTargetWidth);
+                        effectiveHeight = parseInt(searchElement.dataset.lifTargetHeight);
+                        foundStoredDimensions = true;
+                        console.log(`Using aspect ratio container stored dimensions: ${effectiveWidth}x${effectiveHeight} from`, searchElement.className || searchElement.tagName);
+                        break;
+                    }
+                    searchElement = searchElement.parentElement;
+                }
 
-                effectiveWidth = originalWidth;
-                effectiveHeight = originalHeight;
-
-                if (originalWidth === 0 || originalHeight === 0) {
-                    // Fallback to container if image dimensions are problematic
-                    if (containerRect && containerRect.width > 0 && containerRect.height > 0) {
+                if (!foundStoredDimensions) {
+                    // Continue with existing fallback logic
+                    if (isAbsolutelyPositioned && containerRect && containerRect.width > 0 && containerRect.height > 0) {
+                        // For padding-based layouts (absolute positioned containers), use container dimensions
                         effectiveWidth = Math.round(containerRect.width);
                         effectiveHeight = Math.round(containerRect.height);
+                        console.log(`Using container rect dimensions: ${effectiveWidth}x${effectiveHeight}`);
                     } else {
-                        // Last resort: use natural dimensions or reasonable defaults
-                        effectiveWidth = img.naturalWidth || 400;
-                        effectiveHeight = img.naturalHeight || 300;
+                        // For standard layouts, use image dimensions
+                        const originalWidth = img.width || img.naturalWidth;
+                        const originalHeight = img.height || img.naturalHeight;
+
+                        effectiveWidth = originalWidth;
+                        effectiveHeight = originalHeight;
+                        console.log(`Using original image dimensions: ${effectiveWidth}x${effectiveHeight}`);
+
+                        if (originalWidth === 0 || originalHeight === 0) {
+                            // Fallback to container if image dimensions are problematic
+                            if (containerRect && containerRect.width > 0 && containerRect.height > 0) {
+                                effectiveWidth = Math.round(containerRect.width);
+                                effectiveHeight = Math.round(containerRect.height);
+                                console.log(`Fallback to container rect dimensions: ${effectiveWidth}x${effectiveHeight}`);
+                            } else {
+                                // Last resort: use natural dimensions or reasonable defaults
+                                effectiveWidth = img.naturalWidth || 400;
+                                effectiveHeight = img.naturalHeight || 300;
+                                console.log(`Last resort dimensions: ${effectiveWidth}x${effectiveHeight}`);
+                            }
+                        }
                     }
                 }
             }
@@ -1063,6 +1093,8 @@ async function convertTo3D(img, button) {
                     // Check if this is a padding-based layout by looking at the container's current positioning
                     const containerStyle = window.getComputedStyle(container);
                     const isAbsolutelyPositioned = containerStyle.position === 'absolute';
+                    const isAspectRatioContainer = container?.dataset.lifTargetWidth && container?.dataset.lifTargetHeight;
+                    const isFacebookLayout = layoutAnalysis?.isFacebookStyle;
 
                     if (isAbsolutelyPositioned) {
                         // For padding-based layouts, preserve absolute positioning
@@ -1075,6 +1107,23 @@ async function convertTo3D(img, button) {
                             height: 100%;
                             overflow: hidden;
                         `;
+                    } else if (isAspectRatioContainer) {
+                        // For aspect ratio containers (Instagram, Shopify), preserve original container dimensions
+                        // Only ensure proper positioning and overflow, don't override width/height
+                        console.log('Preserving aspect ratio container dimensions for Instagram/Shopify layout');
+                        const currentStyle = window.getComputedStyle(container);
+                        container.style.position = 'relative';
+                        container.style.overflow = 'hidden';
+                        // Preserve existing width/height from aspect ratio calculations
+                        console.log(`Aspect ratio container preserved: ${currentStyle.width} x ${currentStyle.height}`);
+                    } else if (isFacebookLayout) {
+                        // For Facebook layouts, preserve original container dimensions like aspect ratio containers
+                        console.log('Preserving Facebook layout container dimensions');
+                        const currentStyle = window.getComputedStyle(container);
+                        container.style.position = 'relative';
+                        container.style.overflow = 'hidden';
+                        // Preserve existing width/height from Facebook's complex positioning
+                        console.log(`Facebook container preserved: ${currentStyle.width} x ${currentStyle.height}`);
                     } else {
                         // For normal layouts, use explicit dimensions
                         console.log('Using explicit dimensions for standard layout');
@@ -1164,7 +1213,8 @@ async function convertTo3D(img, button) {
                 // Note: We detect ALL picture elements because LIF.js tends to use intrinsic image dimensions
                 // (e.g., 8484x5656) instead of display dimensions (e.g., 305x171) for canvas sizing
                 const isPictureElement = img.closest('picture'); // Detect any picture element, not just ones with stored dimensions
-                if (isAbsolutelyPositioned || isPictureElement) {
+                const isAspectRatioContainer = container?.dataset.lifTargetWidth && container?.dataset.lifTargetHeight;
+                if (isAbsolutelyPositioned || isPictureElement || isAspectRatioContainer) {
                     // Store the correct dimensions
                     const correctWidth = effectiveWidth;
                     const correctHeight = effectiveHeight;
@@ -1974,6 +2024,177 @@ function addConvertButton(img) {
     if (effectiveWidth < 100 || effectiveHeight < 100) {
         return;
     }
+
+    // ============================================================================
+    // INTELLIGENT IMAGE FILTERING SYSTEM
+    // ============================================================================
+    // Comprehensive filtering to avoid buttons on invisible, UI, or non-content images
+    // Examples: Amazon product thumbnails, navigation icons, footer logos, hidden images
+    // ============================================================================
+
+    // 1. VISIBILITY AND LAYOUT CHECKS
+    const imgComputedStyle = window.getComputedStyle(img);
+    const imgRect = img.getBoundingClientRect();
+
+    // Skip invisible images
+    if (imgComputedStyle.display === 'none' ||
+        imgComputedStyle.visibility === 'hidden' ||
+        parseFloat(imgComputedStyle.opacity) === 0) {
+        console.log('🚫 Skipping invisible image:', img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Skip images with zero or negative dimensions (hidden/positioned off-screen)
+    if (imgRect.width <= 0 || imgRect.height <= 0) {
+        console.log('🚫 Skipping zero-dimension image:', img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Skip images positioned far off-screen (likely hidden UI elements)
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    if (imgRect.right < -100 || imgRect.bottom < -100 ||
+        imgRect.left > viewport.width + 100 || imgRect.top > viewport.height + 100) {
+        console.log('🚫 Skipping off-screen image:', img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // 2. ASPECT RATIO AND SHAPE FILTERING
+    const aspectRatio = effectiveWidth / effectiveHeight;
+
+    // Skip extremely thin images (likely decorative borders, spacers, dividers)
+    if (aspectRatio > 20 || aspectRatio < 0.05) {
+        console.log('🚫 Skipping decorative image (extreme aspect ratio):', aspectRatio.toFixed(2), img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Skip very small square images (likely icons, avatars, logos)
+    const isSmallSquare = effectiveWidth <= 150 && effectiveHeight <= 150 &&
+        Math.abs(aspectRatio - 1) < 0.2; // Nearly square
+    if (isSmallSquare) {
+        console.log('🚫 Skipping small square image (likely icon/logo):', `${effectiveWidth}x${effectiveHeight}`, img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // 3. SEMANTIC AND CONTEXTUAL FILTERING
+
+    // Skip based on alt text that suggests UI elements
+    const altText = (img.alt || '').toLowerCase();
+    const uiKeywords = ['icon', 'logo', 'arrow', 'button', 'star', 'rating', 'badge', 'flag',
+        'menu', 'nav', 'search', 'cart', 'profile', 'avatar', 'thumbnail'];
+    if (uiKeywords.some(keyword => altText.includes(keyword))) {
+        console.log('🚫 Skipping UI image (alt text):', altText, img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Skip based on class names that suggest UI elements
+    const classNames = (img.className || '').toLowerCase();
+    const uiClassKeywords = ['icon', 'logo', 'sprite', 'thumb', 'avatar', 'profile', 'badge',
+        'star', 'rating', 'arrow', 'bullet', 'decoration', 'ornament',
+        'background', 'bg-', 'ui-', 'nav-', 'menu-', 'header-', 'footer-',
+        'sidebar', 'widget', 'ad-', 'banner', 'promo'];
+    if (uiClassKeywords.some(keyword => classNames.includes(keyword))) {
+        console.log('🚫 Skipping UI image (class name):', classNames, img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Skip based on src URL patterns that suggest non-content images
+    const src = (img.src || '').toLowerCase();
+    const uiSrcKeywords = ['icon', 'logo', 'sprite', 'thumb', 'avatar', 'profile', 'badge',
+        'arrow', 'bullet', 'star', 'rating', 'decoration', 'ornament',
+        'ui/', 'icons/', 'logos/', 'sprites/', 'thumbs/', 'thumbnails/',
+        'avatars/', 'profiles/', 'badges/', 'decorations/', 'ornaments/'];
+    if (uiSrcKeywords.some(keyword => src.includes(keyword))) {
+        console.log('🚫 Skipping UI image (src pattern):', img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // 4. PARENT CONTEXT FILTERING - Enhanced version of existing logic
+    const enhancedSkipSelectors = [
+        // Navigation and UI areas
+        'nav', 'header', 'footer', 'aside', 'sidebar',
+        '.nav', '.header', '.footer', '.sidebar', '.aside',
+        '.navigation', '.menu', '.navbar', '.topbar', '.bottombar',
+
+        // Branding and identity
+        '.logo', '.brand', '.branding', '.identity',
+        '.icon', '.favicon', '.avatar', '.profile-pic', '.profile-image',
+
+        // UI components
+        '.button', '.btn', '.link', '.control', '.widget', '.component',
+        '.toolbar', '.statusbar', '.breadcrumb', '.pagination',
+
+        // Advertisement and promotional
+        '.ad', '.ads', '.advertisement', '.banner', '.promo', '.promotion',
+        '.sponsored', '.affiliate', '.marketing',
+
+        // E-commerce specific
+        '.cart', '.checkout', '.wishlist', '.favorites', '.compare',
+        '.rating', '.stars', '.reviews', '.badges', '.labels',
+
+        // Social and sharing
+        '.social', '.share', '.sharing', '.follow', '.like', '.comment',
+
+        // Amazon specific patterns
+        '.s-image', '.s-thumb', '.s-icon', // Amazon search/listing images are often thumbnails
+        '[data-component-type="s-search-result"]', // Amazon search results - often thumbnails
+        '.a-carousel', '.a-carousel-viewport', // Amazon carousels often have small images
+
+        // General thumbnail and gallery patterns
+        '.thumbnail', '.thumb', '.gallery-thumb', '.preview', '.miniature',
+        '.carousel-item', '.slider-item', '.swiper-slide'
+    ];
+
+    if (enhancedSkipSelectors.some(selector => {
+        try {
+            return img.closest(selector);
+        } catch (e) {
+            // Handle invalid selectors gracefully
+            return false;
+        }
+    })) {
+        console.log('🚫 Skipping image in UI context:', img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // 5. SPECIAL AMAZON.COM FILTERING
+    if (window.location.hostname.includes('amazon.')) {
+        // Skip Amazon's small product images and UI elements
+        const amazonSpecificChecks = [
+            // Product listing thumbnails
+            img.closest('[data-component-type="s-search-result"]'),
+            // Small images in carousels
+            effectiveWidth < 200 && img.closest('.a-carousel'),
+            // Images with Amazon's thumbnail classes
+            classNames.includes('s-image') || classNames.includes('s-thumb'),
+            // Very small images on Amazon (likely UI elements)
+            effectiveWidth < 150 && effectiveHeight < 150
+        ];
+
+        if (amazonSpecificChecks.some(check => check)) {
+            console.log('🚫 Skipping Amazon thumbnail/UI image:', `${effectiveWidth}x${effectiveHeight}`, img.src?.substring(0, 50) + '...');
+            return;
+        }
+    }
+
+    // 6. OVERLAPPING ELEMENTS CHECK (images behind other content)
+    // Check if image is covered by other elements (likely background or decorative)
+    const centerX = imgRect.left + imgRect.width / 2;
+    const centerY = imgRect.top + imgRect.height / 2;
+    const elementAtCenter = document.elementFromPoint(centerX, centerY);
+
+    if (elementAtCenter && elementAtCenter !== img && !img.contains(elementAtCenter)) {
+        // If the center of the image is covered by another element, it might be a background image
+        const coveringElement = elementAtCenter;
+        const coveringRect = coveringElement.getBoundingClientRect();
+
+        // If covering element is significantly larger, image is likely decorative
+        if (coveringRect.width > imgRect.width * 1.2 && coveringRect.height > imgRect.height * 1.2) {
+            console.log('🚫 Skipping covered/background image:', img.src?.substring(0, 50) + '...');
+            return;
+        }
+    }
+
+    console.log('✅ Image passed all filters:', `${effectiveWidth}x${effectiveHeight}`, img.src?.substring(0, 50) + '...');
 
     // Skip if already has a button
     if (img.dataset.lifButtonAdded) {
