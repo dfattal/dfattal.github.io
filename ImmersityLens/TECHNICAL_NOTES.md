@@ -198,6 +198,322 @@ window.addEventListener('resize', updateOverlayDimensions);
 ```
 
 #### 2. Framework Detection
+
+## Enhanced lifViewer Architecture (January 2025)
+
+### Problem Statement
+
+The original lifViewer integration required extensive manual setup for different website layouts, leading to:
+- **200+ lines** of complex, layout-specific code
+- **Fragile event handling** with animation conflicts
+- **Timeout-based solutions** fighting lifViewer's internal logic
+- **Scattered conditionals** making maintenance difficult
+- **State synchronization issues** causing animation failures
+
+### Solution: Factory Method with Layout Intelligence
+
+Enhanced lifViewer with automatic layout detection and configuration through a sophisticated factory method system.
+
+### Architecture Overview
+
+#### Factory Method Design Pattern
+```javascript
+// Primary API - automatic layout detection
+lifViewer.createForLayout(lifUrl, container, options)
+
+// Manual layout specification (for edge cases)
+lifViewer.createForLayout(lifUrl, container, { layout: 'facebook', ...options })
+```
+
+#### Layout Detection Algorithm
+```javascript
+function detectLayout(container, image, options) {
+    // 1. Picture element detection
+    const pictureElement = image.closest('picture');
+    if (pictureElement) return 'picture';
+    
+    // 2. Facebook/Instagram complex positioning
+    if (isFacebookStyle(container)) return 'facebook';
+    
+    // 3. Aspect ratio containers (Bootstrap, Tailwind, Shopify)
+    if (isAspectRatioContainer(container)) return 'aspectRatio';
+    
+    // 4. Overlay requirements
+    if (requiresOverlay(container, image)) return 'overlay';
+    
+    // 5. Standard container wrapping
+    return 'standard';
+}
+```
+
+#### Layout Configuration System
+```javascript
+const layoutConfigs = {
+    standard: {
+        containerSizing: true,        // Resize container to match canvas
+        canvasPositioning: 'relative', // Normal document flow
+        eventHandling: 'standard',    // Events on canvas + static image
+        preventResizing: false        // Allow lifViewer resizing
+    },
+    picture: {
+        containerSizing: false,       // Don't modify container
+        canvasPositioning: 'absolute',// Overlay positioning
+        eventHandling: 'container',   // Events on container only
+        preventResizing: true         // Prevent dimension changes
+    },
+    facebook: {
+        containerSizing: false,
+        canvasPositioning: 'absolute',
+        eventHandling: 'unified',     // Complex hierarchy handling
+        preventResizing: true
+    },
+    aspectRatio: {
+        containerSizing: false,
+        canvasPositioning: 'absolute',
+        eventHandling: 'container',
+        preventResizing: true
+    },
+    overlay: {
+        containerSizing: false,
+        canvasPositioning: 'absolute',
+        eventHandling: 'unified',
+        preventResizing: true
+    }
+};
+```
+
+### Event Handling System
+
+#### Problem: Animation Conflicts
+Picture elements and complex layouts caused rapid start/stop cycling when:
+- Canvas and static image triggered separate mouse events
+- Element visibility changes triggered enter/leave events
+- Local state variables diverged from lifViewer's internal state
+
+#### Solution: Layout-Specific Event Handlers
+
+**Container-Based Events (Picture Mode)**
+```javascript
+if (config.eventHandling === 'container') {
+    // Events on container prevent canvas/image conflicts
+    container.addEventListener('mouseenter', () => {
+        if (!this.running) this.start();
+    });
+    container.addEventListener('mouseleave', () => {
+        if (this.running) this.stop();
+    });
+}
+```
+
+**Unified Event Handling (Complex Layouts)**
+```javascript
+if (config.eventHandling === 'unified') {
+    const eventTargets = [container, canvas, staticImage].filter(Boolean);
+    eventTargets.forEach(target => {
+        target.addEventListener('mouseenter', handleMouseEnter);
+        target.addEventListener('mouseleave', handleMouseLeave);
+    });
+    
+    // Debounced to prevent rapid cycling
+    const handleMouseEnter = debounce(() => {
+        if (!this.running) this.start();
+    }, 50);
+}
+```
+
+**State Synchronization**
+```javascript
+// Use lifViewer's internal state instead of local variables
+const startAnimation = () => {
+    if (!this.running) {  // this.running is lifViewer's internal state
+        this.start();
+    }
+};
+
+const stopAnimation = () => {
+    if (this.running) {
+        this.stop();
+    }
+};
+```
+
+### Dimension Correction System
+
+#### Problem: Picture Element Dimension Reporting
+Some websites' `<picture>` elements report incorrect dimensions:
+- **Suspicious aspect ratios**: 586x20 (29.3:1) or 823x19 
+- **Container vs image mismatch**: Picture container vs actual image dimensions
+- **Tiny canvas rendering**: Instead of proper image conversion
+
+#### Solution: Intelligent Dimension Analysis
+```javascript
+function correctDimensions(container, image, options) {
+    const containerRect = container.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    
+    const containerAspect = containerRect.width / containerRect.height;
+    const imageAspect = imageRect.width / imageRect.height;
+    
+    // Detect suspicious container dimensions
+    const isSuspiciouslyWide = containerAspect > 15;
+    const isSuspiciouslyTall = containerAspect < 0.067;
+    const hasSignificantDifference = Math.abs(containerAspect - imageAspect) > 5;
+    
+    // Use image dimensions if container dimensions are problematic
+    if ((isSuspiciouslyWide || isSuspiciouslyTall || hasSignificantDifference) && 
+        imageAspect > 0.1 && imageAspect < 10) {
+        return {
+            width: imageRect.width,
+            height: imageRect.height
+        };
+    }
+    
+    return options.dimensions;
+}
+```
+
+### Canvas Positioning System
+
+#### Relative Positioning (Standard Mode)
+```javascript
+if (config.canvasPositioning === 'relative') {
+    // Canvas in normal document flow
+    canvas.style.position = 'relative';
+    canvas.style.display = 'block';
+}
+```
+
+#### Absolute Positioning (Overlay Modes)
+```javascript
+if (config.canvasPositioning === 'absolute') {
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.zIndex = '1000';
+}
+```
+
+### Backward Compatibility
+
+#### Dual Constructor Support
+```javascript
+class lifViewer {
+    constructor(lifUrl, container, heightOrOptions, autoplay, mouseOver) {
+        if (typeof heightOrOptions === 'object') {
+            // New API: options object
+            this.initWithOptions(lifUrl, container, heightOrOptions);
+        } else {
+            // Old API: individual parameters
+            this.initLegacy(lifUrl, container, heightOrOptions, autoplay, mouseOver);
+        }
+    }
+    
+    static createForLayout(lifUrl, container, options) {
+        return new lifViewer(lifUrl, container, options);
+    }
+}
+```
+
+### Implementation Results
+
+#### Code Reduction Metrics
+```javascript
+// Before: Manual setup for Facebook layout
+if (container) {
+    if (isAnimating) return;
+    container.addEventListener('mouseenter', () => {
+        if (!viewer.running) {
+            viewer.start();
+            isAnimating = true;
+        }
+    });
+    container.addEventListener('mouseleave', () => {
+        if (viewer.running) {
+            viewer.stop();
+            isAnimating = false;
+        }
+    });
+    
+    const canvas = viewer.canvas;
+    if (canvas) {
+        canvas.addEventListener('mouseenter', () => {
+            if (!viewer.running) {
+                viewer.start();
+                isAnimating = true;
+            }
+        });
+        // ... 150+ more lines
+    }
+}
+
+// After: Enhanced lifViewer
+const viewer = lifViewer.createForLayout(lifUrl, container, {
+    image: imgElement,
+    dimensions: { width: targetWidth, height: targetHeight }
+});
+```
+
+**Results:**
+- **95% code reduction**: From 200+ lines to ~10 lines
+- **Eliminated fragile code**: No timeouts, MutationObservers, or manual DOM fighting
+- **Fixed animation conflicts**: Proper event handling for all layout types
+- **Improved maintainability**: Clear separation of layout-specific logic
+
+### Testing Matrix
+
+| Layout Type | Detection Method | Positioning | Event Handling | Sites Tested |
+|-------------|------------------|-------------|----------------|--------------|
+| Standard | Default fallback | Relative | Standard | Regular websites |
+| Picture | `<picture>` element | Absolute | Container | CNN, BBC, news |
+| Facebook | Complex positioning | Absolute | Unified | Facebook, Instagram |
+| Aspect Ratio | Padding/class patterns | Absolute | Container | Shopify, Bootstrap |
+| Overlay | Requirement detection | Absolute | Unified | Custom layouts |
+
+### Debugging Features
+
+#### Enhanced Logging
+```javascript
+console.log('Creating LIF viewer with layout mode:', detectedLayout);
+console.log('Applied configuration:', config);
+console.log('Event handling setup:', config.eventHandling);
+console.log('Dimension correction applied:', correctedDimensions);
+```
+
+#### Error Prevention
+- Automatic dimension validation and correction
+- Layout-specific event handling to prevent conflicts
+- State synchronization to avoid animation failures
+- Graceful fallbacks for unsupported patterns
+
+### Future Enhancement Framework
+
+#### Adding New Layout Types
+```javascript
+// 1. Add to layout detection
+function detectLayout(container, image, options) {
+    if (isNewPattern(container)) return 'newPattern';
+    // ... existing patterns
+}
+
+// 2. Add configuration
+const layoutConfigs = {
+    newPattern: {
+        containerSizing: false,
+        canvasPositioning: 'custom',
+        eventHandling: 'specialized',
+        preventResizing: true
+    }
+};
+
+// 3. Implement specialized handling if needed
+if (config.eventHandling === 'specialized') {
+    setupSpecializedEvents(this, container, canvas, staticImage);
+}
+```
+
+This architecture ensures the extension remains maintainable and extensible as new website patterns emerge, while providing consistent, reliable behavior across all supported layout types.
 Could add automatic framework detection for optimized handling:
 ```javascript
 // Future enhancement

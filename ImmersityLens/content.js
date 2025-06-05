@@ -1068,13 +1068,29 @@ async function convertTo3D(img, button) {
                 console.log('Using picture parent as LIF container for overlay approach');
             }
 
-            const viewer = new lifViewer(this.lifDownloadUrl, lifContainer || img.parentElement, effectiveHeight, true, true);
+            // Use the enhanced factory method for layout-aware viewer creation
+            const viewer = lifViewer.createForLayout(
+                this.lifDownloadUrl,
+                lifContainer || img.parentElement,
+                img,
+                layoutAnalysis,
+                {
+                    height: effectiveHeight,
+                    autoplay: true,
+                    mouseOver: true
+                }
+            );
 
             // Store viewer reference on button for later use
             button.lifViewer = viewer;
 
-            viewer.afterLoad = function () {
-                console.log('LIF viewer loaded successfully!');
+            // Enhanced afterLoad - much simpler since lifViewer handles layout-specific setup
+            const originalAfterLoad = viewer.afterLoad;
+            viewer.afterLoad = async function () {
+                // Call the enhanced afterLoad from lifViewer first
+                await originalAfterLoad.call(this);
+
+                console.log('LIF viewer loaded successfully with layout-aware setup!');
 
                 // Ensure button state is still correct after viewer loads
                 setTimeout(() => {
@@ -1086,104 +1102,7 @@ async function convertTo3D(img, button) {
                     }
                 }, 100);
 
-                console.log(`LIF viewer sizing: ${effectiveWidth}x${effectiveHeight}`);
-
-                // Ensure the container maintains the proper dimensions - but preserve layout type
-                if (container) {
-                    // Check if this is a padding-based layout by looking at the container's current positioning
-                    const containerStyle = window.getComputedStyle(container);
-                    const isAbsolutelyPositioned = containerStyle.position === 'absolute';
-                    const isAspectRatioContainer = container?.dataset.lifTargetWidth && container?.dataset.lifTargetHeight;
-                    const isFacebookLayout = layoutAnalysis?.isFacebookStyle;
-
-                    if (isAbsolutelyPositioned) {
-                        // For padding-based layouts, preserve absolute positioning
-                        console.log('Preserving absolute positioning for padding-based layout');
-                        container.style.cssText = `
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            width: 100%;
-                            height: 100%;
-                            overflow: hidden;
-                        `;
-                    } else if (isAspectRatioContainer) {
-                        // For aspect ratio containers (Instagram, Shopify), preserve original container dimensions
-                        // Only ensure proper positioning and overflow, don't override width/height
-                        console.log('Preserving aspect ratio container dimensions for Instagram/Shopify layout');
-                        const currentStyle = window.getComputedStyle(container);
-                        container.style.position = 'relative';
-                        container.style.overflow = 'hidden';
-                        // Preserve existing width/height from aspect ratio calculations
-                        console.log(`Aspect ratio container preserved: ${currentStyle.width} x ${currentStyle.height}`);
-                    } else if (isFacebookLayout) {
-                        // For Facebook layouts, preserve original container dimensions like aspect ratio containers
-                        console.log('Preserving Facebook layout container dimensions');
-                        const currentStyle = window.getComputedStyle(container);
-                        container.style.position = 'relative';
-                        container.style.overflow = 'hidden';
-                        // Preserve existing width/height from Facebook's complex positioning
-                        console.log(`Facebook container preserved: ${currentStyle.width} x ${currentStyle.height}`);
-                    } else {
-                        // For normal layouts, use explicit dimensions
-                        console.log('Using explicit dimensions for standard layout');
-                        container.style.cssText = `
-                            position: relative;
-                            display: inline-block;
-                            width: ${effectiveWidth}px;
-                            height: ${effectiveHeight}px;
-                            overflow: hidden;
-                        `;
-                    }
-                }
-
-                // Hide the original image first
-                img.style.display = 'none';
-
-                // CRITICAL: Set up the LIF viewer static image with pointer-events: auto + cursor: pointer
-                // This was essential to fix CNN animation restart - static image MUST receive mouse events
-                // Without this, hovering over static image wouldn't restart animation on picture elements
-                this.img.style.cssText = `
-                    width: ${effectiveWidth}px !important;
-                    height: ${effectiveHeight}px !important;
-                    max-width: none !important;
-                    max-height: none !important;
-                    object-fit: cover;
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    z-index: 1;
-                    display: none;
-                    pointer-events: auto;
-                    cursor: pointer;
-                `;
-
-                this.canvas.style.cssText = `
-                    width: ${effectiveWidth}px !important;
-                    height: ${effectiveHeight}px !important;
-                    max-width: none !important;
-                    max-height: none !important;
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    z-index: 2;
-                    display: block;
-                    pointer-events: auto;
-                    cursor: pointer;
-                `;
-
-                // Force canvas dimensions to match exactly
-                this.canvas.width = effectiveWidth;
-                this.canvas.height = effectiveHeight;
-
-                // Immediately show the LIF animation canvas
-                this.img.style.display = 'none';
-                this.canvas.style.display = 'block';
-
-                console.log(`Canvas is now visible with dimensions: ${this.canvas.width}x${this.canvas.height}`);
-                console.log(`Canvas style:`, this.canvas.style.cssText);
-
-                // For picture elements with overlay approach, hide the original button zone
+                // For picture elements with overlay approach, manage button zones
                 if (img.closest('picture') && img.closest('picture').dataset.lifTargetWidth) {
                     console.log('Picture element detected - managing overlay button properly');
 
@@ -1209,352 +1128,17 @@ async function convertTo3D(img, button) {
                     });
                 }
 
-                // Override LIF.js automatic resizing for padding-based layouts AND picture elements
-                // Note: We detect ALL picture elements because LIF.js tends to use intrinsic image dimensions
-                // (e.g., 8484x5656) instead of display dimensions (e.g., 305x171) for canvas sizing
-                const isPictureElement = img.closest('picture'); // Detect any picture element, not just ones with stored dimensions
-                const isAspectRatioContainer = container?.dataset.lifTargetWidth && container?.dataset.lifTargetHeight;
-                if (isAbsolutelyPositioned || isPictureElement || isAspectRatioContainer) {
-                    // Store the correct dimensions
-                    const correctWidth = effectiveWidth;
-                    const correctHeight = effectiveHeight;
-
-                    // Override canvas dimensions immediately and repeatedly
-                    const forceCorrectDimensions = () => {
-                        if (this.canvas.width !== correctWidth || this.canvas.height !== correctHeight) {
-                            this.canvas.width = correctWidth;
-                            this.canvas.height = correctHeight;
-                            this.canvas.style.width = `${correctWidth}px`;
-                            this.canvas.style.height = `${correctHeight}px`;
-                        }
-                    };
-
-                    // Apply immediately
-                    forceCorrectDimensions();
-
-                    // Apply again after short delays to override LIF.js resizing
-                    setTimeout(forceCorrectDimensions, 50);
-                    setTimeout(forceCorrectDimensions, 100);
-                    setTimeout(forceCorrectDimensions, 200);
-                    setTimeout(forceCorrectDimensions, 500);
-
-                    // Set up observer to catch any future resizing attempts
-                    const observer = new MutationObserver(() => {
-                        forceCorrectDimensions();
-                    });
-
-                    observer.observe(this.canvas, {
-                        attributes: true,
-                        attributeFilter: ['width', 'height', 'style']
-                    });
-                }
-
-                // Set up hover effects for enhanced interaction - ensure they work properly
-                const canvasElement = this.canvas;
-                const lifViewerInstance = this;
-
-                // Clear any existing event listeners to avoid conflicts
-                canvasElement.onmouseenter = null;
-                canvasElement.onmouseleave = null;
-
-                // Create a robust event handling system for both picture and non-picture elements
-                let isAnimating = false;
-                let animationTimeoutId = null;
-                let lastStateChange = 0; // Track last state change to prevent rapid toggling
-
-                // Detect picture elements early for use in animation functions
-                const pictureElementForEvents = img.closest('picture'); // Simplified detection - just check if it's in a picture element
-
-                const startAnimationSafe = () => {
-                    const now = Date.now();
-                    // Prevent rapid state changes (minimum 200ms between changes)
-                    if (now - lastStateChange < 200) {
-                        console.log('Animation start throttled - too soon after last change');
-                        return;
-                    }
-
-                    if (!isAnimating && lifViewerInstance.startAnimation) {
-                        console.log('Starting LIF animation');
-                        isAnimating = true;
-                        lastStateChange = now;
-
-
-                        // For picture elements, explicitly manage canvas visibility
-                        if (pictureElementForEvents) {
-                            // Show canvas, hide static image
-                            lifViewerInstance.canvas.style.display = 'block';
-                            lifViewerInstance.img.style.display = 'none';
-                            console.log('Picture element: Canvas shown, static image hidden');
-                        }
-
-                        lifViewerInstance.startAnimation();
-
-                        // Clear any pending stop timeout
-                        if (animationTimeoutId) {
-                            clearTimeout(animationTimeoutId);
-                            animationTimeoutId = null;
-                        }
-                    }
-                };
-
-                const stopAnimationSafe = () => {
-                    // Use a small delay to prevent flickering when moving mouse quickly
-                    if (animationTimeoutId) {
-                        clearTimeout(animationTimeoutId);
-                    }
-
-                    animationTimeoutId = setTimeout(() => {
-                        const now = Date.now();
-                        // Prevent rapid state changes (minimum 200ms between changes)
-                        if (now - lastStateChange < 200) {
-                            console.log('Animation stop throttled - too soon after last change');
-                            animationTimeoutId = null;
-                            return;
-                        }
-
-                        if (isAnimating && lifViewerInstance.stopAnimation) {
-                            console.log('Stopping LIF animation');
-                            isAnimating = false;
-                            lastStateChange = now;
-                            lifViewerInstance.stopAnimation();
-
-                            // For picture elements, explicitly manage canvas visibility
-                            if (pictureElementForEvents) {
-                                // Hide canvas, show static image
-                                lifViewerInstance.canvas.style.display = 'none';
-                                lifViewerInstance.img.style.display = 'block';
-                                console.log('Picture element: Canvas hidden, static image shown');
-                                console.log('Static image state:', {
-                                    display: lifViewerInstance.img.style.display,
-                                    pointerEvents: lifViewerInstance.img.style.pointerEvents,
-                                    cursor: lifViewerInstance.img.style.cursor,
-                                    zIndex: lifViewerInstance.img.style.zIndex
-                                });
-                            }
-                        }
-                        animationTimeoutId = null;
-                    }, 150); // Slightly longer delay for stability
-                };
-
-                /**
-                 * MOUSE EVENT HANDLING STRATEGY FOR 3D ANIMATION
-                 * 
-                 * CRITICAL INSIGHTS FROM CNN/FACEBOOK DEBUGGING:
-                 * 
-                 * Picture Elements (CNN-style responsive images):
-                 * - Problem: Canvas and static LIF image positioned absolutely at same location
-                 * - Old Approach: Container events + separate canvas events = rapid start/stop cycling
-                 * - Root Cause: When canvas shows → triggers container mouseleave → stops animation
-                 *               When static shows → triggers container mouseenter → starts animation  
-                 *               Result: Infinite animation toggle loop
-                 * 
-                 * SOLUTION - Unified Event Handlers:
-                 * - Same mouse event functions for container, canvas, AND static image
-                 * - Prevents conflicting event sequences that cause rapid cycling
-                 * - Animation state throttling (200ms minimum between changes)
-                 * - Static image MUST have pointer-events: auto + cursor: pointer
-                 * 
-                 * Facebook Layouts:
-                 * - Complex CSS positioning requires container-based event handling
-                 * - Same unified approach prevents similar conflicts
-                 * 
-                 * Regular Images:
-                 * - Use both canvas and static image for comprehensive coverage
-                 * - Same unified handlers ensure consistent behavior
-                 * 
-                 * ANTI-PATTERNS TO AVOID:
-                 * ❌ Different event handlers for container vs. canvas/image
-                 * ❌ Complex boundary detection for mouse leave (causes legitimate leaves to be ignored)
-                 * ❌ Separate animation start/stop logic for different elements
-                 * ❌ Missing pointer-events on static LIF images
-                 * 
-                 * PROVEN APPROACH:
-                 * ✅ Identical event handlers for all interactive elements  
-                 * ✅ Simple mouse leave with delay (150ms) for stability
-                 * ✅ Animation state throttling to prevent rapid changes
-                 * ✅ Static image properly configured for mouse interaction
-                 */
-
-                // For picture elements, we need more robust event handling
-                if (pictureElementForEvents) {
-                    console.log('Setting up enhanced picture element mouse events');
-
-                    // For picture elements, use the parent container for event handling to avoid conflicts
-                    // between canvas and static image elements that are positioned on top of each other
-                    const eventContainer = container || lifContainer;
-
-                    if (eventContainer) {
-                        // For picture elements, use a unified approach that handles both visible states
-                        // Don't use separate container and image events as they conflict
-
-                        const handleMouseEnter = (e) => {
-                            console.log('Picture element: Unified mouse enter handler');
-                            startAnimationSafe();
-                        };
-
-                        const handleMouseLeave = (e) => {
-                            // Simplified approach: always respect mouse leave events
-                            // but with a small delay to handle rapid movements between elements
-                            console.log('Picture element: Mouse leave detected - will stop animation after delay');
-                            stopAnimationSafe();
-                        };
-
-                        const handleMouseMove = (e) => {
-                            if (!isAnimating) {
-                                console.log('Picture element: Mouse move - starting animation');
-                                startAnimationSafe();
-                            }
-                            if (lifViewerInstance.handleMouseMove) {
-                                lifViewerInstance.handleMouseMove(e);
-                            }
-                        };
-
-                        // Add events to container
-                        eventContainer.addEventListener('mouseenter', handleMouseEnter, { passive: true });
-                        eventContainer.addEventListener('mouseleave', handleMouseLeave, { passive: true });
-                        eventContainer.addEventListener('mousemove', handleMouseMove, { passive: true });
-
-                        // Add events to both canvas and static image with the same handlers
-                        // This ensures consistent behavior regardless of which element is visible
-                        this.canvas.addEventListener('mouseenter', handleMouseEnter, { passive: true });
-                        this.canvas.addEventListener('mouseleave', handleMouseLeave, { passive: true });
-                        this.canvas.addEventListener('mousemove', handleMouseMove, { passive: true });
-
-                        this.img.addEventListener('mouseenter', handleMouseEnter, { passive: true });
-                        this.img.addEventListener('mouseleave', handleMouseLeave, { passive: true });
-                        this.img.addEventListener('mousemove', handleMouseMove, { passive: true });
-
-                        console.log('Unified picture element mouse events configured');
-                    } else {
-                        // Fallback: if no container found, use canvas only but with debouncing
-                        let mouseEnterTimeout = null;
-                        let mouseLeaveTimeout = null;
-
-                        const debouncedEnter = () => {
-                            if (mouseLeaveTimeout) {
-                                clearTimeout(mouseLeaveTimeout);
-                                mouseLeaveTimeout = null;
-                            }
-                            if (!mouseEnterTimeout) {
-                                mouseEnterTimeout = setTimeout(() => {
-                                    startAnimationSafe();
-                                    mouseEnterTimeout = null;
-                                }, 50);
-                            }
-                        };
-
-                        const debouncedLeave = () => {
-                            if (mouseEnterTimeout) {
-                                clearTimeout(mouseEnterTimeout);
-                                mouseEnterTimeout = null;
-                            }
-                            if (!mouseLeaveTimeout) {
-                                mouseLeaveTimeout = setTimeout(() => {
-                                    stopAnimationSafe();
-                                    mouseLeaveTimeout = null;
-                                }, 100);
-                            }
-                        };
-
-                        canvasElement.addEventListener('mouseenter', debouncedEnter, { passive: true });
-                        canvasElement.addEventListener('mouseleave', debouncedLeave, { passive: true });
-                        canvasElement.addEventListener('mousemove', function (e) {
-                            debouncedEnter(); // Reset the leave timeout on movement
-                            if (lifViewerInstance.handleMouseMove) {
-                                lifViewerInstance.handleMouseMove(e);
-                            }
-                        }, { passive: true });
-
-                        console.log('Fallback debounced picture element mouse events configured');
-                    }
-                } else {
-                    console.log('Setting up standard mouse events with state management');
-
-                    // Standard event handling for non-picture elements with same state management
-                    canvasElement.addEventListener('mouseenter', function (e) {
-                        console.log('Mouse entered LIF canvas - starting animation');
-                        e.stopPropagation();
-                        startAnimationSafe();
-                    }, { passive: true });
-
-                    canvasElement.addEventListener('mouseleave', function (e) {
-                        console.log('Mouse left LIF canvas - stopping animation');
-                        e.stopPropagation();
-                        stopAnimationSafe();
-                    }, { passive: true });
-
-                    // Also add events to the static LIF image (this.img) so animation can restart when hovering over static image
-                    this.img.addEventListener('mouseenter', function (e) {
-                        console.log('Picture: Mouse entered static LIF image');
-                        startAnimationSafe();
-                    }, { passive: true });
-                    this.img.addEventListener('mouseleave', function (e) {
-                        console.log('Picture: Mouse left static LIF image');
-                        stopAnimationSafe();
-                    }, { passive: true });
-
-                    // Also handle mouse movement for more responsive interaction
-                    canvasElement.addEventListener('mousemove', function (e) {
-                        if (!isAnimating) {
-                            startAnimationSafe();
-                        }
-                        if (lifViewerInstance.handleMouseMove) {
-                            lifViewerInstance.handleMouseMove(e);
-                        }
-                    }, { passive: true });
-
-                    // Also add mousemove to the static image for non-picture elements
-                    this.img.addEventListener('mousemove', function (e) {
-                        if (!isAnimating) {
-                            console.log('Mouse moved over static LIF image - restarting animation');
-                            startAnimationSafe();
-                        }
-                        if (lifViewerInstance.handleMouseMove) {
-                            lifViewerInstance.handleMouseMove(e);
-                        }
-                    }, { passive: true });
-                }
-
-                // Add a visual indicator that the LIF is ready
+                // Add a visual indicator that the LIF is ready  
                 if (lifContainer) {
                     lifContainer.setAttribute('data-lif-active', 'true');
                 }
 
-                // Fallback: ensure canvas is definitely visible and properly configured
-                setTimeout(() => {
-                    if (this.canvas && this.canvas.style.display !== 'block') {
-                        console.log('Fallback: forcing canvas visibility');
-                        this.canvas.style.display = 'block';
-                        this.canvas.style.position = 'absolute';
-                        this.canvas.style.top = '0';
-                        this.canvas.style.left = '0';
-                        this.canvas.style.zIndex = '10';
-                        this.canvas.style.pointerEvents = 'auto';
-                    }
+                console.log(`Enhanced LIF viewer initialized with layout mode: ${this.layoutMode}`);
+                console.log('All layout-specific setup handled automatically by lifViewer');
 
-                    // Verify the canvas is in the DOM
-                    if (!this.canvas.parentElement) {
-                        console.warn('Canvas not in DOM, re-adding to container');
-                        if (lifContainer) {
-                            lifContainer.appendChild(this.canvas);
-                        }
-                    }
 
-                    console.log('Final canvas state:', {
-                        display: this.canvas.style.display,
-                        width: this.canvas.width,
-                        height: this.canvas.height,
-                        parentElement: this.canvas.parentElement?.tagName,
-                        inDOM: document.contains(this.canvas),
-                        pointerEvents: this.canvas.style.pointerEvents,
-                        isPictureElement: pictureElementForEvents
-                    });
-                }, 150); // Slightly longer delay to ensure everything is set up
 
-                console.log(`LIF viewer initialized with dimensions: ${effectiveWidth}x${effectiveHeight}`);
-                console.log('Container:', lifContainer);
-                console.log('Canvas parent:', this.canvas.parentElement);
-                console.log('Canvas event listeners set up for mouse interaction');
+
             };
 
         };

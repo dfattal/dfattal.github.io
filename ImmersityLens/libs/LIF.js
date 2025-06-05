@@ -562,8 +562,29 @@ class monoLdiGenerator {
 class lifViewer {
     static instances = [];
 
-    constructor(lifUrl, container, height = 300, autoplay = false, mouseOver = true) {
+    constructor(lifUrl, container, heightOrOptions = 300, autoplay = false, mouseOver = true) {
         lifViewer.instances.push(this);
+
+        // Enhanced constructor - support both old API and new options object
+        let options = {};
+        let height = 300;
+
+        if (typeof heightOrOptions === 'object' && heightOrOptions !== null) {
+            // New API: constructor(lifUrl, container, options)
+            options = heightOrOptions;
+            height = options.height || 300;
+            autoplay = options.autoplay !== undefined ? options.autoplay : false;
+            mouseOver = options.mouseOver !== undefined ? options.mouseOver : true;
+        } else {
+            // Old API: constructor(lifUrl, container, height, autoplay, mouseOver)
+            height = heightOrOptions || 300;
+            options = {
+                height,
+                autoplay,
+                mouseOver
+            };
+        }
+
         this.MAX_LAYERS = 4;
         this.lifUrl = lifUrl;
         this.animations = []; // will store LIF animation list
@@ -575,21 +596,28 @@ class lifViewer {
         this.mousePosOld = { x: 0, y: 0 };
         this.mousePos = { x: 0, y: 0 };
 
-        this.img = document.createElement('img');
-        this.img.src = lifUrl;
-        this.img.height = height;
-        this.canvas = document.createElement('canvas');
-        this.gl = this.canvas.getContext('webgl');
-        this.canvas.style.display = 'none';
+        // Enhanced layout-aware properties
+        this.layoutMode = options.layoutMode || 'standard';
+        this.preserveResponsive = options.preserveResponsive || false;
+        this.targetDimensions = options.targetDimensions || null;
+        this.originalImage = options.originalImage || null;
+        this.layoutAnalysis = options.layoutAnalysis || null;
+        this.height = height;
+
+        // Get layout-specific configuration
+        this.layoutConfig = this.getLayoutConfiguration();
+
+        // Create elements with layout awareness
+        this.createElements();
+        this.setupLayoutSpecificStyling();
 
         // Add debugging info
-        console.log(`LIF viewer created for: ${lifUrl}`);
+        console.log(`LIF viewer created for: ${lifUrl} (layout: ${this.layoutMode})`);
         console.log(`Initial height: ${height}`);
 
         if (this.lifUrl) this.init();
         this.disableAnim = false;
         this.currentAnimation;
-
 
         this.renderCam = {
             pos: { x: 0, y: 0, z: 0 }, // default
@@ -604,7 +632,128 @@ class lifViewer {
         this.focus = 0;
         this.animationFrame = null;
         this.render = this.render.bind(this);
+    }
 
+    /**
+     * Get layout-specific configuration based on detected layout mode
+     */
+    getLayoutConfiguration() {
+        const configs = {
+            standard: {
+                containerSizing: 'explicit',
+                canvasPositioning: 'relative',
+                eventHandling: 'standard',
+                preserveOriginalDimensions: false,
+                preventResizing: false
+            },
+            picture: {
+                containerSizing: 'preserve',
+                canvasPositioning: 'absolute',
+                eventHandling: 'unified',
+                preserveOriginalDimensions: true,
+                preventResizing: true
+            },
+            aspectRatio: {
+                containerSizing: 'preserve',
+                canvasPositioning: 'absolute',
+                eventHandling: 'overlay',
+                preserveOriginalDimensions: true,
+                preventResizing: true
+            },
+            facebook: {
+                containerSizing: 'preserve',
+                canvasPositioning: 'absolute',
+                eventHandling: 'overlay',
+                preserveOriginalDimensions: true,
+                preventResizing: true,
+                complexPositioning: true
+            },
+            overlay: {
+                containerSizing: 'preserve',
+                canvasPositioning: 'absolute',
+                eventHandling: 'overlay',
+                preserveOriginalDimensions: true,
+                preventResizing: true
+            }
+        };
+
+        return configs[this.layoutMode] || configs.standard;
+    }
+
+    /**
+     * Create canvas and image elements with layout awareness
+     */
+    createElements() {
+        this.img = document.createElement('img');
+        this.img.src = this.lifUrl;
+        this.img.height = this.height;
+
+        this.canvas = document.createElement('canvas');
+        this.gl = this.canvas.getContext('webgl');
+        this.canvas.style.display = 'none';
+
+        // Add layout-specific data attributes for debugging
+        this.canvas.dataset.lifLayoutMode = this.layoutMode;
+        this.img.dataset.lifLayoutMode = this.layoutMode;
+    }
+
+    /**
+     * Apply layout-specific styling during creation
+     */
+    setupLayoutSpecificStyling() {
+        const config = this.layoutConfig;
+
+        if (config.canvasPositioning === 'absolute') {
+            // For picture elements, aspect ratio containers, etc.
+            const dimensions = this.getEffectiveDimensions();
+
+            this.canvas.style.cssText = `
+                width: ${dimensions.width}px !important;
+                height: ${dimensions.height}px !important;
+                max-width: none !important;
+                max-height: none !important;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 2;
+                display: none;
+                pointer-events: auto;
+                cursor: pointer;
+            `;
+
+            this.img.style.cssText = `
+                width: ${dimensions.width}px !important;
+                height: ${dimensions.height}px !important;
+                max-width: none !important;
+                max-height: none !important;
+                object-fit: cover;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 1;
+                display: none;
+                pointer-events: auto;
+                cursor: pointer;
+            `;
+        }
+    }
+
+    /**
+     * Get effective dimensions based on layout mode and original image
+     */
+    getEffectiveDimensions() {
+        if (this.targetDimensions) {
+            return this.targetDimensions;
+        }
+
+        if (this.originalImage) {
+            return {
+                width: this.originalImage.width || this.originalImage.naturalWidth,
+                height: this.originalImage.height || this.originalImage.naturalHeight
+            };
+        }
+
+        return { width: 400, height: 300 }; // fallback
     }
 
     // Static method to disable animations for all instances
@@ -620,6 +769,63 @@ class lifViewer {
         });
     }
 
+    /**
+     * Static factory method for creating layout-aware viewers
+     */
+    static createForLayout(lifUrl, container, originalImage, layoutAnalysis, options = {}) {
+        // Determine layout mode from analysis
+        let layoutMode = 'standard';
+
+        if (originalImage.closest('picture')) {
+            layoutMode = 'picture';
+        } else if (layoutAnalysis?.isFacebookStyle) {
+            layoutMode = 'facebook';
+        } else if (layoutAnalysis?.containerHasPaddingAspectRatio) {
+            layoutMode = 'aspectRatio';
+        } else if (layoutAnalysis?.preserveOriginal) {
+            layoutMode = 'overlay';
+        }
+
+        // Calculate target dimensions
+        const targetDimensions = {
+            width: originalImage.width || originalImage.naturalWidth,
+            height: originalImage.height || originalImage.naturalHeight
+        };
+
+        // Apply dimension corrections for picture elements
+        if (layoutMode === 'picture') {
+            const pictureElement = originalImage.closest('picture');
+            if (pictureElement) {
+                const pictureRect = pictureElement.getBoundingClientRect();
+                const imgRect = originalImage.getBoundingClientRect();
+                const pictureAspectRatio = pictureRect.width / pictureRect.height;
+                const imageAspectRatio = imgRect.width / imgRect.height;
+
+                const isSuspiciouslyWide = pictureAspectRatio > 15;
+                const hasSignificantDifference = Math.abs(pictureAspectRatio - imageAspectRatio) > 5;
+
+                if ((isSuspiciouslyWide || hasSignificantDifference) &&
+                    imageAspectRatio > 0.1 && imageAspectRatio < 10) {
+                    targetDimensions.width = imgRect.width;
+                    targetDimensions.height = imgRect.height;
+                    console.log('Applied dimension correction for picture element');
+                }
+            }
+        }
+
+        console.log(`Creating lifViewer with layout mode: ${layoutMode}, dimensions: ${targetDimensions.width}x${targetDimensions.height}`);
+
+        return new lifViewer(lifUrl, container, {
+            ...options,
+            layoutMode,
+            targetDimensions,
+            originalImage,
+            layoutAnalysis,
+            autoplay: options.autoplay !== undefined ? options.autoplay : true,
+            mouseOver: options.mouseOver !== undefined ? options.mouseOver : true
+        });
+    }
+
     // Helper to await the image load
     async loadImage() {
         return new Promise((resolve, reject) => {
@@ -628,7 +834,251 @@ class lifViewer {
         });
     }
 
-    async afterLoad() { };
+    async afterLoad() {
+        // Enhanced afterLoad with layout-specific setup
+        console.log(`LIF viewer loaded with layout mode: ${this.layoutMode}`);
+
+        // Apply container styling if we have layout configuration
+        if (this.layoutMode !== 'standard') {
+            this.setupContainer();
+        }
+
+        // Hide original image if provided
+        if (this.originalImage) {
+            this.originalImage.style.display = 'none';
+        }
+
+        // Set up layout-specific event handling
+        this.setupEventHandlers();
+
+        // Force correct dimensions one final time for layout-aware modes
+        if (this.layoutConfig.preventResizing) {
+            const dimensions = this.getEffectiveDimensions();
+            this.canvas.width = dimensions.width;
+            this.canvas.height = dimensions.height;
+        }
+
+        // Show canvas immediately for autoplay
+        if (this.autoplay) {
+            this.img.style.display = 'none';
+            this.canvas.style.display = 'block';
+        }
+
+        console.log(`Canvas ready with dimensions: ${this.canvas.width}x${this.canvas.height}`);
+    };
+
+    /**
+     * Layout-aware container styling
+     */
+    setupContainer() {
+        const config = this.layoutConfig;
+        const dimensions = this.getEffectiveDimensions();
+
+        if (config.containerSizing === 'preserve') {
+            // Preserve existing container styling for responsive layouts
+            const containerStyle = window.getComputedStyle(this.container);
+            this.container.style.position = containerStyle.position === 'static' ? 'relative' : containerStyle.position;
+            this.container.style.overflow = 'hidden';
+
+            console.log(`Preserved container styling for ${this.layoutMode} layout`);
+        } else if (config.containerSizing === 'explicit') {
+            // Standard explicit sizing
+            this.container.style.cssText = `
+                position: relative;
+                display: inline-block;
+                width: ${dimensions.width}px;
+                height: ${dimensions.height}px;
+                overflow: hidden;
+            `;
+        }
+    }
+
+    /**
+     * Layout-aware event handling setup
+     */
+    setupEventHandlers() {
+        const config = this.layoutConfig;
+
+        if (config.eventHandling === 'unified') {
+            // For picture elements - unified events on both canvas and static image
+            this.setupUnifiedEventHandlers();
+        } else if (config.eventHandling === 'overlay') {
+            // For aspect ratio containers and overlays
+            this.setupOverlayEventHandlers();
+        } else {
+            // Standard event handling - don't override existing events
+            this.setupStandardEventHandlers();
+        }
+    }
+
+    setupUnifiedEventHandlers() {
+        // Animation state management for picture elements
+        let lastStateChange = 0;
+        let animationTimeoutId = null;
+        const throttleDelay = 200;
+
+        const startAnimationSafe = () => {
+            const now = Date.now();
+            if (now - lastStateChange < throttleDelay) return;
+
+            // Clear any pending stop animation
+            if (animationTimeoutId) {
+                clearTimeout(animationTimeoutId);
+                animationTimeoutId = null;
+            }
+
+            // Use lifViewer's internal state instead of local state
+            if (!this.running && this.startAnimation) {
+                console.log('Starting LIF animation (unified)');
+                lastStateChange = now;
+                this.canvas.style.display = 'block';
+                this.img.style.display = 'none';
+                this.startAnimation();
+            }
+        };
+
+        const stopAnimationSafe = () => {
+            // Use lifViewer's internal state instead of local state
+            if (this.running) {
+                console.log('Stopping LIF animation (unified)');
+                lastStateChange = Date.now();
+
+                // Use timeout to prevent rapid toggling
+                animationTimeoutId = setTimeout(() => {
+                    if (this.running) { // Double-check state hasn't changed
+                        this.stopAnimation();
+                        this.canvas.style.display = 'none';
+                        this.img.style.display = 'block';
+                    }
+                    animationTimeoutId = null;
+                }, 150);
+            }
+        };
+
+        // For picture elements, use CONTAINER-based events to avoid canvas/image visibility conflicts
+        // Find the container that should handle mouse events
+        let eventTarget = this.container;
+
+        // Try to find a better event target by looking for the parent that contains both the button and the viewer
+        if (this.originalImage && this.originalImage.closest('picture')) {
+            const pictureParent = this.originalImage.closest('picture').parentElement;
+            if (pictureParent && pictureParent.querySelector('.lif-button-zone')) {
+                eventTarget = pictureParent;
+                console.log('Using picture parent container for events');
+            }
+        }
+
+        console.log('Setting up container-based events for picture mode on:', eventTarget);
+
+        // Add events only to the container, not to canvas/image to prevent visibility conflicts
+        eventTarget.addEventListener('mouseenter', (e) => {
+            // Only start if mouse is actually over our area
+            console.log('Container mouseenter (unified)');
+            startAnimationSafe();
+        }, { passive: true });
+
+        eventTarget.addEventListener('mouseleave', (e) => {
+            console.log('Container mouseleave (unified)');
+            stopAnimationSafe();
+        }, { passive: true });
+
+        eventTarget.addEventListener('mousemove', (e) => {
+            // Restart animation on mouse movement if not currently animating
+            if (!isAnimating) {
+                console.log('Container mousemove - restarting animation (unified)');
+                startAnimationSafe();
+            }
+        }, { passive: true });
+
+        console.log('Unified container-based events configured for picture elements');
+    }
+
+    setupOverlayEventHandlers() {
+        // Standard overlay events for aspect ratio containers
+        let animationTimeoutId = null;
+
+        const startAnimation = () => {
+            if (animationTimeoutId) {
+                clearTimeout(animationTimeoutId);
+                animationTimeoutId = null;
+            }
+
+            if (!this.running) {
+                console.log('Starting animation (overlay)');
+                this.startAnimation();
+            }
+        };
+
+        const stopAnimation = () => {
+            if (this.running) {
+                console.log('Stopping animation (overlay)');
+
+                // Small delay to prevent rapid toggling
+                animationTimeoutId = setTimeout(() => {
+                    if (this.running) {
+                        this.stopAnimation();
+                    }
+                    animationTimeoutId = null;
+                }, 100);
+            }
+        };
+
+        this.canvas.addEventListener('mouseenter', startAnimation, { passive: true });
+        this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+        // Also add events to static image for comprehensive coverage
+        this.img.addEventListener('mouseenter', startAnimation, { passive: true });
+        this.img.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+        console.log('Overlay event handlers configured');
+    }
+
+    setupStandardEventHandlers() {
+        // Basic event handling for standard layouts
+        // Only add if not already present to avoid conflicts
+        if (!this.canvas.hasAttribute('data-lif-events-added')) {
+            let animationTimeoutId = null;
+
+            const startAnimation = () => {
+                if (animationTimeoutId) {
+                    clearTimeout(animationTimeoutId);
+                    animationTimeoutId = null;
+                }
+
+                // Use lifViewer's internal state instead of local state
+                if (!this.running) {
+                    console.log('Starting animation (standard)');
+                    this.startAnimation();
+                }
+            };
+
+            const stopAnimation = () => {
+                // Use lifViewer's internal state instead of local state
+                if (this.running) {
+                    console.log('Stopping animation (standard)');
+
+                    // Small delay to prevent rapid toggling
+                    animationTimeoutId = setTimeout(() => {
+                        // Double-check state before stopping
+                        if (this.running) {
+                            this.stopAnimation();
+                        }
+                        animationTimeoutId = null;
+                    }, 100);
+                }
+            };
+
+            this.canvas.addEventListener('mouseenter', startAnimation, { passive: true });
+            this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+            // Also add events to static image for comprehensive coverage
+            this.img.addEventListener('mouseenter', startAnimation, { passive: true });
+            this.img.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+            this.canvas.setAttribute('data-lif-events-added', 'true');
+            console.log('Standard event handlers configured');
+        }
+    }
 
     async replaceKeys(obj, oldKeys, newKeys) {
         if (typeof obj !== 'object' || obj === null) {
@@ -1285,10 +1735,21 @@ class lifViewer {
     }
 
     resizeCanvasToContainer() {
-        // Get the parent container dimensions
-        const parent = this.container;
+        const config = this.layoutConfig;
 
-        // Try to find the original image in the container to match its dimensions
+        if (config.preventResizing) {
+            // For picture elements and aspect ratio containers, 
+            // prevent automatic resizing and use target dimensions
+            const dimensions = this.getEffectiveDimensions();
+            this.canvas.width = dimensions.width;
+            this.canvas.height = dimensions.height;
+
+            console.log(`Layout-aware canvas sizing (${this.layoutMode}): ${dimensions.width}x${dimensions.height}`);
+            return;
+        }
+
+        // Standard resizing behavior for normal layouts
+        const parent = this.container;
         const originalImg = parent.querySelector('img[data-lif-button-added="true"]');
 
         if (originalImg) {
@@ -1299,7 +1760,7 @@ class lifViewer {
             this.canvas.width = displayedWidth;
             this.canvas.height = displayedHeight;
 
-            console.log(`Canvas resized to match original image: ${displayedWidth}x${displayedHeight}`);
+            console.log(`Standard canvas resizing: ${displayedWidth}x${displayedHeight}`);
         } else {
             // Fallback to current behavior
             this.canvas.width = this.img.width;
