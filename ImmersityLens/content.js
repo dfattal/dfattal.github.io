@@ -125,6 +125,15 @@ let scrollHandler = null;
 const STORAGE_KEY = 'lifExtensionEnabled';
 const CORS_INFO_SHOWN_KEY = 'lifCorsInfoShown';
 
+// Z-index configuration - Centralized for easy maintenance
+const Z_INDEX_CONFIG = {
+    BUTTON: 5000,           // LIF conversion buttons
+    BUTTON_ZONE: 5000,      // Button container zones
+    PROCESSING_OVERLAY: 5000, // Loading overlays during conversion
+    CANVAS: 4999,           // Canvas elements (passed to lifViewer)
+    IMAGE: 4999             // Post-conversion image elements (passed to lifViewer)
+};
+
 // 🎨 BUTTON STYLING SYSTEM - Modern gradient design with animation states
 function injectStyles() {
     const style = document.createElement('style');
@@ -141,7 +150,7 @@ function injectStyles() {
             font-size: 12px;
             font-weight: bold;
             cursor: pointer;
-            z-index: 999999;
+            z-index: ${Z_INDEX_CONFIG.BUTTON};
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             transition: all 0.3s ease;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -156,7 +165,7 @@ function injectStyles() {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-            z-index: 9999999;
+            z-index: ${Z_INDEX_CONFIG.BUTTON};
         }
         
         .lif-converter-btn.processing {
@@ -232,7 +241,7 @@ function injectStyles() {
             justify-content: center;
             color: white;
             font-size: 14px;
-            z-index: 9999;
+            z-index: ${Z_INDEX_CONFIG.PROCESSING_OVERLAY};
         }
         
         .lif-spinner {
@@ -256,7 +265,7 @@ function injectStyles() {
             right: 0;
             width: 80px;
             height: 50px;
-            z-index: 999998;
+            z-index: ${Z_INDEX_CONFIG.BUTTON_ZONE};
             pointer-events: none;
         }
         
@@ -806,7 +815,7 @@ async function convertTo3D(img, button) {
                     justify-content: center;
                     color: white;
                     font-size: 14px;
-                    z-index: 999998;
+                    z-index: 5000;
                 `;
 
                 const layoutType = currentPictureElement ? 'picture element' :
@@ -821,7 +830,7 @@ async function convertTo3D(img, button) {
                 }
             } else {
                 // For non-picture elements, use the default CSS positioning (fills container)
-                overlay.style.zIndex = '999998';
+                overlay.style.zIndex = Z_INDEX_CONFIG.PROCESSING_OVERLAY;
                 console.log('Using default overlay positioning for regular image');
             }
 
@@ -1076,7 +1085,9 @@ async function convertTo3D(img, button) {
                     width: effectiveWidth,
                     height: effectiveHeight,
                     autoplay: true,
-                    mouseOver: true
+                    mouseOver: true,
+                    canvasZIndex: Z_INDEX_CONFIG.CANVAS,
+                    imageZIndex: Z_INDEX_CONFIG.IMAGE
                 }
             );
 
@@ -1121,7 +1132,7 @@ async function convertTo3D(img, button) {
                             zone.style.position = 'absolute';
                             zone.style.top = '8px';
                             zone.style.right = '8px';
-                            zone.style.zIndex = '9999999';
+                            zone.style.zIndex = Z_INDEX_CONFIG.BUTTON_ZONE;
                             zone.style.pointerEvents = 'auto';
                         }
                     });
@@ -2491,7 +2502,7 @@ function addConvertButton(img) {
     // Add hover protection
     button.addEventListener('mouseenter', (e) => {
         e.stopPropagation();
-        button.style.zIndex = '9999999';
+        button.style.zIndex = Z_INDEX_CONFIG.BUTTON;
     });
 
     button.addEventListener('mouseleave', (e) => {
@@ -2530,7 +2541,7 @@ function addConvertButton(img) {
         buttonZone.style.position = 'absolute';
         buttonZone.style.top = '8px';
         buttonZone.style.right = '8px';
-        buttonZone.style.zIndex = '99999999';
+        buttonZone.style.zIndex = Z_INDEX_CONFIG.BUTTON_ZONE;
         buttonZone.style.pointerEvents = 'auto';
 
         if (hasImageHoverBehaviors) {
@@ -2549,7 +2560,7 @@ function addConvertButton(img) {
         buttonZone.style.position = 'absolute';
         buttonZone.style.top = '0';
         buttonZone.style.right = '0';
-        buttonZone.style.zIndex = '99999999'; // Much higher z-index to ensure it's on top
+        buttonZone.style.zIndex = Z_INDEX_CONFIG.BUTTON_ZONE; // Higher z-index to ensure it's on top of content
         buttonZone.style.pointerEvents = 'auto'; // Allow pointer events so button can receive clicks
 
         // Use appropriate sizing - larger if hover behaviors detected, standard otherwise
@@ -2814,9 +2825,27 @@ function setupScrollHandler() {
 
                     // 🔧 STATE VALIDATION - Check for tracking flags without actual buttons
                     if (img.dataset && img.dataset.lifButtonAdded) {
-                        const buttonExists = img.closest('div')?.querySelector('.lif-converter-btn') ||
+                        // Enhanced button detection for various layout patterns
+                        const buttonExists =
+                            // Standard: Button inside image container
+                            img.closest('div')?.querySelector('.lif-converter-btn') ||
                             img.parentElement?.querySelector('.lif-button-zone') ||
-                            img.closest('[class*="lif-"]');
+                            // Overlay: Button zone as sibling (CNN pattern)
+                            img.closest('.image__container')?.parentElement?.querySelector('.lif-button-zone') ||
+                            img.closest('.container__item-media')?.querySelector('.lif-button-zone') ||
+                            // General: Any LIF-related element in the area
+                            img.closest('[class*="lif-"]') ||
+                            // Broader search: Look up 3 levels for button zones
+                            (() => {
+                                let element = img.parentElement;
+                                for (let i = 0; i < 3 && element; i++) {
+                                    const foundButton = element.querySelector('.lif-converter-btn') ||
+                                        element.querySelector('.lif-button-zone');
+                                    if (foundButton) return foundButton;
+                                    element = element.parentElement;
+                                }
+                                return null;
+                            })();
 
                         if (!buttonExists) {
                             console.log('🔧 Scroll fix: Re-processing image with stale tracking:', img.src?.substring(0, 50) + '...');

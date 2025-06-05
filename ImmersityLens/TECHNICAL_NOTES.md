@@ -1395,18 +1395,18 @@ const shouldSkip = evaluateWithPreferences(img, userPrefs);
 
 **Fix Applied:**
 ```javascript
-// Canvas z-index: 999999 (above overlays)
-// Image z-index: 999998 (above overlays)
+// Canvas z-index: 4999 (behind buttons)
+// Image z-index: 4999 (behind buttons)
 
 this.canvas.style.cssText = `
     // ... other styles ...
-    z-index: 999999;
+    z-index: 4999;
     // ... other styles ...
 `;
 
 this.img.style.cssText = `
     // ... other styles ...  
-    z-index: 999998;
+    z-index: 4999;
     // ... other styles ...
 `;
 ```

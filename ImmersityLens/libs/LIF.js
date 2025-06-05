@@ -604,6 +604,10 @@ class lifViewer {
         this.layoutAnalysis = options.layoutAnalysis || null;
         this.height = height;
 
+        // Z-index configuration properties for maintainability
+        this.canvasZIndex = options.canvasZIndex || 4999;
+        this.imageZIndex = options.imageZIndex || 4999;
+
         // Get layout-specific configuration
         this.layoutConfig = this.getLayoutConfiguration();
 
@@ -715,7 +719,7 @@ class lifViewer {
                 position: absolute;
                 top: 0;
                 left: 0;
-                z-index: 999999;
+                z-index: ${this.canvasZIndex};
                 display: none;
                 pointer-events: auto;
                 cursor: pointer;
@@ -730,7 +734,7 @@ class lifViewer {
                 position: absolute;
                 top: 0;
                 left: 0;
-                z-index: 999998;
+                z-index: ${this.imageZIndex};
                 display: none;
                 pointer-events: auto;
                 cursor: pointer;
