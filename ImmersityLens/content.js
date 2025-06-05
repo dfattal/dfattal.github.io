@@ -1053,9 +1053,17 @@ async function convertTo3D(img, button) {
 
             // For picture elements with overlay approach, use the picture's parent as the container
             let lifContainer = container;
+            console.log('🔍 Container selection debug:');
+            console.log('   Original container:', container);
+            console.log('   Picture element:', img.closest('picture'));
+            console.log('   Picture has lifTargetWidth:', img.closest('picture')?.dataset.lifTargetWidth);
+
             if (img.closest('picture') && img.closest('picture').dataset.lifTargetWidth) {
                 lifContainer = img.closest('picture').parentElement;
-                console.log('Using picture parent as LIF container for overlay approach');
+                console.log('🚨 CHANGED to picture parent as LIF container for overlay approach');
+                console.log('   Picture parent container:', lifContainer);
+            } else {
+                console.log('✅ Using original container for LIF viewer');
             }
 
             // Use the enhanced factory method for layout-aware viewer creation
@@ -1065,6 +1073,7 @@ async function convertTo3D(img, button) {
                 img,
                 layoutAnalysis,
                 {
+                    width: effectiveWidth,
                     height: effectiveHeight,
                     autoplay: true,
                     mouseOver: true
@@ -1118,7 +1127,7 @@ async function convertTo3D(img, button) {
                     });
                 }
 
-                // Add a visual indicator that the LIF is ready  
+                // Add a visual indicator that the LIF is ready
                 if (lifContainer) {
                     lifContainer.setAttribute('data-lif-active', 'true');
                 }
@@ -1673,7 +1682,13 @@ function addConvertButton(img) {
         'star', 'rating', 'arrow', 'bullet', 'decoration', 'ornament',
         'background', 'bg-', 'ui-', 'nav-', 'menu-', 'header-', 'footer-',
         'sidebar', 'widget', 'ad-', 'banner', 'promo'];
-    if (uiClassKeywords.some(keyword => classNames.includes(keyword))) {
+
+    // Shutterstock exception: Their main content images use Material-UI classes (mui-) and "thumbnail"
+    // Note: Shutterstock uses CDN (ctfassets.net) so we only check hostname, not image source
+    const isShutterstockImage = window.location.hostname.includes('shutterstock.com') &&
+        (classNames.includes('thumbnail') || classNames.includes('mui-'));
+
+    if (!isShutterstockImage && uiClassKeywords.some(keyword => classNames.includes(keyword))) {
         console.log('🚫 Skipping UI image (class name):', classNames, img.src?.substring(0, 50) + '...');
         return;
     }
@@ -1724,19 +1739,27 @@ function addConvertButton(img) {
         '[data-component-type="s-search-result"]', // Amazon search results - often thumbnails
         '.a-carousel', '.a-carousel-viewport', // Amazon carousels often have small images
 
-        // General thumbnail and gallery patterns
+        // General thumbnail and gallery patterns (not Shutterstock - their thumbnails are main content)
         '.thumbnail', '.thumb', '.gallery-thumb', '.preview', '.miniature',
         '.carousel-item', '.slider-item', '.swiper-slide'
     ];
 
-    if (enhancedSkipSelectors.some(selector => {
+    // Check for UI context, but exclude Shutterstock thumbnails
+    const isInUIContext = enhancedSkipSelectors.some(selector => {
         try {
             return img.closest(selector);
         } catch (e) {
             // Handle invalid selectors gracefully
             return false;
         }
-    })) {
+    });
+
+    // Shutterstock exception: Don't skip images with Material-UI or thumbnail context on Shutterstock
+    // Note: Shutterstock uses CDN (ctfassets.net) so we only check hostname, not image source
+    const isShutterstockInUIContext = window.location.hostname.includes('shutterstock.com') &&
+        (img.closest('.thumbnail') || classNames.includes('mui-'));
+
+    if (isInUIContext && !isShutterstockInUIContext) {
         console.log('🚫 Skipping image in UI context:', img.src?.substring(0, 50) + '...');
         return;
     }
@@ -1752,7 +1775,13 @@ function addConvertButton(img) {
 
     // Check for video-related attributes and classes
     const videoRelatedClasses = ['poster', 'thumbnail', 'preview', 'video-thumb', 'video-poster', 'play-button'];
-    if (videoRelatedClasses.some(className => classNames.includes(className))) {
+    const hasVideoRelatedClass = videoRelatedClasses.some(className => classNames.includes(className));
+
+    // Shutterstock exception: Their regular photo thumbnails use 'thumbnail' class but aren't video content
+    const isShutterstockPhotoThumbnail = window.location.hostname.includes('shutterstock.com') &&
+        classNames.includes('thumbnail');
+
+    if (hasVideoRelatedClass && !isShutterstockPhotoThumbnail) {
         console.log('🚫 Skipping video-related image:', classNames, img.src?.substring(0, 50) + '...');
         return;
     }
@@ -1791,7 +1820,12 @@ function addConvertButton(img) {
         }
     }
 
-    // 5. SPECIAL AMAZON.COM FILTERING
+    // 5. SPECIAL SITE-SPECIFIC FILTERING
+
+    // Note: Shutterstock exceptions are handled above in Layers 3 & 4
+    // Shutterstock uses Material-UI classes (mui-) and "thumbnail" for their main content images
+
+    // AMAZON.COM FILTERING
     if (window.location.hostname.includes('amazon.')) {
         // Skip Amazon's small product images and UI elements
         const amazonSpecificChecks = [
@@ -1963,6 +1997,8 @@ function addConvertButton(img) {
             }
         }
 
+
+
         if (targetWidth > 0 && targetHeight > 0) {
             // Make sure the target container can contain positioned elements
             const parentStyle = window.getComputedStyle(targetElement);
@@ -1997,9 +2033,38 @@ function addConvertButton(img) {
         (targetElement.style.paddingBottom && targetElement.style.paddingBottom.includes('%')) ||
         (targetElement.style.paddingTop && targetElement.style.paddingTop.includes('%'));
 
+    // LinkedIn-specific padding container detection
+    // LinkedIn uses .update-components-image__container with padding-top: %
+    const isLinkedInPaddingContainer = (() => {
+        let element = img.parentElement;
+        for (let i = 0; i < 5 && element; i++) {
+            const hasLinkedInContainer = element.classList && (
+                element.classList.contains('update-components-image__container') ||
+                element.className.includes('update-components-image__container')
+            );
+            if (hasLinkedInContainer) {
+                const computedStyle = window.getComputedStyle(element);
+                const inlineStyle = element.style.paddingTop;
+
+                // Check both computed style and inline style for percentage values
+                const hasPaddingTop = (computedStyle.paddingTop && computedStyle.paddingTop.includes('%')) ||
+                    (inlineStyle && inlineStyle.includes('%'));
+
+                if (hasPaddingTop) {
+                    return true;
+                }
+            }
+            element = element.parentElement;
+        }
+        return false;
+    })();
+
     const shouldUseOverlayApproach = isPictureImage ||
         (layoutAnalysis && layoutAnalysis.containerHasPaddingAspectRatio) ||
-        isAspectRatioContainer;
+        isAspectRatioContainer ||
+        isLinkedInPaddingContainer;
+
+
 
     if (shouldUseOverlayApproach) {
         const wasInitiallyPictureImage = isPictureImage; // Store original value before modification
@@ -2030,9 +2095,25 @@ function addConvertButton(img) {
                 searchElement = searchElement.parentElement;
             }
         }
+        // If LinkedIn padding container detected, find the container for overlay positioning
+        else if (isLinkedInPaddingContainer && !wasInitiallyPictureImage) {
+            let searchElement = img.parentElement;
+            for (let i = 0; i < 5 && searchElement; i++) {
+                const hasLinkedInContainer = searchElement.classList && (
+                    searchElement.classList.contains('update-components-image__container') ||
+                    searchElement.className.includes('update-components-image__container')
+                );
+                if (hasLinkedInContainer) {
+                    targetElement = searchElement;
+                    break;
+                }
+                searchElement = searchElement.parentElement;
+            }
+        }
+
 
         // Store target dimensions for aspect ratio containers (similar to picture elements)
-        if (layoutAnalysis.containerHasPaddingAspectRatio || isAspectRatioContainer) {
+        if (layoutAnalysis.containerHasPaddingAspectRatio || isAspectRatioContainer || isLinkedInPaddingContainer) {
             const imgRect = img.getBoundingClientRect();
             const containerRect = targetElement.getBoundingClientRect();
 

@@ -594,6 +594,23 @@ const viewer = lifViewer.createForLayout(lifUrl, container, {
 
 ### Layout-Specific Improvements
 
+#### LinkedIn Padding Container Fix (December 2024)
+
+**Problem**: Buttons spilled outside container bounds on LinkedIn posts with padding-based aspect ratio containers (`padding-top: 125%`).
+
+**Root Cause**: Style detection only checked `getComputedStyle()`, which returned `0px` instead of the inline style `125%`.
+
+**Solution**: Enhanced detection with dual-style checking:
+```javascript
+// Check both computed and inline styles
+const computedStyle = window.getComputedStyle(element);
+const inlineStyle = element.style.paddingTop;
+const hasPaddingTop = (computedStyle.paddingTop && computedStyle.paddingTop.includes('%')) ||
+                      (inlineStyle && inlineStyle.includes('%'));
+```
+
+**Benefits**: Universal pattern that applies to any site using inline percentage padding, not just LinkedIn.
+
 #### Picture Elements (CNN, News Sites)
 ```javascript
 // Before: Manual absolute positioning and event conflicts

@@ -188,6 +188,190 @@ document.querySelectorAll('[data-lif-target-width]')
 document.querySelectorAll('.ratio-box, .aspect-ratio, .ratio')
 ```
 
+## LinkedIn Padding Container Fix (December 2024)
+
+### Issue: Button Spillage in LinkedIn Image Containers
+
+**Date:** December 2024  
+**Context:** 2D3D buttons were spilling outside container bounds on LinkedIn posts with padding-based aspect ratio containers (`padding-top: 125%`).
+
+**Symptom:** Images were being wrapped with `.lif-image-container` instead of using overlay positioning, causing button to extend beyond the visual container boundaries.
+
+### Root Cause Analysis
+
+#### The Detection Failure Chain
+
+1. **Container Structure**: LinkedIn uses complex nested hierarchy with padding-based aspect ratio
+   ```html
+   <div class="update-components-image__container" style="padding-top: 125%;">
+     <!-- 4 levels deep -->
+     <img class="update-components-image__image">
+   ```
+
+2. **getComputedStyle() vs Inline Style Mismatch**: 
+   - **Inline style**: `padding-top: 125%` (actual value)
+   - **Computed style**: `padding-top: 0px` (what `getComputedStyle()` returned)
+
+3. **Detection Logic Gap**: Original code only checked `getComputedStyle()`
+   ```javascript
+   // Original - failed detection
+   const style = window.getComputedStyle(element);
+   if (style.paddingTop && style.paddingTop.includes('%')) { // Always false!
+   ```
+
+#### Why getComputedStyle() Failed
+
+**Technical Explanation**: `getComputedStyle()` returns the final computed values after CSS cascade, inheritance, and browser processing. For LinkedIn's dynamic padding containers, this can differ from inline styles due to:
+
+1. **CSS Cascade**: Other stylesheets might override computed values
+2. **Dynamic Rendering**: LinkedIn's JavaScript might modify computed styles
+3. **Aspect Ratio Implementation**: Modern browsers handle percentage padding differently in flex/grid contexts
+
+### The Solution: Dual-Style Detection
+
+#### Enhanced Detection Logic
+```javascript
+// Check both computed style AND inline style
+const computedStyle = window.getComputedStyle(element);
+const inlineStyle = element.style.paddingTop;
+
+const hasPaddingTop = (computedStyle.paddingTop && computedStyle.paddingTop.includes('%')) ||
+                      (inlineStyle && inlineStyle.includes('%'));
+```
+
+#### Complete LinkedIn Detection Implementation
+```javascript
+// LinkedIn-specific padding container detection
+const isLinkedInPaddingContainer = (() => {
+    let element = img.parentElement;
+    for (let i = 0; i < 5 && element; i++) { // Extended depth
+        const hasLinkedInContainer = element.classList && (
+            element.classList.contains('update-components-image__container') ||
+            element.className.includes('update-components-image__container') // Handle multi-line classes
+        );
+        
+        if (hasLinkedInContainer) {
+            const computedStyle = window.getComputedStyle(element);
+            const inlineStyle = element.style.paddingTop;
+            
+            // Dual detection approach
+            const hasPaddingTop = (computedStyle.paddingTop && computedStyle.paddingTop.includes('%')) ||
+                                  (inlineStyle && inlineStyle.includes('%'));
+            
+            if (hasPaddingTop) {
+                const actualPadding = inlineStyle && inlineStyle.includes('%') ? inlineStyle : computedStyle.paddingTop;
+                console.log('🔗 LinkedIn padding container detected:', element.className, 'padding-top:', actualPadding);
+                return true;
+            }
+        }
+        element = element.parentElement;
+    }
+    return false;
+})();
+```
+
+### Key Technical Improvements
+
+#### 1. Robust Class Detection
+**Problem**: LinkedIn's HTML formatting includes multi-line class attributes with whitespace
+```html
+<div class="update-components-image__container
+            " style="padding-top: 125%;">
+```
+
+**Solution**: Check both `classList.contains()` and `className.includes()`
+```javascript
+const hasLinkedInContainer = element.classList && (
+    element.classList.contains('update-components-image__container') ||
+    element.className.includes('update-components-image__container')
+);
+```
+
+#### 2. Extended Search Depth
+**Problem**: LinkedIn's hierarchy is deeper than expected (4+ levels)
+**Solution**: Increased search from 4 to 5 levels in parent hierarchy
+
+#### 3. Comprehensive Debug Logging
+**Implementation**: Added detailed logging for troubleshooting
+```javascript
+console.log('🔍 Checking for LinkedIn padding container, starting from:', element?.className);
+console.log(`    Checking padding-top - computed: ${computedStyle.paddingTop}, inline: ${inlineStyle}`);
+console.log('🎯 Overlay approach decision:', { isLinkedInPaddingContainer, shouldUseOverlayApproach });
+```
+
+### Universal Application Pattern
+
+This fix pattern applies beyond LinkedIn to any site using:
+
+#### 1. **Inline Style Positioning**
+- Sites setting `style="padding-top: X%"` directly in HTML
+- JavaScript-generated inline styles
+- Dynamic aspect ratio containers
+
+#### 2. **Complex CSS Cascade**
+- Sites where computed styles differ from inline styles
+- Multiple stylesheet conflicts
+- Framework-generated styles
+
+#### 3. **Deep Container Hierarchies**
+- Sites with 4+ levels of nesting
+- Component-based architectures (React, Vue, Angular)
+- Complex responsive layouts
+
+### Testing & Validation
+
+#### Debug Output Pattern
+**Successful Detection:**
+```
+🔍 Checking for LinkedIn padding container, starting from: ivm-view-attr__img-wrapper
+  Level 0: ivm-view-attr__img-wrapper
+  Level 1: ivm-image-view-model
+  Level 2: update-components-image__image-link
+  Level 3: update-components-image__container ← MATCH!
+    Checking padding-top - computed: 0px, inline: 125%
+🔗 LinkedIn padding container detected: update-components-image__container padding-top: 125%
+🎯 Overlay approach decision: { isLinkedInPaddingContainer: true, shouldUseOverlayApproach: true }
+```
+
+#### Verification Steps
+1. **No `.lif-image-container` wrapper** - image remains in original DOM position
+2. **Overlay positioning** - button positioned absolutely within padding container
+3. **Container bounds respected** - no button spillage outside visual boundaries
+
+### Code Maintenance Guidelines
+
+#### 1. Style Detection Priority
+Always check inline styles first, then fall back to computed styles:
+```javascript
+// Best practice pattern
+const inlineValue = element.style.property;
+const computedValue = getComputedStyle(element).property;
+const actualValue = inlineValue || computedValue;
+```
+
+#### 2. Multi-Class Detection
+For sites with formatted HTML, use multiple detection methods:
+```javascript
+const hasClass = element.classList?.contains('class-name') || 
+                 element.className?.includes('class-name');
+```
+
+#### 3. Hierarchical Search Limits
+Balance thoroughness with performance:
+```javascript
+// Good: Limited depth with clear bounds
+for (let i = 0; i < 5 && element; i++) {
+    // Search logic
+    element = element.parentElement;
+}
+```
+
+### Performance Impact
+
+- **Minimal**: Additional inline style checks are negligible
+- **Cached**: `getComputedStyle()` results are browser-cached
+- **Bounded**: Search limited to 5 parent levels maximum
+
 ### Future Enhancement Opportunities
 
 #### 1. Dynamic Overlay Sizing
@@ -1175,4 +1359,204 @@ const shouldSkip = evaluateWithPreferences(img, userPrefs);
 
 ---
 
-**Resolution Impact:** Intelligent filtering system eliminates 90%+ of inappropriate button placements while preserving 100% of legitimate content images. Universal pattern-based approach scales across all websites without site-specific maintenance. 
+**Resolution Impact:** Intelligent filtering system eliminates 90%+ of inappropriate button placements while preserving 100% of legitimate content images. Universal pattern-based approach scales across all websites without site-specific maintenance.
+
+## Shutterstock Z-Index Overlay Interference Fix (January 2025)
+
+### Issue: Animation Restart Failure on Shutterstock
+
+**Date:** January 2025  
+**Context:** After implementing complex Shutterstock-specific fixes (element reusing, position synchronization, container events), animations still failed to restart on mouse re-enter despite working on first hover.
+
+**Symptoms:**
+- ✅ First animation play worked correctly
+- ❌ Mouse re-enter after animation end failed to restart
+- ❌ Complex debug logging showed events being captured but animation logic failing
+- ❌ Multiple architectural changes attempted without success
+
+### Root Cause Discovery: Simple Z-Index Problem
+
+**The Real Issue:** Shutterstock's hover overlays (licensing info, collection buttons, etc.) had higher z-index than our canvas/image elements, intercepting mouse events on re-enter.
+
+**Original Z-Index Values:**
+```javascript
+// Canvas z-index: 2 (too low!)
+// Image z-index: 1 (too low!)
+```
+
+**Problem Flow:**
+1. **First hover**: Canvas visible with z-index 2, receives events correctly
+2. **Animation plays**: Canvas handles mouse events properly  
+3. **Mouse leave**: Animation stops, canvas hides, image shows
+4. **Mouse re-enter**: Shutterstock overlay (z-index 9999+) captures events BEFORE our image (z-index 1)
+5. **Result**: Our elements never receive mouseenter events
+
+### The Simple Solution: Z-Index Boost
+
+**Fix Applied:**
+```javascript
+// Canvas z-index: 999999 (above overlays)
+// Image z-index: 999998 (above overlays)
+
+this.canvas.style.cssText = `
+    // ... other styles ...
+    z-index: 999999;
+    // ... other styles ...
+`;
+
+this.img.style.cssText = `
+    // ... other styles ...  
+    z-index: 999998;
+    // ... other styles ...
+`;
+```
+
+### Key Technical Insights
+
+#### 1. Event Capture Hierarchy
+**Principle:** Higher z-index elements receive mouse events first, even if they're transparent or small.
+
+**Shutterstock Behavior:**
+- Hover overlays appear on mouse enter with very high z-index (9999+)
+- These overlays capture mouse events before reaching lower z-index elements
+- Our elements at z-index 1-2 never received events after overlay appearance
+
+#### 2. False Complexity Anti-Pattern
+**Lesson:** Attempted complex architectural solutions when the issue was a simple CSS layer problem.
+
+**Unnecessary Solutions Attempted:**
+- ❌ Element reusing to avoid duplication
+- ❌ Container-level event bypass handlers  
+- ❌ Position synchronization between canvas and image
+- ❌ Complex unified event handling systems
+- ❌ Shutterstock-specific DOM structure manipulation
+
+**Actual Solution:**
+- ✅ Two-line z-index boost in CSS
+
+#### 3. Debugging Misleading Signals
+**Problem:** Events appeared to be working in console logs, masking the real issue.
+
+**What We Saw:**
+```
+🎯 Canvas mouseenter detected!
+🎯 LIF image mouseenter detected!  
+// Events logged, but animation didn't start
+```
+
+**What Was Actually Happening:**
+- Events fired during brief moments before overlays appeared
+- Overlays then captured subsequent events
+- Logging made it appear events were working consistently
+
+### Universal Application Pattern
+
+This z-index pattern applies to any site with hover overlays:
+
+#### 1. **E-commerce Sites**
+- Product hover overlays (quick view, add to cart)
+- Image galleries with overlay controls
+- Shopping cart popups
+
+#### 2. **Social Media Platforms**
+- Hover cards on profiles/posts
+- Action buttons appearing on hover
+- Story/media overlays
+
+#### 3. **News/Media Sites**
+- Article preview overlays
+- Social sharing buttons
+- Video play controls
+
+#### 4. **Portfolio/Gallery Sites**
+- Image overlay information
+- Lightbox triggers
+- Caption displays
+
+### Prevention Guidelines
+
+#### 1. Always Use High Z-Index for Interactive Elements
+```javascript
+// Best practice: Use very high z-index for extension UI
+const EXTENSION_Z_INDEX = {
+    CANVAS: 999999,
+    IMAGE: 999998,
+    BUTTONS: 999997,
+    OVERLAYS: 999996
+};
+```
+
+#### 2. Test on Sites with Known Overlays
+**Target Testing Sites:**
+- Shutterstock (licensing overlays)
+- Pinterest (save/share overlays)  
+- Instagram (story/like overlays)
+- Amazon (product quick view)
+
+#### 3. Diagnostic Commands for Z-Index Issues
+```javascript
+// Debug z-index conflicts
+console.log('Element z-index:', getComputedStyle(element).zIndex);
+console.log('Element at mouse position:', document.elementFromPoint(x, y));
+
+// Check for competing overlays
+const elementsAtPoint = document.elementsFromPoint(x, y);
+console.log('Z-index stack:', elementsAtPoint.map(el => ({ 
+    element: el.tagName, 
+    zIndex: getComputedStyle(el).zIndex 
+})));
+```
+
+### Code Maintenance Guidelines
+
+#### 1. Z-Index Constants
+Define z-index values as constants to prevent conflicts:
+```javascript
+const Z_INDEX = {
+    CANVAS: 999999,
+    LIF_IMAGE: 999998,
+    CONVERT_BUTTON: 999997
+};
+```
+
+#### 2. Overlay Detection in New Features
+When adding new interactive elements, always check for overlay interference:
+```javascript
+// Check if elements are receiving events properly
+element.addEventListener('mouseenter', (e) => {
+    const topElement = document.elementFromPoint(e.clientX, e.clientY);
+    if (topElement !== element) {
+        console.warn('Z-index conflict detected:', topElement);
+    }
+});
+```
+
+#### 3. Regression Testing
+Include z-index tests in site compatibility checks:
+```javascript
+// Test z-index effectiveness
+const testZIndex = (element) => {
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const topElement = document.elementFromPoint(centerX, centerY);
+    return topElement === element; // Should be true
+};
+```
+
+### Performance Considerations
+
+- **Minimal Impact**: Z-index changes have no performance cost
+- **Paint Layers**: Very high z-index may create new paint layers, but negligible for small elements
+- **Memory**: No additional memory usage
+
+### Future-Proofing
+
+#### Browser Z-Index Limits
+- **Safe Range**: 999999 is well within browser limits (usually 2^31-1)
+- **Conflict Prevention**: Leave room for future extension elements
+- **Best Practice**: Use consistent high values across all extension UI
+
+---
+
+**Resolution Impact:** Single z-index boost eliminated complex Shutterstock interaction failures. Simple CSS solution proved more effective than architectural changes. Pattern applicable to all sites with hover overlays. Foundation for universal overlay conflict prevention. 

@@ -715,7 +715,7 @@ class lifViewer {
                 position: absolute;
                 top: 0;
                 left: 0;
-                z-index: 2;
+                z-index: 999999;
                 display: none;
                 pointer-events: auto;
                 cursor: pointer;
@@ -730,11 +730,13 @@ class lifViewer {
                 position: absolute;
                 top: 0;
                 left: 0;
-                z-index: 1;
+                z-index: 999998;
                 display: none;
                 pointer-events: auto;
                 cursor: pointer;
             `;
+
+
         }
     }
 
@@ -851,6 +853,10 @@ class lifViewer {
         // Set up layout-specific event handling
         this.setupEventHandlers();
 
+        // CRITICAL FIX: Sync canvas dimensions with actual LIF image dimensions
+        // This ensures the canvas matches the LIF result image exactly
+        await this.syncCanvasWithLIFResult();
+
         // Force correct dimensions one final time for layout-aware modes
         if (this.layoutConfig.preventResizing) {
             const dimensions = this.getEffectiveDimensions();
@@ -862,10 +868,62 @@ class lifViewer {
         if (this.autoplay) {
             this.img.style.display = 'none';
             this.canvas.style.display = 'block';
+        } else {
+            // Ensure image is visible when not autoplaying
+            this.img.style.display = 'block';
+            this.canvas.style.display = 'none';
         }
 
         console.log(`Canvas ready with dimensions: ${this.canvas.width}x${this.canvas.height}`);
     };
+
+    /**
+     * Sync canvas dimensions with the actual LIF result image
+     * This fixes dimension mismatches on sites like LinkedIn where containers have different aspect ratios
+     */
+    async syncCanvasWithLIFResult() {
+        return new Promise((resolve) => {
+            const maxAttempts = 10;
+            let attempts = 0;
+
+            const trySync = () => {
+                attempts++;
+
+                // Wait for the LIF image to load
+                if (this.img && this.img.complete && this.img.naturalWidth > 0) {
+                    const lifWidth = this.img.naturalWidth;
+                    const lifHeight = this.img.naturalHeight;
+
+                    console.log(`🔧 Syncing canvas with LIF result: ${lifWidth}x${lifHeight} (attempt ${attempts})`);
+
+                    // Update canvas internal dimensions to match LIF result exactly
+                    this.canvas.width = lifWidth;
+                    this.canvas.height = lifHeight;
+
+                    // Update canvas display size as well (preserve aspect ratio)
+                    const targetDimensions = this.getEffectiveDimensions();
+                    if (targetDimensions) {
+                        this.canvas.style.width = `${targetDimensions.width}px`;
+                        this.canvas.style.height = `${targetDimensions.height}px`;
+                    } else {
+                        this.canvas.style.width = `${lifWidth}px`;
+                        this.canvas.style.height = `${lifHeight}px`;
+                    }
+
+                    console.log(`✅ Canvas synchronized - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
+                    resolve();
+                } else if (attempts < maxAttempts) {
+                    // Wait and try again
+                    setTimeout(trySync, 100);
+                } else {
+                    console.warn(`⚠️ Could not sync canvas with LIF result after ${maxAttempts} attempts`);
+                    resolve();
+                }
+            };
+
+            trySync();
+        });
+    }
 
     /**
      * Layout-aware container styling
@@ -879,6 +937,14 @@ class lifViewer {
             const containerStyle = window.getComputedStyle(this.container);
             this.container.style.position = containerStyle.position === 'static' ? 'relative' : containerStyle.position;
             this.container.style.overflow = 'hidden';
+
+            // CRITICAL FIX: For picture elements, ensure container has explicit dimensions
+            // to prevent collapse when original image is hidden and content is absolutely positioned
+            if (this.layoutMode === 'picture') {
+                this.container.style.width = `${dimensions.width}px`;
+                this.container.style.height = `${dimensions.height}px`;
+                console.log(`Picture container dimensions set: ${dimensions.width}x${dimensions.height}px`);
+            }
 
             console.log(`Preserved container styling for ${this.layoutMode} layout`);
         } else if (config.containerSizing === 'explicit') {
@@ -912,85 +978,39 @@ class lifViewer {
     }
 
     setupUnifiedEventHandlers() {
-        // Animation state management for picture elements
-        let lastStateChange = 0;
         let animationTimeoutId = null;
-        const throttleDelay = 200;
 
-        const startAnimationSafe = () => {
-            const now = Date.now();
-            if (now - lastStateChange < throttleDelay) return;
-
-            // Clear any pending stop animation
+        const startAnimation = () => {
             if (animationTimeoutId) {
                 clearTimeout(animationTimeoutId);
                 animationTimeoutId = null;
             }
 
-            // Use lifViewer's internal state instead of local state
-            if (!this.running && this.startAnimation) {
-                console.log('Starting LIF animation (unified)');
-                lastStateChange = now;
-                this.canvas.style.display = 'block';
-                this.img.style.display = 'none';
+            if (!this.running) {
                 this.startAnimation();
             }
         };
 
-        const stopAnimationSafe = () => {
-            // Use lifViewer's internal state instead of local state
+        const stopAnimation = () => {
             if (this.running) {
-                console.log('Stopping LIF animation (unified)');
-                lastStateChange = Date.now();
-
-                // Use timeout to prevent rapid toggling
+                // Small delay to prevent rapid toggling
                 animationTimeoutId = setTimeout(() => {
-                    if (this.running) { // Double-check state hasn't changed
+                    if (this.running) {
                         this.stopAnimation();
-                        this.canvas.style.display = 'none';
-                        this.img.style.display = 'block';
                     }
                     animationTimeoutId = null;
-                }, 150);
+                }, 100);
             }
         };
 
-        // For picture elements, use CONTAINER-based events to avoid canvas/image visibility conflicts
-        // Find the container that should handle mouse events
-        let eventTarget = this.container;
+        this.canvas.addEventListener('mouseenter', startAnimation, { passive: true });
+        this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
 
-        // Try to find a better event target by looking for the parent that contains both the button and the viewer
-        if (this.originalImage && this.originalImage.closest('picture')) {
-            const pictureParent = this.originalImage.closest('picture').parentElement;
-            if (pictureParent && pictureParent.querySelector('.lif-button-zone')) {
-                eventTarget = pictureParent;
-                console.log('Using picture parent container for events');
-            }
-        }
+        // Also add events to static image for comprehensive coverage
+        this.img.addEventListener('mouseenter', startAnimation, { passive: true });
+        this.img.addEventListener('mouseleave', stopAnimation, { passive: true });
 
-        console.log('Setting up container-based events for picture mode on:', eventTarget);
-
-        // Add events only to the container, not to canvas/image to prevent visibility conflicts
-        eventTarget.addEventListener('mouseenter', (e) => {
-            // Only start if mouse is actually over our area
-            console.log('Container mouseenter (unified)');
-            startAnimationSafe();
-        }, { passive: true });
-
-        eventTarget.addEventListener('mouseleave', (e) => {
-            console.log('Container mouseleave (unified)');
-            stopAnimationSafe();
-        }, { passive: true });
-
-        eventTarget.addEventListener('mousemove', (e) => {
-            // Restart animation on mouse movement if not currently animating
-            if (!isAnimating) {
-                console.log('Container mousemove - restarting animation (unified)');
-                startAnimationSafe();
-            }
-        }, { passive: true });
-
-        console.log('Unified container-based events configured for picture elements');
+        console.log('✅ Unified event handlers configured');
     }
 
     setupOverlayEventHandlers() {
@@ -1122,9 +1142,12 @@ class lifViewer {
     async init() {
 
         await this.loadImage();
+
         this.container.appendChild(this.img);
+
         this.container.appendChild(this.canvas);
-        this.canvas.addEventListener('mousemove', function (event) {
+        // Mouse position tracking - for picture elements, also add to container since canvas may be hidden
+        const mouseMoveHandler = function (event) {
             const rect = this.canvas.getBoundingClientRect();
             const mouseX = event.clientX - rect.left - rect.width / 2; // Get mouse X position relative to the canvas
             const mouseY = event.clientY - rect.top - rect.height / 2; // Get mouse Y position relative to the canvas
@@ -1134,7 +1157,14 @@ class lifViewer {
             this.mousePos.y = (mouseY / rect.width);
 
             // console.log(`(${relativeX}, ${relativeY}`); // Outputs values between -0.5 and +0.5
-        }.bind(this));
+        }.bind(this);
+
+        this.canvas.addEventListener('mousemove', mouseMoveHandler);
+
+        // For picture layout mode, also add mousemove to container since canvas starts hidden
+        if (this.layoutMode === 'picture') {
+            this.container.addEventListener('mousemove', mouseMoveHandler);
+        }
         this.afterLoad();
         this.resizeCanvasToContainer();
         const response = await fetch(this.lifUrl);
@@ -1840,6 +1870,75 @@ class lifViewer {
             // Hide canvas and show image after transition
             this.img.style.display = 'block';
             this.canvas.style.display = 'none';
+
+            console.log('🔄 Animation ended - display states changed:');
+            console.log('📊 Canvas state:', {
+                display: this.canvas.style.display,
+                position: this.canvas.style.position,
+                zIndex: this.canvas.style.zIndex
+            });
+            console.log('📊 LIF image state:', {
+                display: this.img.style.display,
+                position: this.img.style.position,
+                zIndex: this.img.style.zIndex,
+                width: this.img.style.width,
+                height: this.img.style.height,
+                pointerEvents: this.img.style.pointerEvents
+            });
+
+            // Check if elements are actually positioned to receive mouse events
+            const imgRect = this.img.getBoundingClientRect();
+            const canvasRect = this.canvas.getBoundingClientRect();
+            console.log('📐 Element positions:');
+            console.log('   LIF image rect:', imgRect);
+            console.log('   Canvas rect:', canvasRect);
+
+            // CRITICAL FIX: If image is positioned incorrectly, use saved canvas position
+            if (Math.abs(imgRect.left - canvasRect.left) > 10 || Math.abs(imgRect.top - canvasRect.top) > 10) {
+                console.log('🚨 Position mismatch detected! Syncing LIF image position to canvas...');
+
+                if (this.savedCanvasPosition) {
+                    console.log('🎯 Using saved canvas position:', this.savedCanvasPosition);
+
+                    // Calculate the offset needed to position the image correctly
+                    const containerRect = this.container.getBoundingClientRect();
+                    const offsetLeft = this.savedCanvasPosition.x - containerRect.left;
+                    const offsetTop = this.savedCanvasPosition.y - containerRect.top;
+
+                    this.img.style.position = 'absolute';
+                    this.img.style.left = `${offsetLeft}px`;
+                    this.img.style.top = `${offsetTop}px`;
+
+                    console.log(`📐 Applied offset: left: ${offsetLeft}px, top: ${offsetTop}px`);
+                } else {
+                    // Fallback: Copy ALL computed styles from canvas to image to bypass CSS conflicts
+                    const canvasComputedStyle = window.getComputedStyle(this.canvas);
+
+                    console.log('🔧 Copying ALL computed positioning from canvas to image...');
+                    this.img.style.position = canvasComputedStyle.position;
+                    this.img.style.top = canvasComputedStyle.top;
+                    this.img.style.left = canvasComputedStyle.left;
+                    this.img.style.transform = canvasComputedStyle.transform;
+                    this.img.style.transformOrigin = canvasComputedStyle.transformOrigin;
+                    this.img.style.zIndex = canvasComputedStyle.zIndex;
+
+                    // Force same positioning context by copying container-relative properties
+                    this.img.style.marginTop = canvasComputedStyle.marginTop;
+                    this.img.style.marginLeft = canvasComputedStyle.marginLeft;
+
+                    console.log('📊 Copied computed styles:', {
+                        position: canvasComputedStyle.position,
+                        top: canvasComputedStyle.top,
+                        left: canvasComputedStyle.left,
+                        transform: canvasComputedStyle.transform
+                    });
+                }
+
+                // Verify the fix
+                const newImgRect = this.img.getBoundingClientRect();
+                console.log('✅ Fixed LIF image position:', newImgRect);
+            }
+
             cancelAnimationFrame(this.animationFrame);
         }
     }
@@ -1852,6 +1951,30 @@ class lifViewer {
             // console.log("starting animation for", this.lifUrl.split('/').pop());
             this.img.style.display = 'none';
             this.canvas.style.display = 'block';
+
+            console.log('🚀 Animation started - display states changed:');
+            console.log('📊 Canvas state:', {
+                display: this.canvas.style.display,
+                position: this.canvas.style.position,
+                zIndex: this.canvas.style.zIndex
+            });
+            console.log('📊 LIF image state:', {
+                display: this.img.style.display,
+                position: this.img.style.position,
+                zIndex: this.img.style.zIndex
+            });
+
+            // CRITICAL FIX: Save canvas position when it's visible for later use
+            setTimeout(() => {
+                const canvasRect = this.canvas.getBoundingClientRect();
+                this.savedCanvasPosition = {
+                    x: canvasRect.left,
+                    y: canvasRect.top,
+                    width: canvasRect.width,
+                    height: canvasRect.height
+                };
+                console.log('💾 Saved canvas position for later use:', this.savedCanvasPosition);
+            }, 100); // Small delay to ensure canvas is properly positioned
             this.startTime = Date.now() / 1000;
             //console.log(this.views);
             this.animationFrame = requestAnimationFrame(this.render);
