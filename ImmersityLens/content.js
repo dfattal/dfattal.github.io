@@ -723,6 +723,24 @@ async function convertTo3D(img, button) {
             console.log('Picture element detected in convertTo3D - container set to:', container?.className || 'element');
         }
 
+        // Check for aspect ratio containers that might have stored target dimensions
+        if (!overlayContainer) {
+            // Look for aspect ratio containers in the parent hierarchy
+            let searchElement = img.parentElement;
+            for (let i = 0; i < 3 && searchElement; i++) {
+                if (searchElement.dataset.lifTargetWidth && searchElement.dataset.lifTargetHeight) {
+                    overlayContainer = searchElement;
+                    console.log('Found aspect ratio container with stored dimensions:', {
+                        element: searchElement.className || searchElement.tagName,
+                        targetWidth: searchElement.dataset.lifTargetWidth,
+                        targetHeight: searchElement.dataset.lifTargetHeight
+                    });
+                    break;
+                }
+                searchElement = searchElement.parentElement;
+            }
+        }
+
         // Special handling for Facebook-style layouts that may have been unwrapped
         const layoutAnalysis = analyzeLayoutPattern(img.parentElement, img);
         if (layoutAnalysis?.isFacebookStyle && !overlayContainer) {
@@ -757,17 +775,21 @@ async function convertTo3D(img, button) {
             overlay.className = 'lif-processing-overlay';
             overlay.innerHTML = '<div class="lif-spinner"></div>Converting to 3D...';
 
-            // Debug: Check if we have a picture element or Facebook layout
+            // Debug: Check if we have a picture element, Facebook layout, or aspect ratio container using overlay approach
             const currentPictureElement = img.closest('picture');
+            const isAspectRatioContainer = overlayContainer.dataset.lifTargetWidth && overlayContainer.dataset.lifTargetHeight;
+
             console.log('Overlay creation debug:', {
                 hasPictureElement: !!currentPictureElement,
                 isFacebookStyle: layoutAnalysis?.isFacebookStyle,
+                isAspectRatioContainer: !!isAspectRatioContainer,
                 overlayContainer: overlayContainer.className || overlayContainer.tagName,
-                pictureElementClass: currentPictureElement?.className || 'none'
+                pictureElementClass: currentPictureElement?.className || 'none',
+                hasStoredDimensions: !!isAspectRatioContainer
             });
 
-            // For picture element overlays or Facebook layouts, position absolutely to cover the image
-            if (currentPictureElement || layoutAnalysis?.isFacebookStyle) {
+            // For picture element overlays, Facebook layouts, or aspect ratio containers, position absolutely to cover the image
+            if (currentPictureElement || layoutAnalysis?.isFacebookStyle || isAspectRatioContainer) {
                 // Get dimensions from the image
                 const imgRect = img.getBoundingClientRect();
                 const containerRect = overlayContainer.getBoundingClientRect();
@@ -792,7 +814,10 @@ async function convertTo3D(img, button) {
                     z-index: 999998;
                 `;
 
-                console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (picture or Facebook layout)`);
+                const layoutType = currentPictureElement ? 'picture element' :
+                    layoutAnalysis?.isFacebookStyle ? 'Facebook layout' :
+                        'aspect ratio container';
+                console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (${layoutType})`);
 
                 // Ensure the overlay container can contain absolutely positioned elements
                 const containerStyle = window.getComputedStyle(overlayContainer);
@@ -939,7 +964,7 @@ async function convertTo3D(img, button) {
                 });
             }
 
-            // Also check for picture element overlay
+            // Also check for picture element overlay and aspect ratio container overlays
             const pictureParent = img.closest('picture')?.parentElement;
             if (pictureParent) {
                 const pictureOverlay = pictureParent.querySelector('.lif-processing-overlay');
@@ -948,6 +973,17 @@ async function convertTo3D(img, button) {
                 }
                 pictureParent.classList.remove('processing');
             }
+
+            // Check for aspect ratio container overlays that might have stored dimensions
+            const aspectRatioContainers = document.querySelectorAll('[data-lif-target-width]');
+            aspectRatioContainers.forEach(aspectContainer => {
+                const aspectOverlay = aspectContainer.querySelector('.lif-processing-overlay');
+                if (aspectOverlay) {
+                    console.log('Removing aspect ratio container overlay');
+                    aspectOverlay.remove();
+                    aspectContainer.classList.remove('processing');
+                }
+            });
 
             // Create the LIF viewer with effective dimensions
             // For padding-based layouts, prioritize container dimensions over image dimensions
@@ -1547,7 +1583,7 @@ async function convertTo3D(img, button) {
             });
         }
 
-        // Also check for picture element overlay
+        // Also check for picture element overlay and aspect ratio container overlays
         const pictureParent = img.closest('picture')?.parentElement;
         if (pictureParent) {
             const pictureOverlay = pictureParent.querySelector('.lif-processing-overlay');
@@ -1556,6 +1592,17 @@ async function convertTo3D(img, button) {
             }
             pictureParent.classList.remove('processing');
         }
+
+        // Check for aspect ratio container overlays that might have stored dimensions
+        const aspectRatioContainers = document.querySelectorAll('[data-lif-target-width]');
+        aspectRatioContainers.forEach(aspectContainer => {
+            const aspectOverlay = aspectContainer.querySelector('.lif-processing-overlay');
+            if (aspectOverlay) {
+                console.log('Removing aspect ratio container overlay (error handling)');
+                aspectOverlay.remove();
+                aspectContainer.classList.remove('processing');
+            }
+        });
 
         // Provide specific error messages based on error type
         let errorMessage = 'Failed to convert image to 3D. ';
@@ -1715,7 +1762,8 @@ function analyzeLayoutPattern(element, img) {
         });
     }
 
-    // 1. Detect padding-based aspect ratio (Instagram, Pinterest, Google, Facebook, etc.)
+    // 1. Detect padding-based aspect ratio containers (Instagram, Pinterest, Google, Facebook, Shopify, etc.)
+    // This includes checking the image's parent containers for aspect ratio patterns
     const paddingBottom = computedStyle.paddingBottom;
     const paddingTop = computedStyle.paddingTop;
     const height = computedStyle.height;
@@ -1730,22 +1778,65 @@ function analyzeLayoutPattern(element, img) {
     const hasPaddingValue = paddingBottomValue > 0 || paddingTopValue > 0;
     const hasZeroHeight = heightValue === 0 || height === '0px' || height === 'auto';
 
-    if ((hasPaddingValue || hasPercentagePadding) && hasZeroHeight) {
+    // Also check parent containers for aspect ratio patterns (ratio-box, aspect-ratio, etc.)
+    let foundPaddingContainer = false;
+    let paddingContainerInfo = null;
+    let currentElement = element.parentElement;
+
+    for (let i = 0; i < 3 && currentElement; i++) {
+        const parentComputedStyle = window.getComputedStyle(currentElement);
+        const parentPaddingBottom = parentComputedStyle.paddingBottom;
+        const parentPaddingTop = parentComputedStyle.paddingTop;
+        const parentHeight = parentComputedStyle.height;
+
+        const parentPaddingBottomValue = parseFloat(parentPaddingBottom) || 0;
+        const parentPaddingTopValue = parseFloat(parentPaddingTop) || 0;
+        const parentHeightValue = parseFloat(parentHeight) || 0;
+
+        const parentHasPercentagePadding = parentPaddingBottom.includes('%') || parentPaddingTop.includes('%');
+        const parentHasPaddingValue = parentPaddingBottomValue > 0 || parentPaddingTopValue > 0;
+        const parentHasZeroHeight = parentHeightValue === 0 || parentHeight === '0px' || parentHeight === 'auto';
+
+        // Detect aspect ratio containers and similar patterns
+        const isRatioBox = currentElement.classList.contains('ratio-box') ||
+            currentElement.classList.contains('aspect-ratio') ||
+            currentElement.classList.contains('ratio');
+
+        if ((parentHasPaddingValue || parentHasPercentagePadding) && parentHasZeroHeight || isRatioBox) {
+            foundPaddingContainer = true;
+            paddingContainerInfo = {
+                element: currentElement,
+                paddingBottom: parentPaddingBottom,
+                paddingTop: parentPaddingTop,
+                height: parentHeight,
+                isRatioBox: isRatioBox,
+                level: i + 1
+            };
+            break;
+        }
+
+        currentElement = currentElement.parentElement;
+    }
+
+    if ((hasPaddingValue || hasPercentagePadding) && hasZeroHeight || foundPaddingContainer) {
         if (!analysis.type || analysis.type === 'unknown') {
             analysis.type = 'padding-aspect-ratio';
         }
         analysis.preserveOriginal = true;
-        analysis.reason = `Container uses padding-based sizing (padding-top: ${paddingTop}, padding-bottom: ${paddingBottom}, height: ${height})`;
+
+        if (foundPaddingContainer) {
+            analysis.reason = `Parent container uses padding-based sizing (${paddingContainerInfo.element.className}: padding-bottom: ${paddingContainerInfo.paddingBottom})`;
+            analysis.paddingContainer = paddingContainerInfo;
+        } else {
+            analysis.reason = `Container uses padding-based sizing (padding-top: ${paddingTop}, padding-bottom: ${paddingBottom}, height: ${height})`;
+        }
+
         analysis.containerHasPaddingAspectRatio = true;
 
         console.log('Padding-based aspect ratio detected:', {
-            paddingTop,
-            paddingBottom,
-            height,
-            paddingTopValue,
-            paddingBottomValue,
-            heightValue,
-            hasPercentagePadding
+            directPadding: { paddingTop, paddingBottom, height, paddingTopValue, paddingBottomValue, heightValue, hasPercentagePadding },
+            parentPadding: paddingContainerInfo,
+            foundPaddingContainer
         });
     }
 
@@ -2030,16 +2121,80 @@ function addConvertButton(img) {
         }
     }
 
-    // Create container only for non-picture images or if overlay approach fails
+    // Create container only for non-picture images or if overlay approach fails  
     let imageContainer = targetElement;
     let layoutAnalysis = null;
 
-    if (!isPictureImage || !useOverlayApproach) {
-        if (!imageContainer.classList.contains('lif-image-container')) {
-            // Analyze the original container's layout before we modify anything
-            layoutAnalysis = analyzeLayoutPattern(imageContainer, img);
+    // Analyze layout BEFORE deciding on approach to determine if we should use overlay
+    layoutAnalysis = analyzeLayoutPattern(targetElement, img);
+    console.log('🔍 Layout analysis for container:', layoutAnalysis);
 
-            console.log('Layout analysis for container:', layoutAnalysis);
+    // DECISION POINT: Use overlay approach for padding-based layouts (aspect ratio containers)
+    // This prevents DOM structure disruption that breaks padding-based aspect ratio techniques
+
+    // Additional explicit aspect ratio container detection as fallback
+    // Covers common patterns: .ratio-box, .aspect-ratio, .ratio, and inline padding styles
+    const isAspectRatioContainer = targetElement.classList.contains('ratio-box') ||
+        targetElement.classList.contains('aspect-ratio') ||
+        targetElement.classList.contains('ratio') ||
+        targetElement.classList.contains('aspect') ||
+        (targetElement.style.paddingBottom && targetElement.style.paddingBottom.includes('%')) ||
+        (targetElement.style.paddingTop && targetElement.style.paddingTop.includes('%'));
+
+    const shouldUseOverlayApproach = isPictureImage ||
+        (layoutAnalysis && layoutAnalysis.containerHasPaddingAspectRatio) ||
+        isAspectRatioContainer;
+
+    if (shouldUseOverlayApproach) {
+        const wasInitiallyPictureImage = isPictureImage; // Store original value before modification
+        console.log('🎯 Using overlay approach for:', isPictureImage ? 'picture element' : 'aspect ratio container');
+        useOverlayApproach = true;
+        isPictureImage = true; // Treat aspect ratio containers like picture elements
+
+        // For aspect ratio containers, find the appropriate container for button positioning
+        if (layoutAnalysis && layoutAnalysis.paddingContainer) {
+            targetElement = layoutAnalysis.paddingContainer.element;
+            console.log(`📦 Using aspect ratio container (.${targetElement.className}) for overlay positioning`);
+        }
+        // If explicit aspect ratio container detected but layout analysis missed it, find the container
+        else if (isAspectRatioContainer && !wasInitiallyPictureImage) {
+            // Look for the actual aspect ratio container in the parent hierarchy
+            let searchElement = img.parentElement;
+            for (let i = 0; i < 3 && searchElement; i++) {
+                if (searchElement.classList.contains('ratio-box') ||
+                    searchElement.classList.contains('aspect-ratio') ||
+                    searchElement.classList.contains('ratio') ||
+                    searchElement.classList.contains('aspect') ||
+                    (searchElement.style.paddingBottom && searchElement.style.paddingBottom.includes('%')) ||
+                    (searchElement.style.paddingTop && searchElement.style.paddingTop.includes('%'))) {
+                    targetElement = searchElement;
+                    console.log(`📦 Found explicit aspect ratio container (.${targetElement.className}) for overlay positioning`);
+                    break;
+                }
+                searchElement = searchElement.parentElement;
+            }
+        }
+
+        // Store target dimensions for aspect ratio containers (similar to picture elements)
+        if (layoutAnalysis.containerHasPaddingAspectRatio || isAspectRatioContainer) {
+            const imgRect = img.getBoundingClientRect();
+            const containerRect = targetElement.getBoundingClientRect();
+
+            // Use container dimensions for aspect ratio layouts
+            const targetWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
+            const targetHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+
+            if (targetWidth > 0 && targetHeight > 0) {
+                // Store dimensions on the container for later use
+                targetElement.dataset.lifTargetWidth = Math.round(targetWidth);
+                targetElement.dataset.lifTargetHeight = Math.round(targetHeight);
+                console.log(`📐 Stored overlay dimensions: ${Math.round(targetWidth)}x${Math.round(targetHeight)} on`, targetElement.className || targetElement.tagName);
+            }
+        }
+    }
+
+    if (!shouldUseOverlayApproach) {
+        if (!imageContainer.classList.contains('lif-image-container')) {
 
             const wrapper = document.createElement('div');
             wrapper.className = 'lif-image-container';

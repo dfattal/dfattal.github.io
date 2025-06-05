@@ -86,7 +86,7 @@ Experience the web in a whole new dimension with ImmersityLens!
 
 Create these screenshots showing the extension in action:
 
-1. **Hero Screenshot**: Major website (CNN/Shutterstock) with 2D3D buttons visible on multiple images
+1. **Hero Screenshot**: Major website (CNN/Shutterstock/Bootstrap) with 2D3D buttons visible on multiple images
 2. **Conversion Process**: Image being converted with processing overlay
 3. **3D Viewer**: Animated LIF image showing depth effect
 4. **Download Feature**: LIF download in progress

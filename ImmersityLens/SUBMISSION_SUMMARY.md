@@ -9,6 +9,7 @@ Your extension package has been created: **`immersitylens-v2.0.0.zip`** (472KB)
 - ✅ **CNN.com**: Picture elements with perfect animation restart and responsive behavior  
 - ✅ **Facebook.com**: Complex layouts with enhanced overlay handling and positioning preservation
 - ✅ **Universal Dimension Correction**: Pattern-based solution works across Shutterstock, Zillow, and any future sites
+- ✅ **Aspect Ratio Container Support**: Universal overlay approach preserves padding-based layouts (Shopify, Bootstrap, Tailwind CSS)
 - ✅ **Intelligent Aspect Ratio Detection**: Automatically corrects suspicious dimensions (29:1 ratios, etc.)
 - ✅ **Advanced Animation Management**: Optimized state handling eliminates rapid cycling conflicts
 - ✅ **Robust Event System**: Enhanced pointer-events and comprehensive overlay cleanup
@@ -53,7 +54,7 @@ Photos
 ### 4. Required Visual Assets
 
 #### Screenshots Needed (1280×800px):
-1. **Hero Screenshot**: Major website (CNN/Shutterstock/Zillow) with multiple 2D3D buttons visible
+1. **Hero Screenshot**: Major website (CNN/Shutterstock/Bootstrap) with multiple 2D3D buttons visible
 2. **Conversion Process**: "Converting..." state with processing overlay
 3. **3D Viewer**: Final 3D result with "⬇️ LIF" button
 4. **Download Feature**: Success notification during download
@@ -89,7 +90,8 @@ Photos
 - [x] Verify on CNN.com (picture elements) ✅ WORKING - Animation restart fixed
 - [x] Test on Facebook.com complex layouts ✅ WORKING - Overlay handling improved
 - [x] Test on Shutterstock.com (picture elements) ✅ WORKING - Pattern-based dimension correction  
-- [x] Test on Zillow.com (picture elements) ✅ WORKING - Pattern-based dimension correction
+- [x] Test on Zillow.com (picture elements) ✅ WORKING - Pattern-based dimension correction  
+- [x] Test on aspect ratio containers (Shopify, Bootstrap, Tailwind) ✅ WORKING - Universal overlay approach
 - [x] Test on Instagram-style layouts ✅ WORKING - Padding-based aspect ratios
 - [x] Confirm download functionality works ✅ WORKING
 - [x] Check enable/disable toggle in popup ✅ WORKING

@@ -91,6 +91,30 @@ if ((isSuspiciouslyWide || isSuspiciouslyTall || hasSignificantDimensionDifferen
 - **Aspect ratio validation**: Ensures reasonable image proportions (0.1 to 10 ratio range)
 - **Robust fallback**: Uses actual image dimensions when picture element reports suspicious values
 
+### Aspect Ratio Container Preservation
+
+**Problem**: Many websites use aspect ratio containers (`.ratio-box`, `.aspect-ratio`, etc.) with `padding-bottom` percentages for responsive images. Wrapping these images with additional containers breaks the padding-based sizing technique.
+
+**Solution**: Enhanced layout analysis detects aspect ratio containers and uses overlay approach:
+```javascript
+// Detect aspect ratio container patterns in parent containers
+const isAspectRatioContainer = currentElement.classList.contains('ratio-box') || 
+                              currentElement.classList.contains('aspect-ratio') ||
+                              currentElement.classList.contains('ratio');
+
+// Use overlay approach instead of DOM wrapping
+if (layoutAnalysis.containerHasPaddingAspectRatio) {
+    useOverlayApproach = true;
+    isPictureImage = true; // Treat like picture elements
+}
+```
+
+**Benefits**:
+- **Universal compatibility**: Works with Shopify Burst, Bootstrap, Tailwind CSS, and custom aspect ratio containers
+- **Preserves responsive behavior**: Maintains padding-based aspect ratio functionality
+- **No DOM disruption**: Uses absolute positioning overlay instead of wrapping
+- **Pattern recognition**: Detects `.ratio-box`, `.aspect-ratio`, `.ratio`, `.aspect` and inline padding styles
+
 ### Click Propagation Prevention
 
 **Problem**: Button clicks were triggering underlying image/link actions, causing unwanted navigation.
@@ -172,7 +196,7 @@ const debouncedEnter = () => {
 
 ### Detected Layout Types
 
-1. **Padding-based aspect ratios**: Instagram, Pinterest, Google Images
+1. **Padding-based aspect ratios**: Instagram, Pinterest, Google Images, Shopify Burst, Bootstrap, Tailwind CSS
 2. **Absolute positioning**: Complex gallery layouts
 3. **Flex/Grid layouts**: Modern responsive designs
 4. **Responsive containers**: Using %, vw, vh units
@@ -221,6 +245,7 @@ const debouncedEnter = () => {
 - ✅ Google Images (various responsive patterns)
 - ✅ Shutterstock.com (picture element dimension correction)
 - ✅ Zillow.com (picture element dimension correction)
+- ✅ Aspect ratio containers (Shopify Burst, Bootstrap, Tailwind CSS, custom implementations)
 - ✅ Photography portfolios
 - ✅ News websites with responsive images
 
