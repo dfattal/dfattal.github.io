@@ -131,6 +131,7 @@ let hasShownCorsInfo = false; // Track if we've shown CORS info to user
 let isExtensionInitialized = false;
 let mutationObserver = null;
 let messageListener = null;
+let scrollHandler = null;
 
 // Storage key for extension state
 const STORAGE_KEY = 'lifExtensionEnabled';
@@ -1634,11 +1635,16 @@ function addConvertButton(img) {
         return;
     }
 
-    // Skip images positioned far off-screen (likely hidden UI elements)
+    // Skip images positioned extremely far off-screen (likely hidden UI elements)
+    // Allow images in scrolling galleries that are just outside viewport
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    if (imgRect.right < -100 || imgRect.bottom < -100 ||
-        imgRect.left > viewport.width + 100 || imgRect.top > viewport.height + 100) {
-        console.log('🚫 Skipping off-screen image:', img.src?.substring(0, 50) + '...');
+    const isExtremelyOffScreen =
+        imgRect.right < -1000 || imgRect.bottom < -1000 ||  // Far above/left of page
+        imgRect.left > viewport.width + 3000 ||             // Far to the right (suspicious positioning)
+        (imgRect.top > viewport.height + 5000 && imgRect.left < -500); // Suspicious combo: far down + far left
+
+    if (isExtremelyOffScreen) {
+        console.log('🚫 Skipping extremely off-screen image (likely hidden UI):', img.src?.substring(0, 50) + '...');
         return;
     }
 
@@ -1718,6 +1724,10 @@ function addConvertButton(img) {
         // Social and sharing
         '.social', '.share', '.sharing', '.follow', '.like', '.comment',
 
+        // Video and media containers
+        'video', 'audio', '.video-container', '.media-container', '.player-container',
+        '.video-player', '.media-player', '.video-wrapper', '.media-wrapper',
+
         // Amazon specific patterns
         '.s-image', '.s-thumb', '.s-icon', // Amazon search/listing images are often thumbnails
         '[data-component-type="s-search-result"]', // Amazon search results - often thumbnails
@@ -1738,6 +1748,56 @@ function addConvertButton(img) {
     })) {
         console.log('🚫 Skipping image in UI context:', img.src?.substring(0, 50) + '...');
         return;
+    }
+
+    // Additional video-specific checks
+    // Check if image is part of video controls, poster, or thumbnail
+    const videoElement = img.parentElement?.querySelector('video') ||
+        img.closest('div')?.querySelector('video');
+    if (videoElement) {
+        console.log('🚫 Skipping image in video container (likely poster/thumbnail):', img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Check for video-related attributes and classes
+    const videoRelatedClasses = ['poster', 'thumbnail', 'preview', 'video-thumb', 'video-poster', 'play-button'];
+    if (videoRelatedClasses.some(className => classNames.includes(className))) {
+        console.log('🚫 Skipping video-related image:', classNames, img.src?.substring(0, 50) + '...');
+        return;
+    }
+
+    // Instagram-specific video loading detection
+    // Check for images that might be video placeholders or in video-related containers
+    if (window.location.hostname.includes('instagram.com')) {
+        // Look for video elements that might be added after this image (future video loading)
+        const parentContainer = img.closest('div[role="button"]') || img.closest('article');
+        if (parentContainer) {
+            // Check if this container has video-related indicators
+            const hasVideoIndicators =
+                parentContainer.querySelector('svg[aria-label*="audio"]') ||
+                parentContainer.querySelector('svg[aria-label*="Audio"]') ||
+                parentContainer.querySelector('button[aria-label*="audio"]') ||
+                parentContainer.querySelector('button[aria-label*="Toggle"]') ||
+                parentContainer.innerHTML.includes('playsinline') ||
+                parentContainer.innerHTML.includes('preload') ||
+                parentContainer.innerHTML.includes('blob:');
+
+            if (hasVideoIndicators) {
+                console.log('🚫 Skipping image in Instagram video context (likely loading state):', img.src?.substring(0, 50) + '...');
+                return;
+            }
+        }
+
+        // Additional check for images with video-like positioning/sizing patterns
+        const containerStyle = window.getComputedStyle(img.parentElement || img);
+        const hasVideoLikeLayout =
+            containerStyle.paddingBottom && containerStyle.paddingBottom.includes('%') &&
+            parseFloat(containerStyle.paddingBottom) > 50; // Video aspect ratios
+
+        if (hasVideoLikeLayout && img.closest('[role="button"]')) {
+            console.log('🚫 Skipping image with video-like layout in interactive container:', img.src?.substring(0, 50) + '...');
+            return;
+        }
     }
 
     // 5. SPECIAL AMAZON.COM FILTERING
@@ -2527,7 +2587,34 @@ function observeNewImages() {
     mutationObserver = new MutationObserver((mutations) => {
         if (!isExtensionEnabled) return;
 
+        // Track images that may need re-processing due to DOM changes
+        const imagesToCheck = new Set();
+
         mutations.forEach((mutation) => {
+            // Handle removed nodes - collect images that might need re-processing
+            mutation.removedNodes.forEach((node) => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    // If removed node contained images with buttons, we might need to re-add them when they come back
+                    if (node.tagName === 'IMG') {
+                        // Store image URL for potential re-processing
+                        if (node.src && node.dataset && node.dataset.lifButtonAdded) {
+                            console.log('📝 Image with button was removed:', node.src.substring(0, 50) + '...');
+                        }
+                    }
+
+                    // Check for images within removed nodes
+                    const removedImages = node.querySelectorAll && node.querySelectorAll('img[data-lif-button-added]');
+                    if (removedImages) {
+                        removedImages.forEach(img => {
+                            if (img.src) {
+                                console.log('📝 Child image with button was removed:', img.src.substring(0, 50) + '...');
+                            }
+                        });
+                    }
+                }
+            });
+
+            // Handle added nodes
             mutation.addedNodes.forEach((node) => {
                 if (node.nodeType === Node.ELEMENT_NODE) {
                     // Skip if this is a LIF-related element being added
@@ -2547,76 +2634,68 @@ function observeNewImages() {
 
                     // Check if the added node is an image
                     if (node.tagName === 'IMG') {
-                        // Additional checks for the specific image before processing
-                        if (node.src && (
-                            node.src.includes('leia-storage-service') ||
-                            node.src.includes('immersity') ||
-                            node.src.includes('lifResult')
-                        )) {
-                            return;
-                        }
-
-                        // Check if this image is part of a picture element that's already processed
-                        const pictureParent = node.closest('picture');
-                        if (pictureParent && pictureParent.dataset.lifTargetWidth) {
-                            return;
-                        }
-
-                        if (node.complete) {
-                            try {
-                                addConvertButton(node);
-                            } catch (error) {
-                                console.warn('Error adding convert button to node:', error);
-                            }
-                        } else {
-                            node.addEventListener('load', () => {
-                                try {
-                                    addConvertButton(node);
-                                } catch (error) {
-                                    console.warn('Error adding convert button to node on load:', error);
-                                }
-                            }, { once: true });
-                        }
+                        imagesToCheck.add(node);
                     }
 
                     // Check for images within the added node
                     const images = node.querySelectorAll && node.querySelectorAll('img');
                     if (images) {
-                        images.forEach(img => {
-                            // Same filtering as above
-                            if (img.src && (
-                                img.src.includes('leia-storage-service') ||
-                                img.src.includes('immersity') ||
-                                img.src.includes('lifResult')
-                            )) {
-                                return;
-                            }
-
-                            const pictureParent = img.closest('picture');
-                            if (pictureParent && pictureParent.dataset.lifTargetWidth) {
-                                return;
-                            }
-
-                            if (img.complete) {
-                                try {
-                                    addConvertButton(img);
-                                } catch (error) {
-                                    console.warn('Error adding convert button to image:', error);
-                                }
-                            } else {
-                                img.addEventListener('load', () => {
-                                    try {
-                                        addConvertButton(img);
-                                    } catch (error) {
-                                        console.warn('Error adding convert button to image on load:', error);
-                                    }
-                                }, { once: true });
-                            }
-                        });
+                        images.forEach(img => imagesToCheck.add(img));
                     }
                 }
             });
         });
+
+        // Process all collected images with a delay to allow DOM settling
+        if (imagesToCheck.size > 0) {
+            setTimeout(() => {
+                imagesToCheck.forEach(img => {
+                    try {
+                        // Reset button tracking for potentially re-added images
+                        // This is safe because addConvertButton checks if button already exists
+                        if (img.dataset && img.dataset.lifButtonAdded) {
+                            // Check if button actually exists in DOM
+                            const buttonExists = img.closest('div')?.querySelector('.lif-converter-btn') ||
+                                img.parentElement?.querySelector('.lif-button-zone');
+
+                            if (!buttonExists) {
+                                console.log('🔄 Re-processing image - button tracking exists but no button found:', img.src?.substring(0, 50) + '...');
+                                delete img.dataset.lifButtonAdded;
+                            }
+                        }
+
+                        // Filter out LIF-generated images
+                        if (img.src && (
+                            img.src.includes('leia-storage-service') ||
+                            img.src.includes('immersity') ||
+                            img.src.includes('lifResult')
+                        )) {
+                            return;
+                        }
+
+                        // Check if this image is part of a picture element that's already processed
+                        const pictureParent = img.closest('picture');
+                        if (pictureParent && pictureParent.dataset.lifTargetWidth) {
+                            return;
+                        }
+
+                        if (img.complete) {
+                            addConvertButton(img);
+                        } else {
+                            img.addEventListener('load', () => {
+                                try {
+                                    addConvertButton(img);
+                                } catch (error) {
+                                    console.warn('Error adding convert button to image on load:', error);
+                                }
+                            }, { once: true });
+                        }
+                    } catch (error) {
+                        console.warn('Error processing image in mutation observer:', error);
+                    }
+                });
+            }, 200); // Increased delay for complex DOM operations
+        }
     });
 
     mutationObserver.observe(document.body, {
@@ -2625,6 +2704,71 @@ function observeNewImages() {
     });
 
     console.log('Mutation observer created and started');
+}
+
+// Function to handle scroll events and re-process images that might have lost buttons
+function setupScrollHandler() {
+    if (scrollHandler) {
+        console.log('Scroll handler already exists, skipping duplicate creation');
+        return;
+    }
+
+    let scrollTimeout;
+    scrollHandler = () => {
+        if (!isExtensionEnabled) return;
+
+        // Debounce scroll events to avoid excessive processing
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            console.log('🔄 Scroll-based re-processing triggered');
+
+            // Find images in viewport that should have buttons but don't
+            const images = document.querySelectorAll('img');
+            const viewport = { width: window.innerWidth, height: window.innerHeight };
+
+            images.forEach(img => {
+                try {
+                    const rect = img.getBoundingClientRect();
+
+                    // Only check images that are reasonably close to viewport
+                    const isNearViewport = rect.bottom > -200 && rect.top < viewport.height + 200 &&
+                        rect.right > -200 && rect.left < viewport.width + 200;
+
+                    if (!isNearViewport) return;
+
+                    // Skip if image has button tracking but check if button actually exists
+                    if (img.dataset && img.dataset.lifButtonAdded) {
+                        const buttonExists = img.closest('div')?.querySelector('.lif-converter-btn') ||
+                            img.parentElement?.querySelector('.lif-button-zone') ||
+                            img.closest('[class*="lif-"]');
+
+                        if (!buttonExists) {
+                            console.log('🔧 Scroll fix: Re-processing image with stale tracking:', img.src?.substring(0, 50) + '...');
+                            delete img.dataset.lifButtonAdded;
+
+                            // Re-process this image
+                            if (img.complete) {
+                                addConvertButton(img);
+                            } else {
+                                img.addEventListener('load', () => {
+                                    try {
+                                        addConvertButton(img);
+                                    } catch (error) {
+                                        console.warn('Error adding convert button during scroll fix:', error);
+                                    }
+                                }, { once: true });
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // Silently handle errors to avoid console spam
+                }
+            });
+        }, 500); // Wait 500ms after scroll stops
+    };
+
+    window.addEventListener('scroll', scrollHandler, { passive: true });
+    console.log('Scroll handler created and started');
 }
 
 // Function to load extension state from storage
@@ -2727,6 +2871,17 @@ function cleanupExtension() {
         }
     }
 
+    // Remove scroll handler
+    if (scrollHandler) {
+        try {
+            window.removeEventListener('scroll', scrollHandler);
+            scrollHandler = null;
+            console.log('Scroll handler removed');
+        } catch (error) {
+            console.warn('Error removing scroll handler:', error);
+        }
+    }
+
     // Reset initialization state
     isExtensionInitialized = false;
     console.log('Extension cleanup completed');
@@ -2789,6 +2944,9 @@ async function initialize() {
 
         // Start observing new images (this also prevents duplicates)
         observeNewImages();
+
+        // Set up scroll handler for dynamic content re-processing
+        setupScrollHandler();
 
         // Only start processing images if extension is enabled
         if (isExtensionEnabled) {

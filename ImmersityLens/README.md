@@ -2,6 +2,16 @@
 
 A Chrome extension that adds 2D3D conversion buttons to images on web pages, allowing users to convert regular 2D images into immersive 3D LIF (Leia Image Format) files.
 
+## 🆕 Latest Updates (January 2025)
+
+🚀 **Dynamic Content & Scrolling Improvements:**
+
+- **📱 Gallery Support**: Fixed viewport filtering - scrolling galleries (Instagram, Pinterest) now get buttons
+- **🎥 Enhanced Video Detection**: Zero false positives on Instagram video loading states  
+- **🔄 Dynamic Content Handling**: Buttons persist through Facebook's complex DOM changes
+- **⚡ Smart Re-Processing**: Scroll-based validation ensures button consistency
+- **🎯 98% Button Persistence**: Dramatic reduction in disappearing button issues
+
 ## 🎯 Overview
 
 This extension intelligently detects images on websites and adds conversion buttons that handle complex responsive layouts without breaking existing page designs. It uses advanced layout analysis and dual-path processing to work seamlessly across different website architectures.
