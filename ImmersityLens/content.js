@@ -3,11 +3,18 @@
  * 
  * OVERVIEW:
  * This Chrome extension adds 2D3D buttons to images on web pages, allowing users to convert
- * regular 2D images into immersive 3D LIF (Light Field Image Format) files. The extension
- * handles complex responsive layouts and provides a seamless user experience across different
- * website designs including CNN picture elements and Facebook complex positioning.
+ * regular 2D images into immersive 3D LIF (Leia Image Format) files. The extension employs
+ * universal pattern recognition to handle complex responsive layouts across all websites
+ * without site-specific fixes, including CNN picture elements, Shutterstock/Zillow dimension
+ * correction, and Facebook complex positioning.
  * 
  * ARCHITECTURE:
+ * 
+ * 🚀 UNIVERSAL PATTERN RECOGNITION (v2.0.0):
+ *    - Intelligent aspect ratio analysis detects suspicious dimensions (29:1, 1:15, etc.)
+ *    - Pattern-based dimension correction works across Shutterstock, Zillow, and similar sites
+ *    - Eliminates need for site-specific fixes through adaptive algorithms
+ *    - Future-proof solution that handles new websites automatically
  * 
  * 1. DUAL PATH SYSTEM:
  *    - Picture Element Path: For <picture> elements with complex responsive design (CNN-style)
@@ -1832,6 +1839,33 @@ function analyzeLayoutPattern(element, img) {
  * - Preserves responsive design and aspect ratios
  */
 // Function to add 2D3D button to an image
+/**
+ * ============================================================================
+ * ADD CONVERT BUTTON - INTELLIGENT IMAGE PROCESSING
+ * ============================================================================
+ * 
+ * Core function that adds 2D→3D conversion buttons to eligible images across
+ * all websites. Features advanced layout analysis, dimension correction, and
+ * universal compatibility patterns.
+ * 
+ * KEY CAPABILITIES:
+ * ✅ Universal picture element dimension correction (Shutterstock, Zillow, etc.)
+ * ✅ Responsive layout preservation (Instagram, Pinterest, Google Images) 
+ * ✅ Complex container analysis (CNN, Facebook, photography sites)
+ * ✅ CORS-aware processing with fallback strategies
+ * ✅ Intelligent skip logic (UI elements, already processed images)
+ * ✅ Dual-path processing (picture overlay vs container wrapping)
+ * 
+ * SUPPORTED LAYOUT PATTERNS:
+ * - Picture elements with responsive source sets
+ * - Padding-based aspect ratio containers  
+ * - Absolute positioned responsive images
+ * - Flex/Grid modern layouts
+ * - Complex nested container structures
+ * 
+ * @param {HTMLImageElement} img - Target image element to process
+ * ============================================================================
+ */
 function addConvertButton(img) {
     // Get both rendered and intrinsic dimensions
     const renderedWidth = img.width || 0;
@@ -1938,14 +1972,48 @@ function addConvertButton(img) {
         let targetWidth = pictureRect.width;
         let targetHeight = pictureRect.height;
 
-        // Special handling for Shutterstock: picture element has wrong dimensions, use image dimensions instead
-        const isShutterstock = window.location.hostname.includes('shutterstock.com');
-        if (isShutterstock && imgRect.width > 0 && imgRect.height > 0) {
-            console.log('Shutterstock detected - using image dimensions instead of picture dimensions');
-            console.log(`Picture dimensions: ${pictureRect.width}x${pictureRect.height}`);
-            console.log(`Image dimensions: ${imgRect.width}x${imgRect.height}`);
-            targetWidth = imgRect.width;
-            targetHeight = imgRect.height;
+        // ============================================================================
+        // UNIVERSAL PICTURE ELEMENT DIMENSION CORRECTION
+        // ============================================================================
+        // Problem: Some websites' <picture> elements report incorrect dimensions with
+        // extremely skewed aspect ratios, causing tiny conversion results.
+        //
+        // Examples of affected sites:
+        // - Shutterstock: Picture reports 823x19, actual image is 390x280
+        // - Zillow: Picture reports 586x20, actual image has proper dimensions
+        //
+        // Solution: Pattern-based detection using aspect ratio analysis instead of
+        // site-specific fixes. This provides universal compatibility across all
+        // websites that exhibit this layout pattern.
+        // ============================================================================
+        if (pictureRect.width > 0 && pictureRect.height > 0 && imgRect.width > 0 && imgRect.height > 0) {
+            const pictureAspectRatio = pictureRect.width / pictureRect.height;
+            const imageAspectRatio = imgRect.width / imgRect.height;
+
+            // Define thresholds for suspicious aspect ratios
+            // Most legitimate images fall within 0.1 to 10 ratio range (10:1 to 1:10)
+            const isSuspiciouslyWide = pictureAspectRatio > 15;      // Extremely wide (e.g., 29.3:1)
+            const isSuspiciouslyTall = pictureAspectRatio < 0.067;   // Extremely tall (e.g., 1:15)
+            const hasSignificantDimensionDifference = Math.abs(pictureAspectRatio - imageAspectRatio) > 5;
+
+            // Validate that the image element has reasonable dimensions before using them
+            const imageHasValidAspectRatio = imageAspectRatio > 0.1 && imageAspectRatio < 10;
+
+            // Apply correction when picture has suspicious dimensions but image has valid ones
+            if ((isSuspiciouslyWide || isSuspiciouslyTall || hasSignificantDimensionDifference) &&
+                imageHasValidAspectRatio) {
+
+                console.log('🔧 Picture element dimension correction applied');
+                console.log(`📐 Picture: ${pictureRect.width}x${pictureRect.height} (ratio: ${pictureAspectRatio.toFixed(2)})`);
+                console.log(`📐 Image: ${imgRect.width}x${imgRect.height} (ratio: ${imageAspectRatio.toFixed(2)})`);
+                console.log(`🎯 Issue detected: ${isSuspiciouslyWide ? 'Extremely wide ratio' :
+                    isSuspiciouslyTall ? 'Extremely tall ratio' :
+                        'Significant dimension mismatch'}`);
+                console.log(`✅ Using image dimensions for proper 3D conversion`);
+
+                targetWidth = imgRect.width;
+                targetHeight = imgRect.height;
+            }
         }
 
         if (targetWidth > 0 && targetHeight > 0) {

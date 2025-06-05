@@ -33,7 +33,19 @@ The extension includes a sophisticated CSS analysis system that:
 - Recognizes flex/grid layouts
 - Preserves existing CSS patterns to avoid breaking page layouts
 
-## 🔧 Key Technical Solutions
+## 🔧 Advanced Technical Architecture
+
+ImmersityLens employs sophisticated pattern recognition and adaptive processing to ensure seamless compatibility across diverse web architectures. Our intelligent system uses universal algorithms rather than site-specific fixes, making it robust and future-proof.
+
+### Core Innovation: Universal Pattern Detection
+
+**Problem**: Every website implements images differently - from simple `<img>` tags to complex `<picture>` elements with responsive sources, padding-based containers, and intricate CSS layouts.
+
+**Solution**: Advanced pattern recognition system that:
+- ✅ **Detects layout patterns** instead of hardcoding site fixes
+- ✅ **Analyzes aspect ratios** to identify dimension reporting issues  
+- ✅ **Preserves responsive behavior** through minimal intervention
+- ✅ **Adapts to any website** without requiring updates
 
 ### Picture Element Handling
 
@@ -52,24 +64,32 @@ buttonZone.style.pointerEvents = 'auto';
 targetElement.appendChild(buttonZone);
 ```
 
-### Shutterstock Dimension Correction
+### Picture Element Dimension Correction
 
-**Problem**: Shutterstock's `<picture>` elements report incorrect dimensions (e.g., 823x19) while the actual `<img>` inside has correct dimensions (e.g., 390x280), causing tiny canvas rendering.
+**Problem**: Some websites' `<picture>` elements report incorrect dimensions with suspicious aspect ratios (e.g., 586x20 = 29.3:1 or 823x19), causing tiny canvas rendering instead of proper image conversion.
 
-**Solution**: Site-specific dimension detection and correction:
+**Solution**: Pattern-based dimension detection and correction:
 ```javascript
-// Special handling for Shutterstock: picture element has wrong dimensions
-const isShutterstock = window.location.hostname.includes('shutterstock.com');
-if (isShutterstock && imgRect.width > 0 && imgRect.height > 0) {
+// Detect suspicious aspect ratios in picture elements
+const pictureAspectRatio = pictureRect.width / pictureRect.height;
+const imageAspectRatio = imgRect.width / imgRect.height;
+
+const isSuspiciouslyWide = pictureAspectRatio > 15; // More than 15:1 ratio
+const isSuspiciouslyTall = pictureAspectRatio < 0.067; // Less than 1:15 ratio
+const hasSignificantDimensionDifference = Math.abs(pictureAspectRatio - imageAspectRatio) > 5;
+
+if ((isSuspiciouslyWide || isSuspiciouslyTall || hasSignificantDimensionDifference) && 
+    imageAspectRatio > 0.1 && imageAspectRatio < 10) {
     targetWidth = imgRect.width;  // Use image dimensions instead
     targetHeight = imgRect.height;
 }
 ```
 
 **Benefits**:
-- Proper canvas sizing on Shutterstock images
-- No impact on other websites
-- Maintains existing picture element overlay approach
+- **Universal compatibility**: Works across all websites with this pattern (Shutterstock, Zillow, etc.)
+- **Pattern recognition**: Detects layout issues rather than targeting specific sites
+- **Aspect ratio validation**: Ensures reasonable image proportions (0.1 to 10 ratio range)
+- **Robust fallback**: Uses actual image dimensions when picture element reports suspicious values
 
 ### Click Propagation Prevention
 
@@ -200,6 +220,7 @@ const debouncedEnter = () => {
 - ✅ Instagram-style layouts (padding-based aspect ratios)
 - ✅ Google Images (various responsive patterns)
 - ✅ Shutterstock.com (picture element dimension correction)
+- ✅ Zillow.com (picture element dimension correction)
 - ✅ Photography portfolios
 - ✅ News websites with responsive images
 

@@ -38,11 +38,12 @@ Transform your browsing experience with ImmersityLens, the revolutionary Chrome 
 • **Responsive Design**: Seamlessly adapts to mobile and desktop layouts
 
 **🔧 Smart Technology:**
-• Dual-path processing system handles complex responsive layouts
-• Advanced layout analysis prevents breaking website designs
-• Site-specific dimension correction for stock photo platforms
-• CORS-aware processing with fallback strategies
-• Optimized for modern web technologies and single-page applications
+• **AI-Powered Conversion**: Advanced 2D to 3D processing via Immersity AI platform with depth estimation and LDI generation
+• **Universal Pattern Recognition**: Intelligent aspect ratio analysis detects and corrects dimension issues across all websites without site-specific coding
+• **Adaptive Layout Preservation**: Advanced CSS analysis respects responsive designs, padding-based containers, and complex nested structures  
+• **Robust Event Management**: Multi-layer event handling prevents conflicts between 3D interactions and page navigation
+• **CORS-Resilient Processing**: Multiple fallback strategies ensure maximum image compatibility
+• **Modern Web Optimized**: Built for SPAs, responsive designs, and contemporary web architectures
 
 **🎨 Perfect For:**
 • Photography enthusiasts wanting to add depth to their images
@@ -218,7 +219,7 @@ zip -r immersitylens-v2.0.0.zip . -x "*.git*" "*.DS_Store*" "CHROME_STORE_SUBMIS
 - [ ] Test enable/disable functionality
 - [ ] Verify 3D conversion and download features
 - [ ] Check responsive design on mobile/desktop
-- [ ] Test Shutterstock dimension correction
+- [ ] Test picture element dimension correction (Shutterstock, Zillow)
 - [ ] Confirm privacy policy accessibility
 
 ### Common Review Rejection Reasons
