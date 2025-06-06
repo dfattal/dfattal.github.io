@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "2D to 3D Image Converter",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Converts 2D images to immersive 3D LIF files using Immersity AI",
   "permissions": [
     "activeTab",

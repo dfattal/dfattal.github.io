@@ -2727,6 +2727,297 @@ function setupInstagramCarouselListeners() {
     console.log('📱 Instagram carousel navigation listeners set up');
 }
 
+// Function to set up Flickr theater mode overlay cleanup
+function setupFlickrOverlayCleanup() {
+    if (!window.location.hostname.includes('flickr.com')) {
+        return;
+    }
+
+    // Double-check we're in theater mode before setting up any cleanup
+    const isInTheaterMode = document.querySelector('.height-controller') &&
+        document.querySelector('.facade-of-protection-neue');
+
+    if (!isInTheaterMode) {
+        console.log('🖼️ setupFlickrOverlayCleanup: Not in theater mode, skipping all theater-specific setup');
+        return;
+    }
+
+    console.log('🎭 setupFlickrOverlayCleanup: In theater mode, setting up overlay cleanup');
+
+    // Clean up blocking overlays immediately and on DOM changes
+    const cleanupFlickrOverlays = () => {
+        // Remove photo-notes overlay that blocks button interaction in theater mode
+        const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
+        if (photoNotesOverlay) {
+            console.log('🗑️ Removing Flickr photo-notes overlay blocking button access');
+            photoNotesOverlay.remove();
+        }
+
+        // Also remove any other potential blocking overlays
+        const blockingOverlays = document.querySelectorAll('.view.photo-notes-scrappy-view, [class*="photo-notes"]');
+        blockingOverlays.forEach(overlay => {
+            if (overlay && overlay.parentNode) {
+                console.log('🗑️ Removing additional Flickr blocking overlay:', overlay.className);
+                overlay.remove();
+            }
+        });
+    };
+
+    // Clean up immediately
+    cleanupFlickrOverlays();
+
+    // Apply display fixes to any existing active LIF containers
+    document.querySelectorAll('[data-lif-active="true"]').forEach(container => {
+        if (typeof applyFlickrCanvasfix === 'function') {
+            applyFlickrCanvasfix(container);
+        }
+    });
+
+    // Clean up on DOM changes (for dynamic loading)
+    const flickrObserver = new MutationObserver((mutations) => {
+        let needsCleanup = false;
+
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Check if photo-notes overlay was added
+                    if (node.classList && node.classList.contains('photo-notes-scrappy-view')) {
+                        needsCleanup = true;
+                    }
+                    // Check for photo-notes overlays in added containers
+                    if (node.querySelector && node.querySelector('.photo-notes-scrappy-view')) {
+                        needsCleanup = true;
+                    }
+                }
+            });
+        });
+
+        if (needsCleanup) {
+            console.log('🔄 Flickr photo-notes overlay detected, cleaning up...');
+            setTimeout(cleanupFlickrOverlays, 100); // Small delay to ensure DOM is settled
+        }
+    });
+
+    flickrObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // Also clean up on navigation (Flickr uses AJAX navigation)
+    window.addEventListener('popstate', cleanupFlickrOverlays);
+
+    // Clean up when theater mode changes
+    document.addEventListener('click', (e) => {
+        // Detect clicks that might trigger theater mode changes
+        if (e.target.closest('.photo-engagement') ||
+            e.target.closest('[data-track="photo-page-image-click"]') ||
+            e.target.closest('.main-photo')) {
+
+            setTimeout(cleanupFlickrOverlays, 500); // Allow time for theater mode to load
+        }
+    }, { passive: true });
+
+    // Set up Flickr canvas display fixes for theater mode
+    setupFlickrCanvasDisplayFix();
+
+    console.log('🖼️ Flickr theater mode overlay cleanup set up');
+}
+
+// Function to fix Flickr canvas display issues in theater mode
+const setupFlickrCanvasDisplayFix = () => {
+    // Monitor for LIF containers being activated
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-lif-active') {
+                const container = mutation.target;
+                if (container.dataset.lifActive === 'true') {
+                    // Only apply fix if we're potentially in theater mode context
+                    if (container.closest('.photo-well-media-scrappy-view') ||
+                        document.querySelector('.height-controller')) {
+                        applyFlickrCanvasfix(container);
+                    }
+                }
+            }
+        });
+    });
+
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-lif-active'],
+        subtree: true
+    });
+
+    // Also apply to any existing active containers in theater mode
+    document.querySelectorAll('[data-lif-active="true"]').forEach(container => {
+        if (container.closest('.photo-well-media-scrappy-view') ||
+            document.querySelector('.height-controller')) {
+            applyFlickrCanvasfix(container);
+        }
+    });
+};
+
+const applyFlickrCanvasfix = (container) => {
+    console.log('🎭 Applying Flickr theater mode canvas display fix');
+
+    // Only apply this fix in theater mode (when height-controller exists)
+    const heightController = document.querySelector('.height-controller');
+    const facadeContainer = document.querySelector('.facade-of-protection-neue');
+
+    // Check if we're actually in theater mode
+    const isTheaterMode = heightController && facadeContainer &&
+        container.closest('.photo-well-media-scrappy-view');
+
+    if (!isTheaterMode) {
+        console.log('🎭 Not in theater mode, skipping Flickr-specific fixes');
+        return;
+    }
+
+    // Fix the LIF container positioning
+    if (container.classList.contains('lif-image-container')) {
+        // Position relative to height-controller and center manually
+        if (heightController) {
+            const heightControllerRect = heightController.getBoundingClientRect();
+            const imageWidth = facadeContainer ? facadeContainer.offsetWidth : 1453;
+            const imageHeight = facadeContainer ? facadeContainer.offsetHeight : 969;
+
+            // Calculate center position within height-controller
+            const centerTop = heightControllerRect.top + ((heightControllerRect.height - imageHeight) / 2);
+            const centerLeft = heightControllerRect.left + ((heightControllerRect.width - imageWidth) / 2);
+
+            console.log(`🎭 Centering LIF container in height-controller:`);
+            console.log(`   Height controller: ${heightControllerRect.width}x${heightControllerRect.height} at ${heightControllerRect.left},${heightControllerRect.top}`);
+            console.log(`   Image size: ${imageWidth}x${imageHeight}`);
+            console.log(`   Calculated center: ${centerLeft},${centerTop}`);
+
+            container.style.cssText = `
+                    position: fixed !important;
+                    top: ${centerTop}px !important;
+                    left: ${centerLeft}px !important;
+                    width: ${imageWidth}px !important;
+                    height: ${imageHeight}px !important;
+                    overflow: visible !important;
+                    z-index: 5000 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    transform: none !important;
+                    border: none !important;
+                    outline: none !important;
+                `;
+        } else if (facadeContainer) {
+            // Fallback to facade positioning
+            const facadeRect = facadeContainer.getBoundingClientRect();
+            container.style.cssText = `
+                    position: fixed !important;
+                    top: ${facadeRect.top}px !important;
+                    left: ${facadeRect.left}px !important;
+                    width: ${facadeContainer.offsetWidth}px !important;
+                    height: ${facadeContainer.offsetHeight}px !important;
+                    overflow: visible !important;
+                    z-index: 5000 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    transform: none !important;
+                    border: none !important;
+                    outline: none !important;
+                `;
+        } else {
+            // Final fallback
+            container.style.cssText = `
+                    position: absolute !important;
+                    top: 0px !important;
+                    left: 0px !important;
+                    width: 1453px !important;
+                    height: 969px !important;
+                    overflow: visible !important;
+                    z-index: 5000 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    transform: none !important;
+                `;
+        }
+    }
+
+    // Find and fix canvas positioning
+    const canvas = container.querySelector('canvas');
+    if (canvas) {
+        // Use the facade container we already found for proper sizing
+        if (facadeContainer) {
+            const facadeStyle = window.getComputedStyle(facadeContainer);
+            const facadeWidth = parseInt(facadeStyle.width);
+            const facadeHeight = parseInt(facadeStyle.height);
+
+            canvas.style.cssText = `
+                    position: absolute !important;
+                    top: 0px !important;
+                    left: 0px !important;
+                    width: ${facadeWidth}px !important;
+                    height: ${facadeHeight}px !important;
+                    max-width: none !important;
+                    max-height: none !important;
+                    z-index: 5001 !important;
+                    display: block !important;
+                    pointer-events: auto !important;
+                    cursor: pointer !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    border: none !important;
+                    outline: none !important;
+                `;
+
+            console.log(`🎭 Fixed canvas dimensions to ${facadeWidth}x${facadeHeight}px`);
+        }
+    }
+
+    // Find and fix LIF image positioning
+    const lifImage = container.querySelector('img[src*="leia-storage-service"]');
+    if (lifImage) {
+        lifImage.style.cssText += `
+                position: absolute !important;
+                top: 0px !important;
+                left: 0px !important;
+                z-index: 5000 !important;
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                object-fit: cover !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                outline: none !important;
+            `;
+    }
+
+    // Find and fix LIF button zone positioning to ensure it's above canvas
+    const buttonZone = container.querySelector('.lif-button-zone');
+    if (buttonZone) {
+        buttonZone.style.cssText += `
+                z-index: 5002 !important;
+                position: absolute !important;
+                top: 0 !important;
+                right: 0 !important;
+                pointer-events: none !important;
+            `;
+
+        // Also ensure the button itself has high z-index
+        const button = buttonZone.querySelector('.lif-converter-btn');
+        if (button) {
+            button.style.cssText += `
+                    z-index: 5002 !important;
+                    pointer-events: auto !important;
+                `;
+        }
+
+        console.log('🎭 Fixed LIF button zone positioning for Flickr theater mode');
+    }
+
+    // Ensure the facade container doesn't interfere
+    if (facadeContainer) {
+        facadeContainer.style.cssText += `
+                overflow: visible !important;
+                z-index: 4998 !important;
+            `;
+    }
+};
+
 /**
  * ============================================================================
  * DUPLICATE BUTTON CLEANUP SYSTEM
@@ -2738,42 +3029,46 @@ function setupInstagramCarouselListeners() {
  * ============================================================================
  */
 
-// Function to clean up duplicate button zones
+// Function to clean up duplicate button zones (LinkedIn-specific)
 function cleanupDuplicateButtons() {
-    // Find all containers that have multiple button zones
-    const containersWithButtons = document.querySelectorAll('.update-components-image__container-wrapper, .lif-image-container, .image, .container__item-media');
+    // Only run on LinkedIn where the duplicate issue was occurring
+    if (!window.location.hostname.includes('linkedin.com')) {
+        return;
+    }
+
+    // Find LinkedIn-specific containers that have multiple button zones
+    const containersWithButtons = document.querySelectorAll('.update-components-image__container-wrapper, .lif-image-container');
 
     containersWithButtons.forEach(container => {
         const buttonZones = container.querySelectorAll('.lif-button-zone');
 
         if (buttonZones.length > 1) {
-            console.log(`🧹 Found ${buttonZones.length} duplicate button zones, cleaning up...`);
+            console.log(`🧹 LinkedIn: Found ${buttonZones.length} duplicate button zones, cleaning up...`);
 
             // Keep the first button zone, remove the rest
             for (let i = 1; i < buttonZones.length; i++) {
                 buttonZones[i].remove();
-                console.log('🗑️ Removed duplicate button zone');
+                console.log('🗑️ LinkedIn: Removed duplicate button zone');
             }
         }
     });
 
-    // Also check for images that have multiple button zones in their immediate vicinity
+    // Also check for LinkedIn images that have multiple button zones in their immediate vicinity
     const imagesWithButtons = document.querySelectorAll('img[data-lif-button-added="true"]');
     imagesWithButtons.forEach(img => {
-        // Look for multiple button zones near this image
+        // Look for multiple button zones near this image (LinkedIn-specific containers)
         const containerElement = img.closest('.update-components-image__container-wrapper') ||
-            img.closest('.lif-image-container') ||
-            img.parentElement;
+            img.closest('.lif-image-container');
 
         if (containerElement) {
             const buttonZones = containerElement.querySelectorAll('.lif-button-zone');
             if (buttonZones.length > 1) {
-                console.log(`🧹 Found ${buttonZones.length} duplicate button zones for image, cleaning up...`);
+                console.log(`🧹 LinkedIn: Found ${buttonZones.length} duplicate button zones for image, cleaning up...`);
 
                 // Keep the first button zone, remove the rest
                 for (let i = 1; i < buttonZones.length; i++) {
                     buttonZones[i].remove();
-                    console.log('🗑️ Removed duplicate button zone near image');
+                    console.log('🗑️ LinkedIn: Removed duplicate button zone near image');
                 }
             }
         }
@@ -2920,6 +3215,14 @@ function observeNewImages() {
                 // INSTAGRAM CAROUSEL FIX: Process all carousel images when mutations are detected
                 processInstagramCarousels();
 
+                // FLICKR OVERLAY FIX: Clean up blocking overlays when DOM changes
+                if (window.location.hostname.includes('flickr.com')) {
+                    const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
+                    if (photoNotesOverlay) {
+                        photoNotesOverlay.remove();
+                    }
+                }
+
                 imagesToCheck.forEach(img => {
                     try {
                         // 🔍 BUTTON STATE VALIDATION - Check tracking vs actual DOM state
@@ -2999,6 +3302,24 @@ function setupScrollHandler() {
 
             // INSTAGRAM CAROUSEL FIX: Process carousel images during scroll events
             processInstagramCarousels();
+
+            // FLICKR OVERLAY FIX: Clean up blocking overlays during scroll (theater mode only)
+            if (window.location.hostname.includes('flickr.com')) {
+                // Only clean up in theater mode to avoid removing buttons in wall view
+                const isInTheaterMode = document.querySelector('.height-controller') &&
+                    document.querySelector('.facade-of-protection-neue');
+
+                if (isInTheaterMode) {
+                    const cleanupFlickrOverlays = () => {
+                        const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
+                        if (photoNotesOverlay) {
+                            console.log('🎭 Scroll cleanup: Removing theater mode photo-notes overlay');
+                            photoNotesOverlay.remove();
+                        }
+                    };
+                    cleanupFlickrOverlays();
+                }
+            }
 
             // 🔍 VIEWPORT VALIDATION - Find images near viewport with button state issues
             const images = document.querySelectorAll('img');
@@ -3247,6 +3568,20 @@ async function initialize() {
 
         // Set up Instagram carousel navigation listeners
         setupInstagramCarouselListeners();
+
+        // Set up Flickr theater mode overlay cleanup (only in theater mode)
+        if (window.location.hostname.includes('flickr.com')) {
+            // Only set up theater-specific cleanup if we're actually in theater mode
+            const isInTheaterMode = document.querySelector('.height-controller') &&
+                document.querySelector('.facade-of-protection-neue');
+
+            if (isInTheaterMode) {
+                console.log('🎭 Detected Flickr theater mode - setting up overlay cleanup');
+                setupFlickrOverlayCleanup();
+            } else {
+                console.log('🖼️ Detected Flickr wall view - skipping theater-specific setup');
+            }
+        }
 
         // Only start processing images if extension is enabled
         if (isExtensionEnabled) {

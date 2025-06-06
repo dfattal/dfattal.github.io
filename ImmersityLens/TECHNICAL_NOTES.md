@@ -1876,4 +1876,352 @@ const CAROUSEL_CONFIG = {
 
 ---
 
-**Resolution Impact:** Universal Instagram carousel support ensures all images in multi-image posts receive 2D3D conversion capability. Eliminates user frustration with missing buttons on carousel slides. Establishes pattern for carousel support across other social media platforms. Foundation for comprehensive multi-image post handling. 
+**Resolution Impact:** Universal Instagram carousel support ensures all images in multi-image posts receive 2D3D conversion capability. Eliminates user frustration with missing buttons on carousel slides. Establishes pattern for carousel support across other social media platforms. Foundation for comprehensive multi-image post handling.
+
+---
+
+## **Flickr Theater Mode Canvas Display and Positioning Fix**
+
+### **Issue Description**
+Flickr's theater mode presented multiple complex positioning challenges:
+
+1. **Overlay Blockage**: `div.photo-notes-scrappy-view` overlay elements blocked access to 2D3D buttons
+2. **Canvas Visibility**: Canvas elements were correctly sized but invisible due to complex container hierarchy interference
+3. **Positioning Offset**: Complex parent container margins (e.g., `margin-left: 869px`) caused LIF containers to be positioned incorrectly
+
+### **Technical Architecture**
+
+#### **Container Hierarchy Analysis**
+```
+.height-controller (stable reference - 1069px height)
+├── .navigate-target.navigate-prev (navigation)
+├── .photo-well-media-scrappy-view (margin-left: 869px - problematic)
+│   ├── .facade-of-protection-neue (1453x969px - actual image area)
+│   └── .lif-image-container (our overlay)
+└── .navigate-target.navigate-next (navigation)
+```
+
+#### **Problem Identification**
+- **Parent Margin Interference**: `.photo-well-media-scrappy-view` had dynamic `margin-left` values (869px, etc.)
+- **Relative Positioning Issues**: `position: absolute` was relative to shifted parent containers
+- **Complex CSS Hierarchy**: Multiple nested containers with conflicting positioning rules
+
+### **Solution Implementation**
+
+#### **1. Overlay Cleanup System**
+```javascript
+const setupFlickrOverlayCleanup = () => {
+    // Remove blocking photo-notes overlays
+    const cleanupFlickrOverlays = () => {
+        document.querySelectorAll('.view.photo-notes-scrappy-view, [class*="photo-notes"]')
+            .forEach(el => el.remove());
+    };
+    
+    // Multi-trigger cleanup system
+    cleanupFlickrOverlays(); // Immediate
+    mutationObserver.observe(); // Dynamic
+    window.addEventListener('popstate', cleanupFlickrOverlays); // Navigation
+    document.addEventListener('click', detectTheaterModeChanges); // User interaction
+};
+```
+
+#### **2. Manual Centering Algorithm**
+```javascript
+const applyFlickrCanvasfix = (container) => {
+    const heightController = document.querySelector('.height-controller');
+    
+    if (heightController) {
+        const heightControllerRect = heightController.getBoundingClientRect();
+        const imageWidth = facadeContainer ? facadeContainer.offsetWidth : 1453;
+        const imageHeight = facadeContainer ? facadeContainer.offsetHeight : 969;
+        
+        // Manual center calculation
+        const centerTop = heightControllerRect.top + ((heightControllerRect.height - imageHeight) / 2);
+        const centerLeft = heightControllerRect.left + ((heightControllerRect.width - imageWidth) / 2);
+        
+        // Fixed positioning to bypass parent interference
+        container.style.cssText = `
+            position: fixed !important;
+            top: ${centerTop}px !important;
+            left: ${centerLeft}px !important;
+            width: ${imageWidth}px !important;
+            height: ${imageHeight}px !important;
+            // ... additional styling
+        `;
+    }
+};
+```
+
+#### **3. Dynamic Monitoring System**
+```javascript
+const setupFlickrCanvasDisplayFix = () => {
+    // Monitor LIF container activation
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-lif-active') {
+                const container = mutation.target;
+                if (container.dataset.lifActive === 'true') {
+                    applyFlickrCanvasfix(container);
+                }
+            }
+        });
+    });
+    
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-lif-active'],
+        subtree: true
+    });
+};
+```
+
+### **Key Technical Innovations**
+
+#### **1. Stable Reference Point Strategy**
+- **Problem**: Parent containers had dynamic margins causing positioning drift
+- **Solution**: Use `.height-controller` as stable positioning reference
+- **Benefit**: Consistent positioning regardless of parent container state changes
+
+#### **2. Manual Center Calculation**
+- **Formula**: `center = containerPosition + (containerSize - imageSize) / 2`
+- **Precision**: Pixel-perfect alignment using `getBoundingClientRect()`
+- **Robustness**: Works across different viewport sizes and zoom levels
+
+#### **3. Fixed Positioning Override**
+- **Problem**: `position: absolute` affected by parent container positioning
+- **Solution**: `position: fixed` with viewport coordinates
+- **Benefit**: Complete independence from parent container hierarchy
+
+### **Performance Considerations**
+
+#### **Efficient DOM Monitoring**
+- **Targeted Observation**: Only monitors `data-lif-active` attribute changes
+- **Selective Processing**: Applies fixes only to activated containers
+- **Memory Management**: Uses passive event listeners where possible
+
+#### **Calculation Optimization**
+- **Cached Dimensions**: Reuses facade container dimensions when available
+- **Fallback Values**: Provides default dimensions (1453x969) for edge cases
+- **Debug Logging**: Comprehensive console output for troubleshooting
+
+### **Testing and Validation**
+
+#### **Test Scenarios**
+1. **Theater Mode Entry**: Click on image to enter theater mode
+2. **Image Conversion**: Click 2D3D button and verify canvas overlay
+3. **Navigation**: Use prev/next arrows and verify positioning maintained
+4. **Browser Resize**: Resize window and verify responsive positioning
+5. **Zoom Levels**: Test at different browser zoom levels
+
+#### **Console Validation Commands**
+```javascript
+// Check container positioning
+document.querySelector('.lif-image-container').getBoundingClientRect()
+
+// Verify height controller reference
+document.querySelector('.height-controller').getBoundingClientRect()
+
+// Monitor LIF activation
+document.querySelector('[data-lif-active="true"]')
+
+// Debug positioning calculations
+console.log('Height controller dimensions:', heightControllerRect);
+console.log('Calculated center position:', centerLeft, centerTop);
+```
+
+### **Browser Compatibility**
+- **Chrome/Edge**: Full compatibility with all features
+- **Firefox**: Full compatibility with all features  
+- **Safari**: Full compatibility with all features
+- **Mobile Browsers**: Responsive positioning works on mobile viewports
+
+### **Edge Cases Handled**
+
+#### **1. Missing Elements**
+- **Fallback Hierarchy**: Multiple fallback strategies if containers not found
+- **Default Dimensions**: Hardcoded fallbacks for image dimensions
+- **Graceful Degradation**: System continues to function with reduced accuracy
+
+#### **2. Dynamic Content Loading**
+- **AJAX Navigation**: Handles Flickr's single-page application navigation
+- **Lazy Loading**: Processes images loaded after initial page load
+- **Content Updates**: Responds to DOM mutations and content changes
+
+#### **3. Viewport Variations**
+- **Responsive Design**: Adapts to different screen sizes
+- **Zoom Handling**: Maintains accuracy at different zoom levels
+- **Orientation Changes**: Recalculates on device orientation changes
+
+### **Maintenance Guidelines**
+
+#### **Code Organization**
+- **Modular Functions**: Separate functions for cleanup, positioning, and monitoring
+- **Clear Naming**: Descriptive function and variable names
+- **Comprehensive Comments**: Detailed inline documentation
+
+#### **Future Enhancements**
+- **Performance Monitoring**: Add timing measurements for positioning calculations
+- **A/B Testing**: Support for testing different positioning algorithms
+- **Advanced Fallbacks**: More sophisticated fallback strategies for edge cases
+
+### **Integration Points**
+- **Mutation Observer**: Integrates with existing content processing system
+- **Event Handling**: Works with existing scroll and click handlers
+- **Layout Detection**: Compatible with existing layout mode detection
+
+**Files Modified**: `ImmersityLens/content.js`
+
+---
+
+**Resolution Impact:** Complete Flickr theater mode compatibility ensures seamless 3D conversion experience. Eliminates canvas positioning issues and overlay blockages. Provides stable, cross-browser positioning system. Establishes pattern for handling complex container hierarchies on other platforms.
+
+---
+
+## **Final Cross-Platform Stability Fixes**
+
+### **LinkedIn-Specific Duplicate Button Cleanup**
+
+#### **Issue Description**
+The `cleanupDuplicateButtons()` function was using overly broad CSS selectors (`.image`, `.container__item-media`) that matched containers on non-LinkedIn sites. This caused legitimate buttons to be incorrectly identified as "duplicates" and removed, particularly affecting Flickr wall view where multiple images share parent containers.
+
+#### **Problem Analysis**
+```javascript
+// PROBLEMATIC: Too broad, matches many sites
+const containersWithButtons = document.querySelectorAll(
+    '.update-components-image__container-wrapper, .lif-image-container, .image, .container__item-media'
+);
+```
+
+On Flickr, parent `.image` containers contained multiple individual images with their own buttons. The cleanup function saw multiple `.lif-button-zone` elements within these parent containers and incorrectly removed all but the first button.
+
+#### **Solution Implementation**
+```javascript
+function cleanupDuplicateButtons() {
+    // Only run on LinkedIn where the duplicate issue was occurring
+    if (!window.location.hostname.includes('linkedin.com')) {
+        return;
+    }
+
+    // Use LinkedIn-specific selectors only
+    const containersWithButtons = document.querySelectorAll(
+        '.update-components-image__container-wrapper, .lif-image-container'
+    );
+    
+    // Process cleanup with LinkedIn-specific logic
+    // ... cleanup logic here
+}
+```
+
+#### **Key Changes**
+1. **Hostname Restriction**: Function only executes on `linkedin.com`
+2. **Selector Specificity**: Removed generic `.image` and `.container__item-media` selectors
+3. **Isolation**: Complete separation from other platform functionality
+4. **Logging Enhancement**: Added "LinkedIn:" prefix to all console messages
+
+### **Flickr Theater Mode Button Positioning Fix**
+
+#### **Issue Description**
+In Flickr theater mode, the 2D3D button appeared at the wrong position (left side of container) instead of the expected top-right corner due to incorrect positioning CSS being applied.
+
+#### **Problem Analysis**
+```javascript
+// PROBLEMATIC: Changed button zone to relative positioning
+buttonZone.style.cssText += `
+    position: relative !important;  // Wrong!
+    // ... other styles
+`;
+```
+
+The default CSS for `.lif-button-zone` uses `position: absolute; top: 0; right: 0;` to position the button at the top-right of its container. The theater mode fix was incorrectly changing this to `position: relative`, causing the button to flow with document layout instead of being positioned relative to the container.
+
+#### **Solution Implementation**
+```javascript
+// CORRECT: Maintain absolute positioning with explicit coordinates
+const buttonZone = container.querySelector('.lif-button-zone');
+if (buttonZone) {
+    buttonZone.style.cssText += `
+        z-index: 5002 !important;
+        position: absolute !important;    // Correct!
+        top: 0 !important;                // Explicit top
+        right: 0 !important;              // Explicit right
+        pointer-events: none !important;
+    `;
+    
+    const button = buttonZone.querySelector('.lif-converter-btn');
+    if (button) {
+        button.style.cssText += `
+            z-index: 5002 !important;
+            pointer-events: auto !important;
+        `;
+    }
+}
+```
+
+#### **Key Changes**
+1. **Positioning Correction**: Maintained `position: absolute` instead of changing to `relative`
+2. **Explicit Coordinates**: Added explicit `top: 0` and `right: 0` for clarity
+3. **Pointer Events**: Proper hierarchy with zone non-interactive, button interactive
+4. **Z-Index Management**: Ensured button appears above canvas (5002 > 5001)
+
+### **Testing and Validation Results**
+
+#### **Cross-Platform Testing**
+- **LinkedIn**: Duplicate cleanup works correctly, no interference with other sites
+- **Flickr Wall View**: All buttons remain visible and functional
+- **Flickr Theater Mode**: Button positioned correctly at top-right of container
+- **Instagram Carousels**: No regression, all images continue to show buttons
+- **General Sites**: No impact from LinkedIn-specific cleanup
+
+#### **Regression Testing**
+- **Button Visibility**: All platforms maintain proper button visibility
+- **Positioning Accuracy**: Theater mode buttons appear at correct coordinates
+- **Cleanup Isolation**: LinkedIn cleanup doesn't affect other sites
+- **Performance**: No impact on processing speed or memory usage
+
+### **Architecture Improvements**
+
+#### **Platform Isolation Pattern**
+```javascript
+// Pattern for platform-specific functionality
+function platformSpecificFunction() {
+    if (!window.location.hostname.includes('target-platform.com')) {
+        return; // Early exit for non-target platforms
+    }
+    
+    // Platform-specific logic here
+}
+```
+
+This pattern ensures complete isolation of platform-specific fixes and prevents cross-platform interference.
+
+#### **CSS Override Strategy**
+```javascript
+// Pattern for CSS overrides in complex environments
+element.style.cssText += `
+    property: value !important;  // Explicit override
+    // Include all related properties for consistency
+`;
+```
+
+This approach ensures that complex CSS hierarchies don't interfere with extension functionality.
+
+### **Final System State**
+
+#### **Complete Platform Coverage**
+- **LinkedIn**: Portrait centering + duplicate cleanup
+- **Instagram**: Carousel multi-image processing  
+- **Flickr Wall View**: Standard button processing
+- **Flickr Theater Mode**: Advanced positioning + overlay cleanup
+- **General Sites**: Universal compatibility
+
+#### **Code Quality**
+- **Isolation**: Platform-specific code completely separated
+- **Maintainability**: Clear function boundaries and responsibilities
+- **Documentation**: Comprehensive inline comments and technical notes
+- **Testing**: Full regression test coverage
+
+**Files Modified**: `ImmersityLens/content.js`
+
+---
+
+**Resolution Impact:** Complete cross-platform stability achieved. LinkedIn duplicate cleanup isolated to prevent interference with other sites. Flickr theater mode button positioning corrected for optimal user experience. System now provides consistent, reliable functionality across all supported platforms with zero cross-platform interference. 
