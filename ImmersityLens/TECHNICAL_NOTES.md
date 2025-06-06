@@ -1559,4 +1559,321 @@ const testZIndex = (element) => {
 
 ---
 
-**Resolution Impact:** Single z-index boost eliminated complex Shutterstock interaction failures. Simple CSS solution proved more effective than architectural changes. Pattern applicable to all sites with hover overlays. Foundation for universal overlay conflict prevention. 
+**Resolution Impact:** Single z-index boost eliminated complex Shutterstock interaction failures. Simple CSS solution proved more effective than architectural changes. Pattern applicable to all sites with hover overlays. Foundation for universal overlay conflict prevention.
+
+## Instagram Carousel Multi-Image Processing Fix (January 2025)
+
+### Issue: Missing Buttons on Carousel Slides
+
+**Date:** January 2025  
+**Context:** Instagram carousel posts (multi-image posts navigated by swiping left/right) showed 2D3D buttons only on the first/visible image. Hidden carousel slides remained without buttons.
+
+**Symptoms:**
+- ✅ First carousel image had 2D3D button
+- ❌ Slides 2, 3, 4+ had no buttons
+- ❌ Swiping revealed images without conversion capability
+- ❌ Standard mutation observer only caught visible images
+
+### Root Cause: Transform-Based Hidden Content
+
+**Instagram Carousel Structure:**
+```html
+<ul class="_acay">  <!-- Carousel container -->
+  <li class="_acaz" style="transform: translateX(0px);">      <!-- Visible slide -->
+    <img src="image1.jpg" />
+  </li>
+  <li class="_acaz" style="transform: translateX(468px);">    <!-- Hidden slide -->
+    <img src="image2.jpg" />
+  </li>
+  <li class="_acaz" style="transform: translateX(936px);">    <!-- Hidden slide -->
+    <img src="image3.jpg" />
+  </li>
+</ul>
+```
+
+**Problem Flow:**
+1. **DOM Creation**: All carousel images added to DOM simultaneously
+2. **CSS Positioning**: Only first image visible (`translateX(0px)`), others positioned off-screen
+3. **Mutation Observer**: Detected all images but processed sequentially
+4. **Viewport Filtering**: Hidden images filtered out by position-based logic
+5. **Result**: Only visible slide received button
+
+### Comprehensive Solution: Multi-Trigger Carousel Processing
+
+#### 1. **Instagram-Specific Carousel Detection**
+```javascript
+function processInstagramCarousels() {
+    if (!window.location.hostname.includes('instagram.com')) {
+        return;
+    }
+
+    // Primary selector for Instagram carousels
+    const carouselContainers = document.querySelectorAll('ul._acay');
+    
+    // Fallback selectors for UI variations
+    const alternativeCarousels = document.querySelectorAll(
+        '[class*="carousel"], [role="listbox"], ul[class*="slider"]'
+    );
+    
+    const allCarousels = [...carouselContainers, ...alternativeCarousels];
+}
+```
+
+#### 2. **Visibility-Independent Processing**
+```javascript
+carouselItems.forEach((item, index) => {
+    const images = item.querySelectorAll('img');
+    
+    images.forEach(img => {
+        // Use natural dimensions for hidden images
+        const imgRect = img.getBoundingClientRect();
+        const effectiveWidth = imgRect.width > 0 ? imgRect.width : (img.naturalWidth || img.width);
+        const effectiveHeight = imgRect.height > 0 ? imgRect.height : (img.naturalHeight || img.height);
+        
+        // Process regardless of current visibility
+        if (effectiveWidth >= 200 && effectiveHeight >= 200) {
+            addConvertButton(img);
+        }
+    });
+});
+```
+
+#### 3. **Multi-Trigger Architecture**
+**Trigger Points:**
+```javascript
+// 1. Initial page load
+function processImages() {
+    // ... standard processing ...
+    processInstagramCarousels();
+}
+
+// 2. DOM mutations (new carousels loaded)
+mutationObserver = new MutationObserver((mutations) => {
+    setTimeout(() => {
+        processInstagramCarousels();
+        // ... other processing ...
+    }, 200);
+});
+
+// 3. Scroll events (infinite scroll)
+scrollHandler = () => {
+    setTimeout(() => {
+        processInstagramCarousels();
+        // ... other processing ...
+    }, 500);
+};
+
+// 4. Carousel navigation clicks
+function setupInstagramCarouselListeners() {
+    document.addEventListener('click', (e) => {
+        const isCarouselNav = e.target.closest('button[aria-label*="Next"]') ||
+                            e.target.closest('button[aria-label*="Go back"]') ||
+                            e.target.closest('._afxw') ||  // Next button
+                            e.target.closest('._afxv');   // Previous button
+
+        if (isCarouselNav) {
+            setTimeout(() => {
+                processInstagramCarousels();
+            }, 500); // Allow animation to complete
+        }
+    }, { passive: true });
+}
+```
+
+### Technical Deep Dive
+
+#### 1. **Instagram Class Structure Analysis**
+**Container Hierarchy:**
+```
+ul._acay                    # Main carousel container
+├── li._acaz               # Individual carousel items  
+│   ├── div (structure)    # Wrapper divs
+│   └── img                # Actual content images
+├── button._afxv           # "Go back" navigation
+└── button._afxw           # "Next" navigation
+```
+
+**CSS Transform Pattern:**
+- `translateX(0px)` - Currently visible slide
+- `translateX(±Npx)` - Hidden slides positioned off-screen
+- Transform values change on navigation
+
+#### 2. **Dimension Detection Strategy**
+**Challenge:** Hidden images may report `getBoundingClientRect()` as `0x0`
+
+**Solution:** Multi-source dimension checking
+```javascript
+// Priority order for dimension detection:
+// 1. getBoundingClientRect() - for visible images
+// 2. naturalWidth/naturalHeight - for loaded hidden images  
+// 3. width/height attributes - fallback for any remaining cases
+
+const effectiveWidth = imgRect.width > 0 ? imgRect.width : 
+                      (img.naturalWidth || img.width);
+```
+
+#### 3. **Performance Optimization**
+**Batch Processing:**
+- Group carousel detection with other mutations
+- Use debounced timeouts to prevent excessive calls
+- Skip already-processed images efficiently
+
+**Memory Management:**
+- Passive event listeners to prevent scroll blocking
+- Cleanup on page unload to prevent leaks
+- Efficient selector queries with specific classes
+
+### LinkedIn Duplicate Button Integration
+
+**Synergy with Existing Fixes:**
+The Instagram carousel fix works seamlessly with the LinkedIn duplicate button cleanup:
+
+```javascript
+setTimeout(() => {
+    cleanupDuplicateButtons();      // Remove LinkedIn duplicates
+    processInstagramCarousels();    // Process Instagram carousels
+    
+    imagesToCheck.forEach(img => {
+        // Standard processing for other images
+    });
+}, 200);
+```
+
+### Universal Carousel Pattern Recognition
+
+**Applicable Selectors Beyond Instagram:**
+```javascript
+// Generic carousel patterns that work across platforms:
+const genericCarousels = document.querySelectorAll(`
+    [class*="carousel"],
+    [class*="slider"], 
+    [class*="swiper"],
+    [role="listbox"],
+    ul[class*="slides"]
+`);
+
+// Item selectors within carousels:
+const carouselItems = carousel.querySelectorAll(`
+    li[class*="slide"],
+    li[class*="item"], 
+    div[class*="slide"],
+    [class*="carousel-item"]
+`);
+```
+
+### Testing & Validation
+
+#### 1. **Manual Testing Checklist**
+- [ ] Load Instagram home page
+- [ ] Find multi-image post (carousel indicator dots visible)
+- [ ] Verify button on first image
+- [ ] Swipe/click to second image
+- [ ] Verify button appears on second image
+- [ ] Continue through all carousel slides
+- [ ] Test carousel navigation buttons
+- [ ] Scroll page to load new posts
+- [ ] Verify new carousels processed correctly
+
+#### 2. **Console Validation**
+```javascript
+// Debug carousel detection
+console.log('Carousels found:', document.querySelectorAll('ul._acay').length);
+
+// Debug image processing
+document.querySelectorAll('ul._acay').forEach((carousel, i) => {
+    const items = carousel.querySelectorAll('li._acaz');
+    console.log(`Carousel ${i}: ${items.length} items`);
+    
+    items.forEach((item, j) => {
+        const images = item.querySelectorAll('img');
+        console.log(`  Item ${j}: ${images.length} images`);
+        
+        images.forEach((img, k) => {
+            console.log(`    Image ${k}: ${img.dataset.lifButtonAdded ? '✅' : '❌'} button`);
+        });
+    });
+});
+```
+
+#### 3. **Performance Monitoring**
+```javascript
+// Monitor processing performance
+const startTime = performance.now();
+processInstagramCarousels();
+const endTime = performance.now();
+console.log(`Instagram carousel processing took ${endTime - startTime}ms`);
+```
+
+### Common Edge Cases & Solutions
+
+#### 1. **Lazy-Loaded Carousel Images**
+**Problem:** Images added after initial carousel creation
+**Solution:** Navigation event listeners catch post-load images
+
+#### 2. **Rapid Navigation**
+**Problem:** User clicks Next/Previous rapidly
+**Solution:** Debounced processing with 500ms delay
+
+#### 3. **Mixed Content Posts**
+**Problem:** Carousel contains videos + images
+**Solution:** Existing video detection filters still apply
+
+#### 4. **Alternative Carousel UIs**
+**Problem:** Instagram A/B tests different carousel structures
+**Solution:** Fallback selectors catch generic carousel patterns
+
+### Future Enhancement Opportunities
+
+#### 1. **Cross-Platform Carousel Support**
+- Apply pattern to Facebook carousels
+- Extend to Pinterest board slides
+- Add support for Twitter media carousels
+
+#### 2. **Predictive Processing**
+- Process carousel images on hover over navigation
+- Pre-load buttons before user swipes
+- Background processing for smoother UX
+
+#### 3. **Smart Navigation Detection**
+- Touch/swipe gesture detection
+- Keyboard arrow key navigation
+- Mouse wheel carousel scrolling
+
+### Code Maintainability
+
+#### 1. **Modular Architecture**
+```javascript
+// Separate concerns for different carousel types
+const carouselProcessors = {
+    instagram: processInstagramCarousels,
+    facebook: processFacebookCarousels,    // Future
+    pinterest: processPinterestCarousels   // Future
+};
+
+// Platform-agnostic carousel detection
+const detectPlatformCarousels = () => {
+    const hostname = window.location.hostname;
+    if (hostname.includes('instagram.com')) return carouselProcessors.instagram;
+    if (hostname.includes('facebook.com')) return carouselProcessors.facebook;
+    // ... additional platforms
+};
+```
+
+#### 2. **Configuration Constants**
+```javascript
+// Centralized carousel configuration
+const CAROUSEL_CONFIG = {
+    INSTAGRAM: {
+        CONTAINER: 'ul._acay',
+        ITEMS: 'li._acaz',
+        NAV_NEXT: 'button._afxw',
+        NAV_PREV: 'button._afxv',
+        PROCESS_DELAY: 500
+    }
+    // ... other platforms
+};
+```
+
+---
+
+**Resolution Impact:** Universal Instagram carousel support ensures all images in multi-image posts receive 2D3D conversion capability. Eliminates user frustration with missing buttons on carousel slides. Establishes pattern for carousel support across other social media platforms. Foundation for comprehensive multi-image post handling. 

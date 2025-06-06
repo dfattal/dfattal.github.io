@@ -602,6 +602,7 @@ class lifViewer {
         this.targetDimensions = options.targetDimensions || null;
         this.originalImage = options.originalImage || null;
         this.layoutAnalysis = options.layoutAnalysis || null;
+        this.centeredImageInfo = options.centeredImageInfo || null;
         this.height = height;
 
         // Z-index configuration properties for maintainability
@@ -711,14 +712,20 @@ class lifViewer {
             // For picture elements, aspect ratio containers, etc.
             const dimensions = this.getEffectiveDimensions();
 
+            // LINKEDIN CENTERING FIX: Apply centered positioning if available
+            let positioningStyle = 'top: 0; left: 0;';
+            if (this.centeredImageInfo) {
+                positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
+                console.log('🎯 Applying LinkedIn centering:', positioningStyle);
+            }
+
             this.canvas.style.cssText = `
                 width: ${dimensions.width}px !important;
                 height: ${dimensions.height}px !important;
                 max-width: none !important;
                 max-height: none !important;
                 position: absolute;
-                top: 0;
-                left: 0;
+                ${positioningStyle}
                 z-index: ${this.canvasZIndex};
                 display: none;
                 pointer-events: auto;
@@ -732,8 +739,7 @@ class lifViewer {
                 max-height: none !important;
                 object-fit: cover;
                 position: absolute;
-                top: 0;
-                left: 0;
+                ${positioningStyle}
                 z-index: ${this.imageZIndex};
                 display: none;
                 pointer-events: auto;
@@ -792,11 +798,33 @@ class lifViewer {
             layoutMode = 'overlay';
         }
 
-        // Calculate target dimensions
-        const targetDimensions = {
+        // LINKEDIN CENTERING FIX: Detect centered/aspect-fit images
+        let targetDimensions = {
             width: originalImage.width || originalImage.naturalWidth,
             height: originalImage.height || originalImage.naturalHeight
         };
+
+        let centeredImageInfo = null;
+        if (window.location.hostname.includes('linkedin.com') &&
+            (originalImage.classList.contains('ivm-view-attr__img--centered') ||
+                originalImage.classList.contains('ivm-view-attr__img--aspect-fit'))) {
+
+            centeredImageInfo = lifViewer.calculateLinkedInCenteredImageDimensions(originalImage, container);
+            if (centeredImageInfo) {
+                console.log('🎯 LinkedIn centered image detected:', centeredImageInfo);
+                targetDimensions = {
+                    width: centeredImageInfo.width,
+                    height: centeredImageInfo.height
+                };
+
+                // Force aspectRatio layout mode for centered LinkedIn images
+                // to ensure proper absolute positioning
+                if (layoutAnalysis?.containerHasPaddingAspectRatio) {
+                    layoutMode = 'aspectRatio';
+                    console.log('🎯 Forcing aspectRatio layout mode for LinkedIn centering');
+                }
+            }
+        }
 
         // Apply dimension corrections for picture elements
         if (layoutMode === 'picture') {
@@ -827,9 +855,60 @@ class lifViewer {
             targetDimensions,
             originalImage,
             layoutAnalysis,
+            centeredImageInfo,
             autoplay: options.autoplay !== undefined ? options.autoplay : true,
             mouseOver: options.mouseOver !== undefined ? options.mouseOver : true
         });
+    }
+
+    /**
+     * Calculate actual rendered dimensions and position for LinkedIn centered images
+     */
+    static calculateLinkedInCenteredImageDimensions(image, container) {
+        try {
+            const imageRect = image.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            // Get the image's natural dimensions
+            const naturalWidth = image.naturalWidth;
+            const naturalHeight = image.naturalHeight;
+            const naturalAspectRatio = naturalWidth / naturalHeight;
+
+            // Get container dimensions
+            const containerWidth = containerRect.width;
+            const containerHeight = containerRect.height;
+            const containerAspectRatio = containerWidth / containerHeight;
+
+            // Calculate how LinkedIn's object-fit: contain would size the image
+            let renderedWidth, renderedHeight;
+
+            if (naturalAspectRatio > containerAspectRatio) {
+                // Image is wider - fit to container width
+                renderedWidth = containerWidth;
+                renderedHeight = containerWidth / naturalAspectRatio;
+            } else {
+                // Image is taller - fit to container height  
+                renderedHeight = containerHeight;
+                renderedWidth = containerHeight * naturalAspectRatio;
+            }
+
+            // Calculate centering offsets
+            const offsetX = (containerWidth - renderedWidth) / 2;
+            const offsetY = (containerHeight - renderedHeight) / 2;
+
+            return {
+                width: Math.round(renderedWidth),
+                height: Math.round(renderedHeight),
+                offsetX: Math.round(offsetX),
+                offsetY: Math.round(offsetY),
+                containerWidth: Math.round(containerWidth),
+                containerHeight: Math.round(containerHeight)
+            };
+
+        } catch (error) {
+            console.warn('Error calculating LinkedIn centered image dimensions:', error);
+            return null;
+        }
     }
 
     // Helper to await the image load
@@ -897,30 +976,53 @@ class lifViewer {
                 if (this.img && this.img.complete && this.img.naturalWidth > 0) {
                     const lifWidth = this.img.naturalWidth;
                     const lifHeight = this.img.naturalHeight;
-
-                    console.log(`🔧 Syncing canvas with LIF result: ${lifWidth}x${lifHeight} (attempt ${attempts})`);
-
-                    // Update canvas internal dimensions to match LIF result exactly
-                    this.canvas.width = lifWidth;
-                    this.canvas.height = lifHeight;
-
-                    // Update canvas display size as well (preserve aspect ratio)
                     const targetDimensions = this.getEffectiveDimensions();
-                    if (targetDimensions) {
+
+                    console.log(`🔧 Syncing canvas (${this.layoutMode} mode): LIF=${lifWidth}x${lifHeight}, Target=${targetDimensions.width}x${targetDimensions.height} (attempt ${attempts})`);
+
+                    // CRITICAL FIX: For standard layouts (Flickr), use target dimensions for both canvas internal and display
+                    // For complex layouts (LinkedIn), use LIF result for internal, target for display
+                    if (this.layoutMode === 'standard') {
+                        // Standard layouts: Canvas internal dimensions should match target/container dimensions
+                        this.canvas.width = targetDimensions.width;
+                        this.canvas.height = targetDimensions.height;
                         this.canvas.style.width = `${targetDimensions.width}px`;
                         this.canvas.style.height = `${targetDimensions.height}px`;
+
+                        console.log(`✅ Standard layout sync - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                     } else {
-                        this.canvas.style.width = `${lifWidth}px`;
-                        this.canvas.style.height = `${lifHeight}px`;
+                        // Complex layouts: Use LIF result for internal dimensions, target for display
+                        this.canvas.width = lifWidth;
+                        this.canvas.height = lifHeight;
+
+                        if (targetDimensions) {
+                            this.canvas.style.width = `${targetDimensions.width}px`;
+                            this.canvas.style.height = `${targetDimensions.height}px`;
+                        } else {
+                            this.canvas.style.width = `${lifWidth}px`;
+                            this.canvas.style.height = `${lifHeight}px`;
+                        }
+
+                        console.log(`✅ Complex layout sync - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                     }
 
-                    console.log(`✅ Canvas synchronized - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                     resolve();
                 } else if (attempts < maxAttempts) {
                     // Wait and try again
                     setTimeout(trySync, 100);
                 } else {
                     console.warn(`⚠️ Could not sync canvas with LIF result after ${maxAttempts} attempts`);
+
+                    // Fallback for standard layouts: use target dimensions even if LIF image didn't load
+                    if (this.layoutMode === 'standard') {
+                        const targetDimensions = this.getEffectiveDimensions();
+                        this.canvas.width = targetDimensions.width;
+                        this.canvas.height = targetDimensions.height;
+                        this.canvas.style.width = `${targetDimensions.width}px`;
+                        this.canvas.style.height = `${targetDimensions.height}px`;
+                        console.log(`🔄 Fallback standard layout dimensions: ${targetDimensions.width}x${targetDimensions.height}`);
+                    }
+
                     resolve();
                 }
             };
@@ -1092,12 +1194,53 @@ class lifViewer {
                 }
             };
 
+            // FLICKR FIX: Boost canvas z-index and disable overlay pointer events
+            // Similar to Shutterstock fix pattern
+            if (window.location.hostname.includes('flickr.com')) {
+                console.log('🔧 Applying Flickr z-index boost for canvas events');
+                this.canvas.style.zIndex = '999999';  // Higher than typical overlays
+                this.img.style.zIndex = '999998';     // Slightly lower than canvas
+
+                // AGGRESSIVE FIX: Disable Flickr overlays that might be intercepting events
+                const flickrOverlays = this.container.parentElement?.querySelectorAll('.overlay, a.overlay, .interaction-view, .photo-list-photo-interaction');
+                if (flickrOverlays) {
+                    flickrOverlays.forEach(overlay => {
+                        console.log('🔧 Disabling pointer events on Flickr overlay:', overlay.className);
+                        overlay.style.pointerEvents = 'none';
+                    });
+                }
+            }
+
             this.canvas.addEventListener('mouseenter', startAnimation, { passive: true });
             this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
 
             // Also add events to static image for comprehensive coverage
             this.img.addEventListener('mouseenter', startAnimation, { passive: true });
             this.img.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+            // FLICKR FIX: Add container-level events as fallback for overlay interference
+            // If Flickr's overlay still blocks events, container events will catch them
+            if (window.location.hostname.includes('flickr.com') && this.container) {
+                console.log('🔧 Adding Flickr container-level event fallback');
+
+                this.container.addEventListener('mouseenter', (e) => {
+                    // Only trigger if mouse is over our canvas area
+                    const canvasRect = this.canvas.getBoundingClientRect();
+                    const mouseX = e.clientX;
+                    const mouseY = e.clientY;
+
+                    if (mouseX >= canvasRect.left && mouseX <= canvasRect.right &&
+                        mouseY >= canvasRect.top && mouseY <= canvasRect.bottom) {
+                        console.log('🎯 Flickr container mouseenter detected over canvas area');
+                        startAnimation();
+                    }
+                }, { passive: true });
+
+                this.container.addEventListener('mouseleave', () => {
+                    console.log('🎯 Flickr container mouseleave detected');
+                    stopAnimation();
+                }, { passive: true });
+            }
 
             this.canvas.setAttribute('data-lif-events-added', 'true');
             console.log('Standard event handlers configured');
@@ -1779,6 +1922,30 @@ class lifViewer {
             this.canvas.height = dimensions.height;
 
             console.log(`Layout-aware canvas sizing (${this.layoutMode}): ${dimensions.width}x${dimensions.height}`);
+
+            // LINKEDIN CENTERING FIX: Log centered positioning for debugging
+            if (this.centeredImageInfo) {
+                console.log(`🎯 LinkedIn centering applied: ${dimensions.width}x${dimensions.height} at offset (${this.centeredImageInfo.offsetX}, ${this.centeredImageInfo.offsetY})`);
+            }
+            return;
+        }
+
+        // CRITICAL FIX: For standard layouts, don't resize if canvas already has correct dimensions
+        // This prevents overriding the syncCanvasWithLIFResult() method
+        if (this.layoutMode === 'standard') {
+            const targetDimensions = this.getEffectiveDimensions();
+
+            // Check if canvas already has the correct target dimensions
+            if (this.canvas.width === targetDimensions.width &&
+                this.canvas.height === targetDimensions.height) {
+                console.log(`Standard layout: Canvas already has correct dimensions ${this.canvas.width}x${this.canvas.height}, skipping resize`);
+                return;
+            }
+
+            // If dimensions don't match, use target dimensions directly (don't trust originalImg attributes)
+            this.canvas.width = targetDimensions.width;
+            this.canvas.height = targetDimensions.height;
+            console.log(`Standard layout: Applied target dimensions ${targetDimensions.width}x${targetDimensions.height}`);
             return;
         }
 
@@ -1787,14 +1954,23 @@ class lifViewer {
         const originalImg = parent.querySelector('img[data-lif-button-added="true"]');
 
         if (originalImg) {
-            // Use the original image's displayed dimensions
-            const displayedWidth = originalImg.width || originalImg.naturalWidth;
-            const displayedHeight = originalImg.height || originalImg.naturalHeight;
+            // CRITICAL FIX: Use computed dimensions instead of width/height attributes
+            // Fixes Flickr issue where width="100%" height="100%" returns 100x100 instead of actual size
+            const imgRect = originalImg.getBoundingClientRect();
+            let displayedWidth = Math.round(imgRect.width);
+            let displayedHeight = Math.round(imgRect.height);
+
+            // Fallback to attributes if getBoundingClientRect returns zero
+            if (displayedWidth <= 0 || displayedHeight <= 0) {
+                displayedWidth = originalImg.width || originalImg.naturalWidth;
+                displayedHeight = originalImg.height || originalImg.naturalHeight;
+                console.log(`🔄 Fallback to image attributes: ${displayedWidth}x${displayedHeight}`);
+            }
 
             this.canvas.width = displayedWidth;
             this.canvas.height = displayedHeight;
 
-            console.log(`Standard canvas resizing: ${displayedWidth}x${displayedHeight}`);
+            console.log(`Standard canvas resizing (computed): ${displayedWidth}x${displayedHeight}`);
         } else {
             // Fallback to current behavior
             this.canvas.width = this.img.width;
@@ -1890,58 +2066,7 @@ class lifViewer {
                 pointerEvents: this.img.style.pointerEvents
             });
 
-            // Check if elements are actually positioned to receive mouse events
-            const imgRect = this.img.getBoundingClientRect();
-            const canvasRect = this.canvas.getBoundingClientRect();
-            console.log('📐 Element positions:');
-            console.log('   LIF image rect:', imgRect);
-            console.log('   Canvas rect:', canvasRect);
-
-            // CRITICAL FIX: If image is positioned incorrectly, use saved canvas position
-            if (Math.abs(imgRect.left - canvasRect.left) > 10 || Math.abs(imgRect.top - canvasRect.top) > 10) {
-                console.log('🚨 Position mismatch detected! Syncing LIF image position to canvas...');
-
-                if (this.savedCanvasPosition) {
-                    console.log('🎯 Using saved canvas position:', this.savedCanvasPosition);
-
-                    // Calculate the offset needed to position the image correctly
-                    const containerRect = this.container.getBoundingClientRect();
-                    const offsetLeft = this.savedCanvasPosition.x - containerRect.left;
-                    const offsetTop = this.savedCanvasPosition.y - containerRect.top;
-
-                    this.img.style.position = 'absolute';
-                    this.img.style.left = `${offsetLeft}px`;
-                    this.img.style.top = `${offsetTop}px`;
-
-                    console.log(`📐 Applied offset: left: ${offsetLeft}px, top: ${offsetTop}px`);
-                } else {
-                    // Fallback: Copy ALL computed styles from canvas to image to bypass CSS conflicts
-                    const canvasComputedStyle = window.getComputedStyle(this.canvas);
-
-                    console.log('🔧 Copying ALL computed positioning from canvas to image...');
-                    this.img.style.position = canvasComputedStyle.position;
-                    this.img.style.top = canvasComputedStyle.top;
-                    this.img.style.left = canvasComputedStyle.left;
-                    this.img.style.transform = canvasComputedStyle.transform;
-                    this.img.style.transformOrigin = canvasComputedStyle.transformOrigin;
-                    this.img.style.zIndex = canvasComputedStyle.zIndex;
-
-                    // Force same positioning context by copying container-relative properties
-                    this.img.style.marginTop = canvasComputedStyle.marginTop;
-                    this.img.style.marginLeft = canvasComputedStyle.marginLeft;
-
-                    console.log('📊 Copied computed styles:', {
-                        position: canvasComputedStyle.position,
-                        top: canvasComputedStyle.top,
-                        left: canvasComputedStyle.left,
-                        transform: canvasComputedStyle.transform
-                    });
-                }
-
-                // Verify the fix
-                const newImgRect = this.img.getBoundingClientRect();
-                console.log('✅ Fixed LIF image position:', newImgRect);
-            }
+            console.log('✅ Animation ended - layout-aware positioning handled by enhanced architecture');
 
             cancelAnimationFrame(this.animationFrame);
         }
@@ -1968,17 +2093,7 @@ class lifViewer {
                 zIndex: this.img.style.zIndex
             });
 
-            // CRITICAL FIX: Save canvas position when it's visible for later use
-            setTimeout(() => {
-                const canvasRect = this.canvas.getBoundingClientRect();
-                this.savedCanvasPosition = {
-                    x: canvasRect.left,
-                    y: canvasRect.top,
-                    width: canvasRect.width,
-                    height: canvasRect.height
-                };
-                console.log('💾 Saved canvas position for later use:', this.savedCanvasPosition);
-            }, 100); // Small delay to ensure canvas is properly positioned
+            // Enhanced architecture handles positioning automatically
             this.startTime = Date.now() / 1000;
             //console.log(this.views);
             this.animationFrame = requestAnimationFrame(this.render);

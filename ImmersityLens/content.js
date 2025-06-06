@@ -1881,6 +1881,23 @@ function addConvertButton(img) {
         return;
     }
 
+    // LINKEDIN DUPLICATE BUTTON FIX: Check for existing button zones in nearby containers
+    // LinkedIn's dynamic content can trigger multiple mutations for the same image
+    const nearbyButtonZone = img.parentElement?.querySelector('.lif-button-zone') ||
+        img.parentElement?.parentElement?.querySelector('.lif-button-zone') ||
+        img.closest('.update-components-image__container-wrapper')?.querySelector('.lif-button-zone');
+
+    // Also check if container is already processed
+    const containerAlreadyProcessed = img.closest('[data-lif-processed="true"]') ||
+        img.parentElement?.dataset?.lifProcessed === 'true';
+
+    if (nearbyButtonZone || containerAlreadyProcessed) {
+        console.log('🚫 Skipping image - nearby button zone or processed container exists:', img.src?.substring(0, 50) + '...');
+        // Mark this image as processed to prevent future attempts
+        img.dataset.lifButtonAdded = 'true';
+        return;
+    }
+
     // Skip LIF-generated images (from Immersity AI service)
     if (img.src && (
         img.src.includes('leia-storage-service') ||
@@ -2598,10 +2615,169 @@ function addConvertButton(img) {
         console.log('Using default positioning for regular image button');
     }
 
-    // Mark image as processed
+    // Mark image as processed EARLY to prevent race conditions
     img.dataset.lifButtonAdded = 'true';
 
+    // Also mark the container to prevent multiple buttons on the same container
+    if (container) {
+        container.dataset.lifProcessed = 'true';
+    }
+
     console.log('Added 2D3D button to image:', img.src.substring(0, 50) + '...');
+}
+
+/**
+ * ============================================================================
+ * INSTAGRAM CAROUSEL PROCESSING SYSTEM
+ * ============================================================================
+ * 
+ * Instagram's carousel posts use complex positioning with transform: translateX()
+ * and only visible images get processed by the mutation observer. This system
+ * specifically detects and processes all images in carousel structures.
+ * ============================================================================
+ */
+
+// Function to process Instagram carousel images
+function processInstagramCarousels() {
+    if (!window.location.hostname.includes('instagram.com')) {
+        return;
+    }
+
+    // Find Instagram carousel containers using their specific structure
+    const carouselContainers = document.querySelectorAll('ul._acay');
+
+    // Also check for alternative carousel structures
+    const alternativeCarousels = document.querySelectorAll('[class*="carousel"], [role="listbox"], ul[class*="slider"]');
+    const allCarousels = [...carouselContainers, ...alternativeCarousels];
+
+    allCarousels.forEach(carousel => {
+        console.log('🎠 Found Instagram carousel, processing all images...');
+
+        // Find all carousel items (li elements with _acaz class or generic slide items)
+        const carouselItems = carousel.querySelectorAll('li._acaz, li[class*="slide"], li[class*="item"], div[class*="slide"]');
+
+        carouselItems.forEach((item, index) => {
+            // Find images in each carousel item
+            const images = item.querySelectorAll('img');
+
+            images.forEach(img => {
+                try {
+                    // Skip if already processed
+                    if (img.dataset.lifButtonAdded) {
+                        return;
+                    }
+
+                    // Skip if image is too small (likely icons or UI elements)
+                    // For carousel images, check natural dimensions if getBoundingClientRect gives 0
+                    const imgRect = img.getBoundingClientRect();
+                    const effectiveWidth = imgRect.width > 0 ? imgRect.width : (img.naturalWidth || img.width);
+                    const effectiveHeight = imgRect.height > 0 ? imgRect.height : (img.naturalHeight || img.height);
+
+                    if (effectiveWidth < 200 || effectiveHeight < 200) {
+                        return;
+                    }
+
+                    // Process the image regardless of current visibility
+                    console.log(`🎠 Processing carousel image ${index + 1}:`, img.src?.substring(0, 50) + '...');
+
+                    if (img.complete) {
+                        addConvertButton(img);
+                    } else {
+                        img.addEventListener('load', () => {
+                            try {
+                                addConvertButton(img);
+                            } catch (error) {
+                                console.warn('Error adding convert button to carousel image:', error);
+                            }
+                        }, { once: true });
+                    }
+
+                } catch (error) {
+                    console.warn('Error processing carousel image:', error);
+                }
+            });
+        });
+    });
+}
+
+// Function to set up Instagram carousel navigation listeners
+function setupInstagramCarouselListeners() {
+    if (!window.location.hostname.includes('instagram.com')) {
+        return;
+    }
+
+    // Listen for clicks on Instagram carousel navigation buttons
+    document.addEventListener('click', (e) => {
+        // Check if the clicked element is a carousel navigation button
+        const isCarouselNav = e.target.closest('button[aria-label*="Next"]') ||
+            e.target.closest('button[aria-label*="Go back"]') ||
+            e.target.closest('._afxw') ||  // Next button class
+            e.target.closest('._afxv');   // Previous button class
+
+        if (isCarouselNav) {
+            console.log('🎠 Carousel navigation detected, processing images after navigation...');
+
+            // Process carousel images after a short delay to allow for navigation animation
+            setTimeout(() => {
+                processInstagramCarousels();
+            }, 500);
+        }
+    }, { passive: true });
+
+    console.log('📱 Instagram carousel navigation listeners set up');
+}
+
+/**
+ * ============================================================================
+ * DUPLICATE BUTTON CLEANUP SYSTEM
+ * ============================================================================
+ * 
+ * LinkedIn and some dynamic sites can create duplicate button zones due to
+ * rapid DOM mutations. This cleanup system removes duplicates while preserving
+ * the most appropriately positioned button.
+ * ============================================================================
+ */
+
+// Function to clean up duplicate button zones
+function cleanupDuplicateButtons() {
+    // Find all containers that have multiple button zones
+    const containersWithButtons = document.querySelectorAll('.update-components-image__container-wrapper, .lif-image-container, .image, .container__item-media');
+
+    containersWithButtons.forEach(container => {
+        const buttonZones = container.querySelectorAll('.lif-button-zone');
+
+        if (buttonZones.length > 1) {
+            console.log(`🧹 Found ${buttonZones.length} duplicate button zones, cleaning up...`);
+
+            // Keep the first button zone, remove the rest
+            for (let i = 1; i < buttonZones.length; i++) {
+                buttonZones[i].remove();
+                console.log('🗑️ Removed duplicate button zone');
+            }
+        }
+    });
+
+    // Also check for images that have multiple button zones in their immediate vicinity
+    const imagesWithButtons = document.querySelectorAll('img[data-lif-button-added="true"]');
+    imagesWithButtons.forEach(img => {
+        // Look for multiple button zones near this image
+        const containerElement = img.closest('.update-components-image__container-wrapper') ||
+            img.closest('.lif-image-container') ||
+            img.parentElement;
+
+        if (containerElement) {
+            const buttonZones = containerElement.querySelectorAll('.lif-button-zone');
+            if (buttonZones.length > 1) {
+                console.log(`🧹 Found ${buttonZones.length} duplicate button zones for image, cleaning up...`);
+
+                // Keep the first button zone, remove the rest
+                for (let i = 1; i < buttonZones.length; i++) {
+                    buttonZones[i].remove();
+                    console.log('🗑️ Removed duplicate button zone near image');
+                }
+            }
+        }
+    });
 }
 
 /**
@@ -2658,6 +2834,9 @@ function processImages() {
     document.querySelectorAll('.lif-converter-btn').forEach(btn => {
         btn.style.display = '';
     });
+
+    // INSTAGRAM CAROUSEL FIX: Process all carousel images on initial load
+    processInstagramCarousels();
 }
 
 // Function to handle new images added dynamically
@@ -2735,6 +2914,12 @@ function observeNewImages() {
         // 🕒 BATCH PROCESSING - Process collected images after DOM settles
         if (imagesToCheck.size > 0) {
             setTimeout(() => {
+                // LINKEDIN DUPLICATE CLEANUP: Remove duplicate button zones before processing new images
+                cleanupDuplicateButtons();
+
+                // INSTAGRAM CAROUSEL FIX: Process all carousel images when mutations are detected
+                processInstagramCarousels();
+
                 imagesToCheck.forEach(img => {
                     try {
                         // 🔍 BUTTON STATE VALIDATION - Check tracking vs actual DOM state
@@ -2808,6 +2993,12 @@ function setupScrollHandler() {
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
             console.log('🔄 Scroll-based re-processing triggered');
+
+            // Clean up any duplicate buttons that may have been created during scrolling
+            cleanupDuplicateButtons();
+
+            // INSTAGRAM CAROUSEL FIX: Process carousel images during scroll events
+            processInstagramCarousels();
 
             // 🔍 VIEWPORT VALIDATION - Find images near viewport with button state issues
             const images = document.querySelectorAll('img');
@@ -3053,6 +3244,9 @@ async function initialize() {
 
         // Set up scroll handler for dynamic content re-processing
         setupScrollHandler();
+
+        // Set up Instagram carousel navigation listeners
+        setupInstagramCarouselListeners();
 
         // Only start processing images if extension is enabled
         if (isExtensionEnabled) {
