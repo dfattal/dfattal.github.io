@@ -259,17 +259,59 @@ function injectStyles() {
             100% { transform: rotate(360deg); }
         }
         
+        .lif-vr-btn {
+            position: absolute;
+            top: 8px;
+            right: 90px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ffa500 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: ${Z_INDEX_CONFIG.BUTTON};
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            pointer-events: auto;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            display: none; /* Hidden by default, shown when LIF is ready */
+        }
+        
+        .lif-vr-btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            background: linear-gradient(135deg, #ffa500 0%, #ff6b6b 100%);
+        }
+        
+        .lif-vr-btn.vr-active {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            animation: vrPulse 1.5s infinite;
+        }
+        
+        @keyframes vrPulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
         .lif-button-zone {
             position: absolute;
             top: 0;
             right: 0;
-            width: 80px;
+            width: 180px; /* Increased width to accommodate VR button */
             height: 50px;
             z-index: ${Z_INDEX_CONFIG.BUTTON_ZONE};
             pointer-events: none;
         }
         
-        .lif-button-zone .lif-converter-btn {
+        .lif-button-zone .lif-converter-btn,
+        .lif-button-zone .lif-vr-btn {
             pointer-events: auto;
         }
     `;
@@ -907,6 +949,35 @@ async function convertTo3D(img, button) {
             button.dataset.state = 'lif-ready';
             button.title = 'Click to download the LIF file';
 
+            // Show VR button now that LIF is ready
+            if (button.vrButton) {
+                console.log('🥽 Making VR button visible (LIF ready)');
+                button.vrButton.style.display = 'block';
+                console.log('✅ VR button display style set to block');
+
+                // Debug VR button state
+                const vrButtonRect = button.vrButton.getBoundingClientRect();
+                console.log('🔍 VR button status:', {
+                    display: button.vrButton.style.display,
+                    visibility: window.getComputedStyle(button.vrButton).visibility,
+                    opacity: window.getComputedStyle(button.vrButton).opacity,
+                    pointerEvents: window.getComputedStyle(button.vrButton).pointerEvents,
+                    zIndex: window.getComputedStyle(button.vrButton).zIndex,
+                    position: { x: vrButtonRect.x, y: vrButtonRect.y, width: vrButtonRect.width, height: vrButtonRect.height },
+                    hasClickListener: true,
+                    parentElement: button.vrButton.parentElement?.className || 'none',
+                    className: button.vrButton.className
+                });
+
+                console.log('VR button now visible - LIF is ready');
+
+                // VR button is now visible and ready
+                console.log('✅ VR button is now visible and ready for use');
+
+            } else {
+                console.error('❌ VR button not found on button object when trying to make it visible');
+            }
+
             // Remove processing overlay - check both container and overlayContainer
             const overlay = container?.querySelector('.lif-processing-overlay');
             if (overlay) {
@@ -1109,6 +1180,12 @@ async function convertTo3D(img, button) {
                         button.classList.remove('processing');
                         button.classList.add('lif-ready');
                         console.log('Button state reconfirmed as LIF');
+
+                        // Show VR button if not already visible
+                        if (button.vrButton && button.vrButton.style.display === 'none') {
+                            button.vrButton.style.display = 'block';
+                            console.log('VR button made visible during state reconfirmation');
+                        }
                     }
                 }, 100);
 
@@ -1165,6 +1242,13 @@ async function convertTo3D(img, button) {
         button.disabled = false;
         button.dataset.state = 'ready';
         button.style.background = ''; // Reset any custom background
+
+        // Hide VR button on error
+        if (button.vrButton) {
+            button.vrButton.style.display = 'none';
+            button.vrButton.classList.remove('vr-active');
+            button.vrButton.textContent = '🥽 VR';
+        }
 
         // Remove processing overlay - check both container and overlayContainer
         const overlay = container?.querySelector('.lif-processing-overlay');
@@ -2526,8 +2610,154 @@ function addConvertButton(img) {
         e.stopPropagation();
     });
 
-    // Add button to protective zone, then add zone to appropriate container
+    // Create the VR button (initially hidden)
+    console.log('🥽 Creating VR button...');
+    const vrButton = document.createElement('button');
+    vrButton.className = 'lif-vr-btn';
+    vrButton.textContent = '🥽 VR';
+    vrButton.title = 'View in VR/XR mode';
+    vrButton.style.display = 'none'; // Hidden until LIF is ready
+    vrButton.style.pointerEvents = 'auto'; // Ensure button can receive clicks
+    vrButton.style.zIndex = Z_INDEX_CONFIG.BUTTON; // Same z-index as main button
+    console.log('✅ VR button created:', {
+        className: vrButton.className,
+        textContent: vrButton.textContent,
+        title: vrButton.title,
+        display: vrButton.style.display,
+        pointerEvents: vrButton.style.pointerEvents,
+        zIndex: vrButton.style.zIndex
+    });
+
+    // VR button click handler
+    const handleVRButtonClick = async (e) => {
+        console.log('🔥 VR BUTTON CLICKED IN CONTENT.JS!');
+        console.log('📊 Button state analysis:', {
+            buttonState: button.dataset.state,
+            hasLifViewer: !!button.lifViewer,
+            hasNavigatorXR: !!navigator.xr,
+            hasVRLifViewer: !!window.VRLifViewer,
+            buttonText: vrButton.textContent
+        });
+
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        // Only allow VR if LIF is ready
+        if (button.dataset.state === 'lif-ready') {
+            console.log('✅ Button state is lif-ready, proceeding...');
+            const viewer = button.lifViewer;
+            console.log('🔍 Viewer analysis:', {
+                hasViewer: !!viewer,
+                hasLifUrl: !!viewer?.lifUrl,
+                lifUrl: viewer?.lifUrl?.substring(0, 100) + '...',
+                hasCanvas: !!viewer?.canvas
+            });
+
+            if (viewer && viewer.lifUrl) {
+                console.log('✅ Viewer and LIF URL available, starting VR initialization...');
+                try {
+                    vrButton.classList.add('vr-active');
+                    vrButton.textContent = '🔄 Loading VR...';
+                    console.log('🔄 VR button state updated to loading');
+
+                    // Skip old WebXR checks - let the new page context VR system handle everything
+                    console.log('🚀 Skipping content script WebXR checks - delegating to page context VR system');
+
+                    // Create and initialize VR viewer
+                    console.log('🔍 Checking VRLifViewer availability...');
+                    if (window.VRLifViewer) {
+                        console.log('✅ VRLifViewer found, creating instance...');
+                        const vrViewer = new window.VRLifViewer();
+                        console.log('✅ VRLifViewer instance created, initializing with LIF URL...');
+
+                        await vrViewer.init(viewer.lifUrl, button);
+                        console.log('🎉 VRLifViewer initialized successfully!');
+
+                        vrButton.textContent = '👓 VR Active';
+                        console.log('✅ VR button text updated to VR Active');
+                    } else {
+                        console.error('❌ VRLifViewer not loaded in window object');
+                        console.log('🔍 Available window VR/LIF properties:', Object.keys(window).filter(k => k.includes('VR') || k.includes('Lif') || k.includes('Renderer')));
+                        showDownloadNotification('VR viewer not available. Please refresh the page.', 'error');
+                    }
+                } catch (error) {
+                    console.error('❌ Error during VR initialization:', error);
+                    console.error('Error details:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
+                    showDownloadNotification('Failed to start VR session: ' + error.message, 'error');
+                    vrButton.classList.remove('vr-active');
+                    vrButton.textContent = '🥽 VR';
+                }
+            } else {
+                console.error('❌ Viewer or LIF URL not available:', {
+                    hasViewer: !!viewer,
+                    hasLifUrl: !!viewer?.lifUrl
+                });
+                showDownloadNotification('LIF file not ready for VR viewing', 'error');
+            }
+        } else {
+            console.error('❌ Button state is not lif-ready:', {
+                currentState: button.dataset.state,
+                expectedState: 'lif-ready'
+            });
+        }
+
+        return false;
+    };
+
+    // Add VR button event listeners - EXACT COPY of LIF button pattern
+    console.log('🔌 Adding VR button event listeners (copying LIF button pattern)...');
+
+    // Add multiple event listeners to ensure the button works - use capturing phase for all
+    vrButton.addEventListener('click', handleVRButtonClick, true); // Use capturing phase
+    vrButton.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        // Don't call handleVRButtonClick here, just prevent default behavior
+        return false;
+    }, true);
+    vrButton.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        // Call the actual click handler on mouseup for regular images
+        if (!isPictureImage) {
+            handleVRButtonClick(e);
+        }
+        return false;
+    }, true);
+    vrButton.addEventListener('touchstart', handleVRButtonClick, true);
+
+    // Add hover protection - EXACT COPY of LIF button
+    vrButton.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+        vrButton.style.zIndex = Z_INDEX_CONFIG.BUTTON;
+    });
+
+    vrButton.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+    });
+
+    console.log('✅ All VR button event listeners added (LIF button pattern copied)');
+
+    // Add buttons to protective zone, then add zone to appropriate container
+    console.log('📦 Adding buttons to button zone...');
     buttonZone.appendChild(button);
+    buttonZone.appendChild(vrButton);
+    console.log('✅ Buttons added to zone:', {
+        buttonZoneChildCount: buttonZone.children.length,
+        vrButtonParent: vrButton.parentElement?.className || 'none'
+    });
+
+    // Store VR button reference and handler on main button for later access
+    button.vrButton = vrButton;
+    button.vrButtonClickHandler = handleVRButtonClick;
+    console.log('✅ VR button reference and handler stored on main button');
 
     // Determine button positioning approach based on layout type
     const useFacebookOverlay = layoutAnalysis?.isFacebookStyle;
@@ -2562,10 +2792,10 @@ function addConvertButton(img) {
         buttonZone.style.pointerEvents = 'auto';
 
         if (hasImageHoverBehaviors) {
-            buttonZone.style.width = '100px';
+            buttonZone.style.width = '200px'; // Increased for VR button
             buttonZone.style.height = '60px';
         } else {
-            buttonZone.style.width = '80px';
+            buttonZone.style.width = '180px'; // Increased for VR button
             buttonZone.style.height = '50px';
         }
 
@@ -2582,10 +2812,10 @@ function addConvertButton(img) {
 
         // Use appropriate sizing - larger if hover behaviors detected, standard otherwise
         if (hasImageHoverBehaviors) {
-            buttonZone.style.width = '100px';
+            buttonZone.style.width = '200px'; // Increased for VR button
             buttonZone.style.height = '60px';
         } else {
-            buttonZone.style.width = '80px';
+            buttonZone.style.width = '180px'; // Increased for VR button
             buttonZone.style.height = '50px';
         }
 

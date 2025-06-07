@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "2D to 3D Image Converter",
-  "version": "2.0.1",
-  "description": "Converts 2D images to immersive 3D LIF files using Immersity AI",
+  "name": "ImmersityLens - 2D to 3D Converter",
+  "version": "3.0.0",
+  "description": "Convert 2D images to immersive 3D LIF files with VR viewing capabilities using Immersity AI",
   "permissions": [
     "activeTab",
     "storage"
@@ -15,13 +15,22 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["libs/axios.min.js", "libs/heic2any.js", "libs/LIF.js", "content.js"],
+      "js": [
+        "libs/three.min.js", 
+        "libs/axios.min.js", 
+        "libs/heic2any.js", 
+        "libs/LIF.js", 
+        "libs/VRRenderers.js", 
+        "libs/VRTestFile.js", 
+        "libs/VRLifViewer2.js", 
+        "content.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "2D to 3D Image Converter"
+    "default_title": "ImmersityLens - 2D to 3D Converter"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -30,7 +39,11 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["libs/*", "shaders/*"],
+      "resources": [
+        "libs/VRPageSystem.js",
+        "libs/*", 
+        "shaders/*"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

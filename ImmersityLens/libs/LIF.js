@@ -204,22 +204,24 @@ async function parseLif53(file) {
 
     function make_urls(obj) {
         // handle image
-        if (obj.image.blob_id == -1 /*source image*/) {
-            const rgb = new Blob([arrayBuffer], { type: 'image/jpeg' });
-            obj.image.url = handleBlob(rgb);
-        } else {
-            const rgb = lifMeta.getFieldByType(obj.image.blob_id).toBlob();
-            obj.image.url = handleBlob(rgb);
+        if (obj.image && obj.image.blob_id !== undefined) {
+            if (obj.image.blob_id == -1 /*source image*/) {
+                const rgb = new Blob([arrayBuffer], { type: 'image/jpeg' });
+                obj.image.url = handleBlob(rgb);
+            } else {
+                const rgb = lifMeta.getFieldByType(obj.image.blob_id).toBlob();
+                obj.image.url = handleBlob(rgb);
+            }
         }
 
         // handle invZ
-        if (obj.inv_z_map) {
+        if (obj.inv_z_map && obj.inv_z_map.blob_id !== undefined) {
             const invZmap = lifMeta.getFieldByType(obj.inv_z_map.blob_id).toBlob();
             obj.inv_z_map.url = handleBlob(invZmap);
         }
 
         //handle mask
-        if (obj.mask) {
+        if (obj.mask && obj.mask.blob_id !== undefined) {
             const mask = lifMeta.getFieldByType(obj.mask.blob_id).toBlob();
             obj.mask.url = handleBlob(mask);
         }
@@ -2163,3 +2165,32 @@ class lifViewer {
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
     }
 }
+
+// LifLoader class wrapper for VR compatibility
+class LifLoader {
+    constructor() {
+        this.views = null;
+        this.stereo_render_data = null;
+    }
+
+    async load(file) {
+        try {
+            // Use the existing parseLif5 function from LIF.js
+            const result = await parseLif5(file);
+
+            this.views = result.views;
+            this.stereo_render_data = result.stereo_render_data;
+
+            return {
+                views: this.views,
+                stereo_render_data: this.stereo_render_data
+            };
+        } catch (error) {
+            console.error('LifLoader error:', error);
+            throw error;
+        }
+    }
+}
+
+// Make LifLoader available globally for VR extension
+window.LifLoader = LifLoader;

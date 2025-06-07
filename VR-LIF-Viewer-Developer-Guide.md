@@ -2,16 +2,17 @@
 
 ## Overview
 
-This guide explains how to create a VR viewing session for Leia Image Format (LIF) files using Three.js, the LIF loading library, and custom WebGL renderers. The system supports both mono and stereo LIF files and can leverage the Chrome WebXROpenXRBridge extension for enhanced VR features.
+This guide explains the ImmersityLens Chrome Extension VR system for viewing Leia Image Format (LIF) files. The system supports both mono and stereo LIF files with automatic detection of VR headsets vs 3D displays, providing optimized rendering for each display type. It integrates with the Chrome WebXROpenXRBridge extension for enhanced VR features.
 
 ## Architecture Overview
 
-The VR viewing system consists of four main components:
+The VR system consists of five main components:
 
-1. **LIF Loader** (`LifLoader.js`) - Parses and extracts image/depth data from LIF files
-2. **Renderers** (`Renderers.js`) - WebGL-based renderers for different view configurations
-3. **Three.js WebXR Integration** - Handles VR session management and stereoscopic rendering
-4. **Chrome Extension Integration** - Optional advanced VR features via `window.WebXROpenXRBridge`
+1. **Content Script** (`content.js`) - Detects LIF files and manages extension lifecycle
+2. **VR Page System** (`VRPageSystem.js`) - Page-context VR implementation with embedded LIF loader and renderers
+3. **Display Detection** - Automatic detection of VR headsets vs 3D displays using FOV analysis
+4. **Dual-Mode Rendering** - Optimized texture sizing and focus handling for each display type
+5. **Chrome Extension Integration** - Advanced VR features via `window.WebXROpenXRBridge`
 
 ## Key Concepts
 
@@ -21,591 +22,511 @@ The VR viewing system consists of four main components:
 - May contain multiple layers for advanced rendering
 - Includes camera metadata (position, focal length, skew, etc.)
 
-### Rendering Pipeline
-1. Load LIF file and extract views
-2. Create offscreen WebGL contexts for each eye
-3. Render LIF content to textures using custom shaders
-4. Display textures on Three.js planes positioned in VR space
-5. Update rendering based on head tracking
+### Display Type Detection
+The system automatically detects display type using FOV analysis:
 
-## Implementation Guide
+**VR Headset Detection:**
+- Symmetric frustums (mirrored left/right FOVs)
+- Small denominators in 3D position calculations (< 0.0001)
+- Mirror FOV patterns between eyes
 
-### 1. HTML Setup
+**3D Display Detection:**
+- Asymmetric frustums with different boundaries
+- Cameras positioned to view physical display surface
+- Calculable 3D position using frustum intersection
 
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>VR LIF Viewer</title>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
-      }
-    }
-  </script>
-</head>
-<body>
-  <input type="file" id="filePicker" accept="image/*">
-  <canvas id="glCanvas"></canvas>
-  <script type="module" src="vr-lif-viewer.js"></script>
-</body>
-</html>
-```
+### Dual-Mode Rendering Pipeline
 
-### 2. Core VR Implementation
+**VR Mode (`is3D = 0`):**
+1. High-resolution textures (up to 1920px max)
+2. Dynamic convergence based on `focus * inv_z_map.min`
+3. Viewport scaling of 1.2 for content optimization
+4. Symmetric plane positioning using IPD calculations
+
+**3D Display Mode (`is3D = 1`):**
+1. Reduced resolution textures (`viewport.width/2`)
+2. No convergence distance applied (`invd = 0`)
+3. Viewport scaling of 1.0 for direct mapping
+4. Asymmetric plane positioning using frustum intersection
+
+## Implementation Architecture
+
+### 1. Content Script Integration
 
 ```javascript
-import * as THREE from 'three';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { LifLoader } from './LifLoader.js';
-import { MN2MNRenderer, ST2MNRenderer } from './Renderers.js';
+// content.js - LIF Detection and VR Injection
+class VRLifViewer2 {
+    async injectVRSystem() {
+        // Inject VRPageSystem.js as separate script file (CSP-safe)
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('libs/VRPageSystem.js');
+        script.type = 'module';
+        document.head.appendChild(script);
+    }
 
-class VRLifViewer {
+    async startVR(lifUrl) {
+        // Send VR command to page context
+        window.postMessage({
+            type: 'VR_LIF_COMMAND_START_VR',
+            lifUrl: lifUrl
+        }, '*');
+    }
+}
+```
+
+### 2. VR Page System Core
+
+```javascript
+// VRPageSystem.js - Page Context Implementation
+class PageContextVRSystem {
   constructor() {
-    this.scene = null;
-    this.camera = null;
-    this.renderer = null;
-    this.views = null;
-    this.stereoRenderData = null;
-    this.leftEyeRenderer = null;
-    this.rightEyeRenderer = null;
-    this.planeLeft = null;
-    this.planeRight = null;
-    this.texLeft = null;
-    this.texRight = null;
-    this.convergencePlane = null;
-    this.isVRActive = false;
-    this.is3D = false; // Flag to track display type (VR vs 3D display)
-    this.focus = 0.01; // Focus parameter for VR depth calculation
-    this.viewportScale = 1.2; // Viewport scaling factor
-  }
-
-  async init() {
-    // Setup Three.js scene
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.scene.add(this.camera);
-
-    // Setup WebGL renderer with XR support
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.xr.enabled = true;
-    document.body.appendChild(this.renderer.domElement);
-
-    // Add VR button
-    const vrButton = VRButton.createButton(this.renderer);
-    document.body.appendChild(vrButton);
-
-    // Setup XR session event handlers
-    this.renderer.xr.addEventListener('sessionstart', () => this.onXRSessionStart());
-    this.renderer.xr.addEventListener('sessionend', () => this.onXRSessionEnd());
-
-    // Setup file picker
-    document.getElementById('filePicker').addEventListener('change', (e) => this.loadLIF(e));
-  }
-
-  async loadLIF(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    try {
-      // Load LIF file
-      const loader = new LifLoader();
-      await loader.load(file);
-      
-      this.views = loader.views;
-      this.stereoRenderData = loader.stereo_render_data;
-
-      // Create offscreen renderers
-      await this.createOffscreenRenderers();
-
-      // Start animation loop
-      this.animate();
-    } catch (error) {
-      console.error('Error loading LIF:', error);
-    }
-  }
-
-  async createOffscreenRenderers() {
-    // Create offscreen canvases for left and right eye
-    const canvasL = document.createElement('canvas');
-    const canvasR = document.createElement('canvas');
-    
-    // Set canvas dimensions based on view size (limit to 1920px for performance)
-    const maxSize = 1920;
-    const aspectRatio = this.views[0].height_px / this.views[0].width_px;
-    canvasL.width = Math.min(maxSize, this.views[0].width_px);
-    canvasL.height = Math.round(canvasL.width * aspectRatio);
-    canvasR.width = canvasL.width;
-    canvasR.height = canvasL.height;
-
-    // Get WebGL contexts
-    const glL = canvasL.getContext('webgl');
-    const glR = canvasR.getContext('webgl');
-
-    // Create renderers based on view count (mono or stereo)
-    if (this.views.length === 1) {
-      // Mono LIF - use MN2MNRenderer for both eyes
-      this.leftEyeRenderer = await MN2MNRenderer.createInstance(
-        glL, 'shaders/rayCastMonoLDI.glsl', this.views, false, maxSize
-      );
-      this.rightEyeRenderer = await MN2MNRenderer.createInstance(
-        glR, 'shaders/rayCastMonoLDI.glsl', this.views, false, maxSize
-      );
-    } else {
-      // Stereo LIF - use ST2MNRenderer
-      this.leftEyeRenderer = await ST2MNRenderer.createInstance(
-        glL, 'shaders/rayCastStereoLDI.glsl', this.views, false, maxSize
-      );
-      this.rightEyeRenderer = await ST2MNRenderer.createInstance(
-        glR, 'shaders/rayCastStereoLDI.glsl', this.views, false, maxSize
-      );
+        this.is3D = 1; // Default to 3D display mode
+        this.viewportScale = 1.2; // Default viewport scale
+        this.focus = 0.01; // Focus distance constant
+        this.MAX_TEX_SIZE_VR = 1920; // Maximum texture size for VR
+        this.xrCanvasInitialized = false;
     }
 
-    // Set convergence distance if available
-    if (this.stereoRenderData) {
-      this.leftEyeRenderer.invd = this.stereoRenderData.inv_convergence_distance;
-      this.rightEyeRenderer.invd = this.stereoRenderData.inv_convergence_distance;
-    } else {
-      // Default convergence for VR mode will be set dynamically based on display type
-      this.leftEyeRenderer.invd = 0;
-      this.rightEyeRenderer.invd = 0;
+    async createLifVRScene(lifData) {
+        // Load LIF data using embedded LifLoader
+        const loader = new LifLoader();
+        await loader.loadFromData(lifData);
+        this.lifView = loader.views[0];
+
+        // Create dual offscreen renderers for each eye
+        await this.createDualRenderers();
+        
+        // Create VR display planes
+        await this.createVRDisplayPlanes();
     }
 
-    // Create Three.js textures from canvases
-    this.texLeft = new THREE.CanvasTexture(canvasL);
-    this.texRight = new THREE.CanvasTexture(canvasR);
-  }
+    render(time, frame) {
+        const xrCam = this.renderer.xr.getCamera(this.camera);
+        
+        if (xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+            const leftCam = xrCam.cameras[0];
+            const rightCam = xrCam.cameras[1];
 
-  onXRSessionStart() {
-    this.isVRActive = true;
-    
-    // Create VR planes if not already created
-    if (!this.planeLeft || !this.planeRight) {
-      this.createVRPlanes();
-    }
+            // Initialize display detection and canvas sizing
+            if (!this.xrCanvasInitialized) {
+                this.detectDisplayTypeAndInitialize(leftCam, rightCam);
+            }
 
-    // Setup controllers
-    this.setupVRControllers();
-
-    // Initialize convergence plane
-    const xrCam = this.renderer.xr.getCamera(this.camera);
-    if (xrCam.isArrayCamera && xrCam.cameras.length === 2) {
-      this.convergencePlane = this.calculateConvergencePlane(
-        xrCam.cameras[0], xrCam.cameras[1]
-      );
-      this.updatePlanePositions();
-    }
-
-    // Chrome extension integration
-    if (window.WebXROpenXRBridge) {
-      setTimeout(() => {
-        window.WebXROpenXRBridge.setProjectionMethod(1); // Display-centric projection
-        console.log('WebXROpenXRBridge: Set display-centric projection');
-      }, 1000);
-    }
-  }
-
-  onXRSessionEnd() {
-    this.isVRActive = false;
-  }
-
-  createVRPlanes() {
-    // Create shader material for left eye
-    const materialLeft = new THREE.ShaderMaterial({
-      uniforms: {
-        uTexture: { value: this.texLeft },
-        uOpacity: { value: 1.0 }
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            // Render based on detected display type
+            this.renderDualEye(leftCam, rightCam);
         }
-      `,
-      fragmentShader: `
-        uniform sampler2D uTexture;
-        uniform float uOpacity;
-        varying vec2 vUv;
-        void main() {
-          vec4 texColor = texture2D(uTexture, vUv);
-          gl_FragColor = vec4(texColor.rgb, texColor.a * uOpacity);
-        }
-      `,
-      transparent: true
-    });
+    }
+}
+```
 
-    // Create shader material for right eye (similar to left)
-    const materialRight = materialLeft.clone();
-    materialRight.uniforms.uTexture.value = this.texRight;
+### 3. Display Detection Algorithm
 
-    // Create plane geometry
-    const geometry = new THREE.PlaneGeometry(1, 1);
-
-    // Create meshes
-    this.planeLeft = new THREE.Mesh(geometry, materialLeft);
-    this.planeLeft.layers.set(1); // Only visible to left eye
-    this.scene.add(this.planeLeft);
-
-    this.planeRight = new THREE.Mesh(geometry, materialRight);
-    this.planeRight.layers.set(2); // Only visible to right eye
-    this.scene.add(this.planeRight);
-  }
-
-  calculateConvergencePlane(leftCam, rightCam) {
-    // Get camera frustum data from projection matrices
+```javascript
+detectDisplayTypeAndInitialize(leftCam, rightCam) {
+    // Analyze FOV characteristics
     const leftFov = this.computeFovTanAngles(leftCam);
     const rightFov = this.computeFovTanAngles(rightCam);
     
-    // Analyze frustum characteristics to determine display type
-    const isSymmetric = Math.abs(leftFov.tanUp) === Math.abs(leftFov.tanDown) &&
-        Math.abs(leftFov.tanLeft) === Math.abs(leftFov.tanRight);
-    const isEqual = Math.abs(leftFov.tanUp - rightFov.tanUp) < 0.0001 &&
-        Math.abs(leftFov.tanDown - rightFov.tanDown) < 0.0001 &&
-        Math.abs(leftFov.tanLeft - rightFov.tanLeft) < 0.0001 &&
-        Math.abs(leftFov.tanRight - rightFov.tanRight) < 0.0001;
+    const denomX = (rightFov.tanRight - rightFov.tanLeft - leftFov.tanRight + leftFov.tanLeft);
     const isMirror = Math.abs(leftFov.tanLeft) === Math.abs(rightFov.tanRight) && 
-        Math.abs(leftFov.tanRight) === Math.abs(rightFov.tanLeft) && 
-        Math.abs(leftFov.tanUp) === Math.abs(rightFov.tanUp) && 
-        Math.abs(leftFov.tanDown) === Math.abs(rightFov.tanDown);
+                    Math.abs(leftFov.tanRight) === Math.abs(rightFov.tanLeft);
+    
+    if (Math.abs(denomX) < 0.0001 || isMirror) {
+        // VR HEADSET DETECTED
+        this.is3D = 0;
+        this.initializeVRMode(leftCam, rightCam);
+    } else {
+        // 3D DISPLAY DETECTED  
+        this.is3D = 1;
+        this.initialize3DMode(leftCam, rightCam);
+    }
+}
 
-    // Extract FOV angles
+initializeVRMode(leftCam, rightCam) {
+    this.log("RENDERING for VR");
+    
+    // High-resolution textures with aspect ratio preservation
+    const aspectRatio = this.lifView.height_px / this.lifView.width_px;
+    let width = this.lifView.width_px * this.viewportScale;
+    let height = this.lifView.height_px * this.viewportScale;
+    
+    if (width > this.MAX_TEX_SIZE_VR) {
+        width = this.MAX_TEX_SIZE_VR;
+        height = width * aspectRatio;
+    } else if (height > this.MAX_TEX_SIZE_VR) {
+        height = this.MAX_TEX_SIZE_VR;
+        width = height / aspectRatio;
+    }
+    
+    this.lifCanvasL.width = width;
+    this.lifCanvasL.height = height;
+    this.lifCanvasR.width = width;
+    this.lifCanvasR.height = height;
+    
+    // Set focus distance for depth perception
+    this.lifRendererL.invd = this.focus * this.lifView.inv_z_map.min;
+    this.lifRendererR.invd = this.focus * this.lifView.inv_z_map.min;
+}
+
+initialize3DMode(leftCam, rightCam) {
+    this.log("RENDERING for 3D");
+    
+    // Reduced resolution based on viewport
+    this.lifCanvasL.width = leftCam.viewport.width / 2;
+    this.lifCanvasL.height = leftCam.viewport.height / 2;
+    this.lifCanvasR.width = rightCam.viewport.width / 2;
+    this.lifCanvasR.height = rightCam.viewport.height / 2;
+    this.viewportScale = 1;
+    
+    // No convergence distance for 3D displays
+    // (invd remains at default 0)
+}
+```
+
+### 4. Convergence Plane Calculation
+
+```javascript
+locateConvergencePlane(leftCam, rightCam) {
+    const leftFov = this.computeFovTanAngles(leftCam);
+    const rightFov = this.computeFovTanAngles(rightCam);
+    
+    // Extract camera positions and FOV angles
+    const x0 = leftCam.position.x, y0 = leftCam.position.y, z0 = leftCam.position.z;
+    const x1 = rightCam.position.x, y1 = rightCam.position.y, z1 = rightCam.position.z;
     const u0 = leftFov.tanUp, d0 = -leftFov.tanDown;
     const r0 = leftFov.tanRight, l0 = -leftFov.tanLeft;
     const u1 = rightFov.tanUp, d1 = -rightFov.tanDown;
     const r1 = rightFov.tanRight, l1 = -rightFov.tanLeft;
 
-    // Calculate denominators for 3D display position calculation
     const denomX = (r1 - l1 - r0 + l0);
-    const denomY = (u1 - d1 - u0 + d0);
+    const isMirror = Math.abs(l0) === Math.abs(r1) && Math.abs(r0) === Math.abs(l1);
 
-    // Determine if this is VR (symmetric/mirrored frustums) or 3D display (asymmetric)
     if (Math.abs(denomX) < 0.0001 || isMirror) {
       // VR MODE: Symmetric calculation
-      console.log("Detected VR headset - using symmetric calculation");
-      this.is3D = false;
-      
-      const IPD = 0.063; // Standard interpupillary distance
-      const focus = 0.01; // Focus parameter for depth calculation
-      const viewportScale = 1.2; // Scale factor for viewport
-      
-      // Calculate distance based on LIF depth data
-      const distance = IPD / this.views[0].inv_z_map.min / focus;
-      
-      // Calculate plane dimensions based on LIF content
-      const width = viewportScale * distance / this.views[0].focal_px * this.views[0].width_px;
-      const height = viewportScale * distance / this.views[0].focal_px * this.views[0].height_px;
-      
-      // Position plane in front of cameras
+        const DISTANCE = 0.063 / this.lifView.inv_z_map.min / this.focus;
+        const width = this.viewportScale * DISTANCE / this.lifView.focal_px * this.lifView.width_px;
+        const height = this.viewportScale * DISTANCE / this.lifView.focal_px * this.lifView.height_px;
+        
       const centerPos = leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5);
-      const position = new THREE.Vector3(0, 0, -distance)
-        .applyQuaternion(leftCam.quaternion)
-        .add(centerPos);
+        const position = new THREE.Vector3(0, 0, -DISTANCE)
+            .applyQuaternion(leftCam.quaternion).add(centerPos);
 
-      // Remove roll from quaternion for stability
+        // Remove roll for stability
       const euler = new THREE.Euler().setFromQuaternion(leftCam.quaternion, 'YXZ');
-      euler.z = 0; // Remove roll
-      const noRollQuat = new THREE.Quaternion().setFromEuler(euler);
+        euler.z = 0;
+        const quaternion = new THREE.Quaternion().setFromEuler(euler);
 
-      return { position, quaternion: noRollQuat, width, height };
-      
+        return { position, quaternion, width, height };
     } else {
-      // 3D DISPLAY MODE: Asymmetric calculation
-      console.log("Detected 3D display - using asymmetric calculation");
-      this.is3D = true;
-      
-      // Get camera positions
-      const x0 = leftCam.position.x, y0 = leftCam.position.y, z0 = leftCam.position.z;
-      const x1 = rightCam.position.x, y1 = rightCam.position.y, z1 = rightCam.position.z;
-
-      // Calculate physical display position using frustum intersection
+        // 3D DISPLAY MODE: Asymmetric calculation using frustum intersection
       const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
       const xd = x0 - (r0 - l0) * (zd - z0) / 2;
       const yd = y0 - (u0 - d0) * (zd - z0) / 2;
 
-      // Calculate physical display dimensions
       const width = Math.abs((z0 - zd) * (l0 + r0));
       const height = Math.abs((z0 - zd) * (u0 + d0));
 
       return {
         position: new THREE.Vector3(xd, yd, zd),
         quaternion: leftCam.quaternion.clone(),
-        width, 
-        height
-      };
+            width, height
+        };
     }
-  }
+}
+```
 
-  computeFovTanAngles(camera) {
-    // Extract FOV data from WebXR camera projection matrix
-    const projMatrix = camera.projectionMatrix;
-    const m00 = projMatrix.elements[0];
-    const m05 = projMatrix.elements[5];
-    const m08 = projMatrix.elements[8];
-    const m09 = projMatrix.elements[9];
+### 5. Dual-Eye Rendering
 
-    // Calculate frustum boundaries
-    const left = (1 - m08) / m00;
-    const right = (1 + m08) / m00;
-    const bottom = (1 - m09) / m05;
-    const top = (1 + m09) / m05;
-
-    return {
-      tanUp: top,
-      tanDown: -bottom,
-      tanLeft: -left,
-      tanRight: right
-    };
-  }
-
-  updatePlanePositions() {
-    if (!this.convergencePlane) return;
-
-    // Update both planes to convergence position
-    this.planeLeft.position.copy(this.convergencePlane.position);
-    this.planeLeft.quaternion.copy(this.convergencePlane.quaternion);
-    this.planeLeft.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
-
-    this.planeRight.position.copy(this.convergencePlane.position);
-    this.planeRight.quaternion.copy(this.convergencePlane.quaternion);
-    this.planeRight.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
-  }
-
-  setupVRControllers() {
-    // Controller setup would go here
-    // See full implementation for controller tracking details
-  }
-
-  animate() {
-    this.renderer.setAnimationLoop(() => this.render());
-  }
-
-  render() {
-    if (this.isVRActive && this.leftEyeRenderer && this.rightEyeRenderer) {
-      const xrCam = this.renderer.xr.getCamera(this.camera);
-      
-      if (xrCam.isArrayCamera && xrCam.cameras.length === 2) {
-        const leftCam = xrCam.cameras[0];
-        const rightCam = xrCam.cameras[1];
-
-        // Enable layers for each eye
-        leftCam.layers.enable(1);
-        rightCam.layers.enable(2);
-
-        // Update renderer settings based on display type
-        if (this.is3D) {
-          // 3D Display Mode: Use reduced resolution and simple scaling
-          this.leftEyeRenderer.gl.canvas.width = leftCam.viewport?.width / 2 || 960;
-          this.leftEyeRenderer.gl.canvas.height = leftCam.viewport?.height / 2 || 540;
-          this.rightEyeRenderer.gl.canvas.width = rightCam.viewport?.width / 2 || 960;
-          this.rightEyeRenderer.gl.canvas.height = rightCam.viewport?.height / 2 || 540;
-          this.viewportScale = 1.0;
-        } else {
-          // VR Mode: Use optimized resolution and set convergence
-          const maxSize = 1920;
-          const aspectRatio = this.views[0].height_px / this.views[0].width_px;
-          let width = this.views[0].width_px * this.viewportScale;
-          let height = this.views[0].height_px * this.viewportScale;
-          
-          if (width > maxSize) {
-            width = maxSize;
-            height = width * aspectRatio;
-          } else if (height > maxSize) {
-            height = maxSize;
-            width = height / aspectRatio;
-          }
-          
-          this.leftEyeRenderer.gl.canvas.width = width;
-          this.leftEyeRenderer.gl.canvas.height = height;
-          this.rightEyeRenderer.gl.canvas.width = width;
-          this.rightEyeRenderer.gl.canvas.height = height;
-          
-          // Set convergence for VR mode
-          this.leftEyeRenderer.invd = this.focus * this.views[0].inv_z_map.min;
-          this.rightEyeRenderer.invd = this.focus * this.views[0].inv_z_map.min;
-        }
-
-        // Calculate camera positions relative to convergence plane
-        const localLeftPos = leftCam.position.clone()
+```javascript
+renderDualEye(leftCam, rightCam) {
+    // Calculate camera positions in convergence plane's local coordinate system
+    const localLeftCamPos = new THREE.Vector3().copy(leftCam.position)
+        .sub(this.convergencePlane.position);
+    localLeftCamPos.applyQuaternion(this.convergencePlane.quaternion.clone().invert());
+    
+    const localRightCamPos = new THREE.Vector3().copy(rightCam.position)
           .sub(this.convergencePlane.position);
-        const localRightPos = rightCam.position.clone()
-          .sub(this.convergencePlane.position);
-
-        // Update renderer camera positions
-        this.updateRendererCamera(this.leftEyeRenderer, localLeftPos);
-        this.updateRendererCamera(this.rightEyeRenderer, localRightPos);
-
-        // Render LIF content to textures
-        this.leftEyeRenderer.drawScene();
-        this.texLeft.needsUpdate = true;
-
-        this.rightEyeRenderer.drawScene();
-        this.texRight.needsUpdate = true;
-      }
+    localRightCamPos.applyQuaternion(this.convergencePlane.quaternion.clone().invert());
+    
+    // Capture initial positions for head tracking
+    if (this.initialY === undefined) {
+        this.initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+        this.initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+        this.IPD = localLeftCamPos.distanceTo(localRightCamPos);
     }
+    
+    // Render left eye
+    this.updateEyeRenderer(this.lifRendererL, localLeftCamPos);
+    this.lifRendererL.drawScene(currentTime);
+    this.lifTextureL.needsUpdate = true;
+    
+    // Render right eye
+    this.updateEyeRenderer(this.lifRendererR, localRightCamPos);
+    this.lifRendererR.drawScene(currentTime);
+    this.lifTextureR.needsUpdate = true;
+}
 
-    // Render Three.js scene
-    this.renderer.render(this.scene, this.camera);
-  }
-
-  updateRendererCamera(renderer, localPos) {
-    // Normalize position by IPD (interpupillary distance)
-    const IPD = 0.063; // Default 63mm
-    renderer.renderCam.pos.x = localPos.x / IPD;
-    renderer.renderCam.pos.y = localPos.y / IPD;
-    renderer.renderCam.pos.z = localPos.z / IPD;
-
-    // Update skew based on position
+updateEyeRenderer(renderer, localCamPos) {
+    // Normalize position by IPD
+    renderer.renderCam.pos.x = localCamPos.x / this.IPD;
+    renderer.renderCam.pos.y = (this.initialY - localCamPos.y) / this.IPD;
+    renderer.renderCam.pos.z = (this.initialZ - localCamPos.z) / this.IPD;
+    
+    // Apply skew correction
     renderer.renderCam.sk.x = -renderer.renderCam.pos.x * renderer.invd / 
       (1 - renderer.renderCam.pos.z * renderer.invd);
     renderer.renderCam.sk.y = -renderer.renderCam.pos.y * renderer.invd / 
       (1 - renderer.renderCam.pos.z * renderer.invd);
 
-    // Update focal length with viewport scaling
-    const viewportScaling = this.is3D ? 1.0 : this.viewportScale;
+    // Set focal length with mode-specific scaling
     renderer.renderCam.f = renderer.views[0].f * renderer.viewportScale() * 
-      Math.max(1 - renderer.renderCam.pos.z * renderer.invd, 0) / viewportScaling;
-  }
+        Math.max(1 - renderer.renderCam.pos.z * renderer.invd, 0) / this.viewportScale;
 }
-
-// Initialize viewer
-const viewer = new VRLifViewer();
-viewer.init();
 ```
 
-### 3. Chrome Extension Integration
+## Chrome Extension Integration
 
-The WebXROpenXRBridge extension provides advanced VR features:
+### 1. Manifest Configuration
+
+```json
+{
+  "manifest_version": 3,
+  "name": "ImmersityLens",
+  "version": "2.0.1",
+  "permissions": ["activeTab"],
+  "web_accessible_resources": [{
+    "resources": [
+      "libs/VRPageSystem.js",
+      "shaders/*.glsl"
+    ],
+    "matches": ["<all_urls>"]
+  }],
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"]
+  }]
+}
+```
+
+### 2. WebXROpenXRBridge Integration
 
 ```javascript
-// Check if extension is available
+// Enhanced VR features when Chrome extension is available
 if (window.WebXROpenXRBridge) {
-  // Set projection method (0: viewer-centric, 1: display-centric)
+    setTimeout(() => {
+        try {
+            // Set display-centric projection for better 3D display compatibility
   window.WebXROpenXRBridge.setProjectionMethod(1);
   
-  // Reset settings with optional scale factor
+            // Reset settings with default scale
+            setTimeout(() => {
   window.WebXROpenXRBridge.resetSettings(1.0);
   
-  // Extension provides optimized rendering for supported headsets
+                // Trigger convergence plane recalculation
+                setTimeout(() => {
+                    this.resetConvergencePlane(leftCam, rightCam);
+                }, 500);
+            }, 500);
+        } catch (error) {
+            console.error("WebXROpenXRBridge error:", error);
+        }
+    }, 1000);
 }
 ```
 
-## Key Implementation Details
+## Embedded Shader System
 
-### 1. Display Type Detection
-The system automatically detects whether it's running on a VR headset or 3D display by analyzing camera frustums:
+The VR system includes complete embedded shaders to avoid CSP issues:
 
-**VR Detection Criteria:**
-- Symmetric frustums (left/right FOVs are mirrored)
-- Equal vertical FOVs between eyes
-- Near-zero denominator in 3D display calculations
+### Mono Shader Features
+- Advanced raycasting with binary search refinement
+- Multi-layer LDI support (up to 4 layers)
+- Edge feathering and quality optimization
+- GL ES compatibility for mobile VR
 
-**3D Display Detection Criteria:**
-- Asymmetric frustums (different left/right boundaries)
-- Cameras positioned to view a physical display surface
-- Non-zero denominators allowing 3D position calculation
+### Stereo Shader Features  
+- Dual camera input with multiview weighting
+- Stereo-specific depth handling
+- Cross-eye rendering prevention
+- Advanced blending for seamless stereo
 
-### 2. Convergence Plane Calculation
-
-**For VR Headsets:**
 ```javascript
-// Calculate distance based on IPD and LIF depth data
-const distance = IPD / views[0].inv_z_map.min / focus;
+getEmbeddedMonoShader() {
+    return `#version 100
+precision mediump float;
+// ... 332 lines of production mono shader code
+`;
+}
 
-// Scale plane to match LIF content dimensions
-const width = viewportScale * distance / views[0].focal_px * views[0].width_px;
-const height = viewportScale * distance / views[0].focal_px * views[0].height_px;
+getEmbeddedStereoShader() {
+    return `#version 100  
+precision mediump float;
+// ... 403 lines of production stereo shader code
+`;
+}
 ```
 
-**For 3D Displays:**
+## Performance Optimization
+
+### Display-Specific Optimizations
+
+**VR Mode:**
+- Maximum texture resolution: 1920px
+- Dynamic viewport scaling: 1.2x
+- Focus-based convergence calculation
+- Full shader features enabled
+
+**3D Display Mode:**
+- Reduced texture resolution: viewport/2
+- Direct viewport scaling: 1.0x
+- No convergence calculation
+- Optimized rendering pipeline
+
+### Memory Management
 ```javascript
-// Calculate physical display position using frustum intersection
-const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
-const xd = x0 - (r0 - l0) * (zd - z0) / 2;
-
-// Calculate physical display dimensions
-const width = Math.abs((z0 - zd) * (l0 + r0));
+cleanup() {
+    // Dispose WebGL contexts
+    if (this.lifRendererL) {
+        this.lifRendererL.gl.getExtension('WEBGL_lose_context')?.loseContext();
+    }
+    
+    // Clear textures and meshes
+    if (this.lifTextureL) this.lifTextureL.dispose();
+    if (this.lifMeshL) {
+        this.lifMeshL.material.dispose();
+        this.lifMeshL.geometry.dispose();
+    }
+    
+    // Reset state variables
+    this.xrCanvasInitialized = false;
+    this.is3D = 1;
+    this.viewportScale = 1.2;
+}
 ```
-
-### 3. Adaptive Rendering Settings
-- **VR Mode**: High resolution (up to 1920px), dynamic convergence
-- **3D Display Mode**: Reduced resolution (viewport/2), fixed scaling
-- Automatic texture size optimization based on detected hardware
-
-### 4. Layer Management
-- Left eye content only visible to left camera (layer 1)
-- Right eye content only visible to right camera (layer 2)
-- Prevents cross-talk between eyes
-
-### 5. Performance Optimization
-- Adaptive resolution based on display type
-- Efficient shader-based rendering
-- Dynamic convergence adjustment for VR
-- Resource cleanup on session end
-
-## Shader Requirements
-
-The system requires custom GLSL shaders for LIF rendering:
-
-- `rayCastMonoLDI.glsl` - For mono LIF files
-- `rayCastStereoLDI.glsl` - For stereo LIF files
-
-These shaders handle:
-- Depth-based pixel displacement
-- Multi-layer compositing
-- View-dependent rendering
 
 ## Troubleshooting
 
+### Display Detection Issues
+```javascript
+// Debug FOV analysis
+console.log("FOV Analysis:", {
+    isSymmetric: Math.abs(leftFov.tanUp) === Math.abs(leftFov.tanDown),
+    isEqual: Math.abs(leftFov.tanUp - rightFov.tanUp) < 0.0001,
+    isMirror: Math.abs(leftFov.tanLeft) === Math.abs(rightFov.tanRight),
+    denomX: (rightFov.tanRight - rightFov.tanLeft - leftFov.tanRight + leftFov.tanLeft)
+});
+```
+
 ### Common Issues
 
-1. **Black screen in VR**
-   - Check texture updates (`texture.needsUpdate = true`)
-   - Verify layer assignments (left eye: layer 1, right eye: layer 2)
-   - Ensure shaders compiled successfully
-   - Verify convergence plane calculation didn't return NaN values
+1. **Incorrect Display Type Detection**
+   - Check FOV symmetry analysis
+   - Verify camera projection matrices
+   - Test denominator calculations
 
-2. **Performance issues**
-   - Check if proper display type was detected (VR vs 3D display)
-   - Verify texture resolution is appropriate for hardware
-   - Monitor GPU memory usage
-   - Check if too many render calls per frame
+2. **Performance Issues**
+   - Monitor texture resolution settings
+   - Check for proper display mode initialization
+   - Verify cleanup on session end
 
-3. **Incorrect convergence/positioning**
-   - Verify camera projection matrices are valid
-   - Check frustum analysis results (symmetric vs asymmetric)
-   - Ensure IPD calculations are reasonable (around 0.063m)
-   - Validate convergence plane position isn't behind cameras
+3. **Rendering Problems**
+   - Validate convergence plane calculations
+   - Check texture update flags
+   - Verify layer assignments (layer 1/2)
 
-4. **Display type misdetection**
-   - Log FOV analysis results (isSymmetric, isEqual, isMirror)
-   - Check denominator values in convergence calculation
-   - Verify camera positions are different between left/right
-   - Test with different focus values if VR detection fails
+## Development Workflow
+
+### 1. Testing Setup
+```bash
+# Package extension for testing
+cd ImmersityLens
+./package-for-store.sh
+```
+
+### 2. Chrome Extension Loading
+1. Navigate to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked" and select ImmersityLens folder
+4. Test with LIF files on supported websites
+
+### 3. VR Testing
+1. Ensure WebXR-compatible browser
+2. Connect VR headset or use 3D display
+3. Load LIF file in supported format
+4. Click VR button when it appears
+5. Verify proper display type detection
+
+## API Reference
+
+### VRPageSystem Class
+
+#### Constructor
+```javascript
+new PageContextVRSystem()
+```
+
+#### Key Methods
+- `init()` - Initialize Three.js and WebXR
+- `loadAndStartVR(lifUrl)` - Load LIF and start VR session
+- `createLifVRScene(lifData)` - Create VR scene from LIF data
+- `locateConvergencePlane(leftCam, rightCam)` - Calculate display geometry
+- `render(time, frame)` - Main render loop
+- `cleanup()` - Resource disposal
+
+#### Properties
+- `is3D` - Display type flag (0: VR, 1: 3D display)
+- `viewportScale` - Rendering scale factor
+- `focus` - VR convergence focus distance
+- `MAX_TEX_SIZE_VR` - Maximum texture resolution
+
+### Message API
+```javascript
+// Start VR session
+window.postMessage({
+    type: 'VR_LIF_COMMAND_START_VR',
+    lifUrl: 'blob:...'
+}, '*');
+
+// Exit VR session
+window.postMessage({
+    type: 'VR_LIF_COMMAND_EXIT_VR'
+}, '*');
+```
+
+## Browser Compatibility
+
+- **Chrome/Edge**: Full support with WebXR flags enabled
+- **Firefox**: WebXR support varies by version
+- **Safari**: Limited WebXR support
+
+## Extension Packaging
+
+Use the provided script to create store-ready packages:
+
+```bash
+./package-for-store.sh
+```
+
+This creates a `immersitylens-v{version}.zip` file ready for Chrome Web Store submission.
 
 ## Best Practices
 
 1. **Resource Management**
-   - Dispose textures and contexts when done
-   - Release blob URLs after loading
-   - Clear WebGL contexts on session end
+   - Always dispose WebGL contexts on cleanup
+   - Use proper texture disposal
+   - Reset state variables on session end
 
-2. **Error Handling**
-   - Validate LIF file format
-   - Check WebGL context creation
-   - Handle XR session failures gracefully
+2. **Performance**
+   - Monitor texture resolution for target hardware
+   - Use appropriate viewport scaling
+   - Enable display-specific optimizations
 
 3. **User Experience**
-   - Provide loading indicators
-   - Fade in content smoothly
-   - Support controller interactions
+   - Provide clear VR session feedback
+   - Handle session failures gracefully
+   - Support both headset and display types
 
-## References
-
-- [WebXR Device API](https://www.w3.org/TR/webxr/)
-- [Three.js WebXR Documentation](https://threejs.org/docs/#manual/en/introduction/How-to-create-VR-content)
-- [Leia LIF Format Specification](https://www.leiainc.com/) 
+4. **Security**
+   - Use CSP-safe script injection
+   - Validate LIF file formats
+   - Handle cross-origin resources properly 
