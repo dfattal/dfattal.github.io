@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ImmersityLens - 2D to 3D Converter",
-  "version": "3.0.0",
+      "version": "3.1.0",
   "description": "Convert 2D images to immersive 3D LIF files with VR viewing capabilities using Immersity AI",
   "permissions": [
     "activeTab",
@@ -10,7 +10,9 @@
   "host_permissions": [
     "https://api.immersity.ai/*",
     "https://api.dev.immersity.ai/*",
-    "https://*.lambda-url.us-east-1.on.aws/*"
+    "https://*.lambda-url.us-east-1.on.aws/*",
+    "https://*.s3.us-east-1.amazonaws.com/*",
+    "https://leia-storage-service-production.s3.us-east-1.amazonaws.com/*"
   ],
   "content_scripts": [
     {

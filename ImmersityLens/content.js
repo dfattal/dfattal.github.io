@@ -1,5 +1,5 @@
 /**
- * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v2.0.0)
+ * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.0.1)
  * 
  * OVERVIEW:
  * Advanced Chrome extension that adds intelligent 2D→3D conversion buttons to images across
@@ -2171,10 +2171,15 @@ function addConvertButton(img) {
         return false;
     })();
 
+    // FLICKR FIX: Force overlay approach for Flickr's absolutely positioned images
+    const isFlickrAbsoluteImage = window.location.hostname.includes('flickr.com') &&
+        window.getComputedStyle(img).position === 'absolute';
+
     const shouldUseOverlayApproach = isPictureImage ||
         (layoutAnalysis && layoutAnalysis.containerHasPaddingAspectRatio) ||
         isAspectRatioContainer ||
-        isLinkedInPaddingContainer;
+        isLinkedInPaddingContainer ||
+        isFlickrAbsoluteImage;
 
 
 
@@ -2478,9 +2483,23 @@ function addConvertButton(img) {
             img.style.display = 'block';
         }
     } else {
-        // For picture elements using overlay approach, ensure we have a proper container reference
-        console.log('Picture element using overlay approach - setting up container reference');
-        imageContainer = targetElement; // This is the picture parent container
+        // For overlay approach (picture elements, Flickr absolute images, etc.)
+        console.log('Using overlay approach - setting up container reference');
+        imageContainer = targetElement; // This is the container for overlay positioning
+
+        // FLICKR FIX: For absolutely positioned images, ensure container can hold positioned elements
+        if (isFlickrAbsoluteImage) {
+            console.log('🔧 Flickr absolute image detected - setting up overlay container');
+            const containerStyle = window.getComputedStyle(imageContainer);
+            if (containerStyle.position === 'static') {
+                imageContainer.style.position = 'relative';
+            }
+            console.log('✅ Flickr overlay container prepared:', {
+                container: imageContainer.tagName,
+                containerClass: imageContainer.className,
+                position: imageContainer.style.position || containerStyle.position
+            });
+        }
     }
 
     // Ensure container variable is properly set for both picture and non-picture elements

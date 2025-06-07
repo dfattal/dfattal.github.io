@@ -797,7 +797,14 @@ class lifViewer {
         } else if (layoutAnalysis?.containerHasPaddingAspectRatio) {
             layoutMode = 'aspectRatio';
         } else if (layoutAnalysis?.preserveOriginal) {
-            layoutMode = 'overlay';
+            // DEVIANTART FIX: DeviantArt should use standard mode despite preserveOriginal flag
+            // DeviantArt has simple container structures that work best with standard layout
+            if (window.location.hostname.includes('deviantart.com')) {
+                layoutMode = 'standard';
+                console.log('🎨 DeviantArt detected - forcing standard layout mode despite preserveOriginal flag');
+            } else {
+                layoutMode = 'overlay';
+            }
         }
 
         // LINKEDIN CENTERING FIX: Detect centered/aspect-fit images

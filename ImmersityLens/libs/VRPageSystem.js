@@ -924,6 +924,34 @@ class PageContextVRSystem {
         }
     }
 
+    async startVRWithBlobData(arrayBuffer) {
+        this.log('Starting VR with blob data from content script context...');
+
+        try {
+            // Convert array buffer to blob and then to file
+            const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+            const file = new File([blob], 'temp.lif', { type: 'application/octet-stream' });
+
+            // Load with embedded LifLoader
+            const lifLoader = new LifLoader();
+            const lifData = await lifLoader.load(file);
+
+            this.log('LIF data loaded successfully with ' + (lifData.views?.length || 0) + ' views');
+
+            // Create VR scene from LIF data
+            await this.createLifVRScene(lifData);
+
+            // Start VR session
+            await this.startVRSession();
+
+        } catch (error) {
+            this.log('Failed to load LIF from blob data and start VR: ' + error.message);
+            this.log('Falling back to test scene and starting VR...');
+            this.createTestScene();
+            await this.startVRSession();
+        }
+    }
+
     async createLifVRScene(lifData) {
         this.log('Creating LIF VR scene with proper dual-eye renderer...');
 
@@ -2302,6 +2330,11 @@ window.addEventListener('message', (event) => {
         case 'VR_LIF_COMMAND_START_VR':
             if (event.data.lifUrl) {
                 window.vrSystem.loadAndStartVR(event.data.lifUrl);
+            }
+            break;
+        case 'VR_LIF_COMMAND_START_VR_WITH_DATA':
+            if (event.data.lifData) {
+                window.vrSystem.startVRWithBlobData(event.data.lifData);
             }
             break;
         case 'VR_LIF_COMMAND_EXIT_VR':
