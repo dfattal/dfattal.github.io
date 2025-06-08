@@ -112,6 +112,7 @@
 
 // Global state for the extension
 let isExtensionEnabled = false; // Default to disabled - user must explicitly enable
+let isDebugEnabled = false; // Default to disabled - user must explicitly enable debug mode
 let processingImages = new Set(); // Track which images are being processed
 let hasShownCorsInfo = false; // Track if we've shown CORS info to user
 
@@ -121,8 +122,12 @@ let mutationObserver = null;
 let messageListener = null;
 let scrollHandler = null;
 
-// Storage key for extension state
+// Flag to control console logging (avoid noise when extension is disabled)
+let shouldLog = false;
+
+// Storage keys for extension state
 const STORAGE_KEY = 'lifExtensionEnabled';
+const DEBUG_STORAGE_KEY = 'lifDebugEnabled';
 const CORS_INFO_SHOWN_KEY = 'lifCorsInfoShown';
 
 // Z-index configuration - Centralized for easy maintenance
@@ -136,6 +141,12 @@ const Z_INDEX_CONFIG = {
 
 // 🥽 WEBXR SUPPORT TEST - Inject script file into page context
 function testWebXRSupport() {
+    // Only test WebXR if extension is enabled
+    if (!isExtensionEnabled) {
+        console.log('🔍 WebXR support test skipped - extension disabled');
+        return;
+    }
+
     console.log('🔍 Testing WebXR support by injecting test script into page context...');
 
     // Set a timeout fallback in case the WebXR test script doesn't respond
@@ -159,7 +170,7 @@ function testWebXRSupport() {
         const script = document.createElement('script');
         script.src = chrome.runtime.getURL('libs/WebXRTest.js');
         script.onload = () => {
-            console.log('✅ WebXR test script injected successfully');
+            // WebXR test script injected successfully - logging removed
             script.remove(); // Clean up after injection
         };
         script.onerror = (error) => {
@@ -849,13 +860,19 @@ async function convertTo3D(img, button) {
             // Use the same logic as button positioning to find the best container for overlay
             if (containerMedia && containerMedia.classList.contains('container__item-media')) {
                 overlayContainer = containerMedia;
-                console.log('Using container__item-media as overlay container');
+                if (isDebugEnabled) {
+                    console.log('Using container__item-media as overlay container');
+                }
             } else if (imageDiv && imageDiv.classList.contains('image')) {
                 overlayContainer = imageDiv;
-                console.log('Using image div as overlay container');
+                if (isDebugEnabled) {
+                    console.log('Using image div as overlay container');
+                }
             } else {
                 overlayContainer = imageContainer;
-                console.log('Using image__container as overlay container');
+                if (isDebugEnabled) {
+                    console.log('Using image__container as overlay container');
+                }
             }
 
             console.log('Picture element detected in convertTo3D - container set to:', container?.className || 'element');
@@ -893,7 +910,9 @@ async function convertTo3D(img, button) {
                 const style = window.getComputedStyle(searchElement);
                 if (style.position === 'relative' || style.position === 'absolute') {
                     overlayContainer = searchElement;
-                    console.log('Facebook layout: Found overlay container in parent hierarchy');
+                    if (isDebugEnabled) {
+                        console.log('Facebook layout: Found overlay container in parent hierarchy');
+                    }
                     break;
                 }
                 searchElement = searchElement.parentElement;
@@ -902,7 +921,9 @@ async function convertTo3D(img, button) {
             // If still no overlay container, use the direct parent
             if (!overlayContainer) {
                 overlayContainer = img.parentElement;
-                console.log('Facebook layout: Using direct parent as overlay container');
+                if (isDebugEnabled) {
+                    console.log('Facebook layout: Using direct parent as overlay container');
+                }
 
                 // Ensure it can contain positioned elements
                 const parentStyle = window.getComputedStyle(overlayContainer);
@@ -922,14 +943,16 @@ async function convertTo3D(img, button) {
             const currentPictureElement = img.closest('picture');
             const isAspectRatioContainer = overlayContainer.dataset.lifTargetWidth && overlayContainer.dataset.lifTargetHeight;
 
-            console.log('Overlay creation debug:', {
-                hasPictureElement: !!currentPictureElement,
-                isFacebookStyle: layoutAnalysis?.isFacebookStyle,
-                isAspectRatioContainer: !!isAspectRatioContainer,
-                overlayContainer: overlayContainer.className || overlayContainer.tagName,
-                pictureElementClass: currentPictureElement?.className || 'none',
-                hasStoredDimensions: !!isAspectRatioContainer
-            });
+            if (isDebugEnabled) {
+                console.log('Overlay creation debug:', {
+                    hasPictureElement: !!currentPictureElement,
+                    isFacebookStyle: layoutAnalysis?.isFacebookStyle,
+                    isAspectRatioContainer: !!isAspectRatioContainer,
+                    overlayContainer: overlayContainer.className || overlayContainer.tagName,
+                    pictureElementClass: currentPictureElement?.className || 'none',
+                    hasStoredDimensions: !!isAspectRatioContainer
+                });
+            }
 
             // For picture element overlays, Facebook layouts, or aspect ratio containers, position absolutely to cover the image
             if (currentPictureElement || layoutAnalysis?.isFacebookStyle || isAspectRatioContainer) {
@@ -960,7 +983,9 @@ async function convertTo3D(img, button) {
                 const layoutType = currentPictureElement ? 'picture element' :
                     layoutAnalysis?.isFacebookStyle ? 'Facebook layout' :
                         'aspect ratio container';
-                console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (${layoutType})`);
+                if (isDebugEnabled) {
+                    console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (${layoutType})`);
+                }
 
                 // Ensure the overlay container can contain absolutely positioned elements
                 const containerStyle = window.getComputedStyle(overlayContainer);
@@ -970,7 +995,9 @@ async function convertTo3D(img, button) {
             } else {
                 // For non-picture elements, use the default CSS positioning (fills container)
                 overlay.style.zIndex = Z_INDEX_CONFIG.PROCESSING_OVERLAY;
-                console.log('Using default overlay positioning for regular image');
+                if (isDebugEnabled) {
+                    console.log('Using default overlay positioning for regular image');
+                }
             }
 
             // Store reference to overlay container on the overlay for later removal
@@ -1085,7 +1112,7 @@ async function convertTo3D(img, button) {
                 console.log('VR button now visible - LIF is ready');
 
                 // VR button is now visible and ready
-                console.log('✅ VR button is now visible and ready for use');
+                // VR button is now visible and ready for use - success logging removed
 
             } else {
                 console.error('❌ VR button not found on button object when trying to make it visible');
@@ -1256,7 +1283,7 @@ async function convertTo3D(img, button) {
                 console.log('🚨 CHANGED to picture parent as LIF container for overlay approach');
                 console.log('   Picture parent container:', lifContainer);
             } else {
-                console.log('✅ Using original container for LIF viewer');
+                // Using original container for LIF viewer - logging removed
             }
 
             // Use the enhanced factory method for layout-aware viewer creation
@@ -1676,11 +1703,13 @@ function analyzeLayoutPattern(element, img) {
 
         analysis.containerHasPaddingAspectRatio = true;
 
-        console.log('Padding-based aspect ratio detected:', {
-            directPadding: { paddingTop, paddingBottom, height, paddingTopValue, paddingBottomValue, heightValue, hasPercentagePadding },
-            parentPadding: paddingContainerInfo,
-            foundPaddingContainer
-        });
+        if (isDebugEnabled) {
+            console.log('Padding-based aspect ratio detected:', {
+                directPadding: { paddingTop, paddingBottom, height, paddingTopValue, paddingBottomValue, heightValue, hasPercentagePadding },
+                parentPadding: paddingContainerInfo,
+                foundPaddingContainer
+            });
+        }
     }
 
     // 2. Detect absolutely positioned images within containers
@@ -1807,7 +1836,7 @@ function addConvertButton(img) {
     const intrinsicWidth = img.naturalWidth || 0;
     const intrinsicHeight = img.naturalHeight || 0;
 
-    console.log(`Image dimensions - Rendered: ${renderedWidth}x${renderedHeight}, Intrinsic: ${intrinsicWidth}x${intrinsicHeight}`);
+    // Image dimensions logging removed to reduce console noise
 
     // Use intrinsic dimensions if rendered size is 0x0 or too small
     const effectiveWidth = renderedWidth > 0 ? renderedWidth : intrinsicWidth;
@@ -1835,13 +1864,17 @@ function addConvertButton(img) {
     if (imgComputedStyle.display === 'none' ||
         imgComputedStyle.visibility === 'hidden' ||
         parseFloat(imgComputedStyle.opacity) === 0) {
-        console.log('🚫 Skipping invisible image:', img.src?.substring(0, 50) + '...');
+        if (isDebugEnabled) {
+            console.log('🚫 Skipping invisible image:', img.src?.substring(0, 50) + '...');
+        }
         return;
     }
 
     // Skip images with zero or negative dimensions (hidden/positioned off-screen)
     if (imgRect.width <= 0 || imgRect.height <= 0) {
-        console.log('🚫 Skipping zero-dimension image:', img.src?.substring(0, 50) + '...');
+        if (isDebugEnabled) {
+            console.log('🚫 Skipping zero-dimension image:', img.src?.substring(0, 50) + '...');
+        }
         return;
     }
 
@@ -1854,7 +1887,9 @@ function addConvertButton(img) {
         (imgRect.top > viewport.height + 5000 && imgRect.left < -500); // Suspicious combo: far down + far left
 
     if (isExtremelyOffScreen) {
-        console.log('🚫 Skipping extremely off-screen image (likely hidden UI):', img.src?.substring(0, 50) + '...');
+        if (isDebugEnabled) {
+            console.log('🚫 Skipping extremely off-screen image (likely hidden UI):', img.src?.substring(0, 50) + '...');
+        }
         return;
     }
 
@@ -1863,7 +1898,9 @@ function addConvertButton(img) {
 
     // Skip extremely thin images (likely decorative borders, spacers, dividers)
     if (aspectRatio > 20 || aspectRatio < 0.05) {
-        console.log('🚫 Skipping decorative image (extreme aspect ratio):', aspectRatio.toFixed(2), img.src?.substring(0, 50) + '...');
+        if (isDebugEnabled) {
+            console.log('🚫 Skipping decorative image (extreme aspect ratio):', aspectRatio.toFixed(2), img.src?.substring(0, 50) + '...');
+        }
         return;
     }
 
@@ -1871,7 +1908,9 @@ function addConvertButton(img) {
     const isSmallSquare = effectiveWidth <= 150 && effectiveHeight <= 150 &&
         Math.abs(aspectRatio - 1) < 0.2; // Nearly square
     if (isSmallSquare) {
-        console.log('🚫 Skipping small square image (likely icon/logo):', `${effectiveWidth}x${effectiveHeight}`, img.src?.substring(0, 50) + '...');
+        if (isDebugEnabled) {
+            console.log('🚫 Skipping small square image (likely icon/logo):', `${effectiveWidth}x${effectiveHeight}`, img.src?.substring(0, 50) + '...');
+        }
         return;
     }
 
@@ -2086,7 +2125,7 @@ function addConvertButton(img) {
         }
     }
 
-    console.log('✅ Image passed all filters:', `${effectiveWidth}x${effectiveHeight}`, img.src?.substring(0, 50) + '...');
+    // Image passed all filters - success logging removed to reduce console noise
 
     // Skip if already has a button
     if (img.dataset.lifButtonAdded) {
@@ -2231,7 +2270,7 @@ function addConvertButton(img) {
                 console.log(`🎯 Issue detected: ${isSuspiciouslyWide ? 'Extremely wide ratio' :
                     isSuspiciouslyTall ? 'Extremely tall ratio' :
                         'Significant dimension mismatch'}`);
-                console.log(`✅ Using image dimensions for proper 3D conversion`);
+                // Using image dimensions for proper 3D conversion - success logging removed
 
                 targetWidth = imgRect.width;
                 targetHeight = imgRect.height;
@@ -2260,7 +2299,9 @@ function addConvertButton(img) {
 
     // Analyze layout BEFORE deciding on approach to determine if we should use overlay
     layoutAnalysis = analyzeLayoutPattern(targetElement, img);
-    console.log('🔍 Layout analysis for container:', layoutAnalysis);
+    if (isDebugEnabled) {
+        console.log('🔍 Layout analysis for container:', layoutAnalysis);
+    }
 
     // DECISION POINT: Use overlay approach for padding-based layouts (aspect ratio containers)
     // This prevents DOM structure disruption that breaks padding-based aspect ratio techniques
@@ -2314,14 +2355,18 @@ function addConvertButton(img) {
 
     if (shouldUseOverlayApproach) {
         const wasInitiallyPictureImage = isPictureImage; // Store original value before modification
-        console.log('🎯 Using overlay approach for:', isPictureImage ? 'picture element' : 'aspect ratio container');
+        if (isDebugEnabled) {
+            console.log('🎯 Using overlay approach for:', isPictureImage ? 'picture element' : 'aspect ratio container');
+        }
         useOverlayApproach = true;
         isPictureImage = true; // Treat aspect ratio containers like picture elements
 
         // For aspect ratio containers, find the appropriate container for button positioning
         if (layoutAnalysis && layoutAnalysis.paddingContainer) {
             targetElement = layoutAnalysis.paddingContainer.element;
-            console.log(`📦 Using aspect ratio container (.${targetElement.className}) for overlay positioning`);
+            if (isDebugEnabled) {
+                console.log(`📦 Using aspect ratio container (.${targetElement.className}) for overlay positioning`);
+            }
         }
         // If explicit aspect ratio container detected but layout analysis missed it, find the container
         else if (isAspectRatioContainer && !wasInitiallyPictureImage) {
@@ -2335,7 +2380,9 @@ function addConvertButton(img) {
                     (searchElement.style.paddingBottom && searchElement.style.paddingBottom.includes('%')) ||
                     (searchElement.style.paddingTop && searchElement.style.paddingTop.includes('%'))) {
                     targetElement = searchElement;
-                    console.log(`📦 Found explicit aspect ratio container (.${targetElement.className}) for overlay positioning`);
+                    if (isDebugEnabled) {
+                        console.log(`📦 Found explicit aspect ratio container (.${targetElement.className}) for overlay positioning`);
+                    }
                     break;
                 }
                 searchElement = searchElement.parentElement;
@@ -2371,7 +2418,9 @@ function addConvertButton(img) {
                 // Store dimensions on the container for later use
                 targetElement.dataset.lifTargetWidth = Math.round(targetWidth);
                 targetElement.dataset.lifTargetHeight = Math.round(targetHeight);
-                console.log(`📐 Stored overlay dimensions: ${Math.round(targetWidth)}x${Math.round(targetHeight)} on`, targetElement.className || targetElement.tagName);
+                if (isDebugEnabled) {
+                    console.log(`📐 Stored overlay dimensions: ${Math.round(targetWidth)}x${Math.round(targetHeight)} on`, targetElement.className || targetElement.tagName);
+                }
             }
         }
     }
@@ -2404,23 +2453,29 @@ function addConvertButton(img) {
         const parentRect = imageContainer.parentElement?.getBoundingClientRect();
         const parentHasValidSize = parentRect && parentRect.width > 0 && parentRect.height > 0;
 
-        console.log('Container analysis:', {
-            containerSize: `${containerRect.width}x${containerRect.height}`,
-            parentSize: parentRect ? `${parentRect.width}x${parentRect.height}` : 'none',
-            needsSizeFix,
-            hasImageRenderingIssues,
-            parentHasValidSize,
-            layoutType: layoutAnalysis?.type || 'new-container',
-            preserveOriginal: layoutAnalysis?.preserveOriginal || false
-        });
+        if (isDebugEnabled) {
+            console.log('Container analysis:', {
+                containerSize: `${containerRect.width}x${containerRect.height}`,
+                parentSize: parentRect ? `${parentRect.width}x${parentRect.height}` : 'none',
+                needsSizeFix,
+                hasImageRenderingIssues,
+                parentHasValidSize,
+                layoutType: layoutAnalysis?.type || 'new-container',
+                preserveOriginal: layoutAnalysis?.preserveOriginal || false
+            });
+        }
 
         // Respect layout analysis - avoid fixes that would disrupt existing patterns
         if (layoutAnalysis?.preserveOriginal) {
-            console.log(`Preserving original layout: ${layoutAnalysis.reason}`);
+            if (isDebugEnabled) {
+                console.log(`Preserving original layout: ${layoutAnalysis.reason}`);
+            }
 
             // For Facebook-style layouts, apply specialized handling
             if (layoutAnalysis.isFacebookStyle) {
-                console.log('Detected Facebook-style layout - applying specialized handling');
+                if (isDebugEnabled) {
+                    console.log('Detected Facebook-style layout - applying specialized handling');
+                }
 
                 // Facebook images are often positioned within complex padding-based containers
                 // We need to preserve the original positioning and just ensure the image is visible
@@ -2456,16 +2511,20 @@ function addConvertButton(img) {
                 img.style.visibility = 'visible';
                 img.style.opacity = img.style.opacity || '1';
 
-                console.log('Facebook image positioning preserved:', {
-                    position: img.style.position,
-                    width: img.style.width,
-                    height: img.style.height,
-                    display: img.style.display
-                });
+                if (isDebugEnabled) {
+                    console.log('Facebook image positioning preserved:', {
+                        position: img.style.position,
+                        width: img.style.width,
+                        height: img.style.height,
+                        display: img.style.display
+                    });
+                }
             }
             // For padding-based aspect ratios (like Instagram), don't apply size fixes to containers
             else if (layoutAnalysis.containerHasPaddingAspectRatio) {
-                console.log('Detected padding-based aspect ratio - preserving container layout');
+                if (isDebugEnabled) {
+                    console.log('Detected padding-based aspect ratio - preserving container layout');
+                }
 
                 // Ensure our wrapper container fills the padding-created space
                 imageContainer.style.position = 'absolute';
@@ -2477,7 +2536,9 @@ function addConvertButton(img) {
 
                 // Handle different types of padding-based layouts
                 if (layoutAnalysis.imageIsAbsolute) {
-                    console.log('Image is absolutely positioned in padding-based container (Google/Pinterest style)');
+                    if (isDebugEnabled) {
+                        console.log('Image is absolutely positioned in padding-based container (Google/Pinterest style)');
+                    }
                     // Ensure the image maintains its absolute positioning and covers the container
                     img.style.position = 'absolute';
                     img.style.top = '0';
@@ -2487,7 +2548,9 @@ function addConvertButton(img) {
                     img.style.objectFit = 'cover';
                     img.style.display = 'block';
                 } else if (hasImageRenderingIssues) {
-                    console.log('Fixing image display within padding-based container (Instagram style)');
+                    if (isDebugEnabled) {
+                        console.log('Fixing image display within padding-based container (Instagram style)');
+                    }
 
                     // For padding-based layouts, the image should fill the container
                     // Try responsive approach first
@@ -2512,13 +2575,17 @@ function addConvertButton(img) {
                     const imgRect = img.getBoundingClientRect();
                     const containerRect = imageContainer.getBoundingClientRect();
 
-                    console.log('Post-fix dimensions check:', {
-                        containerSize: `${containerRect.width}x${containerRect.height}`,
-                        imageSize: `${imgRect.width}x${imgRect.height}`
-                    });
+                    if (isDebugEnabled) {
+                        console.log('Post-fix dimensions check:', {
+                            containerSize: `${containerRect.width}x${containerRect.height}`,
+                            imageSize: `${imgRect.width}x${imgRect.height}`
+                        });
+                    }
 
                     if (imgRect.width === 0 || imgRect.height === 0) {
-                        console.log('Image still 0x0 after padding-based fixes, applying fallback');
+                        if (isDebugEnabled) {
+                            console.log('Image still 0x0 after padding-based fixes, applying fallback');
+                        }
                         img.style.position = 'absolute';
                         img.style.top = '0';
                         img.style.left = '0';
@@ -2526,14 +2593,18 @@ function addConvertButton(img) {
                         img.style.height = '100%';
                         img.style.objectFit = 'cover';
                         img.style.display = 'block';
-                        console.log('Applied fallback positioning for padding-based layout');
+                        if (isDebugEnabled) {
+                            console.log('Applied fallback positioning for padding-based layout');
+                        }
                     }
                 }, 100);
             }
 
             // For responsive containers, minimal intervention
             else if (layoutAnalysis.hasResponsivePattern) {
-                console.log('Responsive pattern detected - minimal intervention');
+                if (isDebugEnabled) {
+                    console.log('Responsive pattern detected - minimal intervention');
+                }
                 // Only fix if absolutely necessary and in a way that preserves responsiveness
                 if (needsSizeFix && effectiveWidth > 0 && effectiveHeight > 0) {
                     // Use max-width instead of width to preserve responsiveness
@@ -2544,7 +2615,9 @@ function addConvertButton(img) {
 
             // For flex/grid children, even more minimal intervention
             else if (layoutAnalysis.parentUsesFlexOrGrid) {
-                console.log('Flex/Grid layout detected - minimal intervention');
+                if (isDebugEnabled) {
+                    console.log('Flex/Grid layout detected - minimal intervention');
+                }
                 // Just ensure relative positioning for button placement
                 imageContainer.style.position = 'relative';
             }
@@ -2552,7 +2625,9 @@ function addConvertButton(img) {
 
         // Only apply aggressive fixes if no special layout patterns detected
         else if (needsSizeFix && (effectiveWidth > 0 && effectiveHeight > 0)) {
-            console.log('No special layout detected - applying standard size fix:', effectiveWidth, 'x', effectiveHeight);
+            if (isDebugEnabled) {
+                console.log('No special layout detected - applying standard size fix:', effectiveWidth, 'x', effectiveHeight);
+            }
 
             // Use more conservative sizing approach
             imageContainer.style.width = `${effectiveWidth}px`;
@@ -2576,7 +2651,9 @@ function addConvertButton(img) {
 
         // Handle image rendering issues separately and more conservatively
         else if (hasImageRenderingIssues && intrinsicWidth > 0 && intrinsicHeight > 0 && !layoutAnalysis?.preserveOriginal) {
-            console.log('Image has rendering issues, applying conservative fixes');
+            if (isDebugEnabled) {
+                console.log('Image has rendering issues, applying conservative fixes');
+            }
 
             // Calculate a reasonable display size but be more conservative
             const maxDisplaySize = Math.min(600, parentHasValidSize ? Math.min(parentRect.width, parentRect.height) : 400);
@@ -2591,7 +2668,9 @@ function addConvertButton(img) {
                 displayWidth = displayHeight * aspectRatio;
             }
 
-            console.log(`Setting conservative image display size to: ${displayWidth}x${displayHeight}`);
+            if (isDebugEnabled) {
+                console.log(`Setting conservative image display size to: ${displayWidth}x${displayHeight}`);
+            }
 
             // Only apply container sizing if it doesn't already have valid dimensions
             if (containerRect.width === 0 || containerRect.height === 0) {
@@ -2613,21 +2692,27 @@ function addConvertButton(img) {
         }
     } else {
         // For overlay approach (picture elements, Flickr absolute images, etc.)
-        console.log('Using overlay approach - setting up container reference');
+        if (isDebugEnabled) {
+            console.log('Using overlay approach - setting up container reference');
+        }
         imageContainer = targetElement; // This is the container for overlay positioning
 
         // FLICKR FIX: For absolutely positioned images, ensure container can hold positioned elements
         if (isFlickrAbsoluteImage) {
-            console.log('🔧 Flickr absolute image detected - setting up overlay container');
+            if (isDebugEnabled) {
+                console.log('🔧 Flickr absolute image detected - setting up overlay container');
+            }
             const containerStyle = window.getComputedStyle(imageContainer);
             if (containerStyle.position === 'static') {
                 imageContainer.style.position = 'relative';
             }
-            console.log('✅ Flickr overlay container prepared:', {
-                container: imageContainer.tagName,
-                containerClass: imageContainer.className,
-                position: imageContainer.style.position || containerStyle.position
-            });
+            if (isDebugEnabled) {
+                console.log('✅ Flickr overlay container prepared:', {
+                    container: imageContainer.tagName,
+                    containerClass: imageContainer.className,
+                    position: imageContainer.style.position || containerStyle.position
+                });
+            }
         }
     }
 
@@ -2651,7 +2736,9 @@ function addConvertButton(img) {
     );
 
     if (hasImageHoverBehaviors) {
-        console.log('Detected existing hover/zoom behavior on image, applying enhanced protection');
+        if (isDebugEnabled) {
+            console.log('Detected existing hover/zoom behavior on image, applying enhanced protection');
+        }
         // Make the protective zone larger for images with existing behaviors
         buttonZone.style.width = '100px';
         buttonZone.style.height = '60px';
@@ -2759,7 +2846,9 @@ function addConvertButton(img) {
     });
 
     // Create the VR button (initially hidden, conditionally created based on WebXR support)
-    console.log('🥽 Creating VR button...');
+    if (isDebugEnabled) {
+        console.log('🥽 Creating VR button...');
+    }
     const vrButton = document.createElement('button');
     vrButton.className = 'lif-vr-btn';
     vrButton.textContent = '🥽 VR';
@@ -2770,16 +2859,22 @@ function addConvertButton(img) {
     // Check simple WebXR support test result
     if (webXRSupportChecked && !isWebXRSupported) {
         vrButton.style.display = 'none'; // Hide VR button if WebXR not supported
-        console.log('❌ VR button hidden - Simple WebXR test failed');
+        if (isDebugEnabled) {
+            console.log('❌ VR button hidden - Simple WebXR test failed');
+        }
     } else if (!webXRSupportChecked) {
         vrButton.style.display = 'none'; // Hide until test completes
-        console.log('⏳ VR button hidden - Simple WebXR test still pending');
+        if (isDebugEnabled) {
+            console.log('⏳ VR button hidden - Simple WebXR test still pending');
+        }
 
         // Check again in a moment if test completes
         setTimeout(() => {
             if (webXRSupportChecked && isWebXRSupported) {
                 vrButton.style.display = 'none'; // Still hidden until LIF is ready
-                console.log('✅ VR button will be available when LIF is ready');
+                if (isDebugEnabled) {
+                    console.log('✅ VR button will be available when LIF is ready');
+                }
             } else if (webXRSupportChecked && !isWebXRSupported) {
                 vrButton.style.display = 'none';
                 console.log('❌ VR button permanently hidden - WebXR not supported');
@@ -2787,19 +2882,10 @@ function addConvertButton(img) {
         }, 1000);
     } else {
         vrButton.style.display = 'none'; // Hidden until LIF is ready, but will be available
-        console.log('✅ VR button created and will be available when LIF is ready');
+        // VR button created and will be available when LIF is ready - success logging removed
     }
 
-    console.log('✅ VR button created:', {
-        className: vrButton.className,
-        textContent: vrButton.textContent,
-        title: vrButton.title,
-        display: vrButton.style.display,
-        pointerEvents: vrButton.style.pointerEvents,
-        zIndex: vrButton.style.zIndex,
-        webXRSupportChecked: webXRSupportChecked,
-        isWebXRSupported: isWebXRSupported
-    });
+    // VR button created successfully - detailed logging removed to reduce console noise
 
     // VR button click handler
     const handleVRButtonClick = async (e) => {
@@ -2883,7 +2969,9 @@ function addConvertButton(img) {
     };
 
     // Add VR button event listeners - EXACT COPY of LIF button pattern
-    console.log('🔌 Adding VR button event listeners (copying LIF button pattern)...');
+    if (isDebugEnabled) {
+        console.log('🔌 Adding VR button event listeners (copying LIF button pattern)...');
+    }
 
     // Add multiple event listeners to ensure the button works - use capturing phase for all
     vrButton.addEventListener('click', handleVRButtonClick, true); // Use capturing phase
@@ -2916,21 +3004,20 @@ function addConvertButton(img) {
         e.stopPropagation();
     });
 
-    console.log('✅ All VR button event listeners added (LIF button pattern copied)');
+    // All VR button event listeners added successfully - logging removed
 
     // Add buttons to protective zone, then add zone to appropriate container
-    console.log('📦 Adding buttons to button zone...');
+    if (isDebugEnabled) {
+        console.log('📦 Adding buttons to button zone...');
+    }
     buttonZone.appendChild(button);
     buttonZone.appendChild(vrButton);
-    console.log('✅ Buttons added to zone:', {
-        buttonZoneChildCount: buttonZone.children.length,
-        vrButtonParent: vrButton.parentElement?.className || 'none'
-    });
+    // Buttons added to zone successfully - logging removed
 
     // Store VR button reference and handler on main button for later access
     button.vrButton = vrButton;
     button.vrButtonClickHandler = handleVRButtonClick;
-    console.log('✅ VR button reference and handler stored on main button');
+    // VR button reference and handler stored on main button - logging removed
 
     // Determine button positioning approach based on layout type
     const useFacebookOverlay = layoutAnalysis?.isFacebookStyle;
@@ -2938,7 +3025,9 @@ function addConvertButton(img) {
 
     if (useFacebookOverlay) {
         // For Facebook-style layouts, use overlay approach similar to picture elements
-        console.log('Using Facebook overlay approach for button positioning');
+        if (isDebugEnabled) {
+            console.log('Using Facebook overlay approach for button positioning');
+        }
 
         // Find the best container for the overlay (go up the DOM to find a positioned container)
         let overlayContainer = imageContainer;
@@ -2973,7 +3062,9 @@ function addConvertButton(img) {
         }
 
         overlayContainer.appendChild(buttonZone);
-        console.log('Facebook button positioned on overlay container:', overlayContainer.tagName);
+        if (isDebugEnabled) {
+            console.log('Facebook button positioned on overlay container:', overlayContainer.tagName);
+        }
     }
     else if (usePictureOverlay) {
         // For picture elements, add to the parent container (positioned absolutely)
@@ -2993,7 +3084,9 @@ function addConvertButton(img) {
         }
 
         targetElement.appendChild(buttonZone);
-        console.log('Using absolute positioning for picture element button');
+        if (isDebugEnabled) {
+            console.log('Using absolute positioning for picture element button');
+        }
     } else {
         // For regular images, use the old simple approach but fix the pointer events
         buttonZone.style.pointerEvents = 'auto'; // Override CSS default to capture clicks
@@ -3015,7 +3108,9 @@ function addConvertButton(img) {
         }, true);
 
         container.appendChild(buttonZone);
-        console.log('Using default positioning for regular image button');
+        if (isDebugEnabled) {
+            console.log('Using default positioning for regular image button');
+        }
     }
 
     // Mark image as processed EARLY to prevent race conditions
@@ -3026,7 +3121,7 @@ function addConvertButton(img) {
         container.dataset.lifProcessed = 'true';
     }
 
-    console.log('Added 2D3D button to image:', img.src.substring(0, 50) + '...');
+    // Added 2D3D button to image successfully - logging removed
 }
 
 /**
@@ -3409,7 +3504,9 @@ const applyFlickrCanvasfix = (container) => {
                 `;
         }
 
-        console.log('🎭 Fixed LIF button zone positioning for Flickr theater mode');
+        if (isDebugEnabled) {
+            console.log('🎭 Fixed LIF button zone positioning for Flickr theater mode');
+        }
     }
 
     // Ensure the facade container doesn't interfere
@@ -3794,12 +3891,20 @@ function setupScrollHandler() {
 // Function to load extension state from storage
 async function loadExtensionState() {
     try {
-        const result = await chrome.storage.local.get([STORAGE_KEY]);
+        const result = await chrome.storage.local.get([STORAGE_KEY, DEBUG_STORAGE_KEY]);
         isExtensionEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : false;
-        console.log('Loaded extension state:', isExtensionEnabled ? 'enabled' : 'disabled');
+        isDebugEnabled = result[DEBUG_STORAGE_KEY] !== undefined ? result[DEBUG_STORAGE_KEY] : false;
+        shouldLog = isExtensionEnabled; // Set logging based on enabled state
+
+        if (shouldLog) {
+            console.log('Loaded extension state:', isExtensionEnabled ? 'enabled' : 'disabled');
+            console.log('Debug mode:', isDebugEnabled ? 'enabled' : 'disabled');
+        }
     } catch (error) {
         console.error('Error loading extension state:', error);
         isExtensionEnabled = false; // Default to disabled on error
+        isDebugEnabled = false;
+        shouldLog = false;
     }
 }
 
@@ -3810,6 +3915,18 @@ async function saveExtensionState() {
         console.log('Saved extension state:', isExtensionEnabled ? 'enabled' : 'disabled');
     } catch (error) {
         console.error('Error saving extension state:', error);
+    }
+}
+
+// Function to save debug state to storage
+async function saveDebugState() {
+    try {
+        await chrome.storage.local.set({ [DEBUG_STORAGE_KEY]: isDebugEnabled });
+        if (shouldLog) {
+            console.log('Saved debug state:', isDebugEnabled ? 'enabled' : 'disabled');
+        }
+    } catch (error) {
+        console.error('Error saving debug state:', error);
     }
 }
 
@@ -3828,6 +3945,7 @@ function setupMessageListener() {
         if (request.action === 'toggleExtension') {
             const wasEnabled = isExtensionEnabled;
             isExtensionEnabled = !isExtensionEnabled;
+            shouldLog = isExtensionEnabled; // Update logging flag
 
             console.log(`Extension state changing from ${wasEnabled} to ${isExtensionEnabled}`);
 
@@ -3835,7 +3953,36 @@ function setupMessageListener() {
             saveExtensionState();
 
             if (isExtensionEnabled) {
-                // Extension was enabled
+                // Extension was enabled - perform full initialization
+                console.log('Extension enabled - performing full initialization');
+
+                // Inject CSS styles
+                injectStyles();
+
+                // Test WebXR support
+                testWebXRSupport();
+
+                // Start observing new images
+                observeNewImages();
+
+                // Set up scroll handler for dynamic content re-processing
+                setupScrollHandler();
+
+                // Set up Instagram carousel navigation listeners
+                setupInstagramCarouselListeners();
+
+                // Set up Flickr theater mode overlay cleanup if needed
+                if (window.location.hostname.includes('flickr.com')) {
+                    const isInTheaterMode = document.querySelector('.height-controller') &&
+                        document.querySelector('.facade-of-protection-neue');
+
+                    if (isInTheaterMode) {
+                        console.log('🎭 Detected Flickr theater mode - setting up overlay cleanup');
+                        setupFlickrOverlayCleanup();
+                    }
+                }
+
+                // Start processing images
                 processImages();
                 console.log('Extension enabled - processing images');
             } else {
@@ -3854,45 +4001,75 @@ function setupMessageListener() {
             }
 
             sendResponse({ enabled: isExtensionEnabled });
+        } else if (request.action === 'toggleDebug') {
+            isDebugEnabled = !isDebugEnabled;
+
+            // Save the new debug state
+            saveDebugState();
+
+            console.log(`Debug mode ${isDebugEnabled ? 'enabled' : 'disabled'}`);
+            sendResponse({ debugEnabled: isDebugEnabled });
         } else if (request.action === 'getStatus') {
             console.log('Status requested, responding with:', isExtensionEnabled);
             sendResponse({ enabled: isExtensionEnabled });
         } else if (request.action === 'getXRStatus') {
-            const reason = window.webXRSupportReason ||
-                (isWebXRSupported ? 'WebXR immersive-vr supported' :
-                    (webXRSupportChecked ? 'WebXR not supported on this device' : 'WebXR support check in progress'));
+            // Only provide XR status if extension is enabled
+            if (isExtensionEnabled) {
+                const reason = window.webXRSupportReason ||
+                    (isWebXRSupported ? 'WebXR immersive-vr supported' :
+                        (webXRSupportChecked ? 'WebXR not supported on this device' : 'WebXR support check in progress'));
 
-            console.log('XR status requested, responding with:', {
-                supported: isWebXRSupported,
-                checked: webXRSupportChecked,
-                reason: reason
-            });
+                console.log('XR status requested, responding with:', {
+                    supported: isWebXRSupported,
+                    checked: webXRSupportChecked,
+                    reason: reason
+                });
 
-            sendResponse({
-                supported: isWebXRSupported,
-                checked: webXRSupportChecked,
-                reason: reason
-            });
+                sendResponse({
+                    supported: isWebXRSupported,
+                    checked: webXRSupportChecked,
+                    reason: reason
+                });
+            } else {
+                // Extension is disabled, return disabled status
+                console.log('XR status requested but extension is disabled');
+                sendResponse({
+                    supported: false,
+                    checked: true,
+                    reason: 'Extension is disabled'
+                });
+            }
         }
     };
 
     // Add the listener
     chrome.runtime.onMessage.addListener(messageListener);
-    console.log('Message listener created and added');
+
+    // Only log when we should be logging to avoid noise
+    if (shouldLog) {
+        console.log('Message listener created and added');
+    }
 }
 
 // Function to cleanup extension resources
 function cleanupExtension() {
-    console.log('Cleaning up extension resources...');
+    // Only log cleanup if we should be logging
+    if (shouldLog) {
+        console.log('Cleaning up extension resources...');
+    }
 
     // Remove message listener
     if (messageListener) {
         try {
             chrome.runtime.onMessage.removeListener(messageListener);
             messageListener = null;
-            console.log('Message listener removed');
+            if (shouldLog) {
+                console.log('Message listener removed');
+            }
         } catch (error) {
-            console.warn('Error removing message listener:', error);
+            if (shouldLog) {
+                console.warn('Error removing message listener:', error);
+            }
         }
     }
 
@@ -3901,9 +4078,13 @@ function cleanupExtension() {
         try {
             mutationObserver.disconnect();
             mutationObserver = null;
-            console.log('Mutation observer disconnected');
+            if (shouldLog) {
+                console.log('Mutation observer disconnected');
+            }
         } catch (error) {
-            console.warn('Error disconnecting mutation observer:', error);
+            if (shouldLog) {
+                console.warn('Error disconnecting mutation observer:', error);
+            }
         }
     }
 
@@ -3912,15 +4093,23 @@ function cleanupExtension() {
         try {
             window.removeEventListener('scroll', scrollHandler);
             scrollHandler = null;
-            console.log('Scroll handler removed');
+            if (shouldLog) {
+                console.log('Scroll handler removed');
+            }
         } catch (error) {
-            console.warn('Error removing scroll handler:', error);
+            if (shouldLog) {
+                console.warn('Error removing scroll handler:', error);
+            }
         }
     }
 
     // Reset initialization state
     isExtensionInitialized = false;
-    console.log('Extension cleanup completed');
+
+    // Only log completion if we should be logging
+    if (shouldLog) {
+        console.log('Extension cleanup completed');
+    }
 }
 
 // Initialize the extension
@@ -3928,11 +4117,12 @@ function cleanupExtension() {
 async function initialize() {
     // Prevent duplicate initialization
     if (isExtensionInitialized) {
-        console.log('Extension already initialized, skipping duplicate initialization');
+        // Only log if we should be logging
+        if (shouldLog) {
+            console.log('Extension already initialized, skipping duplicate initialization');
+        }
         return;
     }
-
-    console.log('Initializing 2D to 3D Image Converter...');
 
     // Mark as initialized early to prevent race conditions
     isExtensionInitialized = true;
@@ -3940,80 +4130,57 @@ async function initialize() {
     // Clean up any existing resources first (in case of reload during development)
     cleanupExtension();
 
-    // Add helpful CORS information for developers
-    console.log(`
-🎭 ImmersityLens Chrome Extension - FULLY FUNCTIONAL ✅
-
-📍 TESTED & WORKING SITES:
-   • CNN.com - Picture elements with animation restart ✅
-   • Facebook.com - Complex CSS positioning with overlay handling ✅
-   • Wikipedia, Wikimedia Commons ✅
-   • Unsplash, Pixabay, Pexels ✅
-   • GitHub repositories ✅
-   • Photography blogs and portfolios ✅
-
-🔧 RECENT FIXES & INSIGHTS:
-   • Fixed CNN picture element animation restart (unified event handlers)
-   • Fixed Facebook overlay removal (multi-tier cleanup strategy)
-   • Eliminated rapid start/stop animation cycling (200ms throttling)
-   • Enhanced static LIF image mouse interaction (pointer-events: auto)
-   • Simplified mouse leave detection (150ms delay, no complex boundaries)
-
-⚠️  CORS-Restricted Sites (may not work):
-   • News sites with strict CDN protection
-   • E-commerce sites with image protection
-   • Sites with strict referrer policies
-   • Images served from different domains with no CORS headers
-
-💡 Best Results: Extension now handles complex responsive layouts including CNN picture elements
-   and Facebook's complex CSS positioning. Try it on news sites and social media!
-    `);
-
     try {
-        // Load saved state first
+        // Load saved state first - this is essential regardless of enabled state
         await loadExtensionState();
 
-        // Inject CSS styles
-        injectStyles();
-
-        // Test WebXR support early
-        testWebXRSupport();
-
-        // Set up message listener for popup communication
+        // Set up message listener for popup communication - needed for enable/disable functionality
         setupMessageListener();
 
-        // Start observing new images (this also prevents duplicates)
-        observeNewImages();
-
-        // Set up scroll handler for dynamic content re-processing
-        setupScrollHandler();
-
-        // Set up Instagram carousel navigation listeners
-        setupInstagramCarouselListeners();
-
-        // Set up Flickr theater mode overlay cleanup (only in theater mode)
-        if (window.location.hostname.includes('flickr.com')) {
-            // Only set up theater-specific cleanup if we're actually in theater mode
-            const isInTheaterMode = document.querySelector('.height-controller') &&
-                document.querySelector('.facade-of-protection-neue');
-
-            if (isInTheaterMode) {
-                console.log('🎭 Detected Flickr theater mode - setting up overlay cleanup');
-                setupFlickrOverlayCleanup();
-            } else {
-                console.log('🖼️ Detected Flickr wall view - skipping theater-specific setup');
-            }
-        }
-
-        // Only start processing images if extension is enabled
+        // Only proceed with full initialization if extension is enabled
         if (isExtensionEnabled) {
+            console.log('Initializing 2D to 3D Image Converter...');
+
+            // Add helpful CORS information for developers
+            console.log(`ImmersityLens Chrome Extension - FULLY FUNCTIONAL ✅`);
+
+            // Inject CSS styles
+            injectStyles();
+
+            // Test WebXR support early
+            testWebXRSupport();
+
+            // Start observing new images (this also prevents duplicates)
+            observeNewImages();
+
+            // Set up scroll handler for dynamic content re-processing
+            setupScrollHandler();
+
+            // Set up Instagram carousel navigation listeners
+            setupInstagramCarouselListeners();
+
+            // Set up Flickr theater mode overlay cleanup (only in theater mode)
+            if (window.location.hostname.includes('flickr.com')) {
+                // Only set up theater-specific cleanup if we're actually in theater mode
+                const isInTheaterMode = document.querySelector('.height-controller') &&
+                    document.querySelector('.facade-of-protection-neue');
+
+                if (isInTheaterMode) {
+                    console.log('🎭 Detected Flickr theater mode - setting up overlay cleanup');
+                    setupFlickrOverlayCleanup();
+                } else {
+                    console.log('🖼️ Detected Flickr wall view - skipping theater-specific setup');
+                }
+            }
+
+            // Start processing images
             processImages();
             console.log('Extension enabled - processing images');
-        } else {
-            console.log('Extension disabled - not processing images');
-        }
 
-        console.log('2D to 3D Image Converter initialized successfully!');
+            console.log('2D to 3D Image Converter initialized successfully!');
+        } else {
+            console.log('ImmersityLens extension is disabled - not performing initialization tasks');
+        }
 
     } catch (error) {
         console.error('Error during extension initialization:', error);

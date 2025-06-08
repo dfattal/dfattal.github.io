@@ -3,7 +3,7 @@
 // including runtimes like Oculus Immersive Web Emulator that are only visible to pages
 
 (async () => {
-    console.log('🔍 WebXR Test Script - Running in page context...');
+    // WebXR Test Script - Running in page context (logging removed to avoid noise when extension disabled)
 
     try {
         if (navigator.xr && navigator.xr.isSessionSupported) {

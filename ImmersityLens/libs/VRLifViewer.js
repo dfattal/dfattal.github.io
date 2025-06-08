@@ -10,7 +10,7 @@
  * VERSION: 2.0.2 - PAGE CONTEXT INJECTION - Updated: ${new Date().toISOString()}
  */
 
-console.log('🚀 NEW VRLifViewer.js PAGE CONTEXT VERSION LOADING - 2.0.2');
+// Removed initialization logging to avoid console noise when extension is disabled
 
 class VRLifViewer {
     constructor() {

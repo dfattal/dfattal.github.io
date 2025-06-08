@@ -1,5 +1,5 @@
 // VR System that runs in page context - Clean approach with embedded LifLoader
-console.log('🔥 VR system starting in page context with embedded LifLoader...');
+// VR system starting in page context (logging removed to avoid noise when extension disabled)
 
 // === EMBEDDED LIFLOADER CLASS (from original module) ===
 class BinaryStream {

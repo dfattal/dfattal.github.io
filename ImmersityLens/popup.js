@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', function () {
     const toggleBtn = document.getElementById('toggleBtn');
+    const debugToggle = document.getElementById('debugToggle');
     const statusDiv = document.getElementById('status');
     const xrStatusDiv = document.getElementById('xrStatus');
     const STORAGE_KEY = 'lifExtensionEnabled';
+    const DEBUG_STORAGE_KEY = 'lifDebugEnabled';
 
     // Function to update UI based on current state
     function updateUI(isEnabled) {
@@ -16,6 +18,17 @@ document.addEventListener('DOMContentLoaded', function () {
             toggleBtn.classList.add('disabled');
             statusDiv.textContent = 'Status: Disabled';
             statusDiv.style.color = '#ff6b6b';
+        }
+    }
+
+    // Function to update debug UI
+    function updateDebugUI(isDebugEnabled) {
+        if (isDebugEnabled) {
+            debugToggle.textContent = 'Debug Logs: On';
+            debugToggle.style.background = '#ff9800';
+        } else {
+            debugToggle.textContent = 'Debug Logs: Off';
+            debugToggle.style.background = '#9c27b0';
         }
     }
 
@@ -33,7 +46,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Function to check XR status from content script
-    function checkXRStatus() {
+    function checkXRStatus(isExtensionEnabled) {
+        // Only check XR status if extension is enabled
+        if (!isExtensionEnabled) {
+            xrStatusDiv.textContent = 'XR Status: Extension Disabled';
+            xrStatusDiv.style.color = '#999';
+            xrStatusDiv.title = 'Enable extension to check XR support';
+            return;
+        }
+
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             if (tabs[0]) {
                 chrome.tabs.sendMessage(tabs[0].id, { action: 'getXRStatus' }, function (response) {
@@ -54,16 +75,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Load initial state from storage
-    chrome.storage.local.get([STORAGE_KEY]).then((result) => {
+    chrome.storage.local.get([STORAGE_KEY, DEBUG_STORAGE_KEY]).then((result) => {
         const isEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : false;
+        const isDebugEnabled = result[DEBUG_STORAGE_KEY] !== undefined ? result[DEBUG_STORAGE_KEY] : false;
+
         updateUI(isEnabled);
+        updateDebugUI(isDebugEnabled);
 
         // Check XR status after loading initial state
-        checkXRStatus();
+        checkXRStatus(isEnabled);
     }).catch((error) => {
         console.error('Error loading extension state in popup:', error);
         updateUI(false);
-        checkXRStatus();
+        updateDebugUI(false);
+        checkXRStatus(false);
     });
 
     // Handle toggle button click
@@ -72,6 +97,19 @@ document.addEventListener('DOMContentLoaded', function () {
             chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleExtension' }, function (response) {
                 if (response) {
                     updateUI(response.enabled);
+                    // Update XR status when extension state changes
+                    checkXRStatus(response.enabled);
+                }
+            });
+        });
+    });
+
+    // Handle debug toggle button click
+    debugToggle.addEventListener('click', function () {
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleDebug' }, function (response) {
+                if (response !== undefined) {
+                    updateDebugUI(response.debugEnabled);
                 }
             });
         });
@@ -79,8 +117,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Listen for storage changes to keep popup in sync
     chrome.storage.onChanged.addListener((changes, namespace) => {
-        if (namespace === 'local' && changes[STORAGE_KEY]) {
-            updateUI(changes[STORAGE_KEY].newValue);
+        if (namespace === 'local') {
+            if (changes[STORAGE_KEY]) {
+                const newValue = changes[STORAGE_KEY].newValue;
+                updateUI(newValue);
+                // Update XR status when extension state changes via storage
+                checkXRStatus(newValue);
+            }
+            if (changes[DEBUG_STORAGE_KEY]) {
+                const newDebugValue = changes[DEBUG_STORAGE_KEY].newValue;
+                updateDebugUI(newDebugValue);
+            }
         }
     });
 }); 
