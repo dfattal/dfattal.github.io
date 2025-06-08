@@ -122,6 +122,10 @@ let mutationObserver = null;
 let messageListener = null;
 let scrollHandler = null;
 
+// WebXR support state tracking
+let isWebXRSupported = false;
+let webXRSupportChecked = false;
+
 // Flag to control console logging (avoid noise when extension is disabled)
 let shouldLog = false;
 
@@ -205,10 +209,6 @@ function testWebXRSupport() {
         });
     }
 }
-
-// Global variable to track WebXR support
-let isWebXRSupported = false;
-let webXRSupportChecked = false;
 
 // Listen for WebXR test results from injected script
 window.addEventListener('message', (event) => {
@@ -4102,6 +4102,11 @@ function cleanupExtension() {
             }
         }
     }
+
+    // Reset WebXR state to allow fresh testing on re-enable
+    isWebXRSupported = false;
+    webXRSupportChecked = false;
+    window.webXRSupportReason = undefined;
 
     // Reset initialization state
     isExtensionInitialized = false;

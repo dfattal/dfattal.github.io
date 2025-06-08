@@ -53,8 +53,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Function to check XR status from content script
-    function checkXRStatus(isExtensionEnabled) {
+    // Function to check XR status from content script with polling for in-progress tests
+    function checkXRStatus(isExtensionEnabled, retryCount = 0) {
         // Only check XR status if extension is enabled
         if (!isExtensionEnabled) {
             xrStatusDiv.textContent = 'Extension Disabled';
@@ -77,7 +77,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         xrStatusContainer.className = 'status-item checking';
                         xrStatusContainer.title = 'Refresh the page to check XR support';
                     } else if (response) {
-                        updateXRStatus(response.supported, response.reason);
+                        // If WebXR test is still in progress, retry after a delay
+                        if (response.reason === 'WebXR support check in progress' && retryCount < 10) {
+                            setTimeout(() => {
+                                checkXRStatus(isExtensionEnabled, retryCount + 1);
+                            }, 500); // Retry every 500ms, up to 10 times (5 seconds total)
+                        } else {
+                            updateXRStatus(response.supported, response.reason);
+                        }
                     } else {
                         xrStatusDiv.textContent = 'Unknown';
                         xrStatusContainer.className = 'status-item checking';
