@@ -110,40 +110,12 @@ class VRLifViewer {
     }
 
     async injectThreeJS() {
-        console.log('📦 Injecting Three.js into page context...');
+        console.log('📦 Checking and injecting Three.js into page context...');
 
         return new Promise((resolve, reject) => {
-            // Check if Three.js is already available in page context using a safer approach
-            const messageListener = (event) => {
-                if (event.source !== window || !event.data.type?.startsWith('VR_LIF_THREE_')) return;
-
-                window.removeEventListener('message', messageListener);
-
-                if (event.data.type === 'VR_LIF_THREE_AVAILABLE') {
-                    console.log('✅ Three.js already available');
-                    resolve();
-                } else if (event.data.type === 'VR_LIF_THREE_NOT_FOUND') {
-                    console.log('📦 Three.js not found, injecting...');
-                    this.injectThreeJSScript(resolve, reject);
-                }
-            };
-
-            window.addEventListener('message', messageListener);
-
-            // Create a non-inline script to check Three.js availability
-            const checkScript = document.createElement('script');
-            checkScript.src = chrome.runtime.getURL('libs/VRTestFile.js');
-            checkScript.onload = () => {
-                // VRTestFile.js will send a message about Three.js availability
-                checkScript.remove();
-            };
-            checkScript.onerror = () => {
-                window.removeEventListener('message', messageListener);
-                console.log('📦 Test file failed, proceeding with Three.js injection...');
-                this.injectThreeJSScript(resolve, reject);
-            };
-
-            document.head.appendChild(checkScript);
+            // Direct approach: just inject Three.js since it's safe to re-inject
+            console.log('📦 Proceeding with Three.js injection...');
+            this.injectThreeJSScript(resolve, reject);
         });
     }
 

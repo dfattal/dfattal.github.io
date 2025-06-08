@@ -23,7 +23,7 @@
         "libs/heic2any.js", 
         "libs/LIF.js", 
         "libs/VRRenderers.js", 
-        "libs/VRTestFile.js", 
+
         "libs/VRLifViewer2.js", 
         "content.js"
       ],
