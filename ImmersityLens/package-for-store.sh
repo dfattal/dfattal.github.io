@@ -12,6 +12,22 @@ echo "📦 Version: $VERSION"
 # Create package name
 PACKAGE_NAME="immersitylens-v${VERSION}.zip"
 
+# Update installation.html with correct version
+echo "📝 Updating installation.html with version $VERSION..."
+if [ -f "installation.html" ]; then
+    # Update the download link href
+    sed -i.bak "s/href=\"immersitylens-v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip\"/href=\"$PACKAGE_NAME\"/g" installation.html
+    
+    # Update the download button text
+    sed -i.bak "s/📦 Download Extension (v[0-9]\+\.[0-9]\+\.[0-9]\+)/📦 Download Extension (v$VERSION)/g" installation.html
+    
+    # Remove backup file
+    rm installation.html.bak
+    echo "✅ Updated installation.html with version $VERSION"
+else
+    echo "⚠️  installation.html not found, skipping version update"
+fi
+
 # Clean up any existing package
 if [ -f "$PACKAGE_NAME" ]; then
     echo "🗑️  Removing existing package: $PACKAGE_NAME"
