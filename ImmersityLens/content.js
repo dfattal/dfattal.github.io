@@ -1,5 +1,5 @@
 /**
- * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.0.1)
+ * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.1.5)
  * 
  * OVERVIEW:
  * Advanced Chrome extension that adds intelligent 2D→3D conversion buttons to images across
@@ -1878,10 +1878,18 @@ function addConvertButton(img) {
     // 🏷️ LAYER 3: SEMANTIC CONTENT ANALYSIS
 
     // Skip based on alt text that suggests UI elements
+    // Use word boundary matching to avoid false positives (e.g., "flight" containing "flag")
     const altText = (img.alt || '').toLowerCase();
     const uiKeywords = ['icon', 'logo', 'arrow', 'button', 'star', 'rating', 'badge', 'flag',
         'menu', 'nav', 'search', 'cart', 'profile', 'avatar', 'thumbnail'];
-    if (uiKeywords.some(keyword => altText.includes(keyword))) {
+
+    const hasUIKeyword = uiKeywords.some(keyword => {
+        // Use word boundaries to match whole words only
+        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+        return regex.test(altText);
+    });
+
+    if (hasUIKeyword) {
         console.log('🚫 Skipping UI image (alt text):', altText, img.src?.substring(0, 50) + '...');
         return;
     }
@@ -1904,14 +1912,19 @@ function addConvertButton(img) {
     }
 
     // Skip based on src URL patterns that suggest non-content images
+    // BUT exclude base64 data URLs since they contain encoded binary data, not file paths
     const src = (img.src || '').toLowerCase();
-    const uiSrcKeywords = ['icon', 'logo', 'sprite', 'thumb', 'avatar', 'profile', 'badge',
-        'arrow', 'bullet', 'star', 'rating', 'decoration', 'ornament',
-        'ui/', 'icons/', 'logos/', 'sprites/', 'thumbs/', 'thumbnails/',
-        'avatars/', 'profiles/', 'badges/', 'decorations/', 'ornaments/'];
-    if (uiSrcKeywords.some(keyword => src.includes(keyword))) {
-        console.log('🚫 Skipping UI image (src pattern):', img.src?.substring(0, 50) + '...');
-        return;
+    const isDataUrl = src.startsWith('data:');
+
+    if (!isDataUrl) {
+        const uiSrcKeywords = ['icon', 'logo', 'sprite', 'thumb', 'avatar', 'profile', 'badge',
+            'arrow', 'bullet', 'star', 'rating', 'decoration', 'ornament',
+            'ui/', 'icons/', 'logos/', 'sprites/', 'thumbs/', 'thumbnails/',
+            'avatars/', 'profiles/', 'badges/', 'decorations/', 'ornaments/'];
+        if (uiSrcKeywords.some(keyword => src.includes(keyword))) {
+            console.log('🚫 Skipping UI image (src pattern):', img.src?.substring(0, 50) + '...');
+            return;
+        }
     }
 
     // 🏗️ LAYER 4: CONTEXTUAL PARENT ANALYSIS
@@ -2158,10 +2171,11 @@ function addConvertButton(img) {
         useOverlayApproach = true;
 
         // For picture elements, we need to go higher in the DOM to find a container with proper spacing
-        // CNN structure: container__item-media > image > image__container > picture
+        // CNN structure can have wrapper: container__item-media-wrapper > container__item-media > image > image__container > picture
+        // or direct: container__item-media > image > image__container > picture
         const imageContainer = pictureElement.parentElement; // image__container
         const imageDiv = imageContainer?.parentElement; // image div
-        const containerMedia = imageDiv?.parentElement; // container__item-media
+        let containerMedia = imageDiv?.parentElement; // could be container__item-media or container__item-media-wrapper
 
         // Use the highest level container that has proper spacing, fallback to lower levels
         if (containerMedia && containerMedia.classList.contains('container__item-media')) {
