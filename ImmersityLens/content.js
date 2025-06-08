@@ -134,6 +134,103 @@ const Z_INDEX_CONFIG = {
     IMAGE: 4999             // Post-conversion image elements (passed to lifViewer)
 };
 
+// 🥽 WEBXR SUPPORT TEST - Inject script file into page context
+function testWebXRSupport() {
+    console.log('🔍 Testing WebXR support by injecting test script into page context...');
+
+    // Set a timeout fallback in case the WebXR test script doesn't respond
+    setTimeout(() => {
+        if (!webXRSupportChecked) {
+            console.log('⏰ WebXR test timeout - marking as not supported');
+            webXRSupportChecked = true;
+            isWebXRSupported = false;
+            window.webXRSupportReason = 'WebXR test timeout - no response from page context';
+
+            // Hide all existing VR buttons
+            document.querySelectorAll('.lif-vr-btn').forEach(vrButton => {
+                vrButton.style.display = 'none';
+                console.log('❌ VR button hidden due to WebXR test timeout');
+            });
+        }
+    }, 3000); // 3 second timeout
+
+    try {
+        // Inject WebXR test script into page context (like we do with VR libraries)
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('libs/WebXRTest.js');
+        script.onload = () => {
+            console.log('✅ WebXR test script injected successfully');
+            script.remove(); // Clean up after injection
+        };
+        script.onerror = (error) => {
+            console.error('❌ Failed to inject WebXR test script:', error);
+
+            // Fallback: mark as not supported
+            webXRSupportChecked = true;
+            isWebXRSupported = false;
+            window.webXRSupportReason = 'Failed to load WebXR test script';
+
+            // Hide all existing VR buttons
+            document.querySelectorAll('.lif-vr-btn').forEach(vrButton => {
+                vrButton.style.display = 'none';
+                console.log('❌ VR button hidden due to WebXR test script injection failure');
+            });
+        };
+
+        (document.head || document.documentElement).appendChild(script);
+
+    } catch (error) {
+        console.error('❌ Error injecting WebXR test script:', error);
+
+        // Fallback: mark as not supported
+        webXRSupportChecked = true;
+        isWebXRSupported = false;
+        window.webXRSupportReason = 'WebXR test injection failed: ' + error.message;
+
+        // Hide all existing VR buttons
+        document.querySelectorAll('.lif-vr-btn').forEach(vrButton => {
+            vrButton.style.display = 'none';
+            console.log('❌ VR button hidden due to WebXR test injection error');
+        });
+    }
+}
+
+// Global variable to track WebXR support
+let isWebXRSupported = false;
+let webXRSupportChecked = false;
+
+// Listen for WebXR test results from injected script
+window.addEventListener('message', (event) => {
+    if (event.source !== window || !event.data || event.data.type !== 'WEBXR_SUPPORT_RESULT') return;
+
+    webXRSupportChecked = true;
+    isWebXRSupported = event.data.supported;
+    window.webXRSupportReason = event.data.reason;
+
+    if (event.data.supported) {
+        console.log('✅ WebXR Test Result: SUPPORTED -', event.data.reason);
+        console.log('🥽 VR buttons will be available when LIF files are ready');
+        console.log('🔍 WebXR Details:', {
+            hasNavigatorXR: event.data.hasNavigatorXR,
+            hasIsSessionSupported: event.data.hasIsSessionSupported
+        });
+    } else {
+        console.log('❌ WebXR Test Result: NOT SUPPORTED -', event.data.reason);
+        console.log('🚫 VR buttons will be hidden');
+        console.log('🔍 WebXR Details:', {
+            hasNavigatorXR: event.data.hasNavigatorXR,
+            hasIsSessionSupported: event.data.hasIsSessionSupported,
+            error: event.data.error
+        });
+
+        // Hide all existing VR buttons
+        document.querySelectorAll('.lif-vr-btn').forEach(vrButton => {
+            vrButton.style.display = 'none';
+            console.log('❌ VR button hidden due to WebXR not supported');
+        });
+    }
+});
+
 // 🎨 BUTTON STYLING SYSTEM - Modern gradient design with animation states
 function injectStyles() {
     const style = document.createElement('style');
@@ -949,11 +1046,27 @@ async function convertTo3D(img, button) {
             button.dataset.state = 'lif-ready';
             button.title = 'Click to download the LIF file';
 
-            // Show VR button now that LIF is ready
+            // Show VR button now that LIF is ready (but only if WebXR is supported)
             if (button.vrButton) {
-                console.log('🥽 Making VR button visible (LIF ready)');
-                button.vrButton.style.display = 'block';
-                console.log('✅ VR button display style set to block');
+                if (webXRSupportChecked && isWebXRSupported) {
+                    console.log('🥽 Making VR button visible (LIF ready + WebXR supported)');
+                    button.vrButton.style.display = 'block';
+                    console.log('✅ VR button display style set to block');
+                } else if (webXRSupportChecked && !isWebXRSupported) {
+                    console.log('❌ VR button remains hidden - WebXR not supported');
+                    button.vrButton.style.display = 'none';
+                } else {
+                    console.log('⏳ VR button remains hidden - WebXR support test still pending');
+                    button.vrButton.style.display = 'none';
+
+                    // Check again after a short delay
+                    setTimeout(() => {
+                        if (webXRSupportChecked && isWebXRSupported) {
+                            console.log('🥽 Making VR button visible (delayed - WebXR support confirmed)');
+                            button.vrButton.style.display = 'block';
+                        }
+                    }, 1000);
+                }
 
                 // Debug VR button state
                 const vrButtonRect = button.vrButton.getBoundingClientRect();
@@ -1181,10 +1294,12 @@ async function convertTo3D(img, button) {
                         button.classList.add('lif-ready');
                         console.log('Button state reconfirmed as LIF');
 
-                        // Show VR button if not already visible
-                        if (button.vrButton && button.vrButton.style.display === 'none') {
+                        // Show VR button if not already visible (and if WebXR is supported)
+                        if (button.vrButton && button.vrButton.style.display === 'none' && webXRSupportChecked && isWebXRSupported) {
                             button.vrButton.style.display = 'block';
-                            console.log('VR button made visible during state reconfirmation');
+                            console.log('VR button made visible during state reconfirmation (WebXR supported)');
+                        } else if (button.vrButton && button.vrButton.style.display === 'none' && webXRSupportChecked && !isWebXRSupported) {
+                            console.log('VR button remains hidden during state reconfirmation (WebXR not supported)');
                         }
                     }
                 }, 100);
@@ -2629,22 +2744,47 @@ function addConvertButton(img) {
         e.stopPropagation();
     });
 
-    // Create the VR button (initially hidden)
+    // Create the VR button (initially hidden, conditionally created based on WebXR support)
     console.log('🥽 Creating VR button...');
     const vrButton = document.createElement('button');
     vrButton.className = 'lif-vr-btn';
     vrButton.textContent = '🥽 VR';
     vrButton.title = 'View in VR/XR mode';
-    vrButton.style.display = 'none'; // Hidden until LIF is ready
     vrButton.style.pointerEvents = 'auto'; // Ensure button can receive clicks
     vrButton.style.zIndex = Z_INDEX_CONFIG.BUTTON; // Same z-index as main button
+
+    // Check simple WebXR support test result
+    if (webXRSupportChecked && !isWebXRSupported) {
+        vrButton.style.display = 'none'; // Hide VR button if WebXR not supported
+        console.log('❌ VR button hidden - Simple WebXR test failed');
+    } else if (!webXRSupportChecked) {
+        vrButton.style.display = 'none'; // Hide until test completes
+        console.log('⏳ VR button hidden - Simple WebXR test still pending');
+
+        // Check again in a moment if test completes
+        setTimeout(() => {
+            if (webXRSupportChecked && isWebXRSupported) {
+                vrButton.style.display = 'none'; // Still hidden until LIF is ready
+                console.log('✅ VR button will be available when LIF is ready');
+            } else if (webXRSupportChecked && !isWebXRSupported) {
+                vrButton.style.display = 'none';
+                console.log('❌ VR button permanently hidden - WebXR not supported');
+            }
+        }, 1000);
+    } else {
+        vrButton.style.display = 'none'; // Hidden until LIF is ready, but will be available
+        console.log('✅ VR button created and will be available when LIF is ready');
+    }
+
     console.log('✅ VR button created:', {
         className: vrButton.className,
         textContent: vrButton.textContent,
         title: vrButton.title,
         display: vrButton.style.display,
         pointerEvents: vrButton.style.pointerEvents,
-        zIndex: vrButton.style.zIndex
+        zIndex: vrButton.style.zIndex,
+        webXRSupportChecked: webXRSupportChecked,
+        isWebXRSupported: isWebXRSupported
     });
 
     // VR button click handler
@@ -3703,6 +3843,22 @@ function setupMessageListener() {
         } else if (request.action === 'getStatus') {
             console.log('Status requested, responding with:', isExtensionEnabled);
             sendResponse({ enabled: isExtensionEnabled });
+        } else if (request.action === 'getXRStatus') {
+            const reason = window.webXRSupportReason ||
+                (isWebXRSupported ? 'WebXR immersive-vr supported' :
+                    (webXRSupportChecked ? 'WebXR not supported on this device' : 'WebXR support check in progress'));
+
+            console.log('XR status requested, responding with:', {
+                supported: isWebXRSupported,
+                checked: webXRSupportChecked,
+                reason: reason
+            });
+
+            sendResponse({
+                supported: isWebXRSupported,
+                checked: webXRSupportChecked,
+                reason: reason
+            });
         }
     };
 
@@ -3805,6 +3961,9 @@ async function initialize() {
 
         // Inject CSS styles
         injectStyles();
+
+        // Test WebXR support early
+        testWebXRSupport();
 
         // Set up message listener for popup communication
         setupMessageListener();
