@@ -1,5 +1,5 @@
 /**
- * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.1.5)
+ * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.1.6)
  * 
  * OVERVIEW:
  * Advanced Chrome extension that adds intelligent 2D→3D conversion buttons to images across
@@ -3236,18 +3236,24 @@ function setupFlickrOverlayCleanup() {
         document.querySelector('.facade-of-protection-neue');
 
     if (!isInTheaterMode) {
-        console.log('🖼️ setupFlickrOverlayCleanup: Not in theater mode, skipping all theater-specific setup');
+        if (isDebugEnabled) {
+            console.log('🖼️ setupFlickrOverlayCleanup: Not in theater mode, skipping all theater-specific setup');
+        }
         return;
     }
 
-    console.log('🎭 setupFlickrOverlayCleanup: In theater mode, setting up overlay cleanup');
+    if (isDebugEnabled) {
+        console.log('🎭 setupFlickrOverlayCleanup: In theater mode, setting up overlay cleanup');
+    }
 
     // Clean up blocking overlays immediately and on DOM changes
     const cleanupFlickrOverlays = () => {
         // Remove photo-notes overlay that blocks button interaction in theater mode
         const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
         if (photoNotesOverlay) {
-            console.log('🗑️ Removing Flickr photo-notes overlay blocking button access');
+            if (isDebugEnabled) {
+                console.log('🗑️ Removing Flickr photo-notes overlay blocking button access');
+            }
             photoNotesOverlay.remove();
         }
 
@@ -3255,7 +3261,9 @@ function setupFlickrOverlayCleanup() {
         const blockingOverlays = document.querySelectorAll('.view.photo-notes-scrappy-view, [class*="photo-notes"]');
         blockingOverlays.forEach(overlay => {
             if (overlay && overlay.parentNode) {
-                console.log('🗑️ Removing additional Flickr blocking overlay:', overlay.className);
+                if (isDebugEnabled) {
+                    console.log('🗑️ Removing additional Flickr blocking overlay:', overlay.className);
+                }
                 overlay.remove();
             }
         });
@@ -3291,7 +3299,9 @@ function setupFlickrOverlayCleanup() {
         });
 
         if (needsCleanup) {
-            console.log('🔄 Flickr photo-notes overlay detected, cleaning up...');
+            if (isDebugEnabled) {
+                console.log('🔄 Flickr photo-notes overlay detected, cleaning up...');
+            }
             setTimeout(cleanupFlickrOverlays, 100); // Small delay to ensure DOM is settled
         }
     });
@@ -3302,7 +3312,17 @@ function setupFlickrOverlayCleanup() {
     });
 
     // Also clean up on navigation (Flickr uses AJAX navigation)
-    window.addEventListener('popstate', cleanupFlickrOverlays);
+    window.addEventListener('popstate', () => {
+        cleanupFlickrOverlays();
+
+        // Clear theater mode reload flag when navigating away
+        const currentPath = window.location.pathname;
+        const isStillInTheaterMode = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
+
+        if (!isStillInTheaterMode) {
+            sessionStorage.removeItem('flickr-theater-reloaded');
+        }
+    });
 
     // Clean up when theater mode changes
     document.addEventListener('click', (e) => {
@@ -3311,30 +3331,131 @@ function setupFlickrOverlayCleanup() {
             e.target.closest('[data-track="photo-page-image-click"]') ||
             e.target.closest('.main-photo')) {
 
-            setTimeout(cleanupFlickrOverlays, 500); // Allow time for theater mode to load
+            setTimeout(() => {
+                cleanupFlickrOverlays();
+
+                // Clear reload flag if we're no longer in theater mode
+                const currentPath = window.location.pathname;
+                const isStillInTheaterMode = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
+
+                if (!isStillInTheaterMode) {
+                    sessionStorage.removeItem('flickr-theater-reloaded');
+                }
+            }, 500); // Allow time for theater mode to load
         }
     }, { passive: true });
 
     // Set up Flickr canvas display fixes for theater mode
     setupFlickrCanvasDisplayFix();
 
-    console.log('🖼️ Flickr theater mode overlay cleanup set up');
+    if (isDebugEnabled) {
+        console.log('🖼️ Flickr theater mode overlay cleanup set up');
+    }
+}
+
+// Function to monitor URL changes for Flickr SPA navigation to theater mode
+function setupFlickrTheaterModeMonitoring() {
+    if (!window.location.hostname.includes('flickr.com')) {
+        return;
+    }
+
+    let lastURL = window.location.href;
+
+    // Monitor URL changes using both popstate and a polling fallback
+    const checkURLChange = () => {
+        const currentURL = window.location.href;
+        if (currentURL !== lastURL) {
+            const currentPath = window.location.pathname;
+            const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
+
+            if (isTheaterModeURL) {
+                const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
+                if (!hasBeenReloaded) {
+                    if (isDebugEnabled) {
+                        console.log('🔄 FLICKR THEATER MODE: Theater mode detected via URL change, reloading page...');
+                    }
+                    sessionStorage.setItem('flickr-theater-reloaded', 'true');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 100);
+                    return;
+                }
+            } else {
+                // Clear reload flag when navigating away from theater mode
+                const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
+                if (hadReloadFlag) {
+                    sessionStorage.removeItem('flickr-theater-reloaded');
+                }
+            }
+
+            lastURL = currentURL;
+        }
+    };
+
+    // Listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', checkURLChange);
+
+    // Polling fallback for SPA navigation that doesn't trigger popstate
+    const urlMonitorInterval = setInterval(checkURLChange, 500);
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        clearInterval(urlMonitorInterval);
+    }, { once: true });
 }
 
 // Function to fix Flickr canvas display issues in theater mode
 const setupFlickrCanvasDisplayFix = () => {
-    // Monitor for LIF containers being activated
+    // Monitor for LIF containers being activated OR created
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
+            // Handle data-lif-active attribute changes (existing logic)
             if (mutation.type === 'attributes' && mutation.attributeName === 'data-lif-active') {
                 const container = mutation.target;
                 if (container.dataset.lifActive === 'true') {
                     // Only apply fix if we're potentially in theater mode context
                     if (container.closest('.photo-well-media-scrappy-view') ||
                         document.querySelector('.height-controller')) {
+                        if (isDebugEnabled) {
+                            console.log('🎭 LIF container activated, applying Flickr canvas fix');
+                        }
                         applyFlickrCanvasfix(container);
                     }
                 }
+            }
+
+            // Handle new LIF containers being added to DOM (new logic for first load fix)
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if the added node is a LIF container
+                        if (node.classList && node.classList.contains('lif-image-container')) {
+                            // Check if we're in theater mode context
+                            if (node.closest('.photo-well-media-scrappy-view') ||
+                                document.querySelector('.height-controller')) {
+                                if (isDebugEnabled) {
+                                    console.log('🎭 New LIF container detected in theater mode, applying fix');
+                                }
+                                // Apply fix immediately, even if not yet activated
+                                applyFlickrCanvasfix(node);
+                            }
+                        }
+
+                        // Also check for LIF containers within added nodes
+                        const lifContainers = node.querySelectorAll && node.querySelectorAll('.lif-image-container');
+                        if (lifContainers) {
+                            lifContainers.forEach(container => {
+                                if (container.closest('.photo-well-media-scrappy-view') ||
+                                    document.querySelector('.height-controller')) {
+                                    if (isDebugEnabled) {
+                                        console.log('🎭 New nested LIF container detected in theater mode, applying fix');
+                                    }
+                                    applyFlickrCanvasfix(container);
+                                }
+                            });
+                        }
+                    }
+                });
             }
         });
     });
@@ -3342,20 +3463,24 @@ const setupFlickrCanvasDisplayFix = () => {
     observer.observe(document.body, {
         attributes: true,
         attributeFilter: ['data-lif-active'],
+        childList: true,
         subtree: true
     });
 
-    // Also apply to any existing active containers in theater mode
-    document.querySelectorAll('[data-lif-active="true"]').forEach(container => {
+    // Also apply to any existing containers in theater mode (both active and inactive)
+    document.querySelectorAll('.lif-image-container').forEach(container => {
         if (container.closest('.photo-well-media-scrappy-view') ||
             document.querySelector('.height-controller')) {
+            console.log('🎭 Existing LIF container found in theater mode, applying fix');
             applyFlickrCanvasfix(container);
         }
     });
 };
 
 const applyFlickrCanvasfix = (container) => {
-    console.log('🎭 Applying Flickr theater mode canvas display fix');
+    if (isDebugEnabled) {
+        console.log('🎭 Applying Flickr theater mode canvas display fix');
+    }
 
     // Only apply this fix in theater mode (when height-controller exists)
     const heightController = document.querySelector('.height-controller');
@@ -3366,7 +3491,9 @@ const applyFlickrCanvasfix = (container) => {
         container.closest('.photo-well-media-scrappy-view');
 
     if (!isTheaterMode) {
-        console.log('🎭 Not in theater mode, skipping Flickr-specific fixes');
+        if (isDebugEnabled) {
+            console.log('🎭 Not in theater mode, skipping Flickr-specific fixes');
+        }
         return;
     }
 
@@ -3382,10 +3509,12 @@ const applyFlickrCanvasfix = (container) => {
             const centerTop = heightControllerRect.top + ((heightControllerRect.height - imageHeight) / 2);
             const centerLeft = heightControllerRect.left + ((heightControllerRect.width - imageWidth) / 2);
 
-            console.log(`🎭 Centering LIF container in height-controller:`);
-            console.log(`   Height controller: ${heightControllerRect.width}x${heightControllerRect.height} at ${heightControllerRect.left},${heightControllerRect.top}`);
-            console.log(`   Image size: ${imageWidth}x${imageHeight}`);
-            console.log(`   Calculated center: ${centerLeft},${centerTop}`);
+            if (isDebugEnabled) {
+                console.log(`🎭 Centering LIF container in height-controller:`);
+                console.log(`   Height controller: ${heightControllerRect.width}x${heightControllerRect.height} at ${heightControllerRect.left},${heightControllerRect.top}`);
+                console.log(`   Image size: ${imageWidth}x${imageHeight}`);
+                console.log(`   Calculated center: ${centerLeft},${centerTop}`);
+            }
 
             container.style.cssText = `
                     position: fixed !important;
@@ -3453,7 +3582,7 @@ const applyFlickrCanvasfix = (container) => {
                     max-width: none !important;
                     max-height: none !important;
                     z-index: 5001 !important;
-                    display: block !important;
+                    display: none !important;
                     pointer-events: auto !important;
                     cursor: pointer !important;
                     margin: 0 !important;
@@ -3462,7 +3591,9 @@ const applyFlickrCanvasfix = (container) => {
                     outline: none !important;
                 `;
 
-            console.log(`🎭 Fixed canvas dimensions to ${facadeWidth}x${facadeHeight}px`);
+            if (isDebugEnabled) {
+                console.log(`🎭 Fixed canvas dimensions to ${facadeWidth}x${facadeHeight}px`);
+            }
         }
     }
 
@@ -3470,6 +3601,7 @@ const applyFlickrCanvasfix = (container) => {
     const lifImage = container.querySelector('img[src*="leia-storage-service"]');
     if (lifImage) {
         lifImage.style.cssText += `
+                display: block !important;
                 position: absolute !important;
                 top: 0px !important;
                 left: 0px !important;
@@ -3971,15 +4103,46 @@ function setupMessageListener() {
                 // Set up Instagram carousel navigation listeners
                 setupInstagramCarouselListeners();
 
-                // Set up Flickr theater mode overlay cleanup if needed
+                // Set up Flickr theater mode handling if needed
                 if (window.location.hostname.includes('flickr.com')) {
-                    const isInTheaterMode = document.querySelector('.height-controller') &&
-                        document.querySelector('.facade-of-protection-neue');
+                    // URL-based theater mode detection
+                    const currentPath = window.location.pathname;
+                    const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
 
-                    if (isInTheaterMode) {
-                        console.log('🎭 Detected Flickr theater mode - setting up overlay cleanup');
+                    if (isTheaterModeURL) {
+                        if (isDebugEnabled) {
+                            console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
+                        }
+
+                        // Check if this is first load and reload if needed
+                        const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
+
+                        if (!hasBeenReloaded) {
+                            if (isDebugEnabled) {
+                                console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
+                            }
+                            sessionStorage.setItem('flickr-theater-reloaded', 'true');
+                            setTimeout(() => {
+                                location.reload();
+                            }, 100);
+                            return; // Exit early since we're reloading
+                        } else {
+                            if (isDebugEnabled) {
+                                console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
+                            }
+                        }
+
                         setupFlickrOverlayCleanup();
+                    } else {
+                        // Clear the reload flag when NOT in theater mode
+                        const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
+                        if (hadReloadFlag) {
+                            sessionStorage.removeItem('flickr-theater-reloaded');
+                        }
                     }
+
+                    // Set up URL monitoring for SPA navigation to theater mode
+                    setupFlickrTheaterModeMonitoring();
                 }
 
                 // Start processing images
@@ -4164,18 +4327,40 @@ async function initialize() {
             // Set up Instagram carousel navigation listeners
             setupInstagramCarouselListeners();
 
-            // Set up Flickr theater mode overlay cleanup (only in theater mode)
+            // Set up Flickr theater mode handling
             if (window.location.hostname.includes('flickr.com')) {
-                // Only set up theater-specific cleanup if we're actually in theater mode
-                const isInTheaterMode = document.querySelector('.height-controller') &&
-                    document.querySelector('.facade-of-protection-neue');
+                // URL-based theater mode detection
+                const currentPath = window.location.pathname;
+                const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
 
-                if (isInTheaterMode) {
-                    console.log('🎭 Detected Flickr theater mode - setting up overlay cleanup');
+                if (isTheaterModeURL) {
+                    console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
+
+                    // Check if this is first load and reload if needed
+                    const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
+
+                    if (!hasBeenReloaded) {
+                        console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
+                        sessionStorage.setItem('flickr-theater-reloaded', 'true');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 100);
+                        return; // Exit early since we're reloading
+                    } else {
+                        console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
+                    }
+
                     setupFlickrOverlayCleanup();
                 } else {
-                    console.log('🖼️ Detected Flickr wall view - skipping theater-specific setup');
+                    // Clear the reload flag when NOT in theater mode
+                    const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
+                    if (hadReloadFlag) {
+                        sessionStorage.removeItem('flickr-theater-reloaded');
+                    }
                 }
+
+                // Set up URL monitoring for SPA navigation to theater mode
+                setupFlickrTheaterModeMonitoring();
             }
 
             // Start processing images

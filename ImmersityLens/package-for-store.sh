@@ -28,6 +28,22 @@ else
     echo "⚠️  installation.html not found, skipping version update"
 fi
 
+# Update index.html with correct version
+echo "📝 Updating index.html with version $VERSION..."
+if [ -f "index.html" ]; then
+    # Update the version in the download section description
+    sed -i.bak "s/Download ImmersityLens v[0-9]\+\.[0-9]\+ and start/Download ImmersityLens v$VERSION and start/g" index.html
+    
+    # Update the manual download link href
+    sed -i.bak "s/href=\"immersitylens-v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip\"/href=\"$PACKAGE_NAME\"/g" index.html
+    
+    # Remove backup file
+    rm index.html.bak
+    echo "✅ Updated index.html with version $VERSION"
+else
+    echo "⚠️  index.html not found, skipping version update"
+fi
+
 # Clean up any existing package
 if [ -f "$PACKAGE_NAME" ]; then
     echo "🗑️  Removing existing package: $PACKAGE_NAME"

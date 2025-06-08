@@ -792,7 +792,7 @@ class lifViewer {
                 layoutMode = 'standard';
                 console.log('🎨 DeviantArt detected - forcing standard layout mode despite preserveOriginal flag');
             } else {
-                layoutMode = 'overlay';
+            layoutMode = 'overlay';
             }
         }
 
