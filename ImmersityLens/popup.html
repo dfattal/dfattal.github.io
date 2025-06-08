@@ -4,121 +4,319 @@
 <head>
     <meta charset="utf-8">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             width: 320px;
-            padding: 20px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #ffffff;
+            color: #1a1a1a;
+            position: relative;
+        }
+
+        .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            margin: 0;
-        }
-
-        .container {
+            padding: 16px 20px;
             text-align: center;
+            color: white;
+            position: relative;
         }
 
-        h1 {
-            margin: 0 0 20px 0;
-            font-size: 24px;
-            font-weight: 300;
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
         }
 
-        .toggle-container {
-            margin: 20px 0;
+        .header .subtitle {
+            font-size: 11px;
+            opacity: 0.85;
+            font-weight: 400;
+        }
+
+        .content {
+            padding: 16px;
+        }
+
+        .status-section {
+            margin-bottom: 16px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #e9ecef;
+            font-size: 13px;
+        }
+
+        .status-item.enabled {
+            background: #e8f5e8;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+
+        .status-item.disabled {
+            background: #fdf2f2;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+
+        .status-item.checking {
+            background: #fff8e1;
+            border-left-color: #ffc107;
+            color: #8a6914;
+        }
+
+        .status-label {
+            font-weight: 500;
+        }
+
+        .status-value {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .controls-section {
+            margin-bottom: 16px;
+        }
+
+        .control-group {
+            margin-bottom: 8px;
         }
 
         .toggle-btn {
-            background: #4CAF50;
+            width: 100%;
+            padding: 10px 16px;
             border: none;
-            color: white;
-            padding: 12px 24px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 25px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .toggle-btn:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .toggle-btn.disabled {
-            background: #ff6b6b;
-        }
-
-        .toggle-btn.disabled:hover {
-            background: #ff5252;
-        }
-
-        .status {
-            margin: 15px 0;
+            border-radius: 6px;
             font-size: 14px;
-            opacity: 0.9;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
 
-        .description {
+        .toggle-btn.primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .toggle-btn.primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        .toggle-btn.danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .toggle-btn.danger:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .toggle-btn.secondary {
+            background: #6c757d;
+            color: white;
             font-size: 12px;
-            opacity: 0.8;
-            line-height: 1.4;
-            margin-top: 15px;
+            padding: 8px 16px;
         }
 
-        .icon {
-            font-size: 48px;
-            margin-bottom: 10px;
+        .toggle-btn.secondary:hover {
+            background: #545b62;
         }
 
-        .feature-list {
-            text-align: left;
-            margin: 15px 0;
-            font-size: 12px;
+        .toggle-btn.debug-on {
+            background: #ff6b35;
+            color: white;
+        }
+
+        .toggle-btn.debug-on:hover {
+            background: #e55a2b;
+        }
+
+        .features-section {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .features-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #6c757d;
+        }
+
+        .feature-icon {
+            font-size: 11px;
+        }
+
+        .footer {
+            padding: 12px 16px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #6c757d;
+            position: relative;
+        }
+
+        .leia-logo {
+            width: 20px;
+            height: 20px;
             opacity: 0.9;
-        }
-
-        .feature-list li {
-            margin: 5px 0;
         }
 
         .powered-by {
             font-size: 10px;
+            color: #ffffff;
+            text-align: right;
+            line-height: 1.2;
+        }
+
+        .version {
+            font-size: 9px;
             opacity: 0.7;
-            margin-top: 10px;
+        }
+
+        /* Animations */
+        .status-item {
+            animation: fadeInUp 0.3s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Loading animation for XR status */
+        .checking .status-value::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+
+            0%,
+            20% {
+                content: '...';
+            }
+
+            40% {
+                content: '';
+            }
+
+            60% {
+                content: '.';
+            }
+
+            80% {
+                content: '..';
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="icon">🌐➡️🎭</div>
-        <h1>2D→3D Converter</h1>
-        <div class="status" id="status" style="color: #ff6b6b;">Status: Disabled</div>
-        <div class="status" id="xrStatus" style="color: #ffa726; font-size: 12px;">XR Status: Checking...</div>
-        <div class="toggle-container">
-            <button id="toggleBtn" class="toggle-btn disabled">Enable Extension</button>
+    <div class="header">
+        <h1>ImmersityLens</h1>
+        <div class="subtitle">2D to 3D Image Converter</div>
+    </div>
+
+    <div class="content">
+        <div class="status-section">
+            <div class="status-item disabled" id="extensionStatus">
+                <span class="status-label">Extension</span>
+                <span class="status-value" id="status">Disabled</span>
+            </div>
+            <div class="status-item checking" id="xrStatusContainer">
+                <span class="status-label">WebXR Support</span>
+                <span class="status-value" id="xrStatus">Checking</span>
+            </div>
         </div>
-        <div class="toggle-container">
-            <button id="debugToggle" class="toggle-btn"
-                style="background: #9c27b0; font-size: 12px; padding: 8px 16px;">Debug Logs: Off</button>
+
+        <div class="controls-section">
+            <div class="control-group">
+                <button id="toggleBtn" class="toggle-btn primary">
+                    <span>🔌</span>
+                    <span>Enable Extension</span>
+                </button>
+            </div>
+            <div class="control-group">
+                <button id="debugToggle" class="toggle-btn secondary">
+                    <span>🐛</span>
+                    <span>Debug Logs: Off</span>
+                </button>
+            </div>
         </div>
-        <div class="description">
-            This extension adds "2D3D" buttons to images on any website.
-            Click the button to convert any 2D image into an immersive 3D experience!
+
+        <div class="features-section">
+            <div class="features-title">Features</div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <span class="feature-icon">🎯</span>
+                    <span>Auto-detect images</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🎨</span>
+                    <span>AI conversion</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🖱️</span>
+                    <span>Interactive 3D</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🥽</span>
+                    <span>VR/XR ready</span>
+                </div>
+            </div>
         </div>
-        <ul class="feature-list">
-            <li>🎯 Auto-detects images on any webpage</li>
-            <li>🎨 Converts to LIF format using Immersity AI</li>
-            <li>🖱️ Interactive 3D hover effects</li>
-            <li>⚡ Real-time depth processing</li>
-        </ul>
+    </div>
+
+    <div class="footer">
+        <img src="icons/Leia_Logomark_White.png" alt="Leia" class="leia-logo">
         <div class="powered-by">
-            Powered by Immersity AI & Leia Inc.
+            Powered by<br>
+            <strong>Immersity AI</strong>
+            <div class="version">v3.1.5</div>
         </div>
     </div>
 

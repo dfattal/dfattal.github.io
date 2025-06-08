@@ -3,45 +3,53 @@ document.addEventListener('DOMContentLoaded', function () {
     const debugToggle = document.getElementById('debugToggle');
     const statusDiv = document.getElementById('status');
     const xrStatusDiv = document.getElementById('xrStatus');
+    const extensionStatusContainer = document.getElementById('extensionStatus');
+    const xrStatusContainer = document.getElementById('xrStatusContainer');
     const STORAGE_KEY = 'lifExtensionEnabled';
     const DEBUG_STORAGE_KEY = 'lifDebugEnabled';
 
     // Function to update UI based on current state
     function updateUI(isEnabled) {
         if (isEnabled) {
-            toggleBtn.textContent = 'Disable Extension';
-            toggleBtn.classList.remove('disabled');
-            statusDiv.textContent = 'Status: Enabled';
-            statusDiv.style.color = '#4CAF50';
+            // Update button
+            toggleBtn.innerHTML = '<span>🔌</span><span>Disable Extension</span>';
+            toggleBtn.className = 'toggle-btn danger';
+
+            // Update status
+            statusDiv.textContent = 'Enabled';
+            extensionStatusContainer.className = 'status-item enabled';
         } else {
-            toggleBtn.textContent = 'Enable Extension';
-            toggleBtn.classList.add('disabled');
-            statusDiv.textContent = 'Status: Disabled';
-            statusDiv.style.color = '#ff6b6b';
+            // Update button
+            toggleBtn.innerHTML = '<span>🔌</span><span>Enable Extension</span>';
+            toggleBtn.className = 'toggle-btn primary';
+
+            // Update status
+            statusDiv.textContent = 'Disabled';
+            extensionStatusContainer.className = 'status-item disabled';
         }
     }
 
     // Function to update debug UI
     function updateDebugUI(isDebugEnabled) {
         if (isDebugEnabled) {
-            debugToggle.textContent = 'Debug Logs: On';
-            debugToggle.style.background = '#ff9800';
+            debugToggle.innerHTML = '<span>🐛</span><span>Debug Logs: On</span>';
+            debugToggle.className = 'toggle-btn debug-on';
         } else {
-            debugToggle.textContent = 'Debug Logs: Off';
-            debugToggle.style.background = '#9c27b0';
+            debugToggle.innerHTML = '<span>🐛</span><span>Debug Logs: Off</span>';
+            debugToggle.className = 'toggle-btn secondary';
         }
     }
 
     // Function to update XR status UI
     function updateXRStatus(isSupported, reason) {
         if (isSupported) {
-            xrStatusDiv.textContent = 'XR Status: Available';
-            xrStatusDiv.style.color = '#4CAF50';
-            xrStatusDiv.title = 'WebXR is supported - VR buttons will be shown';
+            xrStatusDiv.textContent = 'Available';
+            xrStatusContainer.className = 'status-item enabled';
+            xrStatusContainer.title = 'WebXR is supported - VR buttons will be shown';
         } else {
-            xrStatusDiv.textContent = 'XR Status: Not Available';
-            xrStatusDiv.style.color = '#ff6b6b';
-            xrStatusDiv.title = reason || 'WebXR is not supported on this device';
+            xrStatusDiv.textContent = 'Not Available';
+            xrStatusContainer.className = 'status-item disabled';
+            xrStatusContainer.title = reason || 'WebXR is not supported on this device';
         }
     }
 
@@ -49,25 +57,31 @@ document.addEventListener('DOMContentLoaded', function () {
     function checkXRStatus(isExtensionEnabled) {
         // Only check XR status if extension is enabled
         if (!isExtensionEnabled) {
-            xrStatusDiv.textContent = 'XR Status: Extension Disabled';
-            xrStatusDiv.style.color = '#999';
-            xrStatusDiv.title = 'Enable extension to check XR support';
+            xrStatusDiv.textContent = 'Extension Disabled';
+            xrStatusContainer.className = 'status-item disabled';
+            xrStatusContainer.title = 'Enable extension to check XR support';
             return;
         }
+
+        // Set checking state
+        xrStatusDiv.textContent = 'Checking';
+        xrStatusContainer.className = 'status-item checking';
+        xrStatusContainer.title = 'Checking WebXR support...';
 
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             if (tabs[0]) {
                 chrome.tabs.sendMessage(tabs[0].id, { action: 'getXRStatus' }, function (response) {
                     if (chrome.runtime.lastError) {
                         // Content script not loaded yet
-                        xrStatusDiv.textContent = 'XR Status: Page not ready';
-                        xrStatusDiv.style.color = '#ffa726';
-                        xrStatusDiv.title = 'Refresh the page to check XR support';
+                        xrStatusDiv.textContent = 'Page not ready';
+                        xrStatusContainer.className = 'status-item checking';
+                        xrStatusContainer.title = 'Refresh the page to check XR support';
                     } else if (response) {
                         updateXRStatus(response.supported, response.reason);
                     } else {
-                        xrStatusDiv.textContent = 'XR Status: Unknown';
-                        xrStatusDiv.style.color = '#ffa726';
+                        xrStatusDiv.textContent = 'Unknown';
+                        xrStatusContainer.className = 'status-item checking';
+                        xrStatusContainer.title = 'Unable to determine XR support status';
                     }
                 });
             }
