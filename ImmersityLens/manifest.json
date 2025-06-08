@@ -20,11 +20,11 @@
       "js": [
         "libs/three.min.js", 
         "libs/axios.min.js", 
-        "libs/heic2any.js", 
+
         "libs/LIF.js", 
         "libs/VRRenderers.js", 
 
-        "libs/VRLifViewer2.js", 
+        "libs/VRLifViewer.js", 
         "content.js"
       ],
       "run_at": "document_end"

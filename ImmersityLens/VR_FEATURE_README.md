@@ -134,7 +134,7 @@ ImmersityLens/
 ├── content.js                    # LIF detection and VR injection
 ├── libs/
 │   ├── VRPageSystem.js          # Complete VR system with embedded components
-│   ├── VRLifViewer2.js          # Content script VR interface
+│   ├── VRLifViewer.js           # Content script VR interface
 │   └── ...                      # Other extension libraries
 └── shaders/                     # External shader files (fallback)
     ├── rayCastMonoLDI.glsl

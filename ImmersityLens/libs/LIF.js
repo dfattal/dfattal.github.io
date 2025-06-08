@@ -411,14 +411,7 @@ class monoLdiGenerator {
         };
     }
 
-    async convertHeicToJpeg() {
-        const convertedBlob = await heic2any({
-            blob: this.file,
-            toType: "image/jpeg",
-            quality: 1
-        });
-        this.file = new File([convertedBlob], this.file.name.replace(/\.[^/.]+$/, ".jpg"), { type: "image/jpeg" });
-    }
+
 
     async getAccessToken() {
         console.log('Acquiring access token from LeiaLogin...');
@@ -508,11 +501,7 @@ class monoLdiGenerator {
         if (!this.file) return;
         console.log(`Starting Conversion of ${this.file.name}, ${this.file.type}`);
 
-        // Convert HEIC to a more usable format
-        if (this.file.type === 'image/heic' || this.file.type === 'image/heif') {
-            console.log('Converting HEIC file...');
-            await this.convertHeicToJpeg();
-        }
+
 
         const img = new Image();
         const reader = new FileReader();
