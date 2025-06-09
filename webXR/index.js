@@ -375,6 +375,44 @@ function checkXButtonState() {
     return false;
 }
 
+// Function to set canvas dimensions based on XR camera viewports and display mode
+function setCanvasDimensions(leftCam, rightCam) {
+    if (!rL || !rR || !leftCam || !rightCam) {
+        console.warn("Cannot set canvas dimensions - renderers or cameras not available");
+        return false;
+    }
+
+    if (is3D > 0.5) { // 3D display
+        // CAREFUL: viewport might already be reporting half size from openXR runtime !!
+        rL.gl.canvas.width = leftCam.viewport.width / 2; // 3D resolution about half of viewport for 3D display
+        rL.gl.canvas.height = leftCam.viewport.height / 2;
+        rR.gl.canvas.width = rightCam.viewport.width / 2;
+        rR.gl.canvas.height = rightCam.viewport.height / 2;
+        viewportScale = 1;
+    } else { // VR
+        // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
+        const aspectRatio = views[0].height_px / views[0].width_px;
+        let width = views[0].width_px * viewportScale;
+        let height = views[0].height_px * viewportScale;
+        if (width > MAX_TEX_SIZE_VR) {
+            width = MAX_TEX_SIZE_VR;
+            height = width * aspectRatio;
+        } else if (height > MAX_TEX_SIZE_VR) {
+            height = MAX_TEX_SIZE_VR;
+            width = height / aspectRatio;
+        }
+        rL.gl.canvas.width = width;
+        rL.gl.canvas.height = height;
+        rR.gl.canvas.width = width;
+        rR.gl.canvas.height = height;
+        rL.invd = focus * views[0].inv_z_map.min;
+        rR.invd = focus * views[0].inv_z_map.min;
+    }
+
+    console.log("Canvas dimensions set - width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height, "is3D:", is3D);
+    return true;
+}
+
 // Function to reset convergence plane and tracking variables
 function resetConvergencePlane(leftCam, rightCam) {
     console.log("Resetting convergence plane and tracking variables...");
@@ -383,6 +421,9 @@ function resetConvergencePlane(leftCam, rightCam) {
         // Recalculate convergence plane based on current camera positions
         convergencePlane = locateConvergencePlane(leftCam, rightCam);
         console.log("New convergence plane:", convergencePlane);
+
+        // Reset canvas dimensions based on new convergence plane calculation
+        setCanvasDimensions(leftCam, rightCam);
 
         // Calculate camera positions in convergence plane's local coordinate system
         const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
@@ -739,32 +780,7 @@ function animate() {
 
             // Set canvas dimensions once when XR cameras are available
             if (!xrCanvasInitialized) {
-                if (is3D > 0.5) { // 3D display
-                    rL.gl.canvas.width = leftCam.viewport.width/2; // 3D resolution about half of viewport for 3D display
-                    rL.gl.canvas.height = leftCam.viewport.height/2;
-                    rR.gl.canvas.width = rightCam.viewport.width/2;
-                    rR.gl.canvas.height = rightCam.viewport.height/2;
-                    viewportScale = 1;
-                } else { // VR
-                    // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
-                    const aspectRatio = views[0].height_px / views[0].width_px;
-                    let width = views[0].width_px * viewportScale;
-                    let height = views[0].height_px * viewportScale;
-                    if (width > MAX_TEX_SIZE_VR) {
-                        width = MAX_TEX_SIZE_VR;
-                        height = width * aspectRatio;
-                    } else if (height > MAX_TEX_SIZE_VR) {
-                        height = MAX_TEX_SIZE_VR;
-                        width = height / aspectRatio;
-                    }
-                    rL.gl.canvas.width = width;
-                    rL.gl.canvas.height = height;
-                    rR.gl.canvas.width = width;
-                    rR.gl.canvas.height = height;
-                    rL.invd = focus * views[0].inv_z_map.min;
-                    rR.invd = focus * views[0].inv_z_map.min;
-                }
-                console.log("xrCanvasInitialized, width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height);
+                setCanvasDimensions(leftCam, rightCam);
                 xrCanvasInitialized = true;
 
                 // Each eye sees only its plane
@@ -821,7 +837,7 @@ function animate() {
                 IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
                 console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
                 console.log("convergencePlane position:", convergencePlane.position);
-                
+
             }
             // Render the scene using local coordinates
             rL.renderCam.pos.x = localLeftCamPos.x / IPD;
