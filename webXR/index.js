@@ -384,10 +384,10 @@ function setCanvasDimensions(leftCam, rightCam) {
 
     if (is3D > 0.5) { // 3D display
         // CAREFUL: viewport might already be reporting half size from openXR runtime !!
-        rL.gl.canvas.width = leftCam.viewport.width / 2; // 3D resolution about half of viewport for 3D display
-        rL.gl.canvas.height = leftCam.viewport.height / 2;
-        rR.gl.canvas.width = rightCam.viewport.width / 2;
-        rR.gl.canvas.height = rightCam.viewport.height / 2;
+        rL.gl.canvas.width = leftCam.viewport.width; // 3D resolution about half of viewport for 3D display
+        rL.gl.canvas.height = leftCam.viewport.height;
+        rR.gl.canvas.width = rightCam.viewport.width;
+        rR.gl.canvas.height = rightCam.viewport.height;
         viewportScale = 1;
     } else { // VR
         // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
