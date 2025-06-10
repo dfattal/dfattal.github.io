@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImmersityLens Refactor Test Page</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .test-section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        /* Flexbox Layout Test */
+        .flex-container {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .flex-text {
+            flex: 1;
+        }
+
+        .flex-image {
+            flex: 0 0 300px;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        /* Grid Layout Test */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .grid-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        /* Float Layout Test */
+        .float-container::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+
+        .float-image {
+            float: right;
+            width: 300px;
+            height: 200px;
+            margin-left: 20px;
+            object-fit: cover;
+        }
+
+        /* Absolute Positioning Test */
+        .relative-container {
+            position: relative;
+            height: 250px;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .absolute-image {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        /* Picture Element Test */
+        .picture-container {
+            text-align: center;
+        }
+
+        .picture-container picture {
+            display: inline-block;
+        }
+
+        .picture-container img {
+            max-width: 400px;
+            height: auto;
+        }
+
+        /* Complex Nested Layout */
+        .complex-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .complex-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .complex-card {
+            flex: 1;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .complex-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        .complex-card-content {
+            padding: 15px;
+        }
+
+        /* Performance Test */
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .performance-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .stats {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .comparison-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        .original {
+            background: #ffe6e6;
+        }
+
+        .refactored {
+            background: #e6ffe6;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>ImmersityLens Refactor Test Page</h1>
+    <p>This page tests the refactored ImmersityLens extension across different layout types to demonstrate the universal
+        positioning approach.</p>
+
+    <div class="stats">
+        <h3>Comparison Stats</h3>
+        <table class="comparison-table">
+            <tr>
+                <th>Aspect</th>
+                <th class="original">Original Approach</th>
+                <th class="refactored">Refactored Approach</th>
+            </tr>
+            <tr>
+                <td><strong>Lines of Code</strong></td>
+                <td class="original">4,394 lines</td>
+                <td class="refactored">~500 lines</td>
+            </tr>
+            <tr>
+                <td><strong>Layout Strategies</strong></td>
+                <td class="original">6 different modes</td>
+                <td class="refactored">1 universal CSS Grid</td>
+            </tr>
+            <tr>
+                <td><strong>Site-specific Code</strong></td>
+                <td class="original">Facebook, Instagram, LinkedIn, etc.</td>
+                <td class="refactored">None</td>
+            </tr>
+            <tr>
+                <td><strong>DOM Manipulation</strong></td>
+                <td class="original">Complex wrapper creation</td>
+                <td class="refactored">Simple grid setup</td>
+            </tr>
+            <tr>
+                <td><strong>Event Handling</strong></td>
+                <td class="original">Multiple strategies + protective zones</td>
+                <td class="refactored">Shadow DOM isolation</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="test-section">
+        <h2>1. Flexbox Layout Test</h2>
+        <p>Tests the universal grid approach with flexbox containers.</p>
+        <div class="flex-container">
+            <div class="flex-text">
+                <h3>Flexbox Article</h3>
+                <p>This image is in a flexbox container. The refactored approach uses CSS Grid to overlay the
+                    interactive controls without breaking the flexbox layout.</p>
+            </div>
+            <img src="https://picsum.photos/300/200?random=1" alt="Flexbox test image" class="flex-image">
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. CSS Grid Layout Test</h2>
+        <p>Tests grid-in-grid scenarios.</p>
+        <div class="grid-container">
+            <div>
+                <h3>Grid Article</h3>
+                <p>This image is in a CSS Grid container. The refactored approach creates a nested grid that doesn't
+                    interfere with the parent grid.</p>
+            </div>
+            <img src="https://picsum.photos/300/200?random=2" alt="Grid test image" class="grid-image">
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Float Layout Test</h2>
+        <p>Tests compatibility with legacy float-based layouts.</p>
+        <div class="float-container">
+            <img src="https://picsum.photos/300/200?random=3" alt="Float test image" class="float-image">
+            <h3>Float Layout</h3>
+            <p>This image uses float positioning. The refactored approach converts the parent to a grid container while
+                preserving the visual layout. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+                tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+                ullamco laboris.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Absolute Positioning Test</h2>
+        <p>Tests handling of absolutely positioned images.</p>
+        <div class="relative-container">
+            <h3>Relative Container</h3>
+            <p>This container has relative positioning with an absolutely positioned image.</p>
+            <img src="https://picsum.photos/200/150?random=4" alt="Absolute test image" class="absolute-image">
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Picture Element Test</h2>
+        <p>Tests responsive picture elements (the original approach's most complex scenario).</p>
+        <div class="picture-container">
+            <picture>
+                <source media="(min-width: 800px)" srcset="https://picsum.photos/400/300?random=5">
+                <source media="(min-width: 400px)" srcset="https://picsum.photos/300/225?random=5">
+                <img src="https://picsum.photos/200/150?random=5" alt="Responsive picture test">
+            </picture>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>6. Complex Nested Layout Test</h2>
+        <p>Tests deeply nested flexbox and card layouts.</p>
+        <div class="complex-container">
+            <div class="complex-row">
+                <div class="complex-card">
+                    <img src="https://picsum.photos/250/150?random=6" alt="Card image 1">
+                    <div class="complex-card-content">
+                        <h4>Card 1</h4>
+                        <p>Complex nested layout test</p>
+                    </div>
+                </div>
+                <div class="complex-card">
+                    <img src="https://picsum.photos/250/150?random=7" alt="Card image 2">
+                    <div class="complex-card-content">
+                        <h4>Card 2</h4>
+                        <p>Flexbox within grid within card</p>
+                    </div>
+                </div>
+                <div class="complex-card">
+                    <img src="https://picsum.photos/250/150?random=8" alt="Card image 3">
+                    <div class="complex-card-content">
+                        <h4>Card 3</h4>
+                        <p>Should work universally</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>7. Performance Test (Many Images)</h2>
+        <p>Tests performance with many images (Intersection Observer optimization).</p>
+        <div class="performance-grid">
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=10" alt="Performance test 1">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=11" alt="Performance test 2">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=12" alt="Performance test 3">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=13" alt="Performance test 4">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=14" alt="Performance test 5">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=15" alt="Performance test 6">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=16" alt="Performance test 7">
+            </div>
+            <div class="performance-item">
+                <img src="https://picsum.photos/200/150?random=17" alt="Performance test 8">
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <h3>Expected Results</h3>
+        <ul>
+            <li><strong>Universal Compatibility:</strong> All layout types should work without site-specific code</li>
+            <li><strong>Performance:</strong> Only visible images should be enhanced (check Network tab)</li>
+            <li><strong>Clean Integration:</strong> No layout breaks or style conflicts</li>
+            <li><strong>Shadow DOM Isolation:</strong> Overlays should be immune to page CSS</li>
+            <li><strong>Graceful Degradation:</strong> If enhancement fails, images remain functional</li>
+        </ul>
+    </div>
+
+    <script>
+        // Add some dynamic images to test mutation observer
+        setTimeout(() => {
+            const dynamicSection = document.createElement('div');
+            dynamicSection.className = 'test-section';
+            dynamicSection.innerHTML = `
+                <h2>8. Dynamic Content Test</h2>
+                <p>This image was added dynamically to test the mutation observer.</p>
+                <img src="https://picsum.photos/400/250?random=20" alt="Dynamic image" style="width: 400px; height: 250px; object-fit: cover;">
+            `;
+            document.body.appendChild(dynamicSection);
+        }, 2000);
+
+        // Performance monitoring
+        if (performance.mark) {
+            performance.mark('page-load-start');
+            window.addEventListener('load', () => {
+                performance.mark('page-load-end');
+                performance.measure('page-load', 'page-load-start', 'page-load-end');
+                console.log('Page load performance:', performance.getEntriesByName('page-load'));
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ImmersityLens - 2D to 3D Converter",
-      "version": "3.1.7",
-  "description": "Convert 2D images to immersive 3D LIF files with VR viewing capabilities using Immersity AI",
+  "name": "ImmersityLens - 2D to 3D Converter (Refactored)",
+  "version": "4.0.0",
+  "description": "Convert 2D images to immersive 3D LIF files with VR viewing capabilities using Immersity AI - Refactored for better performance and maintainability",
   "permissions": [
     "activeTab",
     "storage"
@@ -32,7 +32,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ImmersityLens - 2D to 3D Converter"
+    "default_title": "ImmersityLens - 2D to 3D Converter (Refactored)"
   },
   "icons": {
     "16": "icons/icon16.png",
