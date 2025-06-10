@@ -2182,10 +2182,36 @@ void main(void) {
 
                 // Set canvas dimensions based on display type (matching webXR exactly)
                 if (is3D > 0.5) { // 3D display
-                    this.lifCanvasL.width = leftCam.viewport.width / 2; // 3D resolution about half of viewport for 3D display
-                    this.lifCanvasL.height = leftCam.viewport.height / 2;
-                    this.lifCanvasR.width = rightCam.viewport.width / 2;
-                    this.lifCanvasR.height = rightCam.viewport.height / 2;
+                    // Size canvas to match convergence plane aspect ratio, scaled to fit within viewport
+                    if (tempConvergencePlane && !isNaN(tempConvergencePlane.width) && !isNaN(tempConvergencePlane.height) &&
+                        tempConvergencePlane.width > 0 && tempConvergencePlane.height > 0) {
+
+                        // Calculate scale factors to fit convergence plane in viewport
+                        const scaleX = leftCam.viewport.width / tempConvergencePlane.width;
+                        const scaleY = leftCam.viewport.height / tempConvergencePlane.height;
+                        const scale = Math.min(scaleX, scaleY); // Maximize scale while fitting in viewport
+
+                        // Calculate final canvas dimensions
+                        const canvasWidth = Math.round(tempConvergencePlane.width * scale);
+                        const canvasHeight = Math.round(tempConvergencePlane.height * scale);
+
+                        this.lifCanvasL.width = canvasWidth;
+                        this.lifCanvasL.height = canvasHeight;
+                        this.lifCanvasR.width = canvasWidth;
+                        this.lifCanvasR.height = canvasHeight;
+
+                        this.log("3D canvas sized to convergence plane - convergence: " +
+                            tempConvergencePlane.width.toFixed(2) + "x" + tempConvergencePlane.height.toFixed(2) +
+                            " viewport: " + leftCam.viewport.width + "x" + leftCam.viewport.height +
+                            " scale: " + scale.toFixed(3) + " final: " + canvasWidth + "x" + canvasHeight);
+                    } else {
+                        // Fallback to original method if convergence plane is invalid
+                        this.lifCanvasL.width = leftCam.viewport.width;
+                        this.lifCanvasL.height = leftCam.viewport.height;
+                        this.lifCanvasR.width = rightCam.viewport.width;
+                        this.lifCanvasR.height = rightCam.viewport.height;
+                        this.log("3D canvas using fallback sizing (convergence plane unavailable)");
+                    }
                     viewportScale = 1;
                 } else { // VR
                     // Calculate scaled dimensions while preserving aspect ratio and max dimension

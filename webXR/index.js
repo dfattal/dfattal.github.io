@@ -7,7 +7,8 @@ const urlParams = new URLSearchParams(window.location.search);
 const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
 const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
 const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
-const test = urlParams.get('test') ? urlParams.get('test') : true; // Default to true
+const test = urlParams.get('test') !== null ? urlParams.get('test') !== 'false' && urlParams.get('test') !== '0' : true; // Default to true
+console.log("test: ", test);
 
 let views = null;
 let stereo_render_data = null;
@@ -284,8 +285,10 @@ async function init() {
     const glR = offscreenCanvasR.getContext('webgl');
 
     if (views.length == 1) {
+        console.log("test: ", test);
         rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
         rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // 
+        console.log("shader used: ", '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl');
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
@@ -293,6 +296,7 @@ async function init() {
     } else if (views.length == 2) {
         rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // limit image size to 1920px
         rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // 
+        console.log("shader used: ", '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl');
         rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
         rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background

@@ -15,14 +15,9 @@ PACKAGE_NAME="immersitylens-v${VERSION}.zip"
 # Update installation.html with correct version
 echo "📝 Updating installation.html with version $VERSION..."
 if [ -f "installation.html" ]; then
-    # Update the download link href
-    sed -i.bak "s/href=\"immersitylens-v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip\"/href=\"$PACKAGE_NAME\"/g" installation.html
-    
-    # Update the download button text content
-    sed -i.bak "s/📦 Download Extension (v[0-9]\+\.[0-9]\+\.[0-9]\+)/📦 Download Extension (v$VERSION)/g" installation.html
-    
-    # Update any other version references in installation.html
-    sed -i.bak "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$VERSION/g" installation.html
+    # Update all version references with macOS-compatible basic regex
+    sed -i.bak "s/immersitylens-v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.zip/immersitylens-v$VERSION.zip/g" installation.html
+    sed -i.bak "s/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\([^0-9]\)/v$VERSION\1/g" installation.html
     
     # Remove backup file
     rm installation.html.bak
@@ -34,20 +29,34 @@ fi
 # Update index.html with correct version
 echo "📝 Updating index.html with version $VERSION..."
 if [ -f "index.html" ]; then
-    # Update the version in the download section description
-    sed -i.bak "s/Download ImmersityLens v[0-9]\+\.[0-9]\+ and start/Download ImmersityLens v$VERSION and start/g" index.html
+    # Update zip file references
+    sed -i.bak "s/immersitylens-v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.zip/immersitylens-v$VERSION.zip/g" index.html
     
-    # Update the manual download link href
-    sed -i.bak "s/href=\"immersitylens-v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip\"/href=\"$PACKAGE_NAME\"/g" index.html
+    # Update version in download text (handle v3.0 pattern specifically)
+    sed -i.bak "s/Download ImmersityLens v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/Download ImmersityLens v$VERSION/g" index.html
+    sed -i.bak "s/Download ImmersityLens v[0-9][0-9]*\.[0-9][0-9]*[^\.]/Download ImmersityLens v$VERSION and/g" index.html
     
-    # Update any version references in download link text or other content
-    sed -i.bak "s/Manual installation available here.*v[0-9]\+\.[0-9]\+\.[0-9]\+/Manual installation available here (v$VERSION)/g" index.html
+    # Update version references (with word boundaries to prevent over-matching)
+    sed -i.bak "s/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\([^0-9]\)/v$VERSION\1/g" index.html
     
     # Remove backup file
     rm index.html.bak
     echo "✅ Updated index.html with version $VERSION"
 else
     echo "⚠️  index.html not found, skipping version update"
+fi
+
+# Update popup.html with correct version
+echo "📝 Updating popup.html with version $VERSION..."
+if [ -f "popup.html" ]; then
+    # Update all version references
+    sed -i.bak "s/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\([^0-9]\)/v$VERSION\1/g" popup.html
+    
+    # Remove backup file
+    rm popup.html.bak
+    echo "✅ Updated popup.html with version $VERSION"
+else
+    echo "⚠️  popup.html not found, skipping version update"
 fi
 
 # Clean up any existing package
@@ -65,6 +74,11 @@ echo "   ✅ popup.js"
 echo "   ✅ icons/ directory"
 echo "   ✅ libs/ directory"
 echo "   ✅ shaders/ directory"
+echo ""
+echo "📋 Updated files with version $VERSION:"
+echo "   📄 installation.html"
+echo "   📄 index.html" 
+echo "   📄 popup.html"
 
 # Create the package
 zip -r "$PACKAGE_NAME" \
