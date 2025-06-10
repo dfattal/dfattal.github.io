@@ -383,11 +383,36 @@ function setCanvasDimensions(leftCam, rightCam) {
     }
 
     if (is3D > 0.5) { // 3D display
-        // CAREFUL: viewport might already be reporting half size from openXR runtime !!
-        rL.gl.canvas.width = leftCam.viewport.width; // 3D resolution about half of viewport for 3D display
-        rL.gl.canvas.height = leftCam.viewport.height;
-        rR.gl.canvas.width = rightCam.viewport.width;
-        rR.gl.canvas.height = rightCam.viewport.height;
+        // Size canvas to match convergence plane aspect ratio, scaled to fit within viewport
+        if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
+            convergencePlane.width > 0 && convergencePlane.height > 0) {
+
+            // Calculate scale factors to fit convergence plane in viewport
+            const scaleX = leftCam.viewport.width / convergencePlane.width;
+            const scaleY = leftCam.viewport.height / convergencePlane.height;
+            const scale = Math.min(scaleX, scaleY); // Maximize scale while fitting in viewport
+
+            // Calculate final canvas dimensions
+            const canvasWidth = Math.round(convergencePlane.width * scale);
+            const canvasHeight = Math.round(convergencePlane.height * scale);
+
+            rL.gl.canvas.width = canvasWidth;
+            rL.gl.canvas.height = canvasHeight;
+            rR.gl.canvas.width = canvasWidth;
+            rR.gl.canvas.height = canvasHeight;
+
+            console.log("3D canvas sized to convergence plane - convergence:",
+                convergencePlane.width.toFixed(2), "x", convergencePlane.height.toFixed(2),
+                "viewport:", leftCam.viewport.width, "x", leftCam.viewport.height,
+                "scale:", scale.toFixed(3), "final:", canvasWidth, "x", canvasHeight);
+        } else {
+            // Fallback to viewport size if convergence plane not available
+            console.warn("Convergence plane not available, using viewport size");
+            rL.gl.canvas.width = leftCam.viewport.width;
+            rL.gl.canvas.height = leftCam.viewport.height;
+            rR.gl.canvas.width = rightCam.viewport.width;
+            rR.gl.canvas.height = rightCam.viewport.height;
+        }
         viewportScale = 1;
     } else { // VR
         // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
