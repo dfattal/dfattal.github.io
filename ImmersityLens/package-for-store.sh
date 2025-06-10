@@ -18,8 +18,11 @@ if [ -f "installation.html" ]; then
     # Update the download link href
     sed -i.bak "s/href=\"immersitylens-v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip\"/href=\"$PACKAGE_NAME\"/g" installation.html
     
-    # Update the download button text
+    # Update the download button text content
     sed -i.bak "s/📦 Download Extension (v[0-9]\+\.[0-9]\+\.[0-9]\+)/📦 Download Extension (v$VERSION)/g" installation.html
+    
+    # Update any other version references in installation.html
+    sed -i.bak "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$VERSION/g" installation.html
     
     # Remove backup file
     rm installation.html.bak
@@ -36,6 +39,9 @@ if [ -f "index.html" ]; then
     
     # Update the manual download link href
     sed -i.bak "s/href=\"immersitylens-v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip\"/href=\"$PACKAGE_NAME\"/g" index.html
+    
+    # Update any version references in download link text or other content
+    sed -i.bak "s/Manual installation available here.*v[0-9]\+\.[0-9]\+\.[0-9]\+/Manual installation available here (v$VERSION)/g" index.html
     
     # Remove backup file
     rm index.html.bak
