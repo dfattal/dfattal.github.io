@@ -552,14 +552,24 @@ function locateConvergencePlane(leftCam, rightCam) {
     const r1 = rightFov.tanRight;
     const l1 = -rightFov.tanLeft;
 
-    // Get absolute camera positions
-    const x0 = leftCam.position.x;
-    const y0 = leftCam.position.y;
-    const z0 = leftCam.position.z;
+    // Transform camera positions to local coordinate system (centered at centerCam, aligned with leftQuat)
+    const invLeftQuat = leftQuat.clone().invert();
 
-    const x1 = rightCam.position.x;
-    const y1 = rightCam.position.y;
-    const z1 = rightCam.position.z;
+    // Get camera positions relative to centerCam, then rotate to local space
+    const localLeftPos = leftCam.position.clone().sub(centerCam).applyQuaternion(invLeftQuat);
+    const localRightPos = rightCam.position.clone().sub(centerCam).applyQuaternion(invLeftQuat);
+
+    console.log("World positions - Left:", leftCam.position, "Right:", rightCam.position, "Center:", centerCam);
+    console.log("Local positions - Left:", localLeftPos, "Right:", localRightPos);
+
+    // Use local coordinates for calculation
+    const x0 = localLeftPos.x;
+    const y0 = localLeftPos.y;
+    const z0 = localLeftPos.z;
+
+    const x1 = localRightPos.x;
+    const y1 = localRightPos.y;
+    const z1 = localRightPos.z;
 
     // Calculate display position denominators - check for division by zero
     const denomX = (r1 - l1 - r0 + l0);
@@ -576,11 +586,9 @@ function locateConvergencePlane(leftCam, rightCam) {
         DISTANCE = .063 / views[0].inv_z_map.min / focus; // focus 0.01
         const width = viewportScale * DISTANCE / views[0].focal_px * views[0].width_px;
         const height = viewportScale * DISTANCE / views[0].focal_px * views[0].height_px;
-        // console.log("distance:", d, "width:", width, "height:", height);
-        // const pos = new THREE.Vector3(0, 0, -d).applyQuaternion(leftQuat).add(centerCam);
-        // const width = DISTANCE*Math.abs(leftFov.tanRight - leftFov.tanLeft);
-        // const height = DISTANCE*Math.abs(leftFov.tanUp - leftFov.tanDown);
-        const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
+        // Position in local space, then transform back to world space
+        const localPos = new THREE.Vector3(0, 0, -DISTANCE);
+        const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
 
         // Remove roll from quaternion by extracting yaw and pitch only
         const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
@@ -588,34 +596,35 @@ function locateConvergencePlane(leftCam, rightCam) {
         const noRollQuat = new THREE.Quaternion().setFromEuler(euler);
 
         return {
-            position: pos,
+            position: worldPos,
             quaternion: noRollQuat,
             width: width,
             height: height
         };
     }
 
-    // Calculate display position
+    // Calculate display position in local coordinates
     const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
     const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
     const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
 
-    console.log("Display position calculation:",
+    console.log("Display position calculation (local coords):",
         "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
 
     // Calculate display size
     const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
     const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
 
-    const finalPos = new THREE.Vector3(xd, yd, zd); // assume leftQuat is identity (true at start of session)
+    // Transform local position back to world coordinates
+    const localPos = new THREE.Vector3(xd, yd, zd);
+    const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
+
     console.log("RENDERING for 3D");
-    console.log("Final result:",
-        "position:", finalPos,
-        "width:", Math.abs(W),
-        "height:", Math.abs(H));
+    console.log("Local result - position:", localPos, "width:", Math.abs(W), "height:", Math.abs(H));
+    console.log("World result - position:", worldPos, "width:", Math.abs(W), "height:", Math.abs(H));
 
     return {
-        position: finalPos,
+        position: worldPos,
         quaternion: leftQuat.clone(),
         width: Math.abs(W),
         height: Math.abs(H)
