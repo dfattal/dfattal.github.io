@@ -438,6 +438,28 @@ function setCanvasDimensions(leftCam, rightCam) {
         rR.invd = focus * views[0].inv_z_map.min;
     }
 
+    // Recreate textures when canvas dimensions change to avoid texture caching issues
+    if (texL) {
+        texL.dispose();
+        texL = new THREE.CanvasTexture(rL.gl.canvas);
+        console.log("Recreated texL with new canvas dimensions");
+    }
+    if (texR) {
+        texR.dispose();
+        texR = new THREE.CanvasTexture(rR.gl.canvas);
+        console.log("Recreated texR with new canvas dimensions");
+    }
+
+    // Update plane materials with new textures if planes exist
+    if (planeLeft && planeLeft.material && planeLeft.material.uniforms) {
+        planeLeft.material.uniforms.uTexture.value = texL;
+        console.log("Updated planeLeft material with new texture");
+    }
+    if (planeRight && planeRight.material && planeRight.material.uniforms) {
+        planeRight.material.uniforms.uTexture.value = texR;
+        console.log("Updated planeRight material with new texture");
+    }
+
     console.log("Canvas dimensions set - width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height, "is3D:", is3D);
     return true;
 }
