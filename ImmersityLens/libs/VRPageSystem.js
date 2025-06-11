@@ -1004,8 +1004,8 @@ class PageContextVRSystem {
 
             if (views.length == 1) {
                 // Mono LIF - use rayCastMonoLDI shader
-                this.lifRendererL = await this.createRendererInstance(this.lifGLL, 'shaders/rayCastMonoLDI-test.glsl', views, false, 1920);
-                this.lifRendererR = await this.createRendererInstance(this.lifGLR, 'shaders/rayCastMonoLDI-test.glsl', views, false, 1920);
+                this.lifRendererL = await this.createRendererInstance(this.lifGLL, 'shaders/rayCastMonoLDI.glsl', views, false, 1920);
+                this.lifRendererR = await this.createRendererInstance(this.lifGLR, 'shaders/rayCastMonoLDI.glsl', views, false, 1920);
             } else if (views.length == 2) {
                 // Stereo LIF - use rayCastStereoLDI shader  
                 this.lifRendererL = await this.createStereoRendererInstance(this.lifGLL, 'shaders/rayCastStereoLDI-test.glsl', views, false, 1920);
@@ -1063,7 +1063,7 @@ class PageContextVRSystem {
     }
 
     getEmbeddedMonoShader() {
-        // Complete mono LIF fragment shader (embedded to avoid CSP issues) - EXACT COPY from rayCastMonoLDI-test.glsl
+        // Complete mono LIF fragment shader (embedded to avoid CSP issues) - EXACT COPY from rayCastMonoLDI.glsl
         return `
 precision highp float;
 
@@ -1193,21 +1193,17 @@ float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
 }
 
 // Action !
-vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t, out float invZ2, out float confidence) {
+vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t,out float invZ2, out float confidence) {
 
     // s2 is normalized xy coordinate for synthesized view, centered at 0 so values in -0.5..0.5
 
-    const int numCoarseSteps = 8; // Reduced number of coarse steps
-    const int numBinarySteps = 5; // Number of binary search refinement steps
-    float numsteps_float = float(numCoarseSteps);
-
-    // Add accuracy threshold parameter
-    const float accuracyThreshold = 1e-3;
-    float targetAccuracy = (invZmin - invZmax) * accuracyThreshold;
+    const int numsteps = 40;
+    float numsteps_float = float(numsteps);
 
     float invZ = invZmin; // starting point for invZ search
-    float dinvZ = (invZmin - invZmax) / numsteps_float; // Coarser steps for initial search
+    float dinvZ = (invZmin - invZmax) / numsteps_float; // dividing the step into 40 steps
     float invZminT = invZ * (1.0 - t); // for animation
+    invZ += dinvZ; // step back once before start
 
     //vec2 s1 = s2; // inititalize s1
     invZ2 = 0.0; // initialize invZ2
@@ -1227,101 +1223,37 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     vec2 Pzxy = vec2(P[0].z, P[1].z);
     float Pzz = P[2].z;
 
-    vec2 s1 = vec2(0.0); // Will be calculated below
-    vec2 ds1 = vec2(0.0); // Will be calculated below
+    vec2 s1 = C.xy * invZ + (1.0 - C.z * invZ) * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz); // starting point for s1
+    vec2 ds1 = (C.xy - C.z * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz)) * dinvZ; // initial s1 step size
 
     confidence = 1.0;
+    // 40 steps
+    for(int i = 0; i < numsteps; i++) {
 
-    // Phase 1: Coarse linear search to find the first potential intersection
-    bool intersectionFound = false;
-    float invZBefore = invZ; // Store the invZ value before intersection
-    float invZAfter = invZ;  // Store the invZ value after intersection
-    vec2 s1Before = vec2(0.0); // Will store s1 before intersection
-    vec2 s1After = vec2(0.0);  // Will store s1 after intersection
+        invZ -= dinvZ; // step forward
+        s1 -= ds1;
 
-    for(int i = 0; i < numCoarseSteps+2; i++) {
-        invZ = invZmin - float(i-1) * dinvZ; // Step linearly
-
-        // Calculate s1 for current invZ
-        s1 = C.xy * invZ + (1.0 - C.z * invZ) * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz);
-
-        // Calculate s1 step size for next iteration
-        ds1 = (C.xy - C.z * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz)) * dinvZ;
+        //s1 = C.xy*invZ + (1.0 - C.z*invZ)*(Pxyxy*s2 + Pxyz)/(dot(Pzxy,s2) + Pzz);
 
         disp = readDisp(iChannelDisp, s1 + .5, invZmin, invZmax, iRes);
         gradDisp = disp - oldDisp;
         oldDisp = disp;
         invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
-
-        // Check if we've found an intersection
-        if(disp > invZ) {
-            // We found a transition from in front to behind the surface
-            intersectionFound = true;
-            invZAfter = invZ;
-            s1After = s1;
-            invZBefore = invZ + dinvZ;
-            s1Before = s1 + ds1;
-
+        if((disp > invZ) && (invZ2 > 0.0)) { // if ray is below the "virtual surface"...
             if(abs(gradDisp) > gradThr)
                 confidence = 0.0;
-
-            break;
-        }
-    }
-
-    // Phase 2: Binary search refinement if we found an intersection
-    if(intersectionFound) {
-        float invZLow = invZAfter;   // Behind the surface
-        float invZHigh = invZBefore; // In front of the surface
-        vec2 s1Low = s1After;
-        vec2 s1High = s1Before;
-
-        for(int j = 0; j < numBinarySteps; j++) {
-            // Exit if we've reached desired accuracy
-            if(invZHigh - invZLow < targetAccuracy) {
-                break;
-            }
-
-            // Calculate midpoint
-            float invZMid = (invZLow + invZHigh) * 0.5;
-
-            // Calculate s1 for midpoint
-            vec2 s1Mid = C.xy * invZMid + (1.0 - C.z * invZMid) * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz);
-
-            // Read disparity at midpoint
-            float dispMid = readDisp(iChannelDisp, s1Mid + .5, invZmin, invZmax, iRes);
-
-            // Calculate invZ2 at midpoint
-            float invZ2Mid = invZMid * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZMid);
-
-            // Binary search decision: are we in front of or behind the surface?
-            if((dispMid > invZMid) && (invZ2Mid > 0.0)) {
-                // We're behind the surface, move the lower bound
-                invZLow = invZMid;
-                s1Low = s1Mid;
-            } else {
-                // We're in front of the surface, move the upper bound
-                invZHigh = invZMid;
-                s1High = s1Mid;
-            }
+            invZ += dinvZ; // step back
+            s1 += ds1;
+            dinvZ /= 2.0; // increase precision
+            ds1 /= 2.0;
         }
 
-        // Use the values from the front of the surface
-        invZ = invZHigh;
-        s1 = s1High;
-        invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
-    } else {
-        // No intersection found during coarse search
-        invZ2 = 0.0;
-        confidence = 0.0;
-        // return vec4(background.rgb, 0.0);
     }
-
     if((abs(s1.x) < 0.5) && (abs(s1.y) < 0.5) && (invZ2 > 0.0) && (invZ > invZminT)) {
     //if ((abs(s1.x*adjustAr(iChannelResolution[0].xy,iResolution.xy).x)<0.495)&&(abs(s1.y*adjustAr(iChannelResolution[0].xy,iResolution.xy).y)<0.495)&&(invZ2>0.0)) {
-        // if(uNumLayers == 0) { // non-ldi
-        //     return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5));
-        // }
+        if(uNumLayers == 0) { // non-ldi
+            return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5));
+        }
 //
         // if(isMaskAround(s1 + .5, iChannelDisp, iRes))
         //     return vec4(0.0); // option b) original. 0.0 - masked pixel
