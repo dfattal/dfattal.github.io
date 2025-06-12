@@ -787,13 +787,16 @@ class lifViewer {
         } else if (layoutAnalysis?.containerHasPaddingAspectRatio) {
             layoutMode = 'aspectRatio';
         } else if (layoutAnalysis?.preserveOriginal) {
-            // DEVIANTART FIX: DeviantArt should use standard mode despite preserveOriginal flag
-            // DeviantArt has simple container structures that work best with standard layout
+            // SITE-SPECIFIC FIXES: Some sites work better with standard mode despite preserveOriginal flag
+            // These sites have simple container structures that work best with standard layout
             if (window.location.hostname.includes('deviantart.com')) {
                 layoutMode = 'standard';
                 console.log('🎨 DeviantArt detected - forcing standard layout mode despite preserveOriginal flag');
+            } else if (window.location.hostname.includes('redbubble.com')) {
+                layoutMode = 'standard';
+                console.log('🛍️ RedBubble detected - forcing standard layout mode despite preserveOriginal flag');
             } else {
-            layoutMode = 'overlay';
+                layoutMode = 'overlay';
             }
         }
 

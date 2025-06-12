@@ -1,5 +1,5 @@
 /**
- * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.1.6)
+ * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.2.0)
  * 
  * OVERVIEW:
  * Advanced Chrome extension that adds intelligent 2D→3D conversion buttons to images across
@@ -2539,14 +2539,30 @@ function addConvertButton(img) {
                     if (isDebugEnabled) {
                         console.log('Image is absolutely positioned in padding-based container (Google/Pinterest style)');
                     }
-                    // Ensure the image maintains its absolute positioning and covers the container
-                    img.style.position = 'absolute';
-                    img.style.top = '0';
-                    img.style.left = '0';
-                    img.style.width = '100%';
-                    img.style.height = '100%';
-                    img.style.objectFit = 'cover';
-                    img.style.display = 'block';
+
+                    // PINTEREST FIX: Don't override object-fit on Pinterest images
+                    // Pinterest images often use object-fit: contain and overriding to cover can cause disappearing on Windows Chrome
+                    const isPinterestImage = window.location.hostname.includes('pinterest.com');
+                    const currentObjectFit = window.getComputedStyle(img).objectFit;
+
+                    if (isPinterestImage && currentObjectFit === 'contain') {
+                        if (isDebugEnabled) {
+                            console.log('🖼️ Pinterest image detected with object-fit: contain - preserving existing object-fit');
+                        }
+                        // Preserve Pinterest's object-fit: contain and avoid absolute positioning changes
+                        img.style.display = 'block';
+                        img.style.visibility = 'visible';
+                        img.style.opacity = '1';
+                    } else {
+                        // Apply standard absolute positioning for other sites (Google Images, etc.)
+                        img.style.position = 'absolute';
+                        img.style.top = '0';
+                        img.style.left = '0';
+                        img.style.width = '100%';
+                        img.style.height = '100%';
+                        img.style.objectFit = 'cover';
+                        img.style.display = 'block';
+                    }
                 } else if (hasImageRenderingIssues) {
                     if (isDebugEnabled) {
                         console.log('Fixing image display within padding-based container (Instagram style)');
