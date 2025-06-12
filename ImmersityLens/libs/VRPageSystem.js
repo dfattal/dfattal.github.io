@@ -834,6 +834,13 @@ class PageContextVRSystem {
         this.xrCanvasInitialized = false;
         this.focus = 0.01; // Focus distance constant
         this.MAX_TEX_SIZE_VR = 1920; // Maximum texture size for VR mode
+
+        // Controller tracking variables
+        this.leftController = null;
+        this.rightController = null;
+        this.leftXButtonPressed = false;
+        this.leftXButtonJustPressed = false;
+        this.displaySwitch = false; // For WebXROpenXRBridge timing
     }
 
     log(message) {
@@ -867,6 +874,7 @@ class PageContextVRSystem {
                 this.log('XR session started');
                 this.isVRActive = true;
                 canvas.style.display = 'block';
+                this.setupVRControllers();
                 window.postMessage({ type: 'VR_LIF_SESSION_STARTED' }, '*');
             });
 
@@ -996,8 +1004,8 @@ class PageContextVRSystem {
 
             if (views.length == 1) {
                 // Mono LIF - use rayCastMonoLDI shader
-                this.lifRendererL = await this.createRendererInstance(this.lifGLL, 'shaders/rayCastMonoLDI-test.glsl', views, false, 1920);
-                this.lifRendererR = await this.createRendererInstance(this.lifGLR, 'shaders/rayCastMonoLDI-test.glsl', views, false, 1920);
+                this.lifRendererL = await this.createRendererInstance(this.lifGLL, 'shaders/rayCastMonoLDI.glsl', views, false, 1920);
+                this.lifRendererR = await this.createRendererInstance(this.lifGLR, 'shaders/rayCastMonoLDI.glsl', views, false, 1920);
             } else if (views.length == 2) {
                 // Stereo LIF - use rayCastStereoLDI shader  
                 this.lifRendererL = await this.createStereoRendererInstance(this.lifGLL, 'shaders/rayCastStereoLDI-test.glsl', views, false, 1920);
@@ -1055,7 +1063,7 @@ class PageContextVRSystem {
     }
 
     getEmbeddedMonoShader() {
-        // Complete mono LIF fragment shader (embedded to avoid CSP issues) - EXACT COPY from rayCastMonoLDI-test.glsl
+        // Complete mono LIF fragment shader (embedded to avoid CSP issues) - EXACT COPY from rayCastMonoLDI.glsl
         return `
 precision highp float;
 
@@ -1185,21 +1193,17 @@ float isMaskAround_get_val(vec2 xy, sampler2D tex, vec2 iRes) {
 }
 
 // Action !
-vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t, out float invZ2, out float confidence) {
+vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iChannelCol, sampler2D iChannelDisp, float invZmin, float invZmax, vec2 iRes, float t,out float invZ2, out float confidence) {
 
     // s2 is normalized xy coordinate for synthesized view, centered at 0 so values in -0.5..0.5
 
-    const int numCoarseSteps = 8; // Reduced number of coarse steps
-    const int numBinarySteps = 5; // Number of binary search refinement steps
-    float numsteps_float = float(numCoarseSteps);
-
-    // Add accuracy threshold parameter
-    const float accuracyThreshold = 1e-3;
-    float targetAccuracy = (invZmin - invZmax) * accuracyThreshold;
+    const int numsteps = 40;
+    float numsteps_float = float(numsteps);
 
     float invZ = invZmin; // starting point for invZ search
-    float dinvZ = (invZmin - invZmax) / numsteps_float; // Coarser steps for initial search
+    float dinvZ = (invZmin - invZmax) / numsteps_float; // dividing the step into 40 steps
     float invZminT = invZ * (1.0 - t); // for animation
+    invZ += dinvZ; // step back once before start
 
     //vec2 s1 = s2; // inititalize s1
     invZ2 = 0.0; // initialize invZ2
@@ -1219,101 +1223,37 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     vec2 Pzxy = vec2(P[0].z, P[1].z);
     float Pzz = P[2].z;
 
-    vec2 s1 = vec2(0.0); // Will be calculated below
-    vec2 ds1 = vec2(0.0); // Will be calculated below
+    vec2 s1 = C.xy * invZ + (1.0 - C.z * invZ) * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz); // starting point for s1
+    vec2 ds1 = (C.xy - C.z * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz)) * dinvZ; // initial s1 step size
 
     confidence = 1.0;
+    // 40 steps
+    for(int i = 0; i < numsteps; i++) {
 
-    // Phase 1: Coarse linear search to find the first potential intersection
-    bool intersectionFound = false;
-    float invZBefore = invZ; // Store the invZ value before intersection
-    float invZAfter = invZ;  // Store the invZ value after intersection
-    vec2 s1Before = vec2(0.0); // Will store s1 before intersection
-    vec2 s1After = vec2(0.0);  // Will store s1 after intersection
+        invZ -= dinvZ; // step forward
+        s1 -= ds1;
 
-    for(int i = 0; i < numCoarseSteps+2; i++) {
-        invZ = invZmin - float(i-1) * dinvZ; // Step linearly
-
-        // Calculate s1 for current invZ
-        s1 = C.xy * invZ + (1.0 - C.z * invZ) * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz);
-
-        // Calculate s1 step size for next iteration
-        ds1 = (C.xy - C.z * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz)) * dinvZ;
+        //s1 = C.xy*invZ + (1.0 - C.z*invZ)*(Pxyxy*s2 + Pxyz)/(dot(Pzxy,s2) + Pzz);
 
         disp = readDisp(iChannelDisp, s1 + .5, invZmin, invZmax, iRes);
         gradDisp = disp - oldDisp;
         oldDisp = disp;
         invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
-
-        // Check if we've found an intersection
-        if(disp > invZ) {
-            // We found a transition from in front to behind the surface
-            intersectionFound = true;
-            invZAfter = invZ;
-            s1After = s1;
-            invZBefore = invZ + dinvZ;
-            s1Before = s1 + ds1;
-
+        if((disp > invZ) && (invZ2 > 0.0)) { // if ray is below the "virtual surface"...
             if(abs(gradDisp) > gradThr)
                 confidence = 0.0;
-
-            break;
-        }
-    }
-
-    // Phase 2: Binary search refinement if we found an intersection
-    if(intersectionFound) {
-        float invZLow = invZAfter;   // Behind the surface
-        float invZHigh = invZBefore; // In front of the surface
-        vec2 s1Low = s1After;
-        vec2 s1High = s1Before;
-
-        for(int j = 0; j < numBinarySteps; j++) {
-            // Exit if we've reached desired accuracy
-            if(invZHigh - invZLow < targetAccuracy) {
-                break;
-            }
-
-            // Calculate midpoint
-            float invZMid = (invZLow + invZHigh) * 0.5;
-
-            // Calculate s1 for midpoint
-            vec2 s1Mid = C.xy * invZMid + (1.0 - C.z * invZMid) * (Pxyxy * s2 + Pxyz) / (dot(Pzxy, s2) + Pzz);
-
-            // Read disparity at midpoint
-            float dispMid = readDisp(iChannelDisp, s1Mid + .5, invZmin, invZmax, iRes);
-
-            // Calculate invZ2 at midpoint
-            float invZ2Mid = invZMid * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZMid);
-
-            // Binary search decision: are we in front of or behind the surface?
-            if((dispMid > invZMid) && (invZ2Mid > 0.0)) {
-                // We're behind the surface, move the lower bound
-                invZLow = invZMid;
-                s1Low = s1Mid;
-            } else {
-                // We're in front of the surface, move the upper bound
-                invZHigh = invZMid;
-                s1High = s1Mid;
-            }
+            invZ += dinvZ; // step back
+            s1 += ds1;
+            dinvZ /= 2.0; // increase precision
+            ds1 /= 2.0;
         }
 
-        // Use the values from the front of the surface
-        invZ = invZHigh;
-        s1 = s1High;
-        invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
-    } else {
-        // No intersection found during coarse search
-        invZ2 = 0.0;
-        confidence = 0.0;
-        // return vec4(background.rgb, 0.0);
     }
-
     if((abs(s1.x) < 0.5) && (abs(s1.y) < 0.5) && (invZ2 > 0.0) && (invZ > invZminT)) {
     //if ((abs(s1.x*adjustAr(iChannelResolution[0].xy,iResolution.xy).x)<0.495)&&(abs(s1.y*adjustAr(iChannelResolution[0].xy,iResolution.xy).y)<0.495)&&(invZ2>0.0)) {
-        // if(uNumLayers == 0) { // non-ldi
-        //     return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5));
-        // }
+        if(uNumLayers == 0) { // non-ldi
+            return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5));
+        }
 //
         // if(isMaskAround(s1 + .5, iChannelDisp, iRes))
         //     return vec4(0.0); // option b) original. 0.0 - masked pixel
@@ -1901,15 +1841,244 @@ void main(void) {
         this.log('VR display planes created for both eyes');
     }
 
-    // Convergence plane calculation (from webXR demo)
+    // Create and set up VR controllers
+    setupVRControllers() {
+        // Create controller objects - use InputSources to check handedness
+        const session = this.renderer.xr.getSession();
+
+        if (!session) {
+            this.log('No XR session available for controller setup');
+            return;
+        }
+
+        // Function to set up controllers once input sources are available
+        const setupControllersByHandedness = () => {
+            if (!session.inputSources || session.inputSources.length === 0) {
+                // Try again in the next frame if no input sources are available yet
+                return requestAnimationFrame(setupControllersByHandedness);
+            }
+
+            // Clear any existing controllers
+            if (this.leftController) {
+                this.scene.remove(this.leftController);
+            }
+            if (this.rightController) {
+                this.scene.remove(this.rightController);
+            }
+
+            // Find controllers by handedness
+            session.inputSources.forEach((inputSource, index) => {
+                const controller = this.renderer.xr.getController(index);
+
+                if (inputSource.handedness === 'left') {
+                    this.log('Found left controller');
+                    this.leftController = controller;
+                    this.leftController.userData.inputSource = inputSource; // Store reference to inputSource
+                    this.scene.add(this.leftController);
+                }
+                else if (inputSource.handedness === 'right') {
+                    this.log('Found right controller');
+                    this.rightController = controller;
+                    this.scene.add(this.rightController);
+                }
+            });
+        };
+
+        // Set up controllers
+        setupControllersByHandedness();
+
+        // Also listen for inputsourceschange event to handle controller reconnection
+        session.addEventListener('inputsourceschange', setupControllersByHandedness);
+    }
+
+    // Function to check X button state on left controller
+    checkXButtonState() {
+        if (!this.leftController || !this.leftController.userData.inputSource || !this.leftController.userData.inputSource.gamepad) {
+            return false;
+        }
+
+        const gamepad = this.leftController.userData.inputSource.gamepad;
+        // X button is typically at index 4 on left controller
+        if (gamepad.buttons.length > 4) {
+            return gamepad.buttons[4].pressed;
+        }
+
+        return false;
+    }
+
+    // Function to set canvas dimensions based on XR camera viewports and display mode
+    setCanvasDimensions(providedLeftCam, providedRightCam) {
+        // Get fresh camera data if not provided
+        let leftCam = providedLeftCam;
+        let rightCam = providedRightCam;
+
+        if (!leftCam || !rightCam) {
+            if (!this.renderer || !this.renderer.xr.isPresenting) {
+                this.log("Cannot get fresh camera data - renderer or XR not available");
+                return false;
+            }
+
+            const xrCam = this.renderer.xr.getCamera(this.camera);
+            if (!xrCam || !xrCam.isArrayCamera || xrCam.cameras.length < 2) {
+                this.log("Cannot get fresh camera data - XR camera not ready");
+                return false;
+            }
+
+            leftCam = xrCam.cameras[0];
+            rightCam = xrCam.cameras[1];
+            this.log("Got fresh camera data - L viewport:", leftCam.viewport.width + "x" + leftCam.viewport.height);
+        }
+
+        if (!this.lifRendererL || !this.lifRendererR || !leftCam || !rightCam) {
+            this.log("Cannot set canvas dimensions - renderers or cameras not available");
+            return false;
+        }
+
+        if (this.is3D > 0.5) { // 3D display
+            // Size canvas to match convergence plane aspect ratio, scaled to fit within viewport
+            if (this.convergencePlane && !isNaN(this.convergencePlane.width) && !isNaN(this.convergencePlane.height) &&
+                this.convergencePlane.width > 0 && this.convergencePlane.height > 0) {
+
+                // Calculate scale factors to fit convergence plane in viewport
+                const scaleX = leftCam.viewport.width / this.convergencePlane.width;
+                const scaleY = leftCam.viewport.height / this.convergencePlane.height;
+                const scale = Math.min(scaleX, scaleY); // Maximize scale while fitting in viewport
+
+                // Calculate final canvas dimensions
+                const canvasWidth = Math.round(this.convergencePlane.width * scale);
+                const canvasHeight = Math.round(this.convergencePlane.height * scale);
+
+                this.lifCanvasL.width = canvasWidth;
+                this.lifCanvasL.height = canvasHeight;
+                this.lifCanvasR.width = canvasWidth;
+                this.lifCanvasR.height = canvasHeight;
+
+                this.log("3D canvas sized to convergence plane - convergence: " +
+                    this.convergencePlane.width.toFixed(2) + "x" + this.convergencePlane.height.toFixed(2) +
+                    " viewport: " + leftCam.viewport.width + "x" + leftCam.viewport.height +
+                    " scale: " + scale.toFixed(3) + " final: " + canvasWidth + "x" + canvasHeight);
+            } else {
+                // Fallback to viewport size if convergence plane not available
+                this.log("Convergence plane not available, using viewport size");
+                this.lifCanvasL.width = leftCam.viewport.width;
+                this.lifCanvasL.height = leftCam.viewport.height;
+                this.lifCanvasR.width = rightCam.viewport.width;
+                this.lifCanvasR.height = rightCam.viewport.height;
+            }
+            this.viewportScale = 1;
+        } else { // VR
+            // Calculate scaled dimensions while preserving aspect ratio and max dimension
+            const aspectRatio = this.lifView.height_px / this.lifView.width_px;
+            let width = this.lifView.width_px * this.viewportScale;
+            let height = this.lifView.height_px * this.viewportScale;
+            if (width > this.MAX_TEX_SIZE_VR) {
+                width = this.MAX_TEX_SIZE_VR;
+                height = width * aspectRatio;
+            } else if (height > this.MAX_TEX_SIZE_VR) {
+                height = this.MAX_TEX_SIZE_VR;
+                width = height / aspectRatio;
+            }
+            this.lifCanvasL.width = width;
+            this.lifCanvasL.height = height;
+            this.lifCanvasR.width = width;
+            this.lifCanvasR.height = height;
+            this.lifRendererL.invd = this.focus * this.lifView.inv_z_map.min;
+            this.lifRendererR.invd = this.focus * this.lifView.inv_z_map.min;
+        }
+
+        // Recreate textures when canvas dimensions change to avoid texture caching issues
+        if (this.lifTextureL) {
+            this.lifTextureL.dispose();
+            this.lifTextureL = new THREE.CanvasTexture(this.lifCanvasL);
+            this.lifTextureL.minFilter = THREE.LinearFilter;
+            this.lifTextureL.magFilter = THREE.LinearFilter;
+            this.lifTextureL.format = THREE.RGBAFormat;
+            this.log("Recreated lifTextureL with new canvas dimensions");
+        }
+        if (this.lifTextureR) {
+            this.lifTextureR.dispose();
+            this.lifTextureR = new THREE.CanvasTexture(this.lifCanvasR);
+            this.lifTextureR.minFilter = THREE.LinearFilter;
+            this.lifTextureR.magFilter = THREE.LinearFilter;
+            this.lifTextureR.format = THREE.RGBAFormat;
+            this.log("Recreated lifTextureR with new canvas dimensions");
+        }
+
+        // Update plane materials with new textures if planes exist
+        if (this.lifMeshL && this.lifMeshL.material && this.lifMeshL.material.uniforms) {
+            this.lifMeshL.material.uniforms.uTexture.value = this.lifTextureL;
+            this.log("Updated lifMeshL material with new texture");
+        }
+        if (this.lifMeshR && this.lifMeshR.material && this.lifMeshR.material.uniforms) {
+            this.lifMeshR.material.uniforms.uTexture.value = this.lifTextureR;
+            this.log("Updated lifMeshR material with new texture");
+        }
+
+        this.log("Canvas dimensions set - width: " + this.lifCanvasL.width + " height: " + this.lifCanvasL.height + " is3D: " + this.is3D);
+        return true;
+    }
+
+    // Function to reset convergence plane and tracking variables
+    resetConvergencePlane(leftCam, rightCam) {
+        this.log("Resetting convergence plane and tracking variables...");
+
+        try {
+            // Recalculate convergence plane based on current camera positions
+            this.convergencePlane = this.locateConvergencePlane(leftCam, rightCam);
+            this.log("New convergence plane:", this.convergencePlane);
+
+            // Reset canvas dimensions based on new convergence plane calculation (get fresh camera data)
+            this.setCanvasDimensions();
+
+            // Calculate camera positions in convergence plane's local coordinate system
+            const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(this.convergencePlane.position);
+            localLeftCamPos.applyQuaternion(this.convergencePlane.quaternion.clone().invert());
+
+            const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(this.convergencePlane.position);
+            localRightCamPos.applyQuaternion(this.convergencePlane.quaternion.clone().invert());
+
+            // Reset initial tracking variables using local coordinates
+            this.initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+            this.initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+            this.IPD = localLeftCamPos.distanceTo(localRightCamPos);
+
+            this.log("Reset tracking variables - initialY:" + this.initialY.toFixed(3) + " initialZ:" + this.initialZ.toFixed(3) + " IPD:" + this.IPD.toFixed(3));
+
+            // Update plane positions and scales
+            if (this.lifMeshL && this.lifMeshR && !isNaN(this.convergencePlane.width) && !isNaN(this.convergencePlane.height)) {
+                this.lifMeshL.position.copy(this.convergencePlane.position);
+                this.lifMeshL.quaternion.copy(this.convergencePlane.quaternion);
+                this.lifMeshL.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
+
+                this.lifMeshR.position.copy(this.convergencePlane.position);
+                this.lifMeshR.quaternion.copy(this.convergencePlane.quaternion);
+                this.lifMeshR.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
+
+                this.log("Updated plane positions and scales");
+            } else {
+                this.log("Could not update plane positions - invalid values or planes not initialized");
+            }
+
+            return true;
+        } catch (error) {
+            this.log("Error during convergence plane reset: " + error.message);
+            return false;
+        }
+    }
+
+    // Convergence plane calculation with local coordinate transform (from webXR demo)
     locateConvergencePlane(leftCam, rightCam) {
+        this.log("locateConvergencePlane called with:" +
+            " leftCam pos: " + leftCam.position.x.toFixed(3) + "," + leftCam.position.y.toFixed(3) + "," + leftCam.position.z.toFixed(3) +
+            " rightCam pos: " + rightCam.position.x.toFixed(3) + "," + rightCam.position.y.toFixed(3) + "," + rightCam.position.z.toFixed(3));
+
         // Get quaternions from cameras and verify they match
         const leftQuat = leftCam.quaternion;
         const rightQuat = rightCam.quaternion;
 
         // Verify cameras have same orientation
         if (!leftQuat.equals(rightQuat)) {
-            console.warn('Left and right camera orientations do not match');
+            this.log('Left and right camera orientations do not match');
         }
 
         // Calculate center position between left and right cameras
@@ -1930,6 +2099,8 @@ void main(void) {
             Math.abs(leftFov.tanUp) === Math.abs(rightFov.tanUp) &&
             Math.abs(leftFov.tanDown) === Math.abs(rightFov.tanDown);
 
+        this.log("FOV analysis: isSymmetric:" + isSymmetric + " isEqual:" + isEqual + " isMirror:" + isMirror);
+
         // Extract FOV angles for both cameras
         const u0 = leftFov.tanUp;
         const d0 = -leftFov.tanDown;
@@ -1941,26 +2112,44 @@ void main(void) {
         const r1 = rightFov.tanRight;
         const l1 = -rightFov.tanLeft;
 
-        // Get absolute camera positions
-        const x0 = leftCam.position.x;
-        const y0 = leftCam.position.y;
-        const z0 = leftCam.position.z;
+        // Transform camera positions to local coordinate system (centered at centerCam, aligned with leftQuat)
+        const invLeftQuat = leftQuat.clone().invert();
 
-        const x1 = rightCam.position.x;
-        const y1 = rightCam.position.y;
-        const z1 = rightCam.position.z;
+        // Get camera positions relative to centerCam, then rotate to local space
+        const localLeftPos = leftCam.position.clone().sub(centerCam).applyQuaternion(invLeftQuat);
+        const localRightPos = rightCam.position.clone().sub(centerCam).applyQuaternion(invLeftQuat);
+
+        this.log("World positions - Left: " + leftCam.position.x.toFixed(3) + "," + leftCam.position.y.toFixed(3) + "," + leftCam.position.z.toFixed(3) +
+            " Right: " + rightCam.position.x.toFixed(3) + "," + rightCam.position.y.toFixed(3) + "," + rightCam.position.z.toFixed(3) +
+            " Center: " + centerCam.x.toFixed(3) + "," + centerCam.y.toFixed(3) + "," + centerCam.z.toFixed(3));
+        this.log("Local positions - Left: " + localLeftPos.x.toFixed(3) + "," + localLeftPos.y.toFixed(3) + "," + localLeftPos.z.toFixed(3) +
+            " Right: " + localRightPos.x.toFixed(3) + "," + localRightPos.y.toFixed(3) + "," + localRightPos.z.toFixed(3));
+
+        // Use local coordinates for calculation
+        const x0 = localLeftPos.x;
+        const y0 = localLeftPos.y;
+        const z0 = localLeftPos.z;
+
+        const x1 = localRightPos.x;
+        const y1 = localRightPos.y;
+        const z1 = localRightPos.z;
 
         // Calculate display position denominators - check for division by zero
         const denomX = (r1 - l1 - r0 + l0);
         const denomY = (u1 - d1 - u0 + d0);
+        this.log("Denominators for position calculation: denomX:" + denomX.toFixed(6) + " denomY:" + denomY.toFixed(6));
 
         if (Math.abs(denomX) < 0.0001 || isMirror) {
-            // VR MODE: Symmetric calculation
-            const viewportScale = 1.2;
-            const DISTANCE = .063 / this.lifView.inv_z_map.min / this.focus; // Use class focus constant
-            const width = viewportScale * DISTANCE / this.lifView.focal_px * this.lifView.width_px;
-            const height = viewportScale * DISTANCE / this.lifView.focal_px * this.lifView.height_px;
-            const pos = new THREE.Vector3(0, 0, -DISTANCE).applyQuaternion(leftQuat).add(centerCam);
+            this.log("RENDERING for VR");
+            this.is3D = 0;
+            this.log("viewportScale: " + this.viewportScale);
+            // Fallback to symmetric calculation
+            const DISTANCE = .063 / this.lifView.inv_z_map.min / this.focus; // focus 0.01
+            const width = this.viewportScale * DISTANCE / this.lifView.focal_px * this.lifView.width_px;
+            const height = this.viewportScale * DISTANCE / this.lifView.focal_px * this.lifView.height_px;
+            // Position in local space, then transform back to world space
+            const localPos = new THREE.Vector3(0, 0, -DISTANCE);
+            const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
 
             // Remove roll from quaternion by extracting yaw and pitch only
             const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
@@ -1968,26 +2157,37 @@ void main(void) {
             const noRollQuat = new THREE.Quaternion().setFromEuler(euler);
 
             return {
-                position: pos,
+                position: worldPos,
                 quaternion: noRollQuat,
                 width: width,
                 height: height
             };
         }
 
-        // Calculate display position
+        // Calculate display position in local coordinates
         const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
         const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
         const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
+
+        this.log("Display position calculation (local coords): xd:" + xd.toFixed(3) + "|" + (x1 - (r1 - l1) * (zd - z1) / 2).toFixed(3) +
+            " yd:" + yd.toFixed(3) + "|" + (y1 - (u1 - d1) * (zd - z1) / 2).toFixed(3) + " zd:" + zd.toFixed(3));
 
         // Calculate display size
         const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
         const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
 
-        const finalPos = new THREE.Vector3(xd, yd, zd);
+        // Transform local position back to world coordinates
+        const localPos = new THREE.Vector3(xd, yd, zd);
+        const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
+
+        this.log("RENDERING for 3D");
+        this.log("Local result - position: " + localPos.x.toFixed(3) + "," + localPos.y.toFixed(3) + "," + localPos.z.toFixed(3) +
+            " width:" + Math.abs(W).toFixed(3) + " height:" + Math.abs(H).toFixed(3));
+        this.log("World result - position: " + worldPos.x.toFixed(3) + "," + worldPos.y.toFixed(3) + "," + worldPos.z.toFixed(3) +
+            " width:" + Math.abs(W).toFixed(3) + " height:" + Math.abs(H).toFixed(3));
 
         return {
-            position: finalPos,
+            position: worldPos,
             quaternion: leftQuat.clone(),
             width: Math.abs(W),
             height: Math.abs(H)
@@ -2136,6 +2336,13 @@ void main(void) {
         this.xrCanvasInitialized = false;
         this.is3D = 1; // Reset to default 3D display mode
         this.viewportScale = 1.2; // Reset to default viewport scale
+
+        // Reset controller variables
+        this.leftController = null;
+        this.rightController = null;
+        this.leftXButtonPressed = false;
+        this.leftXButtonJustPressed = false;
+        this.displaySwitch = false;
     }
 
     render(time, frame) {
@@ -2153,114 +2360,79 @@ void main(void) {
 
             // Initialize canvas dimensions once when XR cameras are available
             if (!this.xrCanvasInitialized) {
-                // First determine if we're in 3D display mode or VR mode
-                // This matches the webXR reference logic exactly
-                let is3D = 1; // Default to 3D display
-                let viewportScale = 1.2;
+                // Calculate convergence plane to determine display type and set canvas dimensions
+                this.convergencePlane = this.locateConvergencePlane(leftCam, rightCam);
 
-                // Calculate convergence plane to determine display type
-                const tempConvergencePlane = this.locateConvergencePlane(leftCam, rightCam);
+                // Use new setCanvasDimensions function with fresh camera data
+                this.setCanvasDimensions(leftCam, rightCam);
 
-                // The convergence plane calculation sets is3D based on FOV analysis
-                // Check if we detected VR mode (symmetric FOVs indicate VR headset)
-                const leftFov = this.computeFovTanAngles(leftCam);
-                const rightFov = this.computeFovTanAngles(rightCam);
-
-                const denomX = (rightFov.tanRight - rightFov.tanLeft - leftFov.tanRight + leftFov.tanLeft);
-                const isMirror = Math.abs(leftFov.tanLeft) === Math.abs(rightFov.tanRight) &&
-                    Math.abs(leftFov.tanRight) === Math.abs(rightFov.tanLeft) &&
-                    Math.abs(leftFov.tanUp) === Math.abs(rightFov.tanUp) &&
-                    Math.abs(leftFov.tanDown) === Math.abs(rightFov.tanDown);
-
-                if (Math.abs(denomX) < 0.0001 || isMirror) {
-                    this.log("RENDERING for VR");
-                    is3D = 0; // VR mode
-                } else {
-                    this.log("RENDERING for 3D");
-                    is3D = 1; // 3D display mode
-                }
-
-                // Set canvas dimensions based on display type (matching webXR exactly)
-                if (is3D > 0.5) { // 3D display
-                    // Size canvas to match convergence plane aspect ratio, scaled to fit within viewport
-                    if (tempConvergencePlane && !isNaN(tempConvergencePlane.width) && !isNaN(tempConvergencePlane.height) &&
-                        tempConvergencePlane.width > 0 && tempConvergencePlane.height > 0) {
-
-                        // Calculate scale factors to fit convergence plane in viewport
-                        const scaleX = leftCam.viewport.width / tempConvergencePlane.width;
-                        const scaleY = leftCam.viewport.height / tempConvergencePlane.height;
-                        const scale = Math.min(scaleX, scaleY); // Maximize scale while fitting in viewport
-
-                        // Calculate final canvas dimensions
-                        const canvasWidth = Math.round(tempConvergencePlane.width * scale);
-                        const canvasHeight = Math.round(tempConvergencePlane.height * scale);
-
-                        this.lifCanvasL.width = canvasWidth;
-                        this.lifCanvasL.height = canvasHeight;
-                        this.lifCanvasR.width = canvasWidth;
-                        this.lifCanvasR.height = canvasHeight;
-
-                        this.log("3D canvas sized to convergence plane - convergence: " +
-                            tempConvergencePlane.width.toFixed(2) + "x" + tempConvergencePlane.height.toFixed(2) +
-                            " viewport: " + leftCam.viewport.width + "x" + leftCam.viewport.height +
-                            " scale: " + scale.toFixed(3) + " final: " + canvasWidth + "x" + canvasHeight);
-                    } else {
-                        // Fallback to original method if convergence plane is invalid
-                        this.lifCanvasL.width = leftCam.viewport.width;
-                        this.lifCanvasL.height = leftCam.viewport.height;
-                        this.lifCanvasR.width = rightCam.viewport.width;
-                        this.lifCanvasR.height = rightCam.viewport.height;
-                        this.log("3D canvas using fallback sizing (convergence plane unavailable)");
-                    }
-                    viewportScale = 1;
-                } else { // VR
-                    // Calculate scaled dimensions while preserving aspect ratio and max dimension
-                    const aspectRatio = this.lifView.height_px / this.lifView.width_px;
-                    let width = this.lifView.width_px * viewportScale;
-                    let height = this.lifView.height_px * viewportScale;
-                    if (width > this.MAX_TEX_SIZE_VR) {
-                        width = this.MAX_TEX_SIZE_VR;
-                        height = width * aspectRatio;
-                    } else if (height > this.MAX_TEX_SIZE_VR) {
-                        height = this.MAX_TEX_SIZE_VR;
-                        width = height / aspectRatio;
-                    }
-                    this.lifCanvasL.width = width;
-                    this.lifCanvasL.height = height;
-                    this.lifCanvasR.width = width;
-                    this.lifCanvasR.height = height;
-
-                    // Set focus distance only in VR mode (matching webXR)
-                    this.lifRendererL.invd = this.focus * this.lifView.inv_z_map.min;
-                    this.lifRendererR.invd = this.focus * this.lifView.inv_z_map.min;
-                }
-
-                this.log('XR Canvas initialized - width:' + this.lifCanvasL.width + ' height:' + this.lifCanvasL.height + ' is3D:' + is3D);
+                this.log('XR Canvas initialized - width:' + this.lifCanvasL.width + ' height:' + this.lifCanvasL.height + ' is3D:' + this.is3D);
                 this.xrCanvasInitialized = true;
-                this.is3D = is3D; // Store for later use
-                this.viewportScale = viewportScale; // Store for later use
 
                 // Set up eye layer visibility
                 leftCam.layers.enable(1);
                 rightCam.layers.enable(2);
             }
 
-            // Calculate convergence plane and initial positions (matching webXR approach)
-            if (!this.convergencePlane) {
-                this.convergencePlane = this.locateConvergencePlane(leftCam, rightCam);
+            // WebXROpenXRBridge display switch with timing (matching webXR approach)
+            if (!this.displaySwitch) {
+                this.displaySwitch = true;
+                setTimeout(() => {
+                    if (window.WebXROpenXRBridge) {
+                        this.log("Setting WebXROpenXRBridge projection method after 1 second delay");
+                        try {
+                            window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                            this.log("Projection Method set to Display Centric");
+                            setTimeout(() => {
+                                window.WebXROpenXRBridge.resetSettings(1.0);
+                                this.log("Settings reset to default");
+                                setTimeout(() => {
+                                    const resetSuccess = this.resetConvergencePlane(leftCam, rightCam);
+                                    this.log("Convergence plane reset: " + (resetSuccess ? "SUCCESS" : "FAILED"));
+                                }, 500);
+                            }, 500);
 
-                if (this.convergencePlane && this.lifMeshL && this.lifMeshR) {
-                    // Position and scale the planes
-                    this.lifMeshL.position.copy(this.convergencePlane.position);
-                    this.lifMeshL.quaternion.copy(this.convergencePlane.quaternion);
-                    this.lifMeshL.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
-                    this.lifMeshL.visible = true;
+                        } catch (error) {
+                            this.log("Error setting projection method: " + error.message);
+                        }
+                    } else {
+                        this.log("WebXROpenXRBridge not available");
+                    }
+                }, 1000); // 1 second delay
+            }
 
-                    this.lifMeshR.position.copy(this.convergencePlane.position);
-                    this.lifMeshR.quaternion.copy(this.convergencePlane.quaternion);
-                    this.lifMeshR.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
-                    this.lifMeshR.visible = true;
+            // Check X button state for convergence plane reset
+            if (this.isVRActive) {
+                const newXButtonState = this.checkXButtonState();
+
+                // Detect when X button is first pressed (transition from false to true)
+                this.leftXButtonJustPressed = newXButtonState && !this.leftXButtonPressed;
+
+                // Only log changes in button state to avoid console spam
+                if (newXButtonState !== this.leftXButtonPressed) {
+                    this.leftXButtonPressed = newXButtonState;
+                    this.log('Left X button: ' + (this.leftXButtonPressed ? 'PRESSED' : 'RELEASED'));
                 }
+
+                // If X button was just pressed, reset convergence plane
+                if (this.leftXButtonJustPressed) {
+                    const resetSuccess = this.resetConvergencePlane(leftCam, rightCam);
+                    this.log("X button convergence plane reset: " + (resetSuccess ? "SUCCESS" : "FAILED"));
+                }
+            }
+
+            // Update plane positions and scales if convergence plane exists
+            if (this.convergencePlane && this.lifMeshL && this.lifMeshR) {
+                // Position and scale the planes
+                this.lifMeshL.position.copy(this.convergencePlane.position);
+                this.lifMeshL.quaternion.copy(this.convergencePlane.quaternion);
+                this.lifMeshL.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
+                this.lifMeshL.visible = true;
+
+                this.lifMeshR.position.copy(this.convergencePlane.position);
+                this.lifMeshR.quaternion.copy(this.convergencePlane.quaternion);
+                this.lifMeshR.scale.set(this.convergencePlane.width, this.convergencePlane.height, 1);
+                this.lifMeshR.visible = true;
             }
 
             // Calculate camera positions in convergence plane's local coordinate system
