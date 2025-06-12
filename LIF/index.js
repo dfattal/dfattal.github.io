@@ -7,6 +7,7 @@ console.log(mode);
 class lifGenerator {
     constructor(file = null, form = null) {
         this.AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode;
+        // this.AWS_LAMBDA_URL = 'https://gf6coowgaocqp5nfny5tn6ft4q0nxsvy.lambda-url.us-east-1.on.aws/?mode=' + mode;
         this.file = file ? file : null;
         this.stLifInput = false;
         this.width = 0;
