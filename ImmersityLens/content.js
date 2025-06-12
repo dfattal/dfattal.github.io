@@ -1,5 +1,5 @@
 /**
- * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.2.0)
+ * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.2.1)
  * 
  * OVERVIEW:
  * Advanced Chrome extension that adds intelligent 2D→3D conversion buttons to images across
@@ -2006,7 +2006,7 @@ function addConvertButton(img) {
         '.carousel-item', '.slider-item', '.swiper-slide'
     ];
 
-    // Check for UI context, but exclude Shutterstock thumbnails
+    // Check for UI context, but exclude Shutterstock and RedBubble thumbnails
     const isInUIContext = enhancedSkipSelectors.some(selector => {
         try {
             return img.closest(selector);
@@ -2021,7 +2021,12 @@ function addConvertButton(img) {
     const isShutterstockInUIContext = window.location.hostname.includes('shutterstock.com') &&
         (img.closest('.thumbnail') || classNames.includes('mui-'));
 
-    if (isInUIContext && !isShutterstockInUIContext) {
+    // RedBubble exception: Don't skip RedBubble product images even if they're in complex UI contexts
+    // RedBubble uses ProductCard classes for their main product images
+    const isRedBubbleProductImage = window.location.hostname.includes('redbubble.com') &&
+        (classNames.includes('ProductCard_productCardImage') || classNames.includes('productCardImage'));
+
+    if (isInUIContext && !isShutterstockInUIContext && !isRedBubbleProductImage) {
         console.log('🚫 Skipping image in UI context:', img.src?.substring(0, 50) + '...');
         return;
     }
@@ -2043,7 +2048,11 @@ function addConvertButton(img) {
     const isShutterstockPhotoThumbnail = window.location.hostname.includes('shutterstock.com') &&
         classNames.includes('thumbnail');
 
-    if (hasVideoRelatedClass && !isShutterstockPhotoThumbnail) {
+    // RedBubble exception: Their product images use various classes that might trigger video detection
+    const isRedBubbleProductImage2 = window.location.hostname.includes('redbubble.com') &&
+        (classNames.includes('ProductCard_productCardImage') || classNames.includes('productCardImage'));
+
+    if (hasVideoRelatedClass && !isShutterstockPhotoThumbnail && !isRedBubbleProductImage2) {
         console.log('🚫 Skipping video-related image:', classNames, img.src?.substring(0, 50) + '...');
         return;
     }
@@ -2109,19 +2118,24 @@ function addConvertButton(img) {
 
     // 6. OVERLAPPING ELEMENTS CHECK (images behind other content)
     // Check if image is covered by other elements (likely background or decorative)
-    const centerX = imgRect.left + imgRect.width / 2;
-    const centerY = imgRect.top + imgRect.height / 2;
-    const elementAtCenter = document.elementFromPoint(centerX, centerY);
+    // Skip this check for RedBubble as their complex layouts can trigger false positives
+    const isRedBubbleImage = window.location.hostname.includes('redbubble.com');
 
-    if (elementAtCenter && elementAtCenter !== img && !img.contains(elementAtCenter)) {
-        // If the center of the image is covered by another element, it might be a background image
-        const coveringElement = elementAtCenter;
-        const coveringRect = coveringElement.getBoundingClientRect();
+    if (!isRedBubbleImage) {
+        const centerX = imgRect.left + imgRect.width / 2;
+        const centerY = imgRect.top + imgRect.height / 2;
+        const elementAtCenter = document.elementFromPoint(centerX, centerY);
 
-        // If covering element is significantly larger, image is likely decorative
-        if (coveringRect.width > imgRect.width * 1.2 && coveringRect.height > imgRect.height * 1.2) {
-            console.log('🚫 Skipping covered/background image:', img.src?.substring(0, 50) + '...');
-            return;
+        if (elementAtCenter && elementAtCenter !== img && !img.contains(elementAtCenter)) {
+            // If the center of the image is covered by another element, it might be a background image
+            const coveringElement = elementAtCenter;
+            const coveringRect = coveringElement.getBoundingClientRect();
+
+            // If covering element is significantly larger, image is likely decorative
+            if (coveringRect.width > imgRect.width * 1.2 && coveringRect.height > imgRect.height * 1.2) {
+                console.log('🚫 Skipping covered/background image:', img.src?.substring(0, 50) + '...');
+                return;
+            }
         }
     }
 
