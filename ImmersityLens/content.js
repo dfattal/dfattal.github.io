@@ -1,5 +1,5 @@
 /**
- * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.2.1)
+ * ImmersityLens Chrome Extension - 2D to 3D Image Converter (v3.1.9)
  * 
  * OVERVIEW:
  * Advanced Chrome extension that adds intelligent 2D→3D conversion buttons to images across
@@ -1893,6 +1893,33 @@ function addConvertButton(img) {
         return;
     }
 
+    // PINTEREST OVERLAY MANAGEMENT: Disable Pinterest's hover overlays that block button access
+    const isPinterestGrid = window.location.hostname.includes('pinterest.com') &&
+        !window.location.pathname.includes('/pin/'); // Grid view, not pin detail view
+
+    if (isPinterestGrid) {
+        // Find Pinterest pin container
+        const pinContainer = img.closest('[data-test-id="pin"]') || img.closest('[data-test-id="pinWrapper"]');
+        if (pinContainer) {
+            // Disable Pinterest's overlay layers that can block our buttons
+            const contentLayers = pinContainer.querySelectorAll('[data-test-id="contentLayer"], .contentLayer');
+            contentLayers.forEach(layer => {
+                layer.style.pointerEvents = 'none';
+                layer.style.zIndex = '1'; // Lower than our button z-index
+
+                // Also disable any child elements that might have pointer events
+                const childElements = layer.querySelectorAll('*');
+                childElements.forEach(child => {
+                    child.style.pointerEvents = 'none';
+                });
+            });
+
+            if (isDebugEnabled && contentLayers.length > 0) {
+                console.log('🎯 Pinterest: Disabled overlay layers for button access');
+            }
+        }
+    }
+
     // 📐 LAYER 2: SHAPE AND DIMENSIONAL FILTERING
     const aspectRatio = effectiveWidth / effectiveHeight;
 
@@ -2359,18 +2386,27 @@ function addConvertButton(img) {
     const isFlickrAbsoluteImage = window.location.hostname.includes('flickr.com') &&
         window.getComputedStyle(img).position === 'absolute';
 
+    // PINTEREST CAROUSEL FIX: Force overlay approach for Pinterest carousel images
+    // Pinterest carousels use CSS Grid that breaks when images are wrapped
+    const isPinterestCarouselImage = window.location.hostname.includes('pinterest.com') &&
+        (img.alt?.includes('carousel image') || img.closest('.carousel--mode-single'));
+
     const shouldUseOverlayApproach = isPictureImage ||
         (layoutAnalysis && layoutAnalysis.containerHasPaddingAspectRatio) ||
         isAspectRatioContainer ||
         isLinkedInPaddingContainer ||
-        isFlickrAbsoluteImage;
+        isFlickrAbsoluteImage ||
+        isPinterestCarouselImage;
 
 
 
     if (shouldUseOverlayApproach) {
         const wasInitiallyPictureImage = isPictureImage; // Store original value before modification
         if (isDebugEnabled) {
-            console.log('🎯 Using overlay approach for:', isPictureImage ? 'picture element' : 'aspect ratio container');
+            const reason = isPictureImage ? 'picture element' :
+                isPinterestCarouselImage ? 'Pinterest carousel' :
+                    'aspect ratio container';
+            console.log('🎯 Using overlay approach for:', reason);
         }
         useOverlayApproach = true;
         isPictureImage = true; // Treat aspect ratio containers like picture elements
@@ -2417,16 +2453,35 @@ function addConvertButton(img) {
                 searchElement = searchElement.parentElement;
             }
         }
+        // If Pinterest carousel image, use the immediate parent container for overlay positioning
+        else if (isPinterestCarouselImage && !wasInitiallyPictureImage) {
+            // Pinterest carousel images need their immediate parent as the target
+            // This preserves the CSS Grid layout structure
+            targetElement = img.parentElement;
+            if (isDebugEnabled) {
+                console.log('🎠 Pinterest carousel image - using immediate parent for overlay positioning:', targetElement.className);
+            }
+        }
 
 
         // Store target dimensions for aspect ratio containers (similar to picture elements)
-        if (layoutAnalysis.containerHasPaddingAspectRatio || isAspectRatioContainer || isLinkedInPaddingContainer) {
+        if (layoutAnalysis.containerHasPaddingAspectRatio || isAspectRatioContainer || isLinkedInPaddingContainer || isPinterestCarouselImage) {
             const imgRect = img.getBoundingClientRect();
             const containerRect = targetElement.getBoundingClientRect();
 
-            // Use container dimensions for aspect ratio layouts
-            const targetWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
-            const targetHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+            // For Pinterest carousels, use the image's rendered dimensions
+            let targetWidth, targetHeight;
+            if (isPinterestCarouselImage) {
+                targetWidth = imgRect.width > 0 ? imgRect.width : containerRect.width;
+                targetHeight = imgRect.height > 0 ? imgRect.height : containerRect.height;
+                if (isDebugEnabled) {
+                    console.log(`🎠 Pinterest carousel dimensions: img=${imgRect.width}x${imgRect.height}, container=${containerRect.width}x${containerRect.height}`);
+                }
+            } else {
+                // Use container dimensions for aspect ratio layouts
+                targetWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
+                targetHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+            }
 
             if (targetWidth > 0 && targetHeight > 0) {
                 // Store dimensions on the container for later use
@@ -2558,15 +2613,32 @@ function addConvertButton(img) {
                     // Pinterest images often use object-fit: contain and overriding to cover can cause disappearing on Windows Chrome
                     const isPinterestImage = window.location.hostname.includes('pinterest.com');
                     const currentObjectFit = window.getComputedStyle(img).objectFit;
+                    const isInCarousel = img.closest('.carousel--mode-single') || img.alt?.includes('carousel image');
 
                     if (isPinterestImage && currentObjectFit === 'contain') {
                         if (isDebugEnabled) {
                             console.log('🖼️ Pinterest image detected with object-fit: contain - preserving existing object-fit');
+                            if (isInCarousel) {
+                                console.log('🎠 Pinterest carousel context detected - using enhanced preservation');
+                            }
                         }
-                        // Preserve Pinterest's object-fit: contain and avoid absolute positioning changes
+
+                        // Enhanced preservation for Pinterest, especially in carousels
                         img.style.display = 'block';
                         img.style.visibility = 'visible';
                         img.style.opacity = '1';
+
+                        // For carousel images, be extra careful with positioning
+                        if (isInCarousel) {
+                            // Don't override any existing position/sizing in carousels
+                            const currentPosition = window.getComputedStyle(img).position;
+                            if (currentPosition === 'static') {
+                                // Only add relative positioning if needed for button placement
+                                img.style.position = 'relative';
+                            }
+                            // Preserve Pinterest's carousel styling completely
+                            img.style.objectFit = 'contain';
+                        }
                     } else {
                         // Apply standard absolute positioning for other sites (Google Images, etc.)
                         img.style.position = 'absolute';
@@ -3255,6 +3327,198 @@ function setupInstagramCarouselListeners() {
     console.log('📱 Instagram carousel navigation listeners set up');
 }
 
+/**
+ * PINTEREST CAROUSEL PROCESSING SYSTEM
+ * 
+ * Pinterest carousels use complex CSS Grid layouts with view transitions and object-fit: contain.
+ * This function handles the specific patterns and timing issues in Pinterest carousel contexts.
+ * 
+ * KEY CHALLENGES:
+ * - Dynamic loading of carousel slides
+ * - Complex CSS Grid with sticky positioning  
+ * - View Transition API interference
+ * - Object-fit: contain preservation requirements
+ * - Z-index conflicts with overlay buttons
+ */
+function processPinterestCarousels() {
+    if (!window.location.hostname.includes('pinterest.com')) return;
+
+    if (isDebugEnabled) {
+        console.log('🎠 Processing Pinterest carousels...');
+    }
+
+    // Find Pinterest carousel containers - they use ul.carousel--mode-single
+    const carousels = document.querySelectorAll('ul.carousel--mode-single, .carousel--mode-single');
+
+    carousels.forEach(carousel => {
+        // Find all images within this carousel
+        const carouselImages = carousel.querySelectorAll('img[alt*="carousel image"]');
+
+        if (isDebugEnabled && carouselImages.length > 0) {
+            console.log(`🎠 Found Pinterest carousel with ${carouselImages.length} images`);
+        }
+
+        carouselImages.forEach((img, index) => {
+            try {
+                // Skip if already processed successfully 
+                // Check for both container wrapper (old method) and overlay approach (new method)
+                const hasContainer = img.closest('.lif-image-container');
+                const hasOverlayButton = img.parentElement?.querySelector('.lif-button-zone') && !hasContainer;
+                const isProcessed = hasContainer || hasOverlayButton;
+
+                if (isProcessed) {
+                    return;
+                }
+
+                // Skip if marked as processed but no button found (broken state) - reset and retry
+                if (img.dataset.lifButtonAdded && !isProcessed) {
+                    if (isDebugEnabled) {
+                        console.log(`🔄 Pinterest carousel image ${index} in broken state - resetting for retry`);
+                    }
+                    delete img.dataset.lifButtonAdded;
+
+                    // Remove any stray button zones
+                    const strayButtonZone = img.parentElement?.querySelector('.lif-button-zone');
+                    if (strayButtonZone) {
+                        strayButtonZone.remove();
+                    }
+                }
+
+                // Check if image is loaded and visible
+                const rect = img.getBoundingClientRect();
+                const isVisible = rect.width > 0 && rect.height > 0;
+                const isLoaded = img.complete && img.naturalHeight !== 0;
+
+                if (isLoaded && isVisible) {
+                    // Special handling for Pinterest carousel images
+                    addConvertButton(img);
+
+                    if (isDebugEnabled) {
+                        console.log(`🎠 Processed Pinterest carousel image ${index}: ${img.src?.substring(0, 50)}...`);
+                    }
+                } else if (isLoaded && !isVisible) {
+                    // Image is loaded but not visible - might be in a non-active carousel slide
+                    if (isDebugEnabled) {
+                        console.log(`🎠 Pinterest carousel image ${index} loaded but not visible - scheduling for retry`);
+                    }
+
+                    // Retry when it becomes visible
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                addConvertButton(img);
+                                observer.disconnect();
+                                if (isDebugEnabled) {
+                                    console.log(`🎠 Pinterest carousel image ${index} became visible - processed`);
+                                }
+                            }
+                        });
+                    });
+                    observer.observe(img);
+                } else {
+                    // Image not yet loaded - wait for load
+                    img.addEventListener('load', () => {
+                        setTimeout(() => {
+                            addConvertButton(img);
+                            if (isDebugEnabled) {
+                                console.log(`🎠 Pinterest carousel image ${index} loaded - processed`);
+                            }
+                        }, 100); // Small delay to let Pinterest apply its styles
+                    }, { once: true });
+                }
+            } catch (error) {
+                console.warn(`Error processing Pinterest carousel image ${index}:`, error);
+            }
+        });
+    });
+
+    // Also handle Pinterest images outside of carousels that might be missed
+    const pinterestImages = document.querySelectorAll('img[src*="pinimg.com"]');
+    pinterestImages.forEach(img => {
+        // Skip if already has button or is in a carousel (handled above)
+        if (img.dataset.lifButtonAdded || img.closest('.carousel--mode-single')) {
+            return;
+        }
+
+        // Skip LIF result images
+        if (img.src.includes('leia-storage-service') || img.src.includes('lifResult')) {
+            return;
+        }
+
+        const rect = img.getBoundingClientRect();
+        const isVisible = rect.width > 50 && rect.height > 50; // Minimum size check
+        const isLoaded = img.complete && img.naturalHeight !== 0;
+
+        if (isLoaded && isVisible) {
+            addConvertButton(img);
+        }
+    });
+
+    // PINTEREST OVERLAY CLEANUP: Ensure overlays don't block buttons
+    managePinterestOverlays();
+
+    if (isDebugEnabled) {
+        console.log('🎠 Pinterest carousel processing complete');
+    }
+}
+
+function managePinterestOverlays() {
+    if (!window.location.hostname.includes('pinterest.com')) return;
+
+    // Find all Pinterest pins with our buttons
+    const pinsWithButtons = document.querySelectorAll('[data-test-id="pin"] img[data-lif-button-added="true"]');
+
+    pinsWithButtons.forEach(img => {
+        const pinContainer = img.closest('[data-test-id="pin"]') || img.closest('[data-test-id="pinWrapper"]');
+        if (!pinContainer) return;
+
+        // Disable all overlay layers in this pin that might block button access
+        const overlaySelectors = [
+            '[data-test-id="contentLayer"]',
+            '.contentLayer',
+            '[data-test-id="pinrep-save-button"]',
+            '.saveButton',
+            '[class*="overlay"]',
+            '[class*="hover"]',
+            '[class*="MIw"]', // Pinterest's overlay classes
+            '[class*="QLY"]'  // More Pinterest overlay classes
+        ];
+
+        overlaySelectors.forEach(selector => {
+            const overlays = pinContainer.querySelectorAll(selector);
+            overlays.forEach(overlay => {
+                // Only modify overlays that might interfere with our buttons
+                const buttonZone = img.parentElement?.querySelector('.lif-button-zone');
+                if (buttonZone) {
+                    const buttonRect = buttonZone.getBoundingClientRect();
+                    const overlayRect = overlay.getBoundingClientRect();
+
+                    // Check if overlay might overlap with button area
+                    const overlaps = !(buttonRect.right < overlayRect.left ||
+                        buttonRect.left > overlayRect.right ||
+                        buttonRect.bottom < overlayRect.top ||
+                        buttonRect.top > overlayRect.bottom);
+
+                    if (overlaps || overlay.style.pointerEvents !== 'none') {
+                        overlay.style.pointerEvents = 'none';
+                        overlay.style.zIndex = '1'; // Lower than our button z-index (5000)
+
+                        // Disable pointer events on all children too
+                        const children = overlay.querySelectorAll('*');
+                        children.forEach(child => {
+                            child.style.pointerEvents = 'none';
+                        });
+
+                        if (isDebugEnabled) {
+                            console.log('🎯 Pinterest: Disabled overlapping overlay layer');
+                        }
+                    }
+                }
+            });
+        });
+    });
+}
+
 // Function to set up Flickr theater mode overlay cleanup
 function setupFlickrOverlayCleanup() {
     if (!window.location.hostname.includes('flickr.com')) {
@@ -3870,12 +4134,22 @@ function observeNewImages() {
 
         // 🕒 BATCH PROCESSING - Process collected images after DOM settles
         if (imagesToCheck.size > 0) {
+            // Enhanced delay for Pinterest carousels which can load rapidly
+            const isPinterest = window.location.hostname.includes('pinterest.com');
+            const delay = isPinterest ? 300 : 200; // Longer delay for Pinterest
+
             setTimeout(() => {
                 // LINKEDIN DUPLICATE CLEANUP: Remove duplicate button zones before processing new images
                 cleanupDuplicateButtons();
 
                 // INSTAGRAM CAROUSEL FIX: Process all carousel images when mutations are detected
                 processInstagramCarousels();
+
+                // PINTEREST CAROUSEL FIX: Process Pinterest carousels when mutations are detected
+                if (window.location.hostname.includes('pinterest.com')) {
+                    processPinterestCarousels();
+                    managePinterestOverlays(); // Also clean up overlays after mutations
+                }
 
                 // FLICKR OVERLAY FIX: Clean up blocking overlays when DOM changes
                 if (window.location.hostname.includes('flickr.com')) {
@@ -3929,7 +4203,7 @@ function observeNewImages() {
                         console.warn('Error processing image in mutation observer:', error);
                     }
                 });
-            }, 200); // Increased delay for complex DOM operations
+            }, delay); // Dynamic delay based on site
         }
     });
 
@@ -3964,6 +4238,12 @@ function setupScrollHandler() {
 
             // INSTAGRAM CAROUSEL FIX: Process carousel images during scroll events
             processInstagramCarousels();
+
+            // PINTEREST CAROUSEL FIX: Process Pinterest carousels during scroll events
+            if (window.location.hostname.includes('pinterest.com')) {
+                processPinterestCarousels();
+                managePinterestOverlays(); // Also clean up overlays after scroll
+            }
 
             // FLICKR OVERLAY FIX: Clean up blocking overlays during scroll (theater mode only)
             if (window.location.hostname.includes('flickr.com')) {
@@ -4356,6 +4636,31 @@ async function initialize() {
 
             // Set up Instagram carousel navigation listeners
             setupInstagramCarouselListeners();
+
+            // Set up Pinterest carousel processing
+            if (window.location.hostname.includes('pinterest.com')) {
+                // Process existing Pinterest carousels
+                setTimeout(() => {
+                    processPinterestCarousels();
+                    managePinterestOverlays(); // Clean up overlays on initial load
+                }, 1000); // Delay to let Pinterest load
+
+                // Set up Pinterest carousel navigation listeners
+                document.addEventListener('click', (e) => {
+                    // Check for Pinterest carousel navigation
+                    if (e.target.closest('button[aria-label*="Next"]') ||
+                        e.target.closest('button[aria-label*="Previous"]') ||
+                        e.target.closest('.carousel--mode-single')) {
+
+                        setTimeout(() => {
+                            processPinterestCarousels();
+                            managePinterestOverlays(); // Clean up overlays after navigation
+                        }, 300); // Wait for navigation to complete
+                    }
+                }, { passive: true });
+
+                console.log('🎠 Pinterest carousel system initialized');
+            }
 
             // Set up Flickr theater mode handling
             if (window.location.hostname.includes('flickr.com')) {
