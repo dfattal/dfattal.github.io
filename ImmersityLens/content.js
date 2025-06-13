@@ -3281,6 +3281,20 @@ function addConvertButton(img) {
             // Mark as processed
             img.dataset.lifButtonAdded = 'true';
 
+            // Hide any duplicate button zones that appear after the closeup container
+            const closeupContainer = parentContainer.closest('[data-test-id="closeup-body-image-container"]');
+            if (closeupContainer) {
+                const allButtonZones = document.querySelectorAll('.lif-button-zone');
+                allButtonZones.forEach(zone => {
+                    if (!closeupContainer.contains(zone)) {
+                        zone.style.display = 'none';
+                        if (isDebugEnabled) {
+                            console.log('🎯 Pinterest closeup: Hidden duplicate button zone');
+                        }
+                    }
+                });
+            }
+
             if (isDebugEnabled) {
                 console.log('🎯 Pinterest closeup: Added overlay buttons to preserve dimensions');
             }
