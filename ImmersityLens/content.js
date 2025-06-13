@@ -3237,6 +3237,16 @@ function addConvertButton(img) {
             img.parentElement;
 
         if (parentContainer) {
+            // Remove any existing lif-image-container to prevent double wrapping
+            const existingContainer = img.closest('.lif-image-container');
+            if (existingContainer) {
+                const parent = existingContainer.parentNode;
+                while (existingContainer.firstChild) {
+                    parent.insertBefore(existingContainer.firstChild, existingContainer);
+                }
+                parent.removeChild(existingContainer);
+            }
+
             // Create button zone as a sibling to preserve layout
             const buttonZone = document.createElement('div');
             buttonZone.className = 'lif-button-zone';
@@ -4092,33 +4102,50 @@ function cleanupDuplicateButtons() {
 function processImages() {
     if (!isExtensionEnabled) return;
 
-    const images = document.querySelectorAll('img');
+    // Find all images that haven't been processed yet
+    const images = document.querySelectorAll('img:not([data-lif-button-added])');
+
     images.forEach(img => {
         try {
-            // Wait for image to load before adding button
-            if (img.complete) {
-                addConvertButton(img);
-            } else {
-                img.addEventListener('load', () => {
-                    try {
-                        addConvertButton(img);
-                    } catch (error) {
-                        console.warn('Error adding convert button to image:', error);
-                    }
-                }, { once: true });
+            // Skip if already processed
+            if (img.dataset.lifButtonAdded) {
+                return;
             }
+
+            // PINTEREST CLOSEUP DETECTION: Check if we're in a Pinterest closeup/detail view
+            const isPinterestCloseup = window.location.hostname.includes('pinterest.com') &&
+                (window.location.pathname.includes('/pin/') ||
+                    img.closest('[data-test-id="closeup-body-image-container"]'));
+
+            if (isPinterestCloseup) {
+                // For Pinterest closeup views, use overlay approach
+                const parentContainer = img.closest('[data-test-id="closeup-body-image-container"]') ||
+                    img.closest('[data-test-id="closeup-image-main"]') ||
+                    img.parentElement;
+
+                if (parentContainer) {
+                    // Remove any existing lif-image-container
+                    const existingContainer = img.closest('.lif-image-container');
+                    if (existingContainer) {
+                        const parent = existingContainer.parentNode;
+                        while (existingContainer.firstChild) {
+                            parent.insertBefore(existingContainer.firstChild, existingContainer);
+                        }
+                        parent.removeChild(existingContainer);
+                    }
+
+                    // Add button directly to parent container
+                    addConvertButton(img);
+                    return;
+                }
+            }
+
+            // For all other images, use standard processing
+            addConvertButton(img);
         } catch (error) {
             console.warn('Error processing image:', error);
         }
     });
-
-    // Show any hidden buttons if re-enabling
-    document.querySelectorAll('.lif-converter-btn').forEach(btn => {
-        btn.style.display = '';
-    });
-
-    // INSTAGRAM CAROUSEL FIX: Process all carousel images on initial load
-    processInstagramCarousels();
 }
 
 // Function to handle new images added dynamically
