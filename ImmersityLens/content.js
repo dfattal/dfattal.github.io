@@ -4307,6 +4307,11 @@ function observeNewImages() {
                 });
             }, delay); // Dynamic delay based on site
         }
+
+        // After processing mutations, check for duplicate button zones
+        setTimeout(() => {
+            handleDuplicateButtonZones();
+        }, 100);
     });
 
     mutationObserver.observe(document.body, {
@@ -4828,4 +4833,25 @@ if (document.readyState === 'loading') {
 window.addEventListener('beforeunload', () => {
     console.log('Page unloading, cleaning up extension...');
     cleanupExtension();
-}, { once: true }); 
+}, { once: true });
+
+// Function to handle duplicate button zones
+function handleDuplicateButtonZones() {
+    const closeupContainer = document.querySelector('[data-test-id="closeup-body-image-container"]');
+    if (closeupContainer) {
+        // Get all button zones within the container
+        const buttonZones = closeupContainer.querySelectorAll('.lif-button-zone');
+
+        // If we have more than one button zone
+        if (buttonZones.length > 1) {
+            // Keep the first one (inside the image) and hide the last one (at the end of container)
+            const lastButtonZone = buttonZones[buttonZones.length - 1];
+            if (lastButtonZone && !closeupContainer.querySelector('[data-test-id="closeup-image-main"]').contains(lastButtonZone)) {
+                lastButtonZone.style.display = 'none';
+                if (isDebugEnabled) {
+                    console.log('🎯 Hidden duplicate button zone at end of closeup container');
+                }
+            }
+        }
+    }
+} 
