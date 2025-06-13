@@ -3224,6 +3224,59 @@ function addConvertButton(img) {
     }
 
     // Added 2D3D button to image successfully - logging removed
+
+    // PINTEREST CLOSEUP DETECTION: Check if we're in a Pinterest closeup/detail view
+    const isPinterestCloseup = window.location.hostname.includes('pinterest.com') &&
+        (window.location.pathname.includes('/pin/') ||
+            img.closest('[data-test-id="closeup-body-image-container"]'));
+
+    if (isPinterestCloseup) {
+        // Use overlay approach for Pinterest closeup views to preserve dimensions
+        const parentContainer = img.closest('[data-test-id="closeup-body-image-container"]') ||
+            img.closest('[data-test-id="closeup-image-main"]') ||
+            img.parentElement;
+
+        if (parentContainer) {
+            // Create button zone as a sibling to preserve layout
+            const buttonZone = document.createElement('div');
+            buttonZone.className = 'lif-button-zone';
+            buttonZone.style.cssText = `
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 200px;
+                height: 60px;
+                z-index: 5000;
+                pointer-events: auto;
+            `;
+
+            // Add buttons
+            const convertBtn = document.createElement('button');
+            convertBtn.className = 'lif-converter-btn';
+            convertBtn.title = 'Convert to immersive 3D image';
+            convertBtn.dataset.originalText = '2D3D';
+            convertBtn.dataset.state = 'ready';
+            convertBtn.textContent = '2D3D';
+
+            const vrBtn = document.createElement('button');
+            vrBtn.className = 'lif-vr-btn';
+            vrBtn.title = 'View in VR/XR mode';
+            vrBtn.style.cssText = 'pointer-events: auto; z-index: 5000; display: none;';
+            vrBtn.textContent = '🥽 VR';
+
+            buttonZone.appendChild(convertBtn);
+            buttonZone.appendChild(vrBtn);
+            parentContainer.appendChild(buttonZone);
+
+            // Mark as processed
+            img.dataset.lifButtonAdded = 'true';
+
+            if (isDebugEnabled) {
+                console.log('🎯 Pinterest closeup: Added overlay buttons to preserve dimensions');
+            }
+            return;
+        }
+    }
 }
 
 /**
@@ -3466,10 +3519,15 @@ function managePinterestOverlays() {
     if (!window.location.hostname.includes('pinterest.com')) return;
 
     // Find all Pinterest pins with our buttons
-    const pinsWithButtons = document.querySelectorAll('[data-test-id="pin"] img[data-lif-button-added="true"]');
+    const pinsWithButtons = document.querySelectorAll('[data-test-id="pin"] img[data-lif-button-added="true"], [data-test-id="closeup-image"] img[data-lif-button-added="true"]');
 
     pinsWithButtons.forEach(img => {
-        const pinContainer = img.closest('[data-test-id="pin"]') || img.closest('[data-test-id="pinWrapper"]');
+        // Handle both grid view pins and closeup view images
+        const pinContainer = img.closest('[data-test-id="pin"]') ||
+            img.closest('[data-test-id="pinWrapper"]') ||
+            img.closest('[data-test-id="closeup-body-image-container"]') ||
+            img.closest('[data-test-id="closeup-image-main"]');
+
         if (!pinContainer) return;
 
         // Disable all overlay layers in this pin that might block button access
@@ -3481,7 +3539,10 @@ function managePinterestOverlays() {
             '[class*="overlay"]',
             '[class*="hover"]',
             '[class*="MIw"]', // Pinterest's overlay classes
-            '[class*="QLY"]'  // More Pinterest overlay classes
+            '[class*="QLY"]', // More Pinterest overlay classes
+            '[data-test-id="closeup-image-overlay-layer-flashlight-button"]',
+            '[data-test-id="closeup-image-overlay-layer-media-viewer-button"]',
+            '[data-test-id="closeup-image-overlay-layer-domain-link-button"]'
         ];
 
         overlaySelectors.forEach(selector => {
