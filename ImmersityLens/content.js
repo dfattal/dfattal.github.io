@@ -1069,6 +1069,29 @@ async function convertTo3D(img, button, options = {}) {
         lifGen.afterLoad = function () {
             console.log('3D conversion completed successfully');
 
+            // Store the LIF download URL immediately - if the viewer can be created, the URL is valid
+            if (this.lifDownloadUrl && img.src) {
+                imageLIFMap.set(img.src, this.lifDownloadUrl);
+                console.log('LIF file stored for image:', img.src);
+                console.log('LIF download URL:', this.lifDownloadUrl);
+
+                // Proactively update context menu to "Download LIF" state
+                chrome.runtime.sendMessage({
+                    action: "updateContextMenu",
+                    hasLIF: true
+                });
+                console.log('Context menu proactively updated to Download LIF state');
+
+                // Show success notification
+                showDownloadNotification('3D conversion complete! Right-click image to download LIF file.', 'success');
+            } else {
+                console.warn('Cannot store LIF file - missing lifDownloadUrl or img.src:', {
+                    hasLifDownloadUrl: !!this.lifDownloadUrl,
+                    lifDownloadUrl: this.lifDownloadUrl,
+                    hasImgSrc: !!img.src
+                });
+            }
+
             // Update button to LIF state and ensure it persists
             button.textContent = '⬇️ LIF';
             button.classList.remove('processing');
@@ -1309,6 +1332,9 @@ async function convertTo3D(img, button, options = {}) {
             // Store viewer reference on button for later use
             button.lifViewer = viewer;
 
+            // Store reference to lifGen for accessing lifDownloadUrl later
+            const lifGenRef = this;
+
             // Enhanced afterLoad - much simpler since lifViewer handles layout-specific setup
             const originalAfterLoad = viewer.afterLoad;
             viewer.afterLoad = async function () {
@@ -1317,22 +1343,9 @@ async function convertTo3D(img, button, options = {}) {
 
                 console.log('LIF viewer loaded successfully with layout-aware setup!');
 
-                // Store the LIF download URL in our map for context menu functionality
-                if (this.lifDownloadUrl && img.src) {
-                    imageLIFMap.set(img.src, this.lifDownloadUrl);
-                    console.log('LIF file stored for image:', img.src);
-
-                    // Show success notification
-                    showDownloadNotification('3D conversion complete! Right-click image to download LIF file.', 'success');
-
-                    // Update context menu if this is the currently selected image
-                    if (lastContextMenuImage && lastContextMenuImage.src === img.src) {
-                        chrome.runtime.sendMessage({
-                            action: "updateContextMenu",
-                            hasLIF: true
-                        });
-                    }
-                }
+                // Note: LIF download URL is already stored in imageLIFMap from lifGen.afterLoad
+                // This viewer.afterLoad is called after the LIF generation completes
+                console.log('Viewer afterLoad called - LIF should already be stored in imageLIFMap');
 
                 // Remove the temporary button since we're using context menu approach
                 if (button && button.parentElement) {
@@ -3407,6 +3420,13 @@ document.addEventListener('contextmenu', function (e) {
 
         // Update context menu based on whether this image has a LIF file
         const hasLIF = imageLIFMap.has(img.src);
+        console.log('Context menu update:', {
+            imageSrc: img.src,
+            hasLIF: hasLIF,
+            lifMapSize: imageLIFMap.size,
+            lifMapKeys: Array.from(imageLIFMap.keys())
+        });
+
         chrome.runtime.sendMessage({
             action: "updateContextMenu",
             hasLIF: hasLIF
@@ -3508,9 +3528,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Find the image at the clicked position
         const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
 
+        console.log('Download LIF requested:', {
+            foundImage: !!img,
+            imageSrc: img?.src,
+            hasLIFInMap: img ? imageLIFMap.has(img.src) : false,
+            lifMapSize: imageLIFMap.size,
+            lifMapKeys: Array.from(imageLIFMap.keys())
+        });
+
         if (img && imageLIFMap.has(img.src)) {
             const lifDownloadUrl = imageLIFMap.get(img.src);
             console.log('Downloading LIF file for image:', img.src);
+            console.log('LIF download URL:', lifDownloadUrl);
             downloadLIFFile(lifDownloadUrl, img.src);
         } else {
             console.warn('No LIF file available for this image');
