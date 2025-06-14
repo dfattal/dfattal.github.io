@@ -169,6 +169,23 @@ class VRLifViewer {
                 return;
             }
 
+            // Check if VR system script is already injected to prevent BinaryStream conflicts
+            const existingVRScript = document.querySelector(`script[src*="VRPageSystem.js"], script#${this.injectedScriptId}`);
+            if (existingVRScript) {
+                console.log('⏳ VR system script already injected, waiting for initialization...');
+                // Wait for the VR system to initialize
+                setTimeout(() => {
+                    if (window.vrSystem) {
+                        console.log('✅ VR system initialized successfully');
+                        resolve();
+                    } else {
+                        console.log('⚠️ VR system script found but not initialized, proceeding anyway...');
+                        resolve(); // Proceed even if not fully initialized to avoid conflicts
+                    }
+                }, 500);
+                return;
+            }
+
             // Inject the separate VR system file to avoid CSP inline script issues
             const vrScript = document.createElement('script');
             vrScript.id = this.injectedScriptId;

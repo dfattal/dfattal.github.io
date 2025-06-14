@@ -3148,55 +3148,9 @@ function setupMessageListener() {
                 console.warn('Context menu: No LIF available for image');
             }
         } else if (request.action === "enterVR") {
-            // Use the existing context menu image detection system
-            const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
-
-            if (img && imageLIFMap.has(img.src)) {
-                console.log('Context menu: Entering VR for image', img.src);
-
-                // Check WebXR support before proceeding
-                if (!webXRSupportChecked || !isWebXRSupported) {
-                    console.warn('VR not available - WebXR not supported');
-                    showDownloadNotification('VR not available - WebXR not supported on this device', 'error');
-                    return;
-                }
-
-                const lifUrl = imageLIFMap.get(img.src);
-
-                // Initialize VR viewer
-                try {
-                    // Check if VRLifViewer is already loaded
-                    if (window.VRLifViewer) {
-                        const vrViewer = new window.VRLifViewer();
-                        await vrViewer.init(lifUrl, null);
-                    } else {
-                        // Load VRLifViewer script dynamically
-                        const script = document.createElement('script');
-                        script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
-                        script.onload = async () => {
-                            try {
-                                const vrViewer = new VRLifViewer();
-                                await vrViewer.init(lifUrl, null);
-                                console.log('VR viewer initialized successfully');
-                            } catch (error) {
-                                console.error('Failed to initialize VR viewer:', error);
-                                showDownloadNotification('Failed to start VR: ' + error.message, 'error');
-                            }
-                        };
-                        script.onerror = () => {
-                            console.error('Failed to load VR viewer script');
-                            showDownloadNotification('Failed to load VR system', 'error');
-                        };
-                        document.head.appendChild(script);
-                    }
-                } catch (error) {
-                    console.error('Failed to start VR viewer:', error);
-                    showDownloadNotification('Failed to start VR: ' + error.message, 'error');
-                }
-            } else {
-                console.warn('Context menu: No LIF available for VR');
-                showDownloadNotification('No 3D file available for VR viewing', 'error');
-            }
+            // This old VR handler is disabled - VR is now handled by the newer system
+            // that uses pre-loaded VR files and the simple startVR() approach
+            console.log('Old VR handler called - redirecting to newer system');
         }
     };
 
@@ -3312,6 +3266,32 @@ async function initialize() {
 
             // Test WebXR support early
             testWebXRSupport();
+
+            // Pre-load VR system if WebXR is supported (inject once at initialization)
+            setTimeout(async () => {
+                if (webXRSupportChecked && isWebXRSupported) {
+                    console.log('🥽 WebXR supported - pre-loading VR system...');
+                    try {
+                        // Check if VRLifViewer is already loaded
+                        if (!window.VRLifViewer) {
+                            // Load VRLifViewer script once during initialization
+                            const script = document.createElement('script');
+                            script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
+                            script.onload = () => {
+                                console.log('✅ VR system pre-loaded successfully');
+                            };
+                            script.onerror = () => {
+                                console.error('❌ Failed to pre-load VR system');
+                            };
+                            document.head.appendChild(script);
+                        } else {
+                            console.log('✅ VR system already loaded');
+                        }
+                    } catch (error) {
+                        console.error('❌ Error pre-loading VR system:', error);
+                    }
+                }
+            }, 1000); // Wait for WebXR test to complete
 
             // Reset context menu to default state on page load/reload
             chrome.runtime.sendMessage({
@@ -3517,7 +3497,7 @@ document.addEventListener('contextmenu', function (e) {
 }, true);
 
 // Handle messages from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     if (message.action === "convertImage") {
         // Find the image at the clicked position
         const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
@@ -3642,34 +3622,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.log('Starting VR for image:', img.src);
             console.log('LIF URL for VR:', lifDownloadUrl);
 
-            // Initialize VR viewer
+            // Use the pre-loaded VR system (VRLifViewer) that was injected during initialization
             try {
-                // Check if VRLifViewer is already loaded
+                console.log('Starting VR using pre-loaded VR system...');
+
+                // Check if VRLifViewer is available (should be pre-loaded during initialization)
                 if (window.VRLifViewer) {
+                    console.log('VRLifViewer found, initializing VR session...');
                     const vrViewer = new window.VRLifViewer();
-                    vrViewer.init(lifDownloadUrl, null);
+                    await vrViewer.init(lifDownloadUrl, null);
+                    console.log('VR session started successfully');
                 } else {
-                    // Load VRLifViewer script dynamically
-                    const script = document.createElement('script');
-                    script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
-                    script.onload = async () => {
-                        try {
-                            const vrViewer = new VRLifViewer();
-                            await vrViewer.init(lifDownloadUrl, null);
-                            console.log('VR viewer initialized successfully');
-                        } catch (error) {
-                            console.error('Failed to initialize VR viewer:', error);
-                            showDownloadNotification('Failed to start VR: ' + error.message, 'error');
-                        }
-                    };
-                    script.onerror = () => {
-                        console.error('Failed to load VR viewer script');
-                        showDownloadNotification('Failed to load VR system', 'error');
-                    };
-                    document.head.appendChild(script);
+                    console.warn('VRLifViewer not found - VR system may not be pre-loaded');
+                    showDownloadNotification('VR system not ready - please try again in a moment', 'error');
                 }
             } catch (error) {
-                console.error('Failed to start VR viewer:', error);
+                console.error('Failed to start VR:', error);
                 showDownloadNotification('Failed to start VR: ' + error.message, 'error');
             }
         } else {
