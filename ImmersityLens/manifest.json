@@ -5,7 +5,8 @@
   "description": "Convert 2D images to immersive 3D LIF files with VR viewing capabilities using Immersity AI",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://api.immersity.ai/*",
@@ -48,5 +49,8 @@
       ],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 } 

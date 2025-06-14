@@ -819,7 +819,7 @@ async function imageToFile(img) {
 
 // Function to handle the 2D to 3D conversion
 // 🔮 CORE CONVERSION SYSTEM - Handles 2D→3D processing using enhanced lifViewer
-async function convertTo3D(img, button) {
+async function convertTo3D(img, button, options = {}) {
     const imgId = img.src + '_' + Date.now();
 
     if (processingImages.has(imgId)) {
@@ -4619,6 +4619,23 @@ function setupMessageListener() {
                     reason: 'Extension is disabled'
                 });
             }
+        } else if (request.action === "convertImage") {
+            // Find the image element that matches the URL
+            const images = document.querySelectorAll('img');
+            for (const img of images) {
+                if (img.src === request.imageUrl) {
+                    // Create a temporary button to use the existing conversion logic
+                    const tempButton = document.createElement('div');
+                    tempButton.className = 'lif-convert-btn';
+                    tempButton.style.position = 'absolute';
+                    tempButton.style.left = `${request.x}px`;
+                    tempButton.style.top = `${request.y}px`;
+
+                    // Trigger the conversion using the existing logic
+                    convertTo3D(img, tempButton);
+                    break;
+                }
+            }
         }
     };
 
@@ -4854,4 +4871,177 @@ function handleDuplicateButtonZones() {
             }
         }
     }
+}
+
+// Function to recursively search for img tag
+function findImgInTree(element) {
+    if (!element) return null;
+
+    // Check if current element is an img
+    if (element.tagName === 'IMG') {
+        return element;
+    }
+
+    // Check all children recursively
+    for (let child of element.children) {
+        const found = findImgInTree(child);
+        if (found) return found;
+    }
+
+    return null;
+}
+
+// Function to find image in parent elements and their siblings
+function findImgInParentsAndSiblings(element) {
+    let current = element;
+    while (current && current !== document) {
+        // Check current element
+        const img = findImgInTree(current);
+        if (img) return img;
+
+        // Check siblings
+        if (current.parentElement) {
+            for (let sibling of current.parentElement.children) {
+                if (sibling !== current) {
+                    const siblingImg = findImgInTree(sibling);
+                    if (siblingImg) return siblingImg;
+                }
+            }
+        }
+
+        current = current.parentElement;
+    }
+    return null;
+}
+
+// Store the last right-clicked element
+let lastRightClickedElement = null;
+
+// Add test event listener for right-click debugging
+document.addEventListener('contextmenu', function (e) {
+    // Store the clicked element
+    lastRightClickedElement = e.target;
+
+    // Find image in the clicked element's tree
+    const img = findImgInParentsAndSiblings(e.target);
+
+    if (img) {
+        console.log('Found image in clicked element:', {
+            src: img.src,
+            alt: img.alt,
+            clickedElement: e.target.tagName,
+            clickedElementClass: e.target.className,
+            parentStructure: img.parentElement ? img.parentElement.tagName : 'none',
+            path: getElementPath(img)
+        });
+        // Don't prevent default - let the context menu show
+    }
+}, true);
+
+// Handle messages from background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "convertImage") {
+        // Find the image at the clicked position
+        const img = lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null;
+
+        if (img) {
+            // --- GENERALIZED BUTTON APPROACH LOGIC ---
+            // 1. Find the best target container using layout analysis
+            let targetElement = img.parentElement;
+            let isPictureImage = false;
+            let useOverlayApproach = false;
+            let overlayContainer = null;
+            let effectiveWidth, effectiveHeight;
+
+            // Special handling for <picture> elements
+            const pictureElement = img.closest('picture');
+            if (pictureElement && pictureElement.contains(img)) {
+                isPictureImage = true;
+                useOverlayApproach = true;
+                // CNN structure: container__item-media-wrapper > container__item-media > image > image__container > picture
+                const imageContainer = pictureElement.parentElement; // image__container
+                const imageDiv = imageContainer?.parentElement; // image div
+                let containerMedia = imageDiv?.parentElement; // could be container__item-media or container__item-media-wrapper
+                if (containerMedia && containerMedia.classList.contains('container__item-media')) {
+                    targetElement = containerMedia;
+                } else if (imageDiv && imageDiv.classList.contains('image')) {
+                    targetElement = imageDiv;
+                } else {
+                    targetElement = imageContainer;
+                }
+                // Store dimensions for later use with LIF viewer
+                const pictureRect = pictureElement.getBoundingClientRect();
+                pictureElement.dataset.lifTargetWidth = Math.round(pictureRect.width);
+                pictureElement.dataset.lifTargetHeight = Math.round(pictureRect.height);
+            }
+
+            // 2. Analyze layout for all other cases
+            const layoutAnalysis = analyzeLayoutPattern(targetElement, img);
+            // Overlay approach for aspect ratio, flex/grid, Facebook, Pinterest, etc.
+            const isAspectRatioContainer = layoutAnalysis.containerHasPaddingAspectRatio;
+            const shouldUseOverlayApproach = isPictureImage || isAspectRatioContainer || layoutAnalysis.isFacebookStyle || layoutAnalysis.parentUsesFlexOrGrid || layoutAnalysis.hasResponsivePattern;
+
+            // For overlay approach, use the padding container if found
+            if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer) {
+                targetElement = layoutAnalysis.paddingContainer.element;
+            }
+
+            // For overlay approach, store target dimensions
+            if (shouldUseOverlayApproach) {
+                const imgRect = img.getBoundingClientRect();
+                const containerRect = targetElement.getBoundingClientRect();
+                effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
+                effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+                targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
+                targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
+                overlayContainer = targetElement;
+            }
+
+            // For regular images, wrap in .lif-image-container if not already
+            let container = targetElement;
+            if (!shouldUseOverlayApproach) {
+                if (!container.classList.contains('lif-image-container')) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'lif-image-container';
+                    img.parentNode.insertBefore(wrapper, img);
+                    wrapper.appendChild(img);
+                    container = wrapper;
+                }
+                // Ensure container is positioned
+                const computedStyle = window.getComputedStyle(container);
+                if (computedStyle.position === 'static') {
+                    container.style.position = 'relative';
+                }
+                const rect = container.getBoundingClientRect();
+                effectiveWidth = Math.round(rect.width);
+                effectiveHeight = Math.round(rect.height);
+                overlayContainer = container;
+            }
+
+            // 3. Create a temporary hidden button and append to the correct container
+            const tempButton = document.createElement('button');
+            tempButton.className = 'lif-converter-btn';
+            tempButton.style.display = 'none';
+            overlayContainer.appendChild(tempButton);
+
+            // 4. Call the conversion directly, passing the temp button and correct dimensions
+            convertTo3D(img, tempButton, { width: effectiveWidth, height: effectiveHeight });
+        }
+    }
+});
+
+// Helper function to get element path for debugging
+function getElementPath(element) {
+    let path = [];
+    while (element && element !== document) {
+        let selector = element.tagName.toLowerCase();
+        if (element.id) {
+            selector += '#' + element.id;
+        } else if (element.className) {
+            selector += '.' + element.className.split(' ').join('.');
+        }
+        path.unshift(selector);
+        element = element.parentElement;
+    }
+    return path.join(' > ');
 } 
