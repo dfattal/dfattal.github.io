@@ -539,20 +539,51 @@ async function showCorsInfoIfNeeded() {
 }
 
 // Function to download LIF file when LIF button is clicked
-async function downloadLIFFile(lifDownloadUrl, originalImageSrc) {
+async function downloadLIFFile(lifDownloadUrl, originalImageSrc, imgElement = null) {
     try {
-        // Generate a filename based on the original image URL or use a default
+        // Generate a filename based on alt text, image URL, or use a default
         let fileName = 'converted_LIF.jpg';
-        if (originalImageSrc) {
+
+        // Helper function to clean and shorten text for filename
+        function cleanFilename(text, maxLength = 30) {
+            return text
+                .replace(/[^a-zA-Z0-9\s\-_]/g, '') // Remove special characters
+                .replace(/\s+/g, '_') // Replace spaces with underscores
+                .substring(0, maxLength) // Limit length
+                .replace(/_+$/, ''); // Remove trailing underscores
+        }
+
+        // Try to use alt text first (usually most descriptive)
+        if (imgElement && imgElement.alt && imgElement.alt.trim()) {
+            const cleanAlt = cleanFilename(imgElement.alt.trim());
+            if (cleanAlt) {
+                fileName = `${cleanAlt}_LIF.jpg`;
+                console.log('Using alt text for filename:', fileName);
+            }
+        }
+        // Fallback to image URL if no alt text
+        else if (originalImageSrc) {
             try {
                 const url = new URL(originalImageSrc);
                 const pathParts = url.pathname.split('/');
                 const originalName = pathParts[pathParts.length - 1];
-                const nameWithoutExt = originalName.split('.')[0] || 'image';
-                fileName = `${nameWithoutExt}_LIF.jpg`;
+
+                // Extract name without extension and clean it
+                let nameWithoutExt = originalName.split('.')[0] || 'image';
+
+                // Handle common URL patterns (like random IDs, query params)
+                if (nameWithoutExt.length > 20 || /^[a-f0-9]{8,}$/i.test(nameWithoutExt)) {
+                    // If it's a long hash or ID, use a shorter version
+                    nameWithoutExt = nameWithoutExt.substring(0, 8);
+                }
+
+                const cleanName = cleanFilename(nameWithoutExt);
+                fileName = `${cleanName || 'image'}_LIF.jpg`;
+                console.log('Using URL-based filename:', fileName);
             } catch (e) {
                 // Use default filename if URL parsing fails
                 fileName = 'converted_LIF.jpg';
+                console.log('Using default filename due to URL parsing error');
             }
         }
 
@@ -3540,7 +3571,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const lifDownloadUrl = imageLIFMap.get(img.src);
             console.log('Downloading LIF file for image:', img.src);
             console.log('LIF download URL:', lifDownloadUrl);
-            downloadLIFFile(lifDownloadUrl, img.src);
+            downloadLIFFile(lifDownloadUrl, img.src, img);
         } else {
             console.warn('No LIF file available for this image');
             showDownloadNotification('No LIF file available for this image', 'error');
