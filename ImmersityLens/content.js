@@ -4854,23 +4854,7 @@ window.addEventListener('beforeunload', () => {
 
 // Function to handle duplicate button zones
 function handleDuplicateButtonZones() {
-    const closeupContainer = document.querySelector('[data-test-id="closeup-body-image-container"]');
-    if (closeupContainer) {
-        // Get all button zones within the container
-        const buttonZones = closeupContainer.querySelectorAll('.lif-button-zone');
-
-        // If we have more than one button zone
-        if (buttonZones.length > 1) {
-            // Keep the first one (inside the image) and hide the last one (at the end of container)
-            const lastButtonZone = buttonZones[buttonZones.length - 1];
-            if (lastButtonZone && !closeupContainer.querySelector('[data-test-id="closeup-image-main"]').contains(lastButtonZone)) {
-                lastButtonZone.style.display = 'none';
-                if (isDebugEnabled) {
-                    console.log('🎯 Hidden duplicate button zone at end of closeup container');
-                }
-            }
-        }
-    }
+    // Remove Pinterest closeup duplicate button zone cleanup
 }
 
 // Function to recursively search for img tag
@@ -5000,18 +4984,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // For regular images, wrap in .lif-image-container if not already
             let container = targetElement;
             if (!shouldUseOverlayApproach) {
-                if (!container.classList.contains('lif-image-container')) {
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'lif-image-container';
-                    img.parentNode.insertBefore(wrapper, img);
-                    wrapper.appendChild(img);
-                    container = wrapper;
-                }
-                // Ensure container is positioned
-                const computedStyle = window.getComputedStyle(container);
-                if (computedStyle.position === 'static') {
-                    container.style.position = 'relative';
-                }
+                // Store dimensions for later use with LIF viewer
                 const rect = container.getBoundingClientRect();
                 effectiveWidth = Math.round(rect.width);
                 effectiveHeight = Math.round(rect.height);
