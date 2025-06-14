@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImmersityLens Context Menu Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-image {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎯 ImmersityLens Context Menu Test</h1>
+
+    <div class="instructions">
+        <h3>Test Instructions:</h3>
+        <div class="step">
+            <strong>Step 1:</strong> Make sure the ImmersityLens extension is enabled
+        </div>
+        <div class="step">
+            <strong>Step 2:</strong> Right-click on any image below
+        </div>
+        <div class="step">
+            <strong>Step 3:</strong> You should see "Convert to 3D" in the context menu
+        </div>
+        <div class="step">
+            <strong>Step 4:</strong> Click "Convert to 3D" to start conversion
+        </div>
+        <div class="step">
+            <strong>Step 5:</strong> After conversion, right-click the same image again
+        </div>
+        <div class="step">
+            <strong>Step 6:</strong> You should now see "Download LIF" instead of "Convert to 3D"
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Image 1 - Simple Image</h3>
+        <img src="https://picsum.photos/400/300?random=1" alt="Test image 1" class="test-image">
+        <p>This is a simple image for testing the context menu functionality.</p>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Image 2 - Different Aspect Ratio</h3>
+        <img src="https://picsum.photos/600/400?random=2" alt="Test image 2" class="test-image">
+        <p>This image has a different aspect ratio to test various scenarios.</p>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Image 3 - Portrait Orientation</h3>
+        <img src="https://picsum.photos/300/500?random=3" alt="Test image 3" class="test-image">
+        <p>This is a portrait-oriented image for testing.</p>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Image 4 - In a Container</h3>
+        <div style="border: 2px solid #333; padding: 10px; background: #f0f0f0;">
+            <img src="https://picsum.photos/500/300?random=4" alt="Test image 4" class="test-image">
+            <p>This image is nested within a container to test complex DOM structures.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Expected Behavior:</h3>
+        <ul>
+            <li>✅ Right-clicking on images should show "Convert to 3D" in context menu</li>
+            <li>✅ Clicking "Convert to 3D" should start the conversion process</li>
+            <li>✅ You should see a notification that conversion has started</li>
+            <li>✅ After conversion completes, you should see a success notification</li>
+            <li>✅ Right-clicking the same image should now show "Download LIF"</li>
+            <li>✅ Clicking "Download LIF" should download the LIF file</li>
+            <li>✅ Right-clicking on non-image areas should show normal browser context menu</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h3>Debug Information:</h3>
+        <p>Open the browser console (F12) to see debug messages from the extension.</p>
+        <p>Look for messages like:</p>
+        <ul>
+            <li>"Found image in clicked element"</li>
+            <li>"Converting image to 3D..."</li>
+            <li>"LIF file stored for image"</li>
+            <li>"3D conversion complete!"</li>
+        </ul>
+    </div>
+</body>
+
+</html>

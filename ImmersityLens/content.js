@@ -116,6 +116,10 @@ let isDebugEnabled = false; // Default to disabled - user must explicitly enable
 let processingImages = new Set(); // Track which images are being processed
 let hasShownCorsInfo = false; // Track if we've shown CORS info to user
 
+// Track LIF files per image for context menu functionality
+let imageLIFMap = new Map(); // Map image src to LIF download URL
+let lastContextMenuImage = null; // Track the last image that was right-clicked
+
 // Extension initialization state to prevent duplicate setup
 let isExtensionInitialized = false;
 let mutationObserver = null;
@@ -1313,48 +1317,27 @@ async function convertTo3D(img, button, options = {}) {
 
                 console.log('LIF viewer loaded successfully with layout-aware setup!');
 
-                // Ensure button state is still correct after viewer loads
-                setTimeout(() => {
-                    if (button.dataset.state === 'lif-ready') {
-                        button.textContent = '⬇️ LIF';
-                        button.classList.remove('processing');
-                        button.classList.add('lif-ready');
-                        console.log('Button state reconfirmed as LIF');
+                // Store the LIF download URL in our map for context menu functionality
+                if (this.lifDownloadUrl && img.src) {
+                    imageLIFMap.set(img.src, this.lifDownloadUrl);
+                    console.log('LIF file stored for image:', img.src);
 
-                        // Show VR button if not already visible (and if WebXR is supported)
-                        if (button.vrButton && button.vrButton.style.display === 'none' && webXRSupportChecked && isWebXRSupported) {
-                            button.vrButton.style.display = 'block';
-                            console.log('VR button made visible during state reconfirmation (WebXR supported)');
-                        } else if (button.vrButton && button.vrButton.style.display === 'none' && webXRSupportChecked && !isWebXRSupported) {
-                            console.log('VR button remains hidden during state reconfirmation (WebXR not supported)');
-                        }
+                    // Show success notification
+                    showDownloadNotification('3D conversion complete! Right-click image to download LIF file.', 'success');
+
+                    // Update context menu if this is the currently selected image
+                    if (lastContextMenuImage && lastContextMenuImage.src === img.src) {
+                        chrome.runtime.sendMessage({
+                            action: "updateContextMenu",
+                            hasLIF: true
+                        });
                     }
-                }, 100);
+                }
 
-                // For picture elements with overlay approach, manage button zones
-                if (img.closest('picture') && img.closest('picture').dataset.lifTargetWidth) {
-                    console.log('Picture element detected - managing overlay button properly');
-
-                    // Find the original button zone in the picture parent
-                    const pictureParent = img.closest('picture').parentElement;
-                    const originalButtonZones = pictureParent.querySelectorAll('.lif-button-zone');
-
-                    // Keep only the button associated with this specific conversion
-                    originalButtonZones.forEach(zone => {
-                        const zoneButton = zone.querySelector('.lif-converter-btn');
-                        if (zoneButton && zoneButton !== button) {
-                            console.log('Removing duplicate button zone');
-                            zone.remove();
-                        } else if (zoneButton === button) {
-                            console.log('Keeping the active conversion button');
-                            // Ensure the button zone is properly positioned and visible
-                            zone.style.position = 'absolute';
-                            zone.style.top = '8px';
-                            zone.style.right = '8px';
-                            zone.style.zIndex = Z_INDEX_CONFIG.BUTTON_ZONE;
-                            zone.style.pointerEvents = 'auto';
-                        }
-                    });
+                // Remove the temporary button since we're using context menu approach
+                if (button && button.parentElement) {
+                    button.parentElement.removeChild(button);
+                    console.log('Temporary button removed - using context menu approach');
                 }
 
                 // Add a visual indicator that the LIF is ready
@@ -1364,6 +1347,7 @@ async function convertTo3D(img, button, options = {}) {
 
                 console.log(`Enhanced LIF viewer initialized with layout mode: ${this.layoutMode}`);
                 console.log('All layout-specific setup handled automatically by lifViewer');
+                console.log('LIF file ready for download via context menu');
 
 
 
@@ -1378,18 +1362,10 @@ async function convertTo3D(img, button, options = {}) {
     } catch (error) {
         console.error('Error converting image to 3D:', error);
 
-        // Reset button state on error
-        button.textContent = button.dataset.originalText || '2D3D';
-        button.classList.remove('processing', 'lif-ready');
-        button.disabled = false;
-        button.dataset.state = 'ready';
-        button.style.background = ''; // Reset any custom background
-
-        // Hide VR button on error
-        if (button.vrButton) {
-            button.vrButton.style.display = 'none';
-            button.vrButton.classList.remove('vr-active');
-            button.vrButton.textContent = '🥽 VR';
+        // Remove the temporary button on error since we're using context menu approach
+        if (button && button.parentElement) {
+            button.parentElement.removeChild(button);
+            console.log('Temporary button removed due to conversion error');
         }
 
         // Remove processing overlay - check both container and overlayContainer
@@ -1480,40 +1456,23 @@ async function convertTo3D(img, button, options = {}) {
 
         if (error.message && error.message.includes('CORS')) {
             errorMessage = 'This image is protected by CORS policy and cannot be processed. Try images from other websites.';
-            button.textContent = 'CORS Block';
-            button.style.background = 'linear-gradient(135deg, #ff9800 0%, #f44336 100%)';
-
             // Show CORS info popup if this is the first time
             showCorsInfoIfNeeded();
         } else if (error.message && (error.message.includes('network') || error.message.includes('fetch'))) {
             errorMessage = 'Network error occurred. Please check your internet connection and try again.';
-            button.textContent = 'Net Error';
             isTemporaryError = true;
         } else if (error.message && error.message.includes('timeout')) {
             errorMessage = 'Request timed out. The image might be too large or the server is busy. Please try again.';
-            button.textContent = 'Timeout';
             isTemporaryError = true;
         } else if (error.message && error.message.includes('API')) {
             errorMessage = 'API service temporarily unavailable. Please try again in a few moments.';
-            button.textContent = 'API Error';
             isTemporaryError = true;
         } else {
             errorMessage += 'Please try again or try a different image.';
-            button.textContent = 'Error';
         }
 
         // Show error message in console and optionally to user
         console.warn('Conversion failed:', errorMessage);
-
-        // For temporary errors, auto-reset the button after a delay
-        if (isTemporaryError) {
-            setTimeout(() => {
-                if (button.dataset.state === 'ready') {
-                    button.textContent = button.dataset.originalText || '2D3D';
-                    button.style.background = ''; // Reset background
-                }
-            }, 3000);
-        }
 
         // Create a non-intrusive error notification
         const errorNotification = document.createElement('div');
@@ -3039,14 +2998,14 @@ function setupMessageListener() {
                 // Test WebXR support
                 testWebXRSupport();
 
-                // Start observing new images
-                observeNewImages();
+                // Note: Button-based image processing disabled - using context menu approach
+                // observeNewImages(); // Disabled for context menu approach
 
-                // Set up scroll handler for dynamic content re-processing
-                setupScrollHandler();
+                // Note: Scroll handler disabled - not needed for context menu approach
+                // setupScrollHandler(); // Disabled for context menu approach
 
-                // Set up Instagram carousel navigation listeners
-                setupInstagramCarouselListeners();
+                // Note: Instagram carousel listeners disabled - not needed for context menu approach
+                // setupInstagramCarouselListeners(); // Disabled for context menu approach
 
                 // Set up Flickr theater mode handling if needed
                 if (window.location.hostname.includes('flickr.com')) {
@@ -3090,9 +3049,8 @@ function setupMessageListener() {
                     setupFlickrTheaterModeMonitoring();
                 }
 
-                // Start processing images
-                processImages();
-                console.log('Extension enabled - processing images');
+                // Note: Button-based processing disabled - using context menu approach
+                console.log('Extension enabled - context menu approach active');
             } else {
                 // Extension was disabled - reload page for clean state
                 console.log('Extension disabled - reloading page for clean state');
@@ -3350,9 +3308,8 @@ async function initialize() {
                 setupFlickrTheaterModeMonitoring();
             }
 
-            // Start processing images
-            processImages();
-            console.log('Extension enabled - processing images');
+            // Note: Button-based processing disabled - using context menu approach
+            console.log('Extension enabled - context menu approach active');
 
             console.log('2D to 3D Image Converter initialized successfully!');
         } else {
@@ -3429,7 +3386,7 @@ function findImgInParentsAndSiblings(element) {
 // Store the last right-clicked element
 let lastRightClickedElement = null;
 
-// Add test event listener for right-click debugging
+// Add context menu event listener for image detection and menu state management
 document.addEventListener('contextmenu', function (e) {
     // Store the clicked element
     lastRightClickedElement = e.target;
@@ -3438,6 +3395,7 @@ document.addEventListener('contextmenu', function (e) {
     const img = findImgInParentsAndSiblings(e.target);
 
     if (img) {
+        lastContextMenuImage = img;
         console.log('Found image in clicked element:', {
             src: img.src,
             alt: img.alt,
@@ -3446,7 +3404,22 @@ document.addEventListener('contextmenu', function (e) {
             parentStructure: img.parentElement ? img.parentElement.tagName : 'none',
             path: getElementPath(img)
         });
+
+        // Update context menu based on whether this image has a LIF file
+        const hasLIF = imageLIFMap.has(img.src);
+        chrome.runtime.sendMessage({
+            action: "updateContextMenu",
+            hasLIF: hasLIF
+        });
+
         // Don't prevent default - let the context menu show
+    } else {
+        lastContextMenuImage = null;
+        // Reset context menu to default state when no image is found
+        chrome.runtime.sendMessage({
+            action: "updateContextMenu",
+            hasLIF: false
+        });
     }
 }, true);
 
@@ -3454,7 +3427,7 @@ document.addEventListener('contextmenu', function (e) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "convertImage") {
         // Find the image at the clicked position
-        const img = lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null;
+        const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
 
         if (img) {
             // --- GENERALIZED BUTTON APPROACH LOGIC ---
@@ -3525,8 +3498,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             tempButton.style.display = 'none';
             overlayContainer.appendChild(tempButton);
 
-            // 4. Call the conversion directly, passing the temp button and correct dimensions
+            // 4. Show conversion started notification
+            showDownloadNotification('Converting image to 3D...', 'info');
+
+            // 5. Call the conversion directly, passing the temp button and correct dimensions
             convertTo3D(img, tempButton, { width: effectiveWidth, height: effectiveHeight });
+        }
+    } else if (message.action === "downloadLIF") {
+        // Find the image at the clicked position
+        const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
+
+        if (img && imageLIFMap.has(img.src)) {
+            const lifDownloadUrl = imageLIFMap.get(img.src);
+            console.log('Downloading LIF file for image:', img.src);
+            downloadLIFFile(lifDownloadUrl, img.src);
+        } else {
+            console.warn('No LIF file available for this image');
+            showDownloadNotification('No LIF file available for this image', 'error');
         }
     }
 });
