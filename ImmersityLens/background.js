@@ -24,6 +24,13 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             clickX: info.x,
             clickY: info.y
         });
+    } else if (info.menuItemId === "enterVR") {
+        // Send message to content script to handle VR entry
+        chrome.tabs.sendMessage(tab.id, {
+            action: "enterVR",
+            clickX: info.x,
+            clickY: info.y
+        });
     }
 });
 
@@ -33,11 +40,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('Background: Updating context menu, hasLIF:', message.hasLIF);
 
         if (message.hasLIF) {
-            // Remove "Convert to 3D" and add "Download LIF"
+            // Remove "Convert to 3D" and add "Download LIF" and optionally "Enter VR"
             chrome.contextMenus.remove("convertTo3D", () => {
                 if (chrome.runtime.lastError) {
                     console.log('Background: convertTo3D menu item not found (already removed)');
                 }
+
+                // Create Download LIF menu item
                 chrome.contextMenus.create({
                     id: "downloadLIF",
                     title: "Download LIF",
@@ -48,16 +57,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     } else {
                         console.log('Background: downloadLIF menu created successfully');
                     }
-                    // Send response back to content script
-                    sendResponse({ success: true, menuType: "downloadLIF" });
                 });
+
+                // Create Enter VR menu item only if WebXR is supported
+                if (message.webXRSupported) {
+                    chrome.contextMenus.create({
+                        id: "enterVR",
+                        title: "Enter VR",
+                        contexts: ["all"]
+                    }, () => {
+                        if (chrome.runtime.lastError) {
+                            console.error('Background: Error creating enterVR menu:', chrome.runtime.lastError);
+                        } else {
+                            console.log('Background: enterVR menu created successfully');
+                        }
+                        // Send response back to content script after both menus are created
+                        sendResponse({ success: true, menuType: "lifOptionsWithVR" });
+                    });
+                } else {
+                    console.log('Background: Skipping VR menu creation - WebXR not supported');
+                    // Send response back to content script after download menu is created
+                    sendResponse({ success: true, menuType: "lifOptionsNoVR" });
+                }
             });
         } else {
-            // Remove "Download LIF" and add "Convert to 3D"
+            // Remove "Download LIF" and "Enter VR", then add "Convert to 3D"
             chrome.contextMenus.remove("downloadLIF", () => {
                 if (chrome.runtime.lastError) {
                     console.log('Background: downloadLIF menu item not found (already removed)');
                 }
+            });
+
+            chrome.contextMenus.remove("enterVR", () => {
+                if (chrome.runtime.lastError) {
+                    console.log('Background: enterVR menu item not found (already removed)');
+                }
+
                 chrome.contextMenus.create({
                     id: "convertTo3D",
                     title: "Convert to 3D",

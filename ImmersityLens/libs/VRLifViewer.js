@@ -113,8 +113,32 @@ class VRLifViewer {
         console.log('📦 Checking and injecting Three.js into page context...');
 
         return new Promise((resolve, reject) => {
-            // Direct approach: just inject Three.js since it's safe to re-inject
-            console.log('📦 Proceeding with Three.js injection...');
+            // Check if Three.js is already available in page context
+            if (window.THREE) {
+                console.log('✅ Three.js already available in page context');
+                resolve();
+                return;
+            }
+
+            // Check if Three.js script is already injected
+            const existingScript = document.querySelector('script[src*="three.min.js"]');
+            if (existingScript) {
+                console.log('⏳ Three.js script already injected, waiting for load...');
+                // Wait a bit for it to load, then check again
+                setTimeout(() => {
+                    if (window.THREE) {
+                        console.log('✅ Three.js loaded successfully');
+                        resolve();
+                    } else {
+                        console.log('📦 Three.js script found but not loaded, injecting fresh copy...');
+                        this.injectThreeJSScript(resolve, reject);
+                    }
+                }, 500);
+                return;
+            }
+
+            // Inject Three.js
+            console.log('📦 Injecting Three.js into page context...');
             this.injectThreeJSScript(resolve, reject);
         });
     }

@@ -1109,12 +1109,21 @@ async function convertTo3D(img, button, options = {}) {
                 // Proactively update context menu to "Download LIF" state
                 chrome.runtime.sendMessage({
                     action: "updateContextMenu",
-                    hasLIF: true
+                    hasLIF: true,
+                    webXRSupported: webXRSupportChecked && isWebXRSupported
                 });
-                console.log('Context menu proactively updated to Download LIF state');
+                console.log('Context menu proactively updated to Download LIF state',
+                    webXRSupportChecked && isWebXRSupported ? 'with VR support' : 'without VR support');
 
-                // Show success notification
-                showDownloadNotification('3D conversion complete! Right-click image to download LIF file.', 'success');
+                // Show success notification only once per image
+                const notificationKey = `conversion_complete_${img.src}`;
+                if (!window.lifNotificationShown || !window.lifNotificationShown.has(notificationKey)) {
+                    if (!window.lifNotificationShown) {
+                        window.lifNotificationShown = new Set();
+                    }
+                    window.lifNotificationShown.add(notificationKey);
+                    showDownloadNotification('3D conversion complete! Right-click image to download LIF file.', 'success');
+                }
             } else {
                 console.warn('Cannot store LIF file - missing lifDownloadUrl or img.src:', {
                     hasLifDownloadUrl: !!this.lifDownloadUrl,
@@ -1131,50 +1140,8 @@ async function convertTo3D(img, button, options = {}) {
             button.dataset.state = 'lif-ready';
             button.title = 'Click to download the LIF file';
 
-            // Show VR button now that LIF is ready (but only if WebXR is supported)
-            if (button.vrButton) {
-                if (webXRSupportChecked && isWebXRSupported) {
-                    console.log('🥽 Making VR button visible (LIF ready + WebXR supported)');
-                    button.vrButton.style.display = 'block';
-                    console.log('✅ VR button display style set to block');
-                } else if (webXRSupportChecked && !isWebXRSupported) {
-                    console.log('❌ VR button remains hidden - WebXR not supported');
-                    button.vrButton.style.display = 'none';
-                } else {
-                    console.log('⏳ VR button remains hidden - WebXR support test still pending');
-                    button.vrButton.style.display = 'none';
-
-                    // Check again after a short delay
-                    setTimeout(() => {
-                        if (webXRSupportChecked && isWebXRSupported) {
-                            console.log('🥽 Making VR button visible (delayed - WebXR support confirmed)');
-                            button.vrButton.style.display = 'block';
-                        }
-                    }, 1000);
-                }
-
-                // Debug VR button state
-                const vrButtonRect = button.vrButton.getBoundingClientRect();
-                console.log('🔍 VR button status:', {
-                    display: button.vrButton.style.display,
-                    visibility: window.getComputedStyle(button.vrButton).visibility,
-                    opacity: window.getComputedStyle(button.vrButton).opacity,
-                    pointerEvents: window.getComputedStyle(button.vrButton).pointerEvents,
-                    zIndex: window.getComputedStyle(button.vrButton).zIndex,
-                    position: { x: vrButtonRect.x, y: vrButtonRect.y, width: vrButtonRect.width, height: vrButtonRect.height },
-                    hasClickListener: true,
-                    parentElement: button.vrButton.parentElement?.className || 'none',
-                    className: button.vrButton.className
-                });
-
-                console.log('VR button now visible - LIF is ready');
-
-                // VR button is now visible and ready
-                // VR button is now visible and ready for use - success logging removed
-
-            } else {
-                console.error('❌ VR button not found on button object when trying to make it visible');
-            }
+            // Context menu approach: VR functionality is now available via right-click menu
+            // No need for VR button visibility management since we use context menu
 
             // Remove processing overlay - check both container and overlayContainer
             const overlay = container?.querySelector('.lif-processing-overlay');
@@ -3019,7 +2986,7 @@ function setupMessageListener() {
     }
 
     // Create the message listener function
-    messageListener = (request, sender, sendResponse) => {
+    messageListener = async (request, sender, sendResponse) => {
         console.log('Extension message received:', request.action, 'Current state:', isExtensionEnabled);
 
         if (request.action === 'toggleExtension') {
@@ -3150,21 +3117,85 @@ function setupMessageListener() {
                 });
             }
         } else if (request.action === "convertImage") {
-            // Find the image element that matches the URL
-            const images = document.querySelectorAll('img');
-            for (const img of images) {
-                if (img.src === request.imageUrl) {
-                    // Create a temporary button to use the existing conversion logic
-                    const tempButton = document.createElement('div');
-                    tempButton.className = 'lif-convert-btn';
-                    tempButton.style.position = 'absolute';
-                    tempButton.style.left = `${request.x}px`;
-                    tempButton.style.top = `${request.y}px`;
+            // Use the existing context menu image detection system
+            const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
 
-                    // Trigger the conversion using the existing logic
-                    convertTo3D(img, tempButton);
-                    break;
+            if (img) {
+                console.log('Context menu: Converting image', img.src);
+
+                // Create a temporary button to use the existing conversion logic
+                const tempButton = document.createElement('div');
+                tempButton.className = 'lif-convert-btn';
+                tempButton.style.position = 'absolute';
+                tempButton.style.left = '0px';
+                tempButton.style.top = '0px';
+                tempButton.style.display = 'none';
+
+                // Trigger the conversion using the existing logic
+                convertTo3D(img, tempButton);
+            } else {
+                console.warn('Context menu: No image found for conversion');
+            }
+        } else if (request.action === "downloadLIF") {
+            // Use the existing context menu image detection system
+            const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
+
+            if (img && imageLIFMap.has(img.src)) {
+                console.log('Context menu: Downloading LIF for image', img.src);
+                const lifUrl = imageLIFMap.get(img.src);
+                await downloadLIFFile(lifUrl, img.src, img);
+            } else {
+                console.warn('Context menu: No LIF available for image');
+            }
+        } else if (request.action === "enterVR") {
+            // Use the existing context menu image detection system
+            const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
+
+            if (img && imageLIFMap.has(img.src)) {
+                console.log('Context menu: Entering VR for image', img.src);
+
+                // Check WebXR support before proceeding
+                if (!webXRSupportChecked || !isWebXRSupported) {
+                    console.warn('VR not available - WebXR not supported');
+                    showDownloadNotification('VR not available - WebXR not supported on this device', 'error');
+                    return;
                 }
+
+                const lifUrl = imageLIFMap.get(img.src);
+
+                // Initialize VR viewer
+                try {
+                    // Check if VRLifViewer is already loaded
+                    if (window.VRLifViewer) {
+                        const vrViewer = new window.VRLifViewer();
+                        await vrViewer.init(lifUrl, null);
+                    } else {
+                        // Load VRLifViewer script dynamically
+                        const script = document.createElement('script');
+                        script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
+                        script.onload = async () => {
+                            try {
+                                const vrViewer = new VRLifViewer();
+                                await vrViewer.init(lifUrl, null);
+                                console.log('VR viewer initialized successfully');
+                            } catch (error) {
+                                console.error('Failed to initialize VR viewer:', error);
+                                showDownloadNotification('Failed to start VR: ' + error.message, 'error');
+                            }
+                        };
+                        script.onerror = () => {
+                            console.error('Failed to load VR viewer script');
+                            showDownloadNotification('Failed to load VR system', 'error');
+                        };
+                        document.head.appendChild(script);
+                    }
+                } catch (error) {
+                    console.error('Failed to start VR viewer:', error);
+                    showDownloadNotification('Failed to start VR: ' + error.message, 'error');
+                }
+            } else {
+                console.warn('Context menu: No LIF available for VR');
+                showDownloadNotification('No 3D file available for VR viewing', 'error');
             }
         }
     };
@@ -3281,6 +3312,14 @@ async function initialize() {
 
             // Test WebXR support early
             testWebXRSupport();
+
+            // Reset context menu to default state on page load/reload
+            chrome.runtime.sendMessage({
+                action: "updateContextMenu",
+                hasLIF: false,
+                webXRSupported: false
+            });
+            console.log('Context menu reset to default state on page initialization');
 
             // Start observing new images (this also prevents duplicates)
             observeNewImages();
@@ -3458,18 +3497,21 @@ document.addEventListener('contextmenu', function (e) {
             lifMapKeys: Array.from(imageLIFMap.keys())
         });
 
+        // Send context menu update immediately (don't wait for response)
         chrome.runtime.sendMessage({
             action: "updateContextMenu",
-            hasLIF: hasLIF
+            hasLIF: hasLIF,
+            webXRSupported: webXRSupportChecked && isWebXRSupported
         });
 
-        // Don't prevent default - let the context menu show
+        // Don't prevent default - let the context menu show normally
     } else {
         lastContextMenuImage = null;
         // Reset context menu to default state when no image is found
         chrome.runtime.sendMessage({
             action: "updateContextMenu",
-            hasLIF: false
+            hasLIF: false,
+            webXRSupported: false
         });
     }
 }, true);
@@ -3575,6 +3617,64 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
             console.warn('No LIF file available for this image');
             showDownloadNotification('No LIF file available for this image', 'error');
+        }
+    } else if (message.action === "enterVR") {
+        // Find the image at the clicked position
+        const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
+
+        console.log('Enter VR requested:', {
+            foundImage: !!img,
+            imageSrc: img?.src,
+            hasLIFInMap: img ? imageLIFMap.has(img.src) : false,
+            webXRSupported: webXRSupportChecked && isWebXRSupported,
+            lifMapSize: imageLIFMap.size
+        });
+
+        if (img && imageLIFMap.has(img.src)) {
+            // Check WebXR support before proceeding
+            if (!webXRSupportChecked || !isWebXRSupported) {
+                console.warn('VR not available - WebXR not supported');
+                showDownloadNotification('VR not available - WebXR not supported on this device', 'error');
+                return;
+            }
+
+            const lifDownloadUrl = imageLIFMap.get(img.src);
+            console.log('Starting VR for image:', img.src);
+            console.log('LIF URL for VR:', lifDownloadUrl);
+
+            // Initialize VR viewer
+            try {
+                // Check if VRLifViewer is already loaded
+                if (window.VRLifViewer) {
+                    const vrViewer = new window.VRLifViewer();
+                    vrViewer.init(lifDownloadUrl, null);
+                } else {
+                    // Load VRLifViewer script dynamically
+                    const script = document.createElement('script');
+                    script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
+                    script.onload = async () => {
+                        try {
+                            const vrViewer = new VRLifViewer();
+                            await vrViewer.init(lifDownloadUrl, null);
+                            console.log('VR viewer initialized successfully');
+                        } catch (error) {
+                            console.error('Failed to initialize VR viewer:', error);
+                            showDownloadNotification('Failed to start VR: ' + error.message, 'error');
+                        }
+                    };
+                    script.onerror = () => {
+                        console.error('Failed to load VR viewer script');
+                        showDownloadNotification('Failed to load VR system', 'error');
+                    };
+                    document.head.appendChild(script);
+                }
+            } catch (error) {
+                console.error('Failed to start VR viewer:', error);
+                showDownloadNotification('Failed to start VR: ' + error.message, 'error');
+            }
+        } else {
+            console.warn('No LIF file available for VR');
+            showDownloadNotification('No 3D file available for VR viewing', 'error');
         }
     }
 });

@@ -19,7 +19,6 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-        "libs/three.min.js", 
         "libs/axios.min.js", 
 
         "libs/LIF.js", 
