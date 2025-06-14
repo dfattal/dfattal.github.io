@@ -1829,9 +1829,7 @@ function analyzeLayoutPattern(element, img) {
  * @param {HTMLImageElement} img - Target image element to process
  * ============================================================================
  */
-function addConvertButton(img) {
-    return;
-}
+
 
 /**
  * ============================================================================
@@ -1888,11 +1886,11 @@ function processInstagramCarousels() {
                     console.log(`🎠 Processing carousel image ${index + 1}:`, img.src?.substring(0, 50) + '...');
 
                     if (img.complete) {
-                        addConvertButton(img);
+
                     } else {
                         img.addEventListener('load', () => {
                             try {
-                                addConvertButton(img);
+
                             } catch (error) {
                                 console.warn('Error adding convert button to carousel image:', error);
                             }
@@ -1998,7 +1996,7 @@ function processPinterestCarousels() {
 
                 if (isLoaded && isVisible) {
                     // Special handling for Pinterest carousel images
-                    addConvertButton(img);
+
 
                     if (isDebugEnabled) {
                         console.log(`🎠 Processed Pinterest carousel image ${index}: ${img.src?.substring(0, 50)}...`);
@@ -2013,7 +2011,7 @@ function processPinterestCarousels() {
                     const observer = new IntersectionObserver((entries) => {
                         entries.forEach(entry => {
                             if (entry.isIntersecting) {
-                                addConvertButton(img);
+
                                 observer.disconnect();
                                 if (isDebugEnabled) {
                                     console.log(`🎠 Pinterest carousel image ${index} became visible - processed`);
@@ -2026,7 +2024,7 @@ function processPinterestCarousels() {
                     // Image not yet loaded - wait for load
                     img.addEventListener('load', () => {
                         setTimeout(() => {
-                            addConvertButton(img);
+
                             if (isDebugEnabled) {
                                 console.log(`🎠 Pinterest carousel image ${index} loaded - processed`);
                             }
@@ -2057,7 +2055,7 @@ function processPinterestCarousels() {
         const isLoaded = img.complete && img.naturalHeight !== 0;
 
         if (isLoaded && isVisible) {
-            addConvertButton(img);
+
         }
     });
 
@@ -2679,13 +2677,13 @@ function processImages() {
                     }
 
                     // Add button directly to parent container
-                    addConvertButton(img);
+
                     return;
                 }
             }
 
             // For all other images, use standard processing
-            addConvertButton(img);
+
         } catch (error) {
             console.warn('Error processing image:', error);
         }
@@ -2821,11 +2819,11 @@ function observeNewImages() {
                         }
 
                         if (img.complete) {
-                            addConvertButton(img);
+
                         } else {
                             img.addEventListener('load', () => {
                                 try {
-                                    addConvertButton(img);
+
                                 } catch (error) {
                                     console.warn('Error adding convert button to image on load:', error);
                                 }
@@ -2944,11 +2942,11 @@ function setupScrollHandler() {
 
                             // 🔄 RE-PROCESS IMAGE - Add button after clearing stale tracking
                             if (img.complete) {
-                                addConvertButton(img);
+
                             } else {
                                 img.addEventListener('load', () => {
                                     try {
-                                        addConvertButton(img);
+
                                     } catch (error) {
                                         console.warn('Error adding convert button during scroll fix:', error);
                                     }
