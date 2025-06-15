@@ -735,12 +735,12 @@ function startPulsingAnimation(img) {
         const elapsed = Date.now() - startTime;
         const progress = (elapsed % duration) / duration;
 
-        
+
 
         try {
-            
+
             // Create shimmer effect using CSS mask animation
-            const shimmerPosition = (elapsed % duration) / duration; 
+            const shimmerPosition = (elapsed % duration) / duration;
             const maskX = 200 - (shimmerPosition * 400); // Move from -200% to 200%
 
             // Create shimmer mask - mostly transparent with small bright band
@@ -1042,109 +1042,12 @@ async function convertTo3D(img, button, options = {}) {
     processingImages.add(imgId);
 
     try {
-        // Update button state
+        // Update button state (temporary button used for context menu approach)
         button.textContent = 'Converting...';
         button.classList.add('processing');
-        button.classList.remove('lif-ready'); // Remove any previous LIF state
+        button.classList.remove('lif-ready');
         button.disabled = true;
         button.dataset.state = 'processing';
-
-        // Add processing overlay
-        let container = img.closest('.lif-image-container');
-        let overlayContainer = container;
-
-        // For picture elements with overlay approach, use the same target container as the button
-        const pictureElement = img.closest('picture');
-        if (pictureElement) {
-            console.log('Picture element found in convertTo3D, checking data attributes:', {
-                hasLifTargetWidth: !!pictureElement.dataset.lifTargetWidth,
-                hasLifTargetHeight: !!pictureElement.dataset.lifTargetHeight,
-                lifTargetWidth: pictureElement.dataset.lifTargetWidth,
-                lifTargetHeight: pictureElement.dataset.lifTargetHeight
-            });
-
-            const imageContainer = pictureElement.parentElement; // image__container
-            const imageDiv = imageContainer?.parentElement; // image div
-            const containerMedia = imageDiv?.parentElement; // container__item-media
-
-            // For picture elements, set the container to the picture's parent since they don't have .lif-image-container wrapper
-            container = imageContainer; // This will be used for LIF viewer creation
-
-            // Use the same logic as button positioning to find the best container for overlay
-            if (containerMedia && containerMedia.classList.contains('container__item-media')) {
-                overlayContainer = containerMedia;
-                if (isDebugEnabled) {
-                    console.log('Using container__item-media as overlay container');
-                }
-            } else if (imageDiv && imageDiv.classList.contains('image')) {
-                overlayContainer = imageDiv;
-                if (isDebugEnabled) {
-                    console.log('Using image div as overlay container');
-                }
-            } else {
-                overlayContainer = imageContainer;
-                if (isDebugEnabled) {
-                    console.log('Using image__container as overlay container');
-                }
-            }
-
-            console.log('Picture element detected in convertTo3D - container set to:', container?.className || 'element');
-        }
-
-        // Check for aspect ratio containers that might have stored target dimensions
-        if (!overlayContainer) {
-            // Look for aspect ratio containers in the parent hierarchy
-            let searchElement = img.parentElement;
-            for (let i = 0; i < 3 && searchElement; i++) {
-                if (searchElement.dataset.lifTargetWidth && searchElement.dataset.lifTargetHeight) {
-                    overlayContainer = searchElement;
-                    // CRITICAL FIX: Also set container to the element with stored dimensions
-                    // This ensures dimension lookup works correctly for Instagram/Shopify aspect ratio containers
-                    if (!container) {
-                        container = searchElement;
-                    }
-                    console.log('Found aspect ratio container with stored dimensions:', {
-                        element: searchElement.className || searchElement.tagName,
-                        targetWidth: searchElement.dataset.lifTargetWidth,
-                        targetHeight: searchElement.dataset.lifTargetHeight
-                    });
-                    break;
-                }
-                searchElement = searchElement.parentElement;
-            }
-        }
-
-        // Special handling for Facebook-style layouts that may have been unwrapped
-        const layoutAnalysis = analyzeLayoutPattern(img.parentElement, img);
-        if (layoutAnalysis?.isFacebookStyle && !overlayContainer) {
-            // For Facebook images that were unwrapped, find a suitable overlay container
-            let searchElement = img.parentElement;
-            for (let i = 0; i < 3 && searchElement; i++) {
-                const style = window.getComputedStyle(searchElement);
-                if (style.position === 'relative' || style.position === 'absolute') {
-                    overlayContainer = searchElement;
-                    if (isDebugEnabled) {
-                        console.log('Facebook layout: Found overlay container in parent hierarchy');
-                    }
-                    break;
-                }
-                searchElement = searchElement.parentElement;
-            }
-
-            // If still no overlay container, use the direct parent
-            if (!overlayContainer) {
-                overlayContainer = img.parentElement;
-                if (isDebugEnabled) {
-                    console.log('Facebook layout: Using direct parent as overlay container');
-                }
-
-                // Ensure it can contain positioned elements
-                const parentStyle = window.getComputedStyle(overlayContainer);
-                if (parentStyle.position === 'static') {
-                    overlayContainer.style.position = 'relative';
-                }
-            }
-        }
 
         // Apply processing effect directly to image - purple glow + darker opacity
         applyProcessingEffect(img);
@@ -1255,98 +1158,29 @@ async function convertTo3D(img, button, options = {}) {
             // Remove processing effect and restore original image
             removeProcessingEffect(img);
 
-            // Create the LIF viewer with effective dimensions
-            // For padding-based layouts, prioritize container dimensions over image dimensions
-            const containerRect = container?.getBoundingClientRect();
-            const containerStyle = container ? window.getComputedStyle(container) : null;
-            const isAbsolutelyPositioned = containerStyle?.position === 'absolute';
-
+            // Simple dimension handling for context menu approach
             let effectiveWidth, effectiveHeight;
 
-            // Check if we have stored target dimensions (from picture element handling)
-            if (container?.dataset.lifTargetWidth && container?.dataset.lifTargetHeight) {
-                effectiveWidth = parseInt(container.dataset.lifTargetWidth);
-                effectiveHeight = parseInt(container.dataset.lifTargetHeight);
-                console.log(`Using container stored dimensions: ${effectiveWidth}x${effectiveHeight}`);
-            }
-            // Check for picture element dimensions (overlay approach)
-            else if (img.closest('picture')?.dataset.lifTargetWidth && img.closest('picture')?.dataset.lifTargetHeight) {
-                const pictureElement = img.closest('picture');
-                effectiveWidth = parseInt(pictureElement.dataset.lifTargetWidth);
-                effectiveHeight = parseInt(pictureElement.dataset.lifTargetHeight);
-                console.log(`Using picture element stored dimensions: ${effectiveWidth}x${effectiveHeight}`);
-            }
-            // Check for aspect ratio container stored dimensions in parent hierarchy (Instagram, Shopify, etc.)
-            else {
-                let foundStoredDimensions = false;
-                let searchElement = img.parentElement;
-                for (let i = 0; i < 3 && searchElement && !foundStoredDimensions; i++) {
-                    if (searchElement.dataset.lifTargetWidth && searchElement.dataset.lifTargetHeight) {
-                        effectiveWidth = parseInt(searchElement.dataset.lifTargetWidth);
-                        effectiveHeight = parseInt(searchElement.dataset.lifTargetHeight);
-                        foundStoredDimensions = true;
-                        console.log(`Using aspect ratio container stored dimensions: ${effectiveWidth}x${effectiveHeight} from`, searchElement.className || searchElement.tagName);
-                        break;
-                    }
-                    searchElement = searchElement.parentElement;
-                }
-
-                if (!foundStoredDimensions) {
-                    // Continue with existing fallback logic
-                    if (isAbsolutelyPositioned && containerRect && containerRect.width > 0 && containerRect.height > 0) {
-                        // For padding-based layouts (absolute positioned containers), use container dimensions
-                        effectiveWidth = Math.round(containerRect.width);
-                        effectiveHeight = Math.round(containerRect.height);
-                        console.log(`Using container rect dimensions: ${effectiveWidth}x${effectiveHeight}`);
-                    } else {
-                        // For standard layouts, use image dimensions
-                        const originalWidth = img.width || img.naturalWidth;
-                        const originalHeight = img.height || img.naturalHeight;
-
-                        effectiveWidth = originalWidth;
-                        effectiveHeight = originalHeight;
-                        console.log(`Using original image dimensions: ${effectiveWidth}x${effectiveHeight}`);
-
-                        if (originalWidth === 0 || originalHeight === 0) {
-                            // Fallback to container if image dimensions are problematic
-                            if (containerRect && containerRect.width > 0 && containerRect.height > 0) {
-                                effectiveWidth = Math.round(containerRect.width);
-                                effectiveHeight = Math.round(containerRect.height);
-                                console.log(`Fallback to container rect dimensions: ${effectiveWidth}x${effectiveHeight}`);
-                            } else {
-                                // Last resort: use natural dimensions or reasonable defaults
-                                effectiveWidth = img.naturalWidth || 400;
-                                effectiveHeight = img.naturalHeight || 300;
-                                console.log(`Last resort dimensions: ${effectiveWidth}x${effectiveHeight}`);
-                            }
-                        }
-                    }
-                }
-            }
-
-            console.log(`Creating LIF viewer for image: ${effectiveWidth}x${effectiveHeight}`);
-
-            // For picture elements with overlay approach, use the picture's parent as the container
-            let lifContainer = container;
-            console.log('🔍 Container selection debug:');
-            console.log('   Original container:', container);
-            console.log('   Picture element:', img.closest('picture'));
-            console.log('   Picture has lifTargetWidth:', img.closest('picture')?.dataset.lifTargetWidth);
-
-            if (img.closest('picture') && img.closest('picture').dataset.lifTargetWidth) {
-                lifContainer = img.closest('picture').parentElement;
-                console.log('🚨 CHANGED to picture parent as LIF container for overlay approach');
-                console.log('   Picture parent container:', lifContainer);
+            if (options.width && options.height) {
+                // Use dimensions from context menu handler (preferred)
+                effectiveWidth = options.width;
+                effectiveHeight = options.height;
+                console.log(`Using context menu dimensions: ${effectiveWidth}x${effectiveHeight}`);
             } else {
-                // Using original container for LIF viewer - logging removed
+                // Fallback to image dimensions
+                effectiveWidth = img.width || img.naturalWidth || 400;
+                effectiveHeight = img.height || img.naturalHeight || 300;
+                console.log(`Fallback to image dimensions: ${effectiveWidth}x${effectiveHeight}`);
             }
 
             // Use the enhanced factory method for layout-aware viewer creation
+            const finalLayoutAnalysis = options.layoutAnalysis || analyzeLayoutPattern(img.parentElement, img);
+
             const viewer = lifViewer.createForLayout(
                 this.lifDownloadUrl,
-                lifContainer || img.parentElement,
+                img.parentElement, // Simple container - just use image parent
                 img,
-                layoutAnalysis,
+                finalLayoutAnalysis,
                 {
                     width: effectiveWidth,
                     height: effectiveHeight,
@@ -1382,9 +1216,7 @@ async function convertTo3D(img, button, options = {}) {
                 }
 
                 // Add a visual indicator that the LIF is ready
-                if (lifContainer) {
-                    lifContainer.setAttribute('data-lif-active', 'true');
-                }
+                img.setAttribute('data-lif-active', 'true');
 
                 console.log(`Enhanced LIF viewer initialized with layout mode: ${this.layoutMode}`);
                 console.log('All layout-specific setup handled automatically by lifViewer');
@@ -3484,8 +3316,23 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             if (shouldUseOverlayApproach) {
                 const imgRect = img.getBoundingClientRect();
                 const containerRect = targetElement.getBoundingClientRect();
-                effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
-                effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+
+                // LinkedIn-specific fix: Use image dimensions for centered/aspect-fill images
+                if (window.location.hostname.includes('linkedin.com') &&
+                    (img.classList.contains('ivm-view-attr__img--centered') ||
+                        img.classList.contains('ivm-view-attr__img--aspect-fit') ||
+                        img.classList.contains('ivm-view-attr__img--aspect-fill'))) {
+
+                    // Use the image's actual rendered dimensions, not the container
+                    effectiveWidth = img.width || img.naturalWidth;
+                    effectiveHeight = img.height || img.naturalHeight;
+                    console.log('🎯 LinkedIn centered image - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                } else {
+                    // Default behavior for other sites
+                    effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
+                    effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+                }
+
                 targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
                 targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
                 overlayContainer = targetElement;
@@ -3507,8 +3354,12 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             tempButton.style.display = 'none';
             overlayContainer.appendChild(tempButton);
 
-            // 4. Call the conversion directly, passing the temp button and correct dimensions
-            convertTo3D(img, tempButton, { width: effectiveWidth, height: effectiveHeight });
+            // 4. Call the conversion directly, passing the temp button, correct dimensions, and layout analysis
+            convertTo3D(img, tempButton, {
+                width: effectiveWidth,
+                height: effectiveHeight,
+                layoutAnalysis: layoutAnalysis
+            });
         }
     } else if (message.action === "downloadLIF") {
         // Find the image at the clicked position

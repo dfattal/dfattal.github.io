@@ -796,7 +796,8 @@ class lifViewer {
         let centeredImageInfo = null;
         if (window.location.hostname.includes('linkedin.com') &&
             (originalImage.classList.contains('ivm-view-attr__img--centered') ||
-                originalImage.classList.contains('ivm-view-attr__img--aspect-fit'))) {
+                originalImage.classList.contains('ivm-view-attr__img--aspect-fit') ||
+                originalImage.classList.contains('ivm-view-attr__img--aspect-fill'))) {
 
             centeredImageInfo = lifViewer.calculateLinkedInCenteredImageDimensions(originalImage, container);
             if (centeredImageInfo) {
@@ -868,17 +869,28 @@ class lifViewer {
             const containerHeight = containerRect.height;
             const containerAspectRatio = containerWidth / containerHeight;
 
-            // Calculate how LinkedIn's object-fit: contain would size the image
+            // Check if image uses aspect-fill (object-fit: cover) behavior
+            const isAspectFill = image.classList.contains('ivm-view-attr__img--aspect-fill');
+
             let renderedWidth, renderedHeight;
 
-            if (naturalAspectRatio > containerAspectRatio) {
-                // Image is wider - fit to container width
-                renderedWidth = containerWidth;
-                renderedHeight = containerWidth / naturalAspectRatio;
+            if (isAspectFill) {
+                // For aspect-fill: use the image's HTML width/height attributes or natural dimensions
+                // This matches how LinkedIn displays the image
+                renderedWidth = image.width || naturalWidth;
+                renderedHeight = image.height || naturalHeight;
+                console.log('🎯 LinkedIn aspect-fill detected, using image dimensions:', renderedWidth + 'x' + renderedHeight);
             } else {
-                // Image is taller - fit to container height  
-                renderedHeight = containerHeight;
-                renderedWidth = containerHeight * naturalAspectRatio;
+                // Calculate how LinkedIn's object-fit: contain would size the image
+                if (naturalAspectRatio > containerAspectRatio) {
+                    // Image is wider - fit to container width
+                    renderedWidth = containerWidth;
+                    renderedHeight = containerWidth / naturalAspectRatio;
+                } else {
+                    // Image is taller - fit to container height  
+                    renderedHeight = containerHeight;
+                    renderedWidth = containerHeight * naturalAspectRatio;
+                }
             }
 
             // Calculate centering offsets
