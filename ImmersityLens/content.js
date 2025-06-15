@@ -371,6 +371,30 @@ function injectStyles() {
             100% { transform: rotate(360deg); }
         }
         
+        img.lif-processing-glow {
+            animation: lifGlow 1.2s infinite alternate ease-in-out !important;
+            animation-fill-mode: both !important;
+            animation-play-state: running !important;
+        }
+        
+        @keyframes lifGlow {
+            0% {
+                opacity: 0.6 !important;
+                outline-color: rgba(192, 128, 255, 0.6) !important;
+                filter: sepia(100%) hue-rotate(260deg) saturate(120%) brightness(0.8) !important;
+            }
+            50% {
+                opacity: 0.9 !important;
+                outline-color: rgba(255, 255, 255, 0.9) !important;
+                filter: sepia(100%) hue-rotate(280deg) saturate(180%) brightness(1.2) !important;
+            }
+            100% {
+                opacity: 0.75 !important;
+                outline-color: rgba(192, 128, 255, 1) !important;
+                filter: sepia(100%) hue-rotate(270deg) saturate(150%) brightness(1) !important;
+            }
+        }
+        
         .lif-vr-btn {
             position: absolute;
             top: 8px;
@@ -650,92 +674,157 @@ async function downloadLIFFile(lifDownloadUrl, originalImageSrc, imgElement = nu
     }
 }
 
-// Function to create processing overlay similar to canvas pattern - clean DOM insertion
-function createProcessingOverlay(img) {
+// Function to apply processing effect directly to image - purple glow + darker opacity
+function applyProcessingEffect(img) {
     try {
-        // Create overlay element
-        const overlay = document.createElement('div');
-        overlay.className = 'lif-processing-overlay';
-        overlay.innerHTML = '<div class="lif-spinner"></div>Converting to 3D...';
+        console.log('LIF: Applying processing effect to image:', img.src);
 
-        // Get image position and dimensions for overlay positioning
-        const imgRect = img.getBoundingClientRect();
+        // Store original styles for restoration
+        img.dataset.lifOriginalOpacity = img.style.opacity || '';
+        img.dataset.lifOriginalFilter = img.style.filter || '';
+        img.dataset.lifOriginalBorderRadius = img.style.borderRadius || '';
+        img.dataset.lifOriginalBoxShadow = img.style.boxShadow || '';
+        img.dataset.lifOriginalTransition = img.style.transition || '';
+        img.dataset.lifOriginalMaskImage = img.style.maskImage || img.style.webkitMaskImage || '';
+        img.dataset.lifOriginalMaskSize = img.style.maskSize || img.style.webkitMaskSize || '';
+        img.dataset.lifOriginalMaskPosition = img.style.maskPosition || img.style.webkitMaskPosition || '';
 
-        // Position overlay to cover the image exactly - fixed positioning relative to viewport
-        overlay.style.cssText = `
-            position: fixed;
-            top: ${imgRect.top}px;
-            left: ${imgRect.left}px;
-            width: ${imgRect.width}px;
-            height: ${imgRect.height}px;
-            background: rgba(0,0,0,0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 14px;
-            font-weight: 500;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            z-index: ${Z_INDEX_CONFIG.PROCESSING_OVERLAY};
-            border-radius: 8px;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        `;
 
-        // Add to body (like canvas pattern) - no DOM modification of existing containers
-        document.body.appendChild(overlay);
+        // Mark as processing FIRST
+        img.dataset.lifProcessing = 'true';
 
-        // Store reference to image for cleanup
-        overlay.dataset.lifImageSrc = img.src;
+        // Apply base processing effect - subtle brightness/contrast enhancement
+        img.style.setProperty('filter', 'contrast(1.15) brightness(1.1)', 'important');
+        img.style.setProperty('opacity', '0.95', 'important');
+        img.style.setProperty('border-radius', '8px', 'important');
 
-        // Handle window resize/scroll to keep overlay positioned correctly
-        const updateOverlayPosition = () => {
-            const currentImgRect = img.getBoundingClientRect();
-            overlay.style.top = `${currentImgRect.top}px`;
-            overlay.style.left = `${currentImgRect.left}px`;
-            overlay.style.width = `${currentImgRect.width}px`;
-            overlay.style.height = `${currentImgRect.height}px`;
-        };
+        // Initial subtle outer glow effect
+        const initialGlow = '0 0 15px 3px rgba(192, 128, 255, 0.5)';
+        const initialRim = '0 0 0 1px rgba(192, 128, 255, 0.8)';
+        img.style.setProperty('box-shadow', `${initialGlow}, ${initialRim}`, 'important');
 
-        window.addEventListener('scroll', updateOverlayPosition, { passive: true });
-        window.addEventListener('resize', updateOverlayPosition, { passive: true });
+        // Add glowing class for identification
+        img.classList.add('lif-processing-glow');
 
-        // Store cleanup function
-        overlay._cleanup = () => {
-            window.removeEventListener('scroll', updateOverlayPosition);
-            window.removeEventListener('resize', updateOverlayPosition);
-        };
+        // Start JavaScript-based subtle glow animation immediately
+        console.log('LIF: About to start subtle glow animation...');
+        startPulsingAnimation(img);
 
-        if (isDebugEnabled) {
-            console.log(`Created processing overlay at ${imgRect.left},${imgRect.top} with size ${imgRect.width}x${imgRect.height}`);
-        }
-
-        return overlay;
+        console.log('LIF: Processing effect applied successfully');
+        return true;
     } catch (error) {
-        console.error('Error creating processing overlay:', error);
-        return null;
+        console.error('LIF: Error applying processing effect:', error);
+        return false;
     }
 }
 
-// Function to remove processing overlay
-function removeProcessingOverlay(img) {
-    try {
-        // Find overlay by image source
-        const overlay = document.querySelector(`.lif-processing-overlay[data-lif-image-src="${img.src}"]`);
-        if (overlay) {
-            // Call cleanup function if it exists
-            if (overlay._cleanup) {
-                overlay._cleanup();
-            }
-            overlay.remove();
-            img.removeAttribute('data-lif-processing-overlay');
+// JavaScript-based subtle glowing animation (slowly pulsing inward rim)
+function startPulsingAnimation(img) {
+    console.log('LIF: Starting subtle glow animation for', img.src);
+    let startTime = Date.now();
+    const duration = 3000; // Slower cycle - 4 seconds
+    let frameCount = 0;
 
-            if (isDebugEnabled) {
-                console.log('Removed processing overlay for image:', img.src);
-            }
+    function animate() {
+        if (!img.dataset.lifProcessing) {
+            console.log('LIF: Animation stopped - processing complete');
+            return; // Stop if processing is done
         }
+
+        frameCount++;
+        const elapsed = Date.now() - startTime;
+        const progress = (elapsed % duration) / duration;
+
+        
+
+        try {
+            
+            // Create shimmer effect using CSS mask animation
+            const shimmerPosition = (elapsed % duration) / duration; 
+            const maskX = 200 - (shimmerPosition * 400); // Move from -200% to 200%
+
+            // Create shimmer mask - mostly transparent with small bright band
+            const shimmerMask = `linear-gradient(120deg, 
+                rgba(255,255,255,1.0) 0%, 
+                rgba(255,255,255,1.0) ${maskX - 20}%, 
+                rgba(255,255,255,0.5) ${maskX}%, 
+                rgba(255,255,255,1.0) ${maskX + 20}%, 
+                rgba(255,255,255,1.0) 100%)`;
+
+            // Apply shimmer mask with animated position
+            img.style.setProperty('-webkit-mask-image', shimmerMask, 'important');
+            img.style.setProperty('mask-image', shimmerMask, 'important');
+            img.style.setProperty('-webkit-mask-size', '200% 100%', 'important');
+            img.style.setProperty('mask-size', '200% 100%', 'important');
+            img.style.setProperty('-webkit-mask-position', `${maskX}% 0`, 'important');
+            img.style.setProperty('mask-position', `${maskX}% 0`, 'important');
+
+        } catch (error) {
+            console.error('LIF: Animation error:', error);
+        }
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+}
+
+/* 
+🎨 ALTERNATIVE PROCESSING EFFECT IDEAS FOR FUTURE REFERENCE:
+
+// Option 1: Pulsing Brightness with Hue Shift
+filter: brightness(0.8) hue-rotate(270deg) saturate(150%);
+animation: brightness 2s infinite alternate;
+
+// Option 2: Grayscale to Purple Transform  
+filter: grayscale(100%);
+animation: colorShift 1.5s infinite alternate;
+
+// Option 3: Opacity Waves with Color Temperature
+animation: temperatureWave 2s infinite ease-in-out;
+
+// Option 4: Scale + Filter Combo (if container allows)
+animation: pulseScale 1.8s infinite alternate;
+
+// Option 5: Contrast + Saturation Pulse
+filter: contrast(120%) saturate(180%) hue-rotate(260deg);
+*/
+
+// Function to remove processing effect and restore original image styles
+function removeProcessingEffect(img) {
+    try {
+        console.log('LIF: Removing processing effect from image:', img.src);
+
+        // Remove glow class
+        img.classList.remove('lif-processing-glow');
+
+        // Restore original styles
+        img.style.opacity = img.dataset.lifOriginalOpacity || '';
+        img.style.filter = img.dataset.lifOriginalFilter || '';
+        img.style.borderRadius = img.dataset.lifOriginalBorderRadius || '';
+        img.style.boxShadow = img.dataset.lifOriginalBoxShadow || '';
+        img.style.transition = img.dataset.lifOriginalTransition || '';
+        img.style.maskImage = img.dataset.lifOriginalMaskImage || '';
+        img.style.webkitMaskImage = img.dataset.lifOriginalMaskImage || '';
+        img.style.maskSize = img.dataset.lifOriginalMaskSize || '';
+        img.style.webkitMaskSize = img.dataset.lifOriginalMaskSize || '';
+        img.style.maskPosition = img.dataset.lifOriginalMaskPosition || '';
+        img.style.webkitMaskPosition = img.dataset.lifOriginalMaskPosition || '';
+
+        // Clean up data attributes
+        delete img.dataset.lifOriginalOpacity;
+        delete img.dataset.lifOriginalFilter;
+        delete img.dataset.lifOriginalBorderRadius;
+        delete img.dataset.lifOriginalBoxShadow;
+        delete img.dataset.lifOriginalTransition;
+        delete img.dataset.lifOriginalMaskImage;
+        delete img.dataset.lifOriginalMaskSize;
+        delete img.dataset.lifOriginalMaskPosition;
+
+        delete img.dataset.lifProcessing;
+
+        console.log('LIF: Processing effect removed successfully');
     } catch (error) {
-        console.error('Error removing processing overlay:', error);
+        console.error('LIF: Error removing processing effect:', error);
     }
 }
 
@@ -1057,12 +1146,8 @@ async function convertTo3D(img, button, options = {}) {
             }
         }
 
-        // Create processing overlay similar to canvas pattern - clean DOM insertion
-        const overlay = createProcessingOverlay(img);
-        if (overlay) {
-            // Store reference for cleanup
-            img.dataset.lifProcessingOverlay = 'true';
-        }
+        // Apply processing effect directly to image - purple glow + darker opacity
+        applyProcessingEffect(img);
 
         console.log('Starting 2D to 3D conversion for image:', img.src);
 
@@ -1167,8 +1252,8 @@ async function convertTo3D(img, button, options = {}) {
             // Context menu approach: VR functionality is now available via right-click menu
             // No need for VR button visibility management since we use context menu
 
-            // Remove processing overlay using clean removal function
-            removeProcessingOverlay(img);
+            // Remove processing effect and restore original image
+            removeProcessingEffect(img);
 
             // Create the LIF viewer with effective dimensions
             // For padding-based layouts, prioritize container dimensions over image dimensions
@@ -1324,8 +1409,8 @@ async function convertTo3D(img, button, options = {}) {
             console.log('Temporary button removed due to conversion error');
         }
 
-        // Remove processing overlay using clean removal function
-        removeProcessingOverlay(img);
+        // Remove processing effect and restore original image
+        removeProcessingEffect(img);
 
         // Provide specific error messages based on error type
         let errorMessage = 'Failed to convert image to 3D. ';
