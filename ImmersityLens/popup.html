@@ -252,6 +252,38 @@
                 content: '..';
             }
         }
+
+        .how-to-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .how-to-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #495057;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .step-text {
+            line-height: 1.3;
+        }
     </style>
 </head>
 
@@ -263,23 +295,13 @@
 
     <div class="content">
         <div class="status-section">
-            <div class="status-item disabled" id="extensionStatus">
-                <span class="status-label">Extension</span>
-                <span class="status-value" id="status">Disabled</span>
-            </div>
-            <div class="status-item checking" id="xrStatusContainer">
+            <div class="status-item enabled" id="xrStatusContainer">
                 <span class="status-label">WebXR Support</span>
                 <span class="status-value" id="xrStatus">Checking</span>
             </div>
         </div>
 
         <div class="controls-section">
-            <div class="control-group">
-                <button id="toggleBtn" class="toggle-btn primary">
-                    <span>🔌</span>
-                    <span>Enable Extension</span>
-                </button>
-            </div>
             <div class="control-group">
                 <button id="debugToggle" class="toggle-btn secondary">
                     <span>🐛</span>
@@ -289,23 +311,19 @@
         </div>
 
         <div class="features-section">
-            <div class="features-title">Features</div>
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <span class="feature-icon">🎯</span>
-                    <span>Auto-detect images</span>
+            <div class="features-title">How to use</div>
+            <div class="how-to-steps">
+                <div class="how-to-step">
+                    <span class="step-number">1</span>
+                    <span class="step-text">Right-click any image</span>
                 </div>
-                <div class="feature-item">
-                    <span class="feature-icon">🎨</span>
-                    <span>AI conversion</span>
+                <div class="how-to-step">
+                    <span class="step-number">2</span>
+                    <span class="step-text">Select "Convert to 3D"</span>
                 </div>
-                <div class="feature-item">
-                    <span class="feature-icon">🖱️</span>
-                    <span>Interactive 3D</span>
-                </div>
-                <div class="feature-item">
-                    <span class="feature-icon">🥽</span>
-                    <span>VR/XR ready</span>
+                <div class="how-to-step">
+                    <span class="step-number">3</span>
+                    <span class="step-text">Download LIF or view in XR</span>
                 </div>
             </div>
         </div>

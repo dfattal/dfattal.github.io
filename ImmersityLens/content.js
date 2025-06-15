@@ -111,7 +111,7 @@
  */
 
 // Global state for the extension
-let isExtensionEnabled = false; // Default to disabled - user must explicitly enable
+let isExtensionEnabled = true; // Always enabled - context menu approach is non-invasive
 let isDebugEnabled = false; // Default to disabled - user must explicitly enable debug mode
 let processingImages = new Set(); // Track which images are being processed
 let hasShownCorsInfo = false; // Track if we've shown CORS info to user
@@ -131,10 +131,9 @@ let isWebXRSupported = false;
 let webXRSupportChecked = false;
 
 // Flag to control console logging (avoid noise when extension is disabled)
-let shouldLog = false;
+let shouldLog = true; // Always log since extension is always enabled
 
 // Storage keys for extension state
-const STORAGE_KEY = 'lifExtensionEnabled';
 const DEBUG_STORAGE_KEY = 'lifDebugEnabled';
 const CORS_INFO_SHOWN_KEY = 'lifCorsInfoShown';
 
@@ -149,12 +148,6 @@ const Z_INDEX_CONFIG = {
 
 // 🥽 WEBXR SUPPORT TEST - Inject script file into page context
 function testWebXRSupport() {
-    // Only test WebXR if extension is enabled
-    if (!isExtensionEnabled) {
-        console.log('🔍 WebXR support test skipped - extension disabled');
-        return;
-    }
-
     console.log('🔍 Testing WebXR support by injecting test script into page context...');
 
     // Set a timeout fallback in case the WebXR test script doesn't respond
@@ -2411,8 +2404,6 @@ function cleanupDuplicateButtons() {
 // Function to process all images on the page
 // 🔄 INITIAL IMAGE PROCESSING - Processes all existing images when extension enables
 function processImages() {
-    if (!isExtensionEnabled) return;
-
     // Find all images that haven't been processed yet
     const images = document.querySelectorAll('img:not([data-lif-button-added])');
 
@@ -2471,8 +2462,6 @@ function observeNewImages() {
     // Tracks both removed and added DOM nodes to maintain button consistency
     // through complex DOM manipulations (Facebook, Instagram, Pinterest)
     mutationObserver = new MutationObserver((mutations) => {
-        if (!isExtensionEnabled) return;
-
         // Collect images for batch processing to improve performance
         const imagesToCheck = new Set();
 
@@ -2630,8 +2619,6 @@ function setupScrollHandler() {
 
     let scrollTimeout;
     scrollHandler = () => {
-        if (!isExtensionEnabled) return;
-
         // 🕐 DEBOUNCED PROCESSING - Wait for scroll completion to avoid excessive processing
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
@@ -2737,30 +2724,25 @@ function setupScrollHandler() {
 // Function to load extension state from storage
 async function loadExtensionState() {
     try {
-        const result = await chrome.storage.local.get([STORAGE_KEY, DEBUG_STORAGE_KEY]);
-        isExtensionEnabled = result[STORAGE_KEY] !== undefined ? result[STORAGE_KEY] : false;
+        const result = await chrome.storage.local.get([DEBUG_STORAGE_KEY]);
         isDebugEnabled = result[DEBUG_STORAGE_KEY] !== undefined ? result[DEBUG_STORAGE_KEY] : false;
-        shouldLog = isExtensionEnabled; // Set logging based on enabled state
+        shouldLog = true; // Set logging based on enabled state
 
         if (shouldLog) {
-            console.log('Loaded extension state:', isExtensionEnabled ? 'enabled' : 'disabled');
             console.log('Debug mode:', isDebugEnabled ? 'enabled' : 'disabled');
+            console.log('Extension is always enabled (context menu approach)');
+        }
+
+        // Clean up old storage key that's no longer needed
+        try {
+            await chrome.storage.local.remove('lifExtensionEnabled');
+        } catch (error) {
+            // Ignore cleanup errors
         }
     } catch (error) {
         console.error('Error loading extension state:', error);
-        isExtensionEnabled = false; // Default to disabled on error
-        isDebugEnabled = false;
+        isDebugEnabled = false; // Default to disabled on error
         shouldLog = false;
-    }
-}
-
-// Function to save extension state to storage
-async function saveExtensionState() {
-    try {
-        await chrome.storage.local.set({ [STORAGE_KEY]: isExtensionEnabled });
-        console.log('Saved extension state:', isExtensionEnabled ? 'enabled' : 'disabled');
-    } catch (error) {
-        console.error('Error saving extension state:', error);
     }
 }
 
@@ -2786,68 +2768,9 @@ function setupMessageListener() {
 
     // Create the message listener function
     messageListener = async (request, sender, sendResponse) => {
-        console.log('Extension message received:', request.action, 'Current state:', isExtensionEnabled);
+        console.log('Extension message received:', request.action);
 
-        if (request.action === 'toggleExtension') {
-            const wasEnabled = isExtensionEnabled;
-            isExtensionEnabled = !isExtensionEnabled;
-            shouldLog = isExtensionEnabled; // Update logging flag
-
-            console.log(`Extension state changing from ${wasEnabled} to ${isExtensionEnabled}`);
-
-            // Save the new state
-            saveExtensionState();
-
-            if (isExtensionEnabled) {
-                // Extension was enabled - perform full initialization
-                console.log('Extension enabled - performing full initialization');
-
-                // Inject CSS styles
-                injectStyles();
-
-                // Test WebXR support
-                testWebXRSupport();
-
-                // Note: Button-based image processing disabled - using context menu approach
-                // observeNewImages(); // Disabled for context menu approach
-
-                // Note: Scroll handler disabled - not needed for context menu approach
-                // setupScrollHandler(); // Disabled for context menu approach
-
-                // Note: Instagram carousel listeners disabled - not needed for context menu approach
-                // setupInstagramCarouselListeners(); // Disabled for context menu approach
-
-                // COMMENTED OUT: Flickr-specific theater mode handling
-                // TODO: Generalize overlay and theater mode detection
-                // if (window.location.hostname.includes('flickr.com')) {
-                //     const currentPath = window.location.pathname;
-                //     const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
-                //     if (isTheaterModeURL) {
-                //         // Flickr theater mode setup logic...
-                //         setupFlickrOverlayCleanup();
-                //     }
-                //     setupFlickrTheaterModeMonitoring();
-                // }
-
-                // Note: Button-based processing disabled - using context menu approach
-                console.log('Extension enabled - context menu approach active');
-            } else {
-                // Extension was disabled - reload page for clean state
-                console.log('Extension disabled - reloading page for clean state');
-
-                // Send response before reloading
-                sendResponse({ enabled: isExtensionEnabled });
-
-                // Small delay to ensure response is sent, then reload
-                setTimeout(() => {
-                    location.reload();
-                }, 100);
-
-                return; // Exit early since we're reloading
-            }
-
-            sendResponse({ enabled: isExtensionEnabled });
-        } else if (request.action === 'toggleDebug') {
+        if (request.action === 'toggleDebug') {
             isDebugEnabled = !isDebugEnabled;
 
             // Save the new debug state
@@ -2856,35 +2779,24 @@ function setupMessageListener() {
             console.log(`Debug mode ${isDebugEnabled ? 'enabled' : 'disabled'}`);
             sendResponse({ debugEnabled: isDebugEnabled });
         } else if (request.action === 'getStatus') {
-            console.log('Status requested, responding with:', isExtensionEnabled);
-            sendResponse({ enabled: isExtensionEnabled });
+            console.log('Status requested, responding with: enabled (always)');
+            sendResponse({ enabled: true });
         } else if (request.action === 'getXRStatus') {
-            // Only provide XR status if extension is enabled
-            if (isExtensionEnabled) {
-                const reason = window.webXRSupportReason ||
-                    (isWebXRSupported ? 'WebXR immersive-vr supported' :
-                        (webXRSupportChecked ? 'WebXR not supported on this device' : 'WebXR support check in progress'));
+            const reason = window.webXRSupportReason ||
+                (isWebXRSupported ? 'WebXR immersive-vr supported' :
+                    (webXRSupportChecked ? 'WebXR not supported on this device' : 'WebXR support check in progress'));
 
-                console.log('XR status requested, responding with:', {
-                    supported: isWebXRSupported,
-                    checked: webXRSupportChecked,
-                    reason: reason
-                });
+            console.log('XR status requested, responding with:', {
+                supported: isWebXRSupported,
+                checked: webXRSupportChecked,
+                reason: reason
+            });
 
-                sendResponse({
-                    supported: isWebXRSupported,
-                    checked: webXRSupportChecked,
-                    reason: reason
-                });
-            } else {
-                // Extension is disabled, return disabled status
-                console.log('XR status requested but extension is disabled');
-                sendResponse({
-                    supported: false,
-                    checked: true,
-                    reason: 'Extension is disabled'
-                });
-            }
+            sendResponse({
+                supported: isWebXRSupported,
+                checked: webXRSupportChecked,
+                reason: reason
+            });
         } else if (request.action === "convertImage") {
             // This old convertImage handler is disabled - conversion is now handled by the newer
             // message listener that includes proper layout analysis and container detection
@@ -2988,9 +2900,7 @@ async function initialize() {
     // Prevent duplicate initialization
     if (isExtensionInitialized) {
         // Only log if we should be logging
-        if (shouldLog) {
-            console.log('Extension already initialized, skipping duplicate initialization');
-        }
+        console.log('Extension already initialized, skipping duplicate initialization');
         return;
     }
 
@@ -3001,137 +2911,98 @@ async function initialize() {
     cleanupExtension();
 
     try {
-        // Load saved state first - this is essential regardless of enabled state
+        // Load saved debug state
         await loadExtensionState();
 
-        // Set up message listener for popup communication - needed for enable/disable functionality
+        // Set up message listener for popup communication
         setupMessageListener();
 
-        // Only proceed with full initialization if extension is enabled
-        if (isExtensionEnabled) {
-            console.log('Initializing 2D to 3D Image Converter...');
+        // Extension is always enabled - perform full initialization
+        console.log('Initializing 2D to 3D Image Converter...');
 
-            // Add helpful CORS information for developers
-            console.log(`ImmersityLens Chrome Extension - FULLY FUNCTIONAL ✅`);
+        // Add helpful CORS information for developers
+        console.log(`ImmersityLens Chrome Extension - FULLY FUNCTIONAL ✅`);
 
-            // Inject CSS styles
-            injectStyles();
+        // Inject CSS styles
+        injectStyles();
 
-            // Test WebXR support early
-            testWebXRSupport();
+        // Test WebXR support early
+        testWebXRSupport();
 
-            // Pre-load VR system if WebXR is supported (inject once at initialization)
-            setTimeout(async () => {
-                if (webXRSupportChecked && isWebXRSupported) {
-                    console.log('🥽 WebXR supported - pre-loading VR system...');
-                    try {
-                        // Check if VRLifViewer is already loaded
-                        if (!window.VRLifViewer) {
-                            // Load VRLifViewer script once during initialization
-                            const script = document.createElement('script');
-                            script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
-                            script.onload = () => {
-                                console.log('✅ VR system pre-loaded successfully');
-                            };
-                            script.onerror = () => {
-                                console.error('❌ Failed to pre-load VR system');
-                            };
-                            document.head.appendChild(script);
-                        } else {
-                            console.log('✅ VR system already loaded');
-                        }
-                    } catch (error) {
-                        console.error('❌ Error pre-loading VR system:', error);
-                    }
-                }
-            }, 1000); // Wait for WebXR test to complete
-
-            // Reset context menu to default state on page load/reload
-            chrome.runtime.sendMessage({
-                action: "updateContextMenu",
-                hasLIF: false,
-                webXRSupported: false
-            });
-            console.log('Context menu reset to default state on page initialization');
-
-            // Start observing new images (this also prevents duplicates)
-            // observeNewImages(); // Disabled for context menu approach
-
-            // Set up scroll handler for dynamic content re-processing
-            // setupScrollHandler(); // Disabled for context menu approach
-
-            // Set up Instagram carousel navigation listeners
-            // setupInstagramCarouselListeners(); // Disabled for context menu approach
-
-            // Set up Pinterest carousel processing
-            // Pinterest carousel processing disabled for context menu approach
-            // if (window.location.hostname.includes('pinterest.com')) {
-            //     // Process existing Pinterest carousels
-            //     setTimeout(() => {
-            //         processPinterestCarousels();
-            //         managePinterestOverlays(); // Clean up overlays on initial load
-            //     }, 1000); // Delay to let Pinterest load
-
-            //     // Set up Pinterest carousel navigation listeners
-            //     document.addEventListener('click', (e) => {
-            //         // Check for Pinterest carousel navigation
-            //         if (e.target.closest('button[aria-label*="Next"]') ||
-            //             e.target.closest('button[aria-label*="Previous"]') ||
-            //             e.target.closest('.carousel--mode-single')) {
-
-            //             setTimeout(() => {
-            //                 processPinterestCarousels();
-            //                 managePinterestOverlays(); // Clean up overlays after navigation
-            //             }, 300); // Wait for navigation to complete
-            //         }
-            //     }, { passive: true });
-
-            //     console.log('🎠 Pinterest carousel system initialized');
-            // }
-
-            // Set up Flickr theater mode handling
-            if (window.location.hostname.includes('flickr.com')) {
-                // URL-based theater mode detection
-                const currentPath = window.location.pathname;
-                const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
-
-                if (isTheaterModeURL) {
-                    console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
-
-                    // Check if this is first load and reload if needed
-                    const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
-
-                    if (!hasBeenReloaded) {
-                        console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
-                        sessionStorage.setItem('flickr-theater-reloaded', 'true');
-                        setTimeout(() => {
-                            location.reload();
-                        }, 100);
-                        return; // Exit early since we're reloading
+        // Pre-load VR system if WebXR is supported (inject once at initialization)
+        setTimeout(async () => {
+            if (webXRSupportChecked && isWebXRSupported) {
+                console.log('🥽 WebXR supported - pre-loading VR system...');
+                try {
+                    // Check if VRLifViewer is already loaded
+                    if (!window.VRLifViewer) {
+                        // Load VRLifViewer script once during initialization
+                        const script = document.createElement('script');
+                        script.src = chrome.runtime.getURL('libs/VRLifViewer.js');
+                        script.onload = () => {
+                            console.log('✅ VR system pre-loaded successfully');
+                        };
+                        script.onerror = () => {
+                            console.error('❌ Failed to pre-load VR system');
+                        };
+                        document.head.appendChild(script);
                     } else {
-                        console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
+                        console.log('✅ VR system already loaded');
                     }
+                } catch (error) {
+                    console.error('❌ Error pre-loading VR system:', error);
+                }
+            }
+        }, 1000); // Wait for WebXR test to complete
 
-                    setupFlickrOverlayCleanup();
+        // Reset context menu to default state on page load/reload
+        chrome.runtime.sendMessage({
+            action: "updateContextMenu",
+            hasLIF: false,
+            webXRSupported: false
+        });
+        console.log('Context menu reset to default state on page initialization');
+
+        // Set up Flickr theater mode handling
+        if (window.location.hostname.includes('flickr.com')) {
+            // URL-based theater mode detection
+            const currentPath = window.location.pathname;
+            const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
+
+            if (isTheaterModeURL) {
+                console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
+
+                // Check if this is first load and reload if needed
+                const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
+
+                if (!hasBeenReloaded) {
+                    console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
+                    sessionStorage.setItem('flickr-theater-reloaded', 'true');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 100);
+                    return; // Exit early since we're reloading
                 } else {
-                    // Clear the reload flag when NOT in theater mode
-                    const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
-                    if (hadReloadFlag) {
-                        sessionStorage.removeItem('flickr-theater-reloaded');
-                    }
+                    console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
                 }
 
-                // Set up URL monitoring for SPA navigation to theater mode
-                setupFlickrTheaterModeMonitoring();
+                setupFlickrOverlayCleanup();
+            } else {
+                // Clear the reload flag when NOT in theater mode
+                const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
+                if (hadReloadFlag) {
+                    sessionStorage.removeItem('flickr-theater-reloaded');
+                }
             }
 
-            // Note: Button-based processing disabled - using context menu approach
-            console.log('Extension enabled - context menu approach active');
-
-            console.log('2D to 3D Image Converter initialized successfully!');
-        } else {
-            console.log('ImmersityLens extension is disabled - not performing initialization tasks');
+            // Set up URL monitoring for SPA navigation to theater mode
+            setupFlickrTheaterModeMonitoring();
         }
+
+        // Note: Button-based processing disabled - using context menu approach
+        console.log('Extension enabled - context menu approach active');
+
+        console.log('2D to 3D Image Converter initialized successfully!');
 
     } catch (error) {
         console.error('Error during extension initialization:', error);
