@@ -1965,6 +1965,15 @@ class lifViewer {
     }
 
     render() {
+        // Safety check: ensure currentAnimation is initialized before rendering
+        if (!this.currentAnimation || !this.currentAnimation.duration_sec) {
+            // If animation data isn't ready yet, schedule another frame and return
+            if (!this.gl.isContextLost()) {
+                this.animationFrame = requestAnimationFrame(this.render);
+            }
+            return;
+        }
+
         // assume harmonic for now
         const animTime = this.currentAnimation.duration_sec;
         const ut = Date.now() / 1000 - this.startTime;
@@ -2004,6 +2013,15 @@ class lifViewer {
 
     renderOff(transitionTime) {
         if (this.running) { console.log("abort renderOFF !"); return; }
+
+        // Safety check: ensure currentAnimation is initialized
+        if (!this.currentAnimation || !this.currentAnimation.data) {
+            // If animation data isn't ready, just hide canvas and return
+            this.canvas.style.display = 'none';
+            cancelAnimationFrame(this.animationFrame);
+            return;
+        }
+
         const elapsedTime = (Date.now() / 1000) - this.startTime;
 
         //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point

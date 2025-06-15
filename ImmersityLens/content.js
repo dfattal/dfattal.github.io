@@ -1893,9 +1893,9 @@ function setupInstagramCarouselListeners() {
             console.log('🎠 Carousel navigation detected, processing images after navigation...');
 
             // Process carousel images after a short delay to allow for navigation animation
-            setTimeout(() => {
-                processInstagramCarousels();
-            }, 500);
+            // setTimeout(() => {
+            //     processInstagramCarousels(); // Disabled for context menu approach
+            // }, 500);
         }
     }, { passive: true });
 
@@ -2743,13 +2743,13 @@ function observeNewImages() {
                 cleanupDuplicateButtons();
 
                 // INSTAGRAM CAROUSEL FIX: Process all carousel images when mutations are detected
-                processInstagramCarousels();
+                // processInstagramCarousels(); // Disabled for context menu approach
 
                 // PINTEREST CAROUSEL FIX: Process Pinterest carousels when mutations are detected
-                if (window.location.hostname.includes('pinterest.com')) {
-                    processPinterestCarousels();
-                    managePinterestOverlays(); // Also clean up overlays after mutations
-                }
+                // if (window.location.hostname.includes('pinterest.com')) {
+                //     processPinterestCarousels(); // Disabled for context menu approach
+                //     managePinterestOverlays(); // Also clean up overlays after mutations
+                // }
 
                 // FLICKR OVERLAY FIX: Clean up blocking overlays when DOM changes
                 if (window.location.hostname.includes('flickr.com')) {
@@ -2842,13 +2842,13 @@ function setupScrollHandler() {
             cleanupDuplicateButtons();
 
             // INSTAGRAM CAROUSEL FIX: Process carousel images during scroll events
-            processInstagramCarousels();
+            // processInstagramCarousels(); // Disabled for context menu approach
 
             // PINTEREST CAROUSEL FIX: Process Pinterest carousels during scroll events
-            if (window.location.hostname.includes('pinterest.com')) {
-                processPinterestCarousels();
-                managePinterestOverlays(); // Also clean up overlays after scroll
-            }
+            // if (window.location.hostname.includes('pinterest.com')) {
+            //     processPinterestCarousels(); // Disabled for context menu approach
+            //     managePinterestOverlays(); // Also clean up overlays after scroll
+            // }
 
             // FLICKR OVERLAY FIX: Clean up blocking overlays during scroll (theater mode only)
             if (window.location.hostname.includes('flickr.com')) {
@@ -3117,25 +3117,9 @@ function setupMessageListener() {
                 });
             }
         } else if (request.action === "convertImage") {
-            // Use the existing context menu image detection system
-            const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
-
-            if (img) {
-                console.log('Context menu: Converting image', img.src);
-
-                // Create a temporary button to use the existing conversion logic
-                const tempButton = document.createElement('div');
-                tempButton.className = 'lif-convert-btn';
-                tempButton.style.position = 'absolute';
-                tempButton.style.left = '0px';
-                tempButton.style.top = '0px';
-                tempButton.style.display = 'none';
-
-                // Trigger the conversion using the existing logic
-                convertTo3D(img, tempButton);
-            } else {
-                console.warn('Context menu: No image found for conversion');
-            }
+            // This old convertImage handler is disabled - conversion is now handled by the newer
+            // message listener that includes proper layout analysis and container detection
+            console.log('Old convertImage handler called - conversion handled by newer system');
         } else if (request.action === "downloadLIF") {
             // Use the existing context menu image detection system
             const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
@@ -3302,38 +3286,39 @@ async function initialize() {
             console.log('Context menu reset to default state on page initialization');
 
             // Start observing new images (this also prevents duplicates)
-            observeNewImages();
+            // observeNewImages(); // Disabled for context menu approach
 
             // Set up scroll handler for dynamic content re-processing
-            setupScrollHandler();
+            // setupScrollHandler(); // Disabled for context menu approach
 
             // Set up Instagram carousel navigation listeners
-            setupInstagramCarouselListeners();
+            // setupInstagramCarouselListeners(); // Disabled for context menu approach
 
             // Set up Pinterest carousel processing
-            if (window.location.hostname.includes('pinterest.com')) {
-                // Process existing Pinterest carousels
-                setTimeout(() => {
-                    processPinterestCarousels();
-                    managePinterestOverlays(); // Clean up overlays on initial load
-                }, 1000); // Delay to let Pinterest load
+            // Pinterest carousel processing disabled for context menu approach
+            // if (window.location.hostname.includes('pinterest.com')) {
+            //     // Process existing Pinterest carousels
+            //     setTimeout(() => {
+            //         processPinterestCarousels();
+            //         managePinterestOverlays(); // Clean up overlays on initial load
+            //     }, 1000); // Delay to let Pinterest load
 
-                // Set up Pinterest carousel navigation listeners
-                document.addEventListener('click', (e) => {
-                    // Check for Pinterest carousel navigation
-                    if (e.target.closest('button[aria-label*="Next"]') ||
-                        e.target.closest('button[aria-label*="Previous"]') ||
-                        e.target.closest('.carousel--mode-single')) {
+            //     // Set up Pinterest carousel navigation listeners
+            //     document.addEventListener('click', (e) => {
+            //         // Check for Pinterest carousel navigation
+            //         if (e.target.closest('button[aria-label*="Next"]') ||
+            //             e.target.closest('button[aria-label*="Previous"]') ||
+            //             e.target.closest('.carousel--mode-single')) {
 
-                        setTimeout(() => {
-                            processPinterestCarousels();
-                            managePinterestOverlays(); // Clean up overlays after navigation
-                        }, 300); // Wait for navigation to complete
-                    }
-                }, { passive: true });
+            //             setTimeout(() => {
+            //                 processPinterestCarousels();
+            //                 managePinterestOverlays(); // Clean up overlays after navigation
+            //             }, 300); // Wait for navigation to complete
+            //         }
+            //     }, { passive: true });
 
-                console.log('🎠 Pinterest carousel system initialized');
-            }
+            //     console.log('🎠 Pinterest carousel system initialized');
+            // }
 
             // Set up Flickr theater mode handling
             if (window.location.hostname.includes('flickr.com')) {
