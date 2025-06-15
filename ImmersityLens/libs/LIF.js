@@ -652,7 +652,7 @@ class lifViewer {
         const configs = {
             standard: {
                 containerSizing: 'explicit',
-                canvasPositioning: 'relative',
+                canvasPositioning: 'absolute', // SIMPLIFIED: Always use absolute positioning
                 eventHandling: 'standard',
                 preserveOriginalDimensions: false,
                 preventResizing: false
@@ -706,27 +706,25 @@ class lifViewer {
      * Apply layout-specific styling during creation
      */
     setupLayoutSpecificStyling() {
-        const config = this.layoutConfig;
-        if (config.canvasPositioning === 'absolute') {
-            const dimensions = this.getEffectiveDimensions();
-            let positioningStyle = 'top: 0; left: 0;';
-            if (this.centeredImageInfo) {
-                positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
-                console.log('🎯 Applying LinkedIn centering:', positioningStyle);
-            }
-            this.canvas.style.cssText = `
-                width: ${dimensions.width}px !important;
-                height: ${dimensions.height}px !important;
-                max-width: none !important;
-                max-height: none !important;
-                position: absolute;
-                ${positioningStyle}
-                z-index: ${this.canvasZIndex};
-                display: none;
-                pointer-events: auto;
-                cursor: pointer;
-            `;
+        // SIMPLIFIED: Always use absolute positioning for canvas over image
+        const dimensions = this.getEffectiveDimensions();
+        let positioningStyle = 'top: 0; left: 0;';
+        if (this.centeredImageInfo) {
+            positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
+            console.log('🎯 Applying centered image positioning:', positioningStyle);
         }
+        this.canvas.style.cssText = `
+            width: ${dimensions.width}px !important;
+            height: ${dimensions.height}px !important;
+            max-width: none !important;
+            max-height: none !important;
+            position: absolute;
+            ${positioningStyle}
+            z-index: ${this.canvasZIndex};
+            display: none;
+            pointer-events: auto;
+            cursor: pointer;
+        `;
     }
 
     /**
@@ -847,33 +845,38 @@ class lifViewer {
             }
         } else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
             // Use aspectRatio mode for any object-fit image or centered/fitted image with dimensions
-            const hasExplicitDimensions = originalImage.width && originalImage.height;
+            // BUT: Don't override picture element layout mode - picture elements have their own dimension handling
+            if (layoutMode !== 'picture') {
+                const hasExplicitDimensions = originalImage.width && originalImage.height;
 
-            if (hasExplicitDimensions && isCenteredOrFitted) {
-                // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
-                targetDimensions = {
-                    width: originalImage.width || originalImage.naturalWidth || targetDimensions.width,
-                    height: originalImage.height || originalImage.naturalHeight || targetDimensions.height
-                };
+                if (hasExplicitDimensions && isCenteredOrFitted) {
+                    // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
+                    targetDimensions = {
+                        width: originalImage.width || originalImage.naturalWidth || targetDimensions.width,
+                        height: originalImage.height || originalImage.naturalHeight || targetDimensions.height
+                    };
+                } else {
+                    // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
+                    targetDimensions = {
+                        width: originalImage.naturalWidth || originalImage.width || targetDimensions.width,
+                        height: originalImage.naturalHeight || originalImage.height || targetDimensions.height
+                    };
+                }
+
+                layoutMode = 'aspectRatio';
+                console.log('🎯 Object-fit or centered/fitted image detected - using aspectRatio mode with image dimensions:', {
+                    hasObjectFit,
+                    objectFit: computedStyle.objectFit,
+                    isCenteredOrFitted,
+                    hasExplicitDimensions,
+                    naturalSize: originalImage.naturalWidth + 'x' + originalImage.naturalHeight,
+                    attributeSize: originalImage.width + 'x' + originalImage.height,
+                    targetDimensions,
+                    priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
+                });
             } else {
-                // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
-                targetDimensions = {
-                    width: originalImage.naturalWidth || originalImage.width || targetDimensions.width,
-                    height: originalImage.naturalHeight || originalImage.height || targetDimensions.height
-                };
+                console.log('🎯 Object-fit detected but preserving picture layout mode for proper dimension handling');
             }
-
-            layoutMode = 'aspectRatio';
-            console.log('🎯 Object-fit or centered/fitted image detected - using aspectRatio mode with image dimensions:', {
-                hasObjectFit,
-                objectFit: computedStyle.objectFit,
-                isCenteredOrFitted,
-                hasExplicitDimensions,
-                naturalSize: originalImage.naturalWidth + 'x' + originalImage.naturalHeight,
-                attributeSize: originalImage.width + 'x' + originalImage.height,
-                targetDimensions,
-                priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
-            });
         }
 
         // Apply dimension corrections for picture elements

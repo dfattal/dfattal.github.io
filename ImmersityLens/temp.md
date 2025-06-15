@@ -61,7 +61,7 @@ The new system uses Chrome's context menu for on-demand image processing:
 
 ### 1. Duplicate Conversion Issue
 **Problem**: Instagram carousels triggered conversion twice
-```
+```javascript
 Extension message received: convertImage Current state: true
 Context menu: Converting image [same URL]
 ```
@@ -194,6 +194,77 @@ This cleanup represents a complete architectural shift from automatic button-bas
 # ImmersityLens Development Log
 
 ## Recent Changes & Fixes (Latest Session)
+
+### 🎯 **CNN Picture Canvas Sizing Fix** *(Latest - FIXED)*
+
+#### **Problem Identified:**
+- **CNN Picture Elements**: Canvas was too big, not matching image dimensions
+- **Root Cause**: Changes in commit `f8286ac7bd4b3de394acd03c654002a4db7c1062` introduced:
+  1. Enhanced search range (3→6 levels) finding larger aspect ratio containers
+  2. Enhanced object-fit detection overriding picture element layout modes
+  3. Smart dimension priority system affecting picture element calculations
+
+#### **Issue Analysis:**
+The CNN picture canvas was oversized because:
+- Enhanced search (6 levels up DOM) found larger aspect ratio containers higher in hierarchy
+- Picture elements were using these larger containers as `targetElement` instead of picture element itself
+- Enhanced object-fit detection was changing layout mode from 'picture' to 'aspectRatio'
+- Canvas was sized to larger container dimensions instead of actual picture/image dimensions
+
+#### **Fixes Applied:**
+
+**1. Reverted Search Range** (`content.js` line 1424):
+```javascript
+// BEFORE: Enhanced search range
+for (let i = 0; i < 6 && currentElement; i++) {
+
+// AFTER: Conservative search range (reverted)
+for (let i = 0; i < 3 && currentElement; i++) {
+```
+
+**2. Protected Picture Elements from Container Override** (`content.js` line 3199):
+```javascript
+// BEFORE: All overlay approaches used padding container
+if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer) {
+    targetElement = layoutAnalysis.paddingContainer.element;
+}
+
+// AFTER: Picture elements protected from container override
+if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer && !isPictureImage) {
+    targetElement = layoutAnalysis.paddingContainer.element;
+}
+```
+
+**3. Protected Picture Layout Mode** (`libs/LIF.js` line 847):
+```javascript
+// BEFORE: Object-fit detection could override any layout mode
+} else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
+    layoutMode = 'aspectRatio';
+
+// AFTER: Picture layout mode protected
+} else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
+    if (layoutMode !== 'picture') {
+        layoutMode = 'aspectRatio';
+        // ... dimension logic
+    } else {
+        console.log('🎯 Object-fit detected but preserving picture layout mode for proper dimension handling');
+    }
+}
+```
+
+#### **Technical Details:**
+- **Search Range**: Reduced from 6 to 3 levels to avoid finding unrelated containers
+- **Container Selection**: Picture elements now always use their own container, not padding containers found higher up
+- **Layout Mode**: Picture elements maintain 'picture' layout mode regardless of object-fit detection
+- **Dimension Handling**: Picture elements use their own dimension calculation logic
+
+#### **Result:**
+✅ **CNN Picture Elements**: Canvas now correctly sized to match image dimensions  
+✅ **Backward Compatibility**: Regular images still benefit from enhanced detection  
+✅ **Performance**: Conservative search reduces unnecessary DOM traversal  
+✅ **Reliability**: Picture elements have consistent, predictable behavior  
+
+---
 
 ### 🎯 **Universal Object-Fit Detection & Smart Dimension Priority System**
 

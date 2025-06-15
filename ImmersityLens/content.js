@@ -142,7 +142,7 @@ const Z_INDEX_CONFIG = {
     BUTTON: 5000,           // LIF conversion buttons
     BUTTON_ZONE: 5000,      // Button container zones
     PROCESSING_OVERLAY: 5000, // Loading overlays during conversion
-    CANVAS: 4999,           // Canvas elements (passed to lifViewer)
+    CANVAS: 5001,           // Canvas elements (passed to lifViewer) - Higher than overlays
     IMAGE: 4999             // Post-conversion image elements (passed to lifViewer)
 };
 
@@ -1415,7 +1415,7 @@ function analyzeLayoutPattern(element, img) {
     let currentElement = element.parentElement;
 
     // Enhanced search: look further up the hierarchy for aspect ratio containers
-    for (let i = 0; i < 6 && currentElement; i++) {
+    for (let i = 0; i < 3 && currentElement; i++) {
         const parentComputedStyle = window.getComputedStyle(currentElement);
         const parentPaddingBottom = parentComputedStyle.paddingBottom;
         const parentPaddingTop = parentComputedStyle.paddingTop;
@@ -1522,6 +1522,8 @@ function analyzeLayoutPattern(element, img) {
         }
     }
 
+    // Note: Container transforms no longer need special handling since all canvases use absolute positioning
+
     // 6. Detect object-fit usage (modern responsive image technique)
     if (imgStyle.objectFit && imgStyle.objectFit !== 'fill') {
         if (!analysis.preserveOriginal) {
@@ -1605,10 +1607,12 @@ function analyzeLayoutPattern(element, img) {
  */
 
 // Function to process Instagram carousel images
+// INSTAGRAM-SPECIFIC: COMMENTED OUT - using generalized approach
 function processInstagramCarousels() {
-    if (!window.location.hostname.includes('instagram.com')) {
-        return;
-    }
+    // if (!window.location.hostname.includes('instagram.com')) {
+    //     return;
+    // }
+    return; // Disabled - using generalized approach
 
     // Find Instagram carousel containers using their specific structure
     const carouselContainers = document.querySelectorAll('ul._acay');
@@ -1668,10 +1672,12 @@ function processInstagramCarousels() {
 }
 
 // Function to set up Instagram carousel navigation listeners
+// INSTAGRAM-SPECIFIC: COMMENTED OUT - using generalized approach
 function setupInstagramCarouselListeners() {
-    if (!window.location.hostname.includes('instagram.com')) {
-        return;
-    }
+    // if (!window.location.hostname.includes('instagram.com')) {
+    //     return;
+    // }
+    return; // Disabled - using generalized approach
 
     // Listen for clicks on Instagram carousel navigation buttons
     document.addEventListener('click', (e) => {
@@ -1707,8 +1713,10 @@ function setupInstagramCarouselListeners() {
  * - Object-fit: contain preservation requirements
  * - Z-index conflicts with overlay buttons
  */
+// PINTEREST-SPECIFIC: COMMENTED OUT - using generalized approach
 function processPinterestCarousels() {
-    if (!window.location.hostname.includes('pinterest.com')) return;
+    // if (!window.location.hostname.includes('pinterest.com')) return;
+    return; // Disabled - using generalized approach
 
     if (isDebugEnabled) {
         console.log('🎠 Processing Pinterest carousels...');
@@ -1829,8 +1837,10 @@ function processPinterestCarousels() {
     }
 }
 
+// PINTEREST-SPECIFIC: COMMENTED OUT - using generalized approach
 function managePinterestOverlays() {
-    if (!window.location.hostname.includes('pinterest.com')) return;
+    // if (!window.location.hostname.includes('pinterest.com')) return;
+    return; // Disabled - using generalized approach
 
     // Find all Pinterest pins with our buttons
     const pinsWithButtons = document.querySelectorAll('[data-test-id="pin"] img[data-lif-button-added="true"], [data-test-id="closeup-image"] img[data-lif-button-added="true"]');
@@ -1895,10 +1905,12 @@ function managePinterestOverlays() {
 }
 
 // Function to set up Flickr theater mode overlay cleanup
+// FLICKR-SPECIFIC: COMMENTED OUT - using generalized approach
 function setupFlickrOverlayCleanup() {
-    if (!window.location.hostname.includes('flickr.com')) {
-        return;
-    }
+    // if (!window.location.hostname.includes('flickr.com')) {
+    //     return;
+    // }
+    return; // Disabled - using generalized approach
 
     // Double-check we're in theater mode before setting up any cleanup
     const isInTheaterMode = document.querySelector('.height-controller') &&
@@ -2014,8 +2026,8 @@ function setupFlickrOverlayCleanup() {
         }
     }, { passive: true });
 
-    // Set up Flickr canvas display fixes for theater mode
-    setupFlickrCanvasDisplayFix();
+    // FLICKR-SPECIFIC: COMMENTED OUT - using generalized approach
+    // setupFlickrCanvasDisplayFix();
 
     if (isDebugEnabled) {
         console.log('🖼️ Flickr theater mode overlay cleanup set up');
@@ -2023,10 +2035,12 @@ function setupFlickrOverlayCleanup() {
 }
 
 // Function to monitor URL changes for Flickr SPA navigation to theater mode
+// FLICKR-SPECIFIC: COMMENTED OUT - using generalized approach
 function setupFlickrTheaterModeMonitoring() {
-    if (!window.location.hostname.includes('flickr.com')) {
-        return;
-    }
+    // if (!window.location.hostname.includes('flickr.com')) {
+    //     return;
+    // }
+    return; // Disabled - using generalized approach
 
     let lastURL = window.location.href;
 
@@ -2331,11 +2345,13 @@ const applyFlickrCanvasfix = (container) => {
  */
 
 // Function to clean up duplicate button zones (LinkedIn-specific)
+// LINKEDIN-SPECIFIC: COMMENTED OUT - using generalized approach
 function cleanupDuplicateButtons() {
     // Only run on LinkedIn where the duplicate issue was occurring
-    if (!window.location.hostname.includes('linkedin.com')) {
-        return;
-    }
+    // if (!window.location.hostname.includes('linkedin.com')) {
+    //     return;
+    // }
+    return; // Disabled - using generalized approach
 
     // Find LinkedIn-specific containers that have multiple button zones
     const containersWithButtons = document.querySelectorAll('.update-components-image__container-wrapper, .lif-image-container');
@@ -2414,33 +2430,33 @@ function processImages() {
                 return;
             }
 
-            // PINTEREST CLOSEUP DETECTION: Check if we're in a Pinterest closeup/detail view
-            const isPinterestCloseup = window.location.hostname.includes('pinterest.com') &&
-                (window.location.pathname.includes('/pin/') ||
-                    img.closest('[data-test-id="closeup-body-image-container"]'));
+            // PINTEREST-SPECIFIC: COMMENTED OUT - using generalized approach
+            // const isPinterestCloseup = window.location.hostname.includes('pinterest.com') &&
+            //     (window.location.pathname.includes('/pin/') ||
+            //         img.closest('[data-test-id="closeup-body-image-container"]'));
 
-            if (isPinterestCloseup) {
-                // For Pinterest closeup views, use overlay approach
-                const parentContainer = img.closest('[data-test-id="closeup-body-image-container"]') ||
-                    img.closest('[data-test-id="closeup-image-main"]') ||
-                    img.parentElement;
+            // if (isPinterestCloseup) {
+            //     // For Pinterest closeup views, use overlay approach
+            //     const parentContainer = img.closest('[data-test-id="closeup-body-image-container"]') ||
+            //         img.closest('[data-test-id="closeup-image-main"]') ||
+            //         img.parentElement;
 
-                if (parentContainer) {
-                    // Remove any existing lif-image-container
-                    const existingContainer = img.closest('.lif-image-container');
-                    if (existingContainer) {
-                        const parent = existingContainer.parentNode;
-                        while (existingContainer.firstChild) {
-                            parent.insertBefore(existingContainer.firstChild, existingContainer);
-                        }
-                        parent.removeChild(existingContainer);
-                    }
+            //     if (parentContainer) {
+            //         // Remove any existing lif-image-container
+            //         const existingContainer = img.closest('.lif-image-container');
+            //         if (existingContainer) {
+            //             const parent = existingContainer.parentNode;
+            //             while (existingContainer.firstChild) {
+            //                 parent.insertBefore(existingContainer.firstChild, existingContainer);
+            //             }
+            //             parent.removeChild(existingContainer);
+            //         }
 
-                    // Add button directly to parent container
+            //         // Add button directly to parent container
 
-                    return;
-                }
-            }
+            //         return;
+            //     }
+            // }
 
             // For all other images, use standard processing
 
@@ -2522,9 +2538,10 @@ function observeNewImages() {
 
         // 🕒 BATCH PROCESSING - Process collected images after DOM settles
         if (imagesToCheck.size > 0) {
-            // Enhanced delay for Pinterest carousels which can load rapidly
-            const isPinterest = window.location.hostname.includes('pinterest.com');
-            const delay = isPinterest ? 300 : 200; // Longer delay for Pinterest
+            // PINTEREST-SPECIFIC: COMMENTED OUT - using generalized approach
+            // const isPinterest = window.location.hostname.includes('pinterest.com');
+            // const delay = isPinterest ? 300 : 200; // Longer delay for Pinterest
+            const delay = 200; // Standard delay for all sites
 
             setTimeout(() => {
                 // LINKEDIN DUPLICATE CLEANUP: Remove duplicate button zones before processing new images
@@ -2533,19 +2550,19 @@ function observeNewImages() {
                 // INSTAGRAM CAROUSEL FIX: Process all carousel images when mutations are detected
                 // processInstagramCarousels(); // Disabled for context menu approach
 
-                // PINTEREST CAROUSEL FIX: Process Pinterest carousels when mutations are detected
+                // PINTEREST-SPECIFIC: COMMENTED OUT - using generalized approach
                 // if (window.location.hostname.includes('pinterest.com')) {
                 //     processPinterestCarousels(); // Disabled for context menu approach
                 //     managePinterestOverlays(); // Also clean up overlays after mutations
                 // }
 
-                // FLICKR OVERLAY FIX: Clean up blocking overlays when DOM changes
-                if (window.location.hostname.includes('flickr.com')) {
-                    const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
-                    if (photoNotesOverlay) {
-                        photoNotesOverlay.remove();
-                    }
-                }
+                // FLICKR-SPECIFIC: COMMENTED OUT - using generalized approach
+                // if (window.location.hostname.includes('flickr.com')) {
+                //     const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
+                //     if (photoNotesOverlay) {
+                //         photoNotesOverlay.remove();
+                //     }
+                // }
 
                 imagesToCheck.forEach(img => {
                     try {
@@ -2637,22 +2654,23 @@ function setupScrollHandler() {
             // }
 
             // FLICKR OVERLAY FIX: Clean up blocking overlays during scroll (theater mode only)
-            if (window.location.hostname.includes('flickr.com')) {
-                // Only clean up in theater mode to avoid removing buttons in wall view
-                const isInTheaterMode = document.querySelector('.height-controller') &&
-                    document.querySelector('.facade-of-protection-neue');
+            // FLICKR-SPECIFIC: COMMENTED OUT - using generalized approach
+            // if (window.location.hostname.includes('flickr.com')) {
+            //     // Only clean up in theater mode to avoid removing buttons in wall view
+            //     const isInTheaterMode = document.querySelector('.height-controller') &&
+            //         document.querySelector('.facade-of-protection-neue');
 
-                if (isInTheaterMode) {
-                    const cleanupFlickrOverlays = () => {
-                        const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
-                        if (photoNotesOverlay) {
-                            console.log('🎭 Scroll cleanup: Removing theater mode photo-notes overlay');
-                            photoNotesOverlay.remove();
-                        }
-                    };
-                    cleanupFlickrOverlays();
-                }
-            }
+            //     if (isInTheaterMode) {
+            //         const cleanupFlickrOverlays = () => {
+            //             const photoNotesOverlay = document.querySelector('.view.photo-notes-scrappy-view');
+            //             if (photoNotesOverlay) {
+            //                 console.log('🎭 Scroll cleanup: Removing theater mode photo-notes overlay');
+            //                 photoNotesOverlay.remove();
+            //             }
+            //         };
+            //         cleanupFlickrOverlays();
+            //     }
+            // }
 
             // 🔍 VIEWPORT VALIDATION - Find images near viewport with button state issues
             const images = document.querySelectorAll('img');
@@ -2963,41 +2981,41 @@ async function initialize() {
         });
         console.log('Context menu reset to default state on page initialization');
 
-        // Set up Flickr theater mode handling
-        if (window.location.hostname.includes('flickr.com')) {
-            // URL-based theater mode detection
-            const currentPath = window.location.pathname;
-            const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
+        // FLICKR-SPECIFIC: COMMENTED OUT - using generalized approach
+        // if (window.location.hostname.includes('flickr.com')) {
+        //     // URL-based theater mode detection
+        //     const currentPath = window.location.pathname;
+        //     const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
 
-            if (isTheaterModeURL) {
-                console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
+        //     if (isTheaterModeURL) {
+        //         console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
 
-                // Check if this is first load and reload if needed
-                const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
+        //         // Check if this is first load and reload if needed
+        //         const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
 
-                if (!hasBeenReloaded) {
-                    console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
-                    sessionStorage.setItem('flickr-theater-reloaded', 'true');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 100);
-                    return; // Exit early since we're reloading
-                } else {
-                    console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
-                }
+        //         if (!hasBeenReloaded) {
+        //             console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
+        //             sessionStorage.setItem('flickr-theater-reloaded', 'true');
+        //             setTimeout(() => {
+        //                 location.reload();
+        //             }, 100);
+        //             return; // Exit early since we're reloading
+        //         } else {
+        //             console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
+        //         }
 
-                setupFlickrOverlayCleanup();
-            } else {
-                // Clear the reload flag when NOT in theater mode
-                const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
-                if (hadReloadFlag) {
-                    sessionStorage.removeItem('flickr-theater-reloaded');
-                }
-            }
+        //         setupFlickrOverlayCleanup();
+        //     } else {
+        //         // Clear the reload flag when NOT in theater mode
+        //         const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
+        //         if (hadReloadFlag) {
+        //             sessionStorage.removeItem('flickr-theater-reloaded');
+        //         }
+        //     }
 
-            // Set up URL monitoring for SPA navigation to theater mode
-            setupFlickrTheaterModeMonitoring();
-        }
+        //     // Set up URL monitoring for SPA navigation to theater mode
+        //     setupFlickrTheaterModeMonitoring();
+        // }
 
         // Note: Button-based processing disabled - using context menu approach
         console.log('Extension enabled - context menu approach active');
@@ -3153,9 +3171,22 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     targetElement = imageContainer;
                 }
                 // Store dimensions for later use with LIF viewer
+                // For picture elements, use the image dimensions since picture element itself might have height: 0
+                const imgRect = img.getBoundingClientRect();
                 const pictureRect = pictureElement.getBoundingClientRect();
-                pictureElement.dataset.lifTargetWidth = Math.round(pictureRect.width);
-                pictureElement.dataset.lifTargetHeight = Math.round(pictureRect.height);
+
+                // Use image dimensions if picture has zero height, otherwise use picture dimensions
+                const effectivePictureWidth = pictureRect.height > 0 ? pictureRect.width : imgRect.width;
+                const effectivePictureHeight = pictureRect.height > 0 ? pictureRect.height : imgRect.height;
+
+                pictureElement.dataset.lifTargetWidth = Math.round(effectivePictureWidth);
+                pictureElement.dataset.lifTargetHeight = Math.round(effectivePictureHeight);
+
+                console.log('📸 Picture element dimensions:', {
+                    pictureRect: `${pictureRect.width}x${pictureRect.height}`,
+                    imgRect: `${imgRect.width}x${imgRect.height}`,
+                    effective: `${effectivePictureWidth}x${effectivePictureHeight}`
+                });
             }
 
             // 2. Analyze layout for all other cases
@@ -3165,7 +3196,8 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             const shouldUseOverlayApproach = isPictureImage || isAspectRatioContainer || layoutAnalysis.isFacebookStyle || layoutAnalysis.parentUsesFlexOrGrid || layoutAnalysis.hasResponsivePattern;
 
             // For overlay approach, use the padding container if found
-            if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer) {
+            // BUT: Don't override picture element containers - they should use their own dimensions
+            if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer && !isPictureImage) {
                 targetElement = layoutAnalysis.paddingContainer.element;
             }
 
@@ -3174,67 +3206,64 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 const imgRect = img.getBoundingClientRect();
                 const containerRect = targetElement.getBoundingClientRect();
 
-                // COMMENTED OUT: LinkedIn-specific fix
-                // TODO: Generalize this to detect centered/aspect-fit images on any site
-                // if (window.location.hostname.includes('linkedin.com') &&
-                //     (img.classList.contains('ivm-view-attr__img--centered') ||
-                //         img.classList.contains('ivm-view-attr__img--aspect-fit') ||
-                //         img.classList.contains('ivm-view-attr__img--aspect-fill'))) {
-                //     effectiveWidth = img.width || img.naturalWidth;
-                //     effectiveHeight = img.height || img.naturalHeight;
-                //     console.log('🎯 LinkedIn centered image - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
-                // } else {
+                // Skip dimension calculation for picture elements - already handled above
+                if (!isPictureImage) {
+                    // GENERALIZED: For aspect ratio containers, prefer image dimensions over container when image has explicit size or uses object-fit
+                    const hasExplicitDimensions = img.width && img.height;
+                    const isCenteredOrFitted = (
+                        // Generic class patterns
+                        img.classList.contains('centered') ||
+                        img.classList.contains('aspect-fit') ||
+                        img.classList.contains('aspect-fill') ||
+                        // LinkedIn-style prefixed classes (keeping pattern recognition)
+                        img.className.includes('centered') ||
+                        img.className.includes('aspect-fit') ||
+                        img.className.includes('aspect-fill') ||
+                        // CSS object-fit detection
+                        img.style.objectFit === 'contain' ||
+                        img.style.objectFit === 'cover'
+                    );
 
-                // GENERALIZED: For aspect ratio containers, prefer image dimensions over container when image has explicit size or uses object-fit
-                const hasExplicitDimensions = img.width && img.height;
-                const isCenteredOrFitted = (
-                    // Generic class patterns
-                    img.classList.contains('centered') ||
-                    img.classList.contains('aspect-fit') ||
-                    img.classList.contains('aspect-fill') ||
-                    // LinkedIn-style prefixed classes (keeping pattern recognition)
-                    img.className.includes('centered') ||
-                    img.className.includes('aspect-fit') ||
-                    img.className.includes('aspect-fill') ||
-                    // CSS object-fit detection
-                    img.style.objectFit === 'contain' ||
-                    img.style.objectFit === 'cover'
-                );
+                    // Get computed style for comprehensive object-fit detection
+                    const computedStyle = window.getComputedStyle(img);
+                    const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
 
-                // Get computed style for comprehensive object-fit detection
-                const computedStyle = window.getComputedStyle(img);
-                const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
-
-                if ((hasExplicitDimensions && isCenteredOrFitted) || hasObjectFit) {
-                    // For centered/fitted images with explicit dimensions, prefer HTML attributes over natural size
-                    // For object-fit images without explicit dimensions, use natural size
-                    if (hasExplicitDimensions && isCenteredOrFitted) {
-                        // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
-                        effectiveWidth = img.width || img.naturalWidth || imgRect.width;
-                        effectiveHeight = img.height || img.naturalHeight || imgRect.height;
+                    if ((hasExplicitDimensions && isCenteredOrFitted) || hasObjectFit) {
+                        // For centered/fitted images with explicit dimensions, prefer HTML attributes over natural size
+                        // For object-fit images without explicit dimensions, use natural size
+                        if (hasExplicitDimensions && isCenteredOrFitted) {
+                            // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
+                            effectiveWidth = img.width || img.naturalWidth || imgRect.width;
+                            effectiveHeight = img.height || img.naturalHeight || imgRect.height;
+                        } else {
+                            // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
+                            effectiveWidth = img.naturalWidth || img.width || imgRect.width;
+                            effectiveHeight = img.naturalHeight || img.height || imgRect.height;
+                        }
+                        console.log('🎯 Centered/fitted/object-fit image detected - using image dimensions:', effectiveWidth + 'x' + effectiveHeight, {
+                            hasExplicitDimensions,
+                            isCenteredOrFitted,
+                            hasObjectFit,
+                            objectFit: computedStyle.objectFit,
+                            naturalSize: img.naturalWidth + 'x' + img.naturalHeight,
+                            attributeSize: img.width + 'x' + img.height,
+                            priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
+                        });
                     } else {
-                        // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
-                        effectiveWidth = img.naturalWidth || img.width || imgRect.width;
-                        effectiveHeight = img.naturalHeight || img.height || imgRect.height;
+                        // Default behavior: use container dimensions for aspect ratio containers
+                        effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
+                        effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
                     }
-                    console.log('🎯 Centered/fitted/object-fit image detected - using image dimensions:', effectiveWidth + 'x' + effectiveHeight, {
-                        hasExplicitDimensions,
-                        isCenteredOrFitted,
-                        hasObjectFit,
-                        objectFit: computedStyle.objectFit,
-                        naturalSize: img.naturalWidth + 'x' + img.naturalHeight,
-                        attributeSize: img.width + 'x' + img.height,
-                        priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
-                    });
-                } else {
-                    // Default behavior: use container dimensions for aspect ratio containers
-                    effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
-                    effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
-                }
-                // }
 
-                targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
-                targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
+                    targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
+                    targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
+                } else {
+                    // For picture elements, use the dimensions already calculated and stored on the picture element
+                    effectiveWidth = parseInt(pictureElement.dataset.lifTargetWidth) || imgRect.width;
+                    effectiveHeight = parseInt(pictureElement.dataset.lifTargetHeight) || imgRect.height;
+                    console.log('📸 Picture element - using pre-calculated dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                }
+
                 overlayContainer = targetElement;
             }
 
