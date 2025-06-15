@@ -774,45 +774,64 @@ class lifViewer {
         } else if (layoutAnalysis?.containerHasPaddingAspectRatio) {
             layoutMode = 'aspectRatio';
         } else if (layoutAnalysis?.preserveOriginal) {
-            // SITE-SPECIFIC FIXES: Some sites work better with standard mode despite preserveOriginal flag
-            // These sites have simple container structures that work best with standard layout
-            if (window.location.hostname.includes('deviantart.com')) {
-                layoutMode = 'standard';
-                console.log('🎨 DeviantArt detected - forcing standard layout mode despite preserveOriginal flag');
-            } else if (window.location.hostname.includes('redbubble.com')) {
-                layoutMode = 'standard';
-                console.log('🛍️ RedBubble detected - forcing standard layout mode despite preserveOriginal flag');
-            } else {
-                layoutMode = 'overlay';
-            }
+            // COMMENTED OUT: Site-specific layout mode overrides
+            // TODO: Find a way to detect when standard mode is better than overlay
+            // if (window.location.hostname.includes('deviantart.com')) {
+            //     layoutMode = 'standard';
+            //     console.log('🎨 DeviantArt detected - forcing standard layout mode despite preserveOriginal flag');
+            // } else if (window.location.hostname.includes('redbubble.com')) {
+            //     layoutMode = 'standard';
+            //     console.log('🛍️ RedBubble detected - forcing standard layout mode despite preserveOriginal flag');
+            // } else {
+            //     layoutMode = 'overlay';
+            // }
+
+            // GENERALIZED: Use overlay mode for preserveOriginal layouts
+            layoutMode = 'overlay';
         }
 
-        // LINKEDIN CENTERING FIX: Detect centered/aspect-fit images
+        // COMMENTED OUT: LinkedIn-specific centering fix
+        // TODO: Generalize this to detect centered/fitted images on any site
         let targetDimensions = {
             width: originalImage.width || originalImage.naturalWidth,
             height: originalImage.height || originalImage.naturalHeight
         };
 
         let centeredImageInfo = null;
-        if (window.location.hostname.includes('linkedin.com') &&
-            (originalImage.classList.contains('ivm-view-attr__img--centered') ||
-                originalImage.classList.contains('ivm-view-attr__img--aspect-fit') ||
-                originalImage.classList.contains('ivm-view-attr__img--aspect-fill'))) {
+        // if (window.location.hostname.includes('linkedin.com') &&
+        //     (originalImage.classList.contains('ivm-view-attr__img--centered') ||
+        //         originalImage.classList.contains('ivm-view-attr__img--aspect-fit') ||
+        //         originalImage.classList.contains('ivm-view-attr__img--aspect-fill'))) {
+        //     centeredImageInfo = lifViewer.calculateLinkedInCenteredImageDimensions(originalImage, container);
+        //     if (centeredImageInfo) {
+        //         console.log('🎯 LinkedIn centered image detected:', centeredImageInfo);
+        //         targetDimensions = {
+        //             width: centeredImageInfo.width,
+        //             height: centeredImageInfo.height
+        //         };
+        //         if (layoutAnalysis?.containerHasPaddingAspectRatio) {
+        //             layoutMode = 'aspectRatio';
+        //             console.log('🎯 Forcing aspectRatio layout mode for LinkedIn centering');
+        //         }
+        //     }
+        // }
 
-            centeredImageInfo = lifViewer.calculateLinkedInCenteredImageDimensions(originalImage, container);
-            if (centeredImageInfo) {
-                console.log('🎯 LinkedIn centered image detected:', centeredImageInfo);
+        // GENERALIZED: Detect centered/fitted images using CSS and class patterns
+        if ((originalImage.classList.contains('centered') ||
+            originalImage.classList.contains('aspect-fit') ||
+            originalImage.classList.contains('aspect-fill') ||
+            originalImage.style.objectFit === 'contain' ||
+            originalImage.style.objectFit === 'cover') &&
+            layoutAnalysis?.containerHasPaddingAspectRatio) {
+
+            // Use image dimensions for fitted images in aspect ratio containers
+            if (originalImage.width && originalImage.height) {
                 targetDimensions = {
-                    width: centeredImageInfo.width,
-                    height: centeredImageInfo.height
+                    width: originalImage.width,
+                    height: originalImage.height
                 };
-
-                // Force aspectRatio layout mode for centered LinkedIn images
-                // to ensure proper absolute positioning
-                if (layoutAnalysis?.containerHasPaddingAspectRatio) {
-                    layoutMode = 'aspectRatio';
-                    console.log('🎯 Forcing aspectRatio layout mode for LinkedIn centering');
-                }
+                layoutMode = 'aspectRatio';
+                console.log('🎯 Centered/fitted image in aspect ratio container - using image dimensions');
             }
         }
 
@@ -1192,22 +1211,24 @@ class lifViewer {
                 }
             };
 
-            // FLICKR FIX: Boost canvas z-index and disable overlay pointer events
-            // Similar to Shutterstock fix pattern
-            if (window.location.hostname.includes('flickr.com')) {
-                console.log('🔧 Applying Flickr z-index boost for canvas events');
-                this.canvas.style.zIndex = '999999';  // Higher than typical overlays
-                this.originalImage.style.zIndex = '999998';     // Slightly lower than canvas
+            // COMMENTED OUT: Flickr-specific z-index and overlay fixes
+            // TODO: Generalize overlay interference detection
+            // if (window.location.hostname.includes('flickr.com')) {
+            //     console.log('🔧 Applying Flickr z-index boost for canvas events');
+            //     this.canvas.style.zIndex = '999999';
+            //     this.originalImage.style.zIndex = '999998';
+            //     const flickrOverlays = this.container.parentElement?.querySelectorAll('.overlay, a.overlay, .interaction-view, .photo-list-photo-interaction');
+            //     if (flickrOverlays) {
+            //         flickrOverlays.forEach(overlay => {
+            //             console.log('🔧 Disabling pointer events on Flickr overlay:', overlay.className);
+            //             overlay.style.pointerEvents = 'none';
+            //         });
+            //     }
+            // }
 
-                // AGGRESSIVE FIX: Disable Flickr overlays that might be intercepting events
-                const flickrOverlays = this.container.parentElement?.querySelectorAll('.overlay, a.overlay, .interaction-view, .photo-list-photo-interaction');
-                if (flickrOverlays) {
-                    flickrOverlays.forEach(overlay => {
-                        console.log('🔧 Disabling pointer events on Flickr overlay:', overlay.className);
-                        overlay.style.pointerEvents = 'none';
-                    });
-                }
-            }
+            // GENERALIZED: Apply high z-index to ensure canvas events work
+            this.canvas.style.zIndex = this.canvasZIndex || '999999';
+            this.originalImage.style.zIndex = this.imageZIndex || '999998';
 
             this.canvas.addEventListener('mouseenter', startAnimation, { passive: true });
             this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
@@ -1216,29 +1237,25 @@ class lifViewer {
             this.originalImage.addEventListener('mouseenter', startAnimation, { passive: true });
             this.originalImage.addEventListener('mouseleave', stopAnimation, { passive: true });
 
-            // FLICKR FIX: Add container-level events as fallback for overlay interference
-            // If Flickr's overlay still blocks events, container events will catch them
-            if (window.location.hostname.includes('flickr.com') && this.container) {
-                console.log('🔧 Adding Flickr container-level event fallback');
-
-                this.container.addEventListener('mouseenter', (e) => {
-                    // Only trigger if mouse is over our canvas area
-                    const canvasRect = this.canvas.getBoundingClientRect();
-                    const mouseX = e.clientX;
-                    const mouseY = e.clientY;
-
-                    if (mouseX >= canvasRect.left && mouseX <= canvasRect.right &&
-                        mouseY >= canvasRect.top && mouseY <= canvasRect.bottom) {
-                        console.log('🎯 Flickr container mouseenter detected over canvas area');
-                        startAnimation();
-                    }
-                }, { passive: true });
-
-                this.container.addEventListener('mouseleave', () => {
-                    console.log('🎯 Flickr container mouseleave detected');
-                    stopAnimation();
-                }, { passive: true });
-            }
+            // COMMENTED OUT: Flickr-specific container event fallback
+            // TODO: Generalize overlay interference detection and fallback
+            // if (window.location.hostname.includes('flickr.com') && this.container) {
+            //     console.log('🔧 Adding Flickr container-level event fallback');
+            //     this.container.addEventListener('mouseenter', (e) => {
+            //         const canvasRect = this.canvas.getBoundingClientRect();
+            //         const mouseX = e.clientX;
+            //         const mouseY = e.clientY;
+            //         if (mouseX >= canvasRect.left && mouseX <= canvasRect.right &&
+            //             mouseY >= canvasRect.top && mouseY <= canvasRect.bottom) {
+            //             console.log('🎯 Flickr container mouseenter detected over canvas area');
+            //             startAnimation();
+            //         }
+            //     }, { passive: true });
+            //     this.container.addEventListener('mouseleave', () => {
+            //         console.log('🎯 Flickr container mouseleave detected');
+            //         stopAnimation();
+            //     }, { passive: true });
+            // }
 
             this.canvas.setAttribute('data-lif-events-added', 'true');
             console.log('Standard event handlers configured');

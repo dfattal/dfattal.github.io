@@ -1173,12 +1173,24 @@ async function convertTo3D(img, button, options = {}) {
                 console.log(`Fallback to image dimensions: ${effectiveWidth}x${effectiveHeight}`);
             }
 
+            // Container selection: special handling for picture elements
+            let lifContainer;
+            const pictureElement = img.closest('picture');
+            if (pictureElement) {
+                // For picture elements, canvas goes next to the picture tag, not inside it
+                lifContainer = pictureElement.parentElement;
+                console.log('Picture element detected - using picture parent as container');
+            } else {
+                // For regular images, use image parent
+                lifContainer = img.parentElement;
+            }
+
             // Use the enhanced factory method for layout-aware viewer creation
-            const finalLayoutAnalysis = options.layoutAnalysis || analyzeLayoutPattern(img.parentElement, img);
+            const finalLayoutAnalysis = options.layoutAnalysis || analyzeLayoutPattern(lifContainer, img);
 
             const viewer = lifViewer.createForLayout(
                 this.lifDownloadUrl,
-                img.parentElement, // Simple container - just use image parent
+                lifContainer,
                 img,
                 finalLayoutAnalysis,
                 {
@@ -1350,38 +1362,41 @@ function analyzeLayoutPattern(element, img) {
         isFacebookStyle: false
     };
 
-    // 0. Detect Facebook-style layouts first (specific to Facebook)
-    // Insight: Facebook uses complex CSS positioning (x168nmei, x13lgxp2, x5pf9jr classes)
-    // that breaks when DOM structure is modified. Overlay approach preserves original layout.
-    const isFacebookImage = img.src && img.src.includes('fbcdn.net');
-    const hasFacebookClasses = img.classList && (
-        img.className.includes('x168nmei') ||
-        img.className.includes('x13lgxp2') ||
-        img.className.includes('x5pf9jr')
+    // COMMENTED OUT: Facebook-specific layout detection
+    // TODO: Generalize this to detect complex positioned layouts on any site
+    // const isFacebookImage = img.src && img.src.includes('fbcdn.net');
+    // const hasFacebookClasses = img.classList && (
+    //     img.className.includes('x168nmei') ||
+    //     img.className.includes('x13lgxp2') ||
+    //     img.className.includes('x5pf9jr')
+    // );
+    // if (isFacebookImage || hasFacebookClasses) {
+    //     analysis.isFacebookStyle = true;
+    //     analysis.type = 'facebook-layout';
+    //     analysis.preserveOriginal = true;
+    //     analysis.reason = 'Facebook-style complex positioning detected';
+    //     // ... rest of Facebook logic
+    // }
+
+    // GENERALIZED: Detect complex positioned layouts by analyzing CSS properties
+    const elementStyle = window.getComputedStyle(element);
+    const hasComplexPositioning = (
+        elementStyle.position === 'absolute' ||
+        elementStyle.position === 'fixed' ||
+        elementStyle.transform !== 'none' ||
+        (elementStyle.zIndex && parseInt(elementStyle.zIndex) > 100)
     );
 
-    if (isFacebookImage || hasFacebookClasses) {
-        analysis.isFacebookStyle = true;
-        analysis.type = 'facebook-layout';
+    if (hasComplexPositioning && element.classList.length > 5) {
+        analysis.isFacebookStyle = true; // Keep the same flag for compatibility
+        analysis.type = 'complex-positioned-layout';
         analysis.preserveOriginal = true;
-        analysis.reason = 'Facebook-style complex positioning detected';
-
-        // Check if this is within a padding-based container
-        let currentElement = element;
-        for (let i = 0; i < 5 && currentElement; i++) {
-            const style = window.getComputedStyle(currentElement);
-            if (style.paddingTop.includes('%') && parseFloat(style.paddingTop) > 50) {
-                analysis.containerHasPaddingAspectRatio = true;
-                break;
-            }
-            currentElement = currentElement.parentElement;
-        }
-
-        console.log('Facebook layout detected:', {
-            isFacebookImage,
-            hasFacebookClasses,
-            hasPaddingContainer: analysis.containerHasPaddingAspectRatio,
-            imgClasses: img.className
+        analysis.reason = 'Complex positioning detected - using overlay approach';
+        console.log('Complex positioned layout detected:', {
+            position: elementStyle.position,
+            transform: elementStyle.transform,
+            zIndex: elementStyle.zIndex,
+            classCount: element.classList.length
         });
     }
 
@@ -2801,47 +2816,17 @@ function setupMessageListener() {
                 // Note: Instagram carousel listeners disabled - not needed for context menu approach
                 // setupInstagramCarouselListeners(); // Disabled for context menu approach
 
-                // Set up Flickr theater mode handling if needed
-                if (window.location.hostname.includes('flickr.com')) {
-                    // URL-based theater mode detection
-                    const currentPath = window.location.pathname;
-                    const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
-
-                    if (isTheaterModeURL) {
-                        if (isDebugEnabled) {
-                            console.log('🎭 Flickr theater mode detected - setting up overlay cleanup');
-                        }
-
-                        // Check if this is first load and reload if needed
-                        const hasBeenReloaded = sessionStorage.getItem('flickr-theater-reloaded');
-
-                        if (!hasBeenReloaded) {
-                            if (isDebugEnabled) {
-                                console.log('🔄 FLICKR THEATER MODE: First load detected, reloading page to fix positioning issues...');
-                            }
-                            sessionStorage.setItem('flickr-theater-reloaded', 'true');
-                            setTimeout(() => {
-                                location.reload();
-                            }, 100);
-                            return; // Exit early since we're reloading
-                        } else {
-                            if (isDebugEnabled) {
-                                console.log('🎭 FLICKR THEATER MODE: Page already reloaded, proceeding with normal setup');
-                            }
-                        }
-
-                        setupFlickrOverlayCleanup();
-                    } else {
-                        // Clear the reload flag when NOT in theater mode
-                        const hadReloadFlag = sessionStorage.getItem('flickr-theater-reloaded');
-                        if (hadReloadFlag) {
-                            sessionStorage.removeItem('flickr-theater-reloaded');
-                        }
-                    }
-
-                    // Set up URL monitoring for SPA navigation to theater mode
-                    setupFlickrTheaterModeMonitoring();
-                }
+                // COMMENTED OUT: Flickr-specific theater mode handling
+                // TODO: Generalize overlay and theater mode detection
+                // if (window.location.hostname.includes('flickr.com')) {
+                //     const currentPath = window.location.pathname;
+                //     const isTheaterModeURL = /\/photos\/[^\/]+\/\d+\/in\//.test(currentPath);
+                //     if (isTheaterModeURL) {
+                //         // Flickr theater mode setup logic...
+                //         setupFlickrOverlayCleanup();
+                //     }
+                //     setupFlickrTheaterModeMonitoring();
+                // }
 
                 // Note: Button-based processing disabled - using context menu approach
                 console.log('Extension enabled - context menu approach active');
@@ -3317,21 +3302,34 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 const imgRect = img.getBoundingClientRect();
                 const containerRect = targetElement.getBoundingClientRect();
 
-                // LinkedIn-specific fix: Use image dimensions for centered/aspect-fill images
-                if (window.location.hostname.includes('linkedin.com') &&
-                    (img.classList.contains('ivm-view-attr__img--centered') ||
-                        img.classList.contains('ivm-view-attr__img--aspect-fit') ||
-                        img.classList.contains('ivm-view-attr__img--aspect-fill'))) {
+                // COMMENTED OUT: LinkedIn-specific fix
+                // TODO: Generalize this to detect centered/aspect-fit images on any site
+                // if (window.location.hostname.includes('linkedin.com') &&
+                //     (img.classList.contains('ivm-view-attr__img--centered') ||
+                //         img.classList.contains('ivm-view-attr__img--aspect-fit') ||
+                //         img.classList.contains('ivm-view-attr__img--aspect-fill'))) {
+                //     effectiveWidth = img.width || img.naturalWidth;
+                //     effectiveHeight = img.height || img.naturalHeight;
+                //     console.log('🎯 LinkedIn centered image - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                // } else {
 
-                    // Use the image's actual rendered dimensions, not the container
-                    effectiveWidth = img.width || img.naturalWidth;
-                    effectiveHeight = img.height || img.naturalHeight;
-                    console.log('🎯 LinkedIn centered image - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                // GENERALIZED: For aspect ratio containers, prefer image dimensions over container when image has explicit size
+                if (img.width && img.height &&
+                    (img.classList.contains('centered') ||
+                        img.classList.contains('aspect-fit') ||
+                        img.classList.contains('aspect-fill') ||
+                        img.style.objectFit === 'contain' ||
+                        img.style.objectFit === 'cover')) {
+                    // Use image dimensions for explicitly sized, fitted images
+                    effectiveWidth = img.width;
+                    effectiveHeight = img.height;
+                    console.log('🎯 Centered/fitted image detected - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
                 } else {
-                    // Default behavior for other sites
+                    // Default behavior: use container dimensions for aspect ratio containers
                     effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
                     effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
                 }
+                // }
 
                 targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
                 targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
