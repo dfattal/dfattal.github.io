@@ -463,15 +463,11 @@ class monoLdiGenerator {
     }
 
     async generateLif() {
-        // Clear any existing timer before starting a new one
-        try {
-            console.timeEnd('fetchDuration');
-        } catch (e) {
-            // Timer doesn't exist, which is fine
-        }
+        // Use a unique timer name to avoid conflicts between multiple conversions
+        const timerName = `fetchDuration_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
         // Start timing the fetch
-        console.time('fetchDuration');
+        console.time(timerName);
         // Show the progress bar
         console.log(this.width, ' - ', this.height, ' - ', this.execPlan.executionPlan[2].productParams.params.inpaintMethod);
 
@@ -497,18 +493,18 @@ class monoLdiGenerator {
             console.error('Error during fetch:', error);
             // End timer even if there's an error
             try {
-                console.timeEnd('fetchDuration');
+                console.timeEnd(timerName);
             } catch (timerError) {
-                console.warn('Timer fetchDuration was not started or already ended');
+                console.warn('Timer was not started or already ended');
             }
             return;
         }
 
         try {
             this.lifFile = await fetch(this.lifDownloadUrl);
-            console.timeEnd('fetchDuration');
+            console.timeEnd(timerName);
         } catch (timerError) {
-            console.warn('Timer fetchDuration was not started or already ended');
+            console.warn('Timer was not started or already ended');
         }
 
     }
