@@ -650,6 +650,95 @@ async function downloadLIFFile(lifDownloadUrl, originalImageSrc, imgElement = nu
     }
 }
 
+// Function to create processing overlay similar to canvas pattern - clean DOM insertion
+function createProcessingOverlay(img) {
+    try {
+        // Create overlay element
+        const overlay = document.createElement('div');
+        overlay.className = 'lif-processing-overlay';
+        overlay.innerHTML = '<div class="lif-spinner"></div>Converting to 3D...';
+
+        // Get image position and dimensions for overlay positioning
+        const imgRect = img.getBoundingClientRect();
+
+        // Position overlay to cover the image exactly - fixed positioning relative to viewport
+        overlay.style.cssText = `
+            position: fixed;
+            top: ${imgRect.top}px;
+            left: ${imgRect.left}px;
+            width: ${imgRect.width}px;
+            height: ${imgRect.height}px;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: ${Z_INDEX_CONFIG.PROCESSING_OVERLAY};
+            border-radius: 8px;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        `;
+
+        // Add to body (like canvas pattern) - no DOM modification of existing containers
+        document.body.appendChild(overlay);
+
+        // Store reference to image for cleanup
+        overlay.dataset.lifImageSrc = img.src;
+
+        // Handle window resize/scroll to keep overlay positioned correctly
+        const updateOverlayPosition = () => {
+            const currentImgRect = img.getBoundingClientRect();
+            overlay.style.top = `${currentImgRect.top}px`;
+            overlay.style.left = `${currentImgRect.left}px`;
+            overlay.style.width = `${currentImgRect.width}px`;
+            overlay.style.height = `${currentImgRect.height}px`;
+        };
+
+        window.addEventListener('scroll', updateOverlayPosition, { passive: true });
+        window.addEventListener('resize', updateOverlayPosition, { passive: true });
+
+        // Store cleanup function
+        overlay._cleanup = () => {
+            window.removeEventListener('scroll', updateOverlayPosition);
+            window.removeEventListener('resize', updateOverlayPosition);
+        };
+
+        if (isDebugEnabled) {
+            console.log(`Created processing overlay at ${imgRect.left},${imgRect.top} with size ${imgRect.width}x${imgRect.height}`);
+        }
+
+        return overlay;
+    } catch (error) {
+        console.error('Error creating processing overlay:', error);
+        return null;
+    }
+}
+
+// Function to remove processing overlay
+function removeProcessingOverlay(img) {
+    try {
+        // Find overlay by image source
+        const overlay = document.querySelector(`.lif-processing-overlay[data-lif-image-src="${img.src}"]`);
+        if (overlay) {
+            // Call cleanup function if it exists
+            if (overlay._cleanup) {
+                overlay._cleanup();
+            }
+            overlay.remove();
+            img.removeAttribute('data-lif-processing-overlay');
+
+            if (isDebugEnabled) {
+                console.log('Removed processing overlay for image:', img.src);
+            }
+        }
+    } catch (error) {
+        console.error('Error removing processing overlay:', error);
+    }
+}
+
 // Function to show download notification
 function showDownloadNotification(message, type = 'info') {
     const notification = document.createElement('div');
@@ -968,76 +1057,11 @@ async function convertTo3D(img, button, options = {}) {
             }
         }
 
-        if (overlayContainer) {
-            overlayContainer.classList.add('processing');
-            const overlay = document.createElement('div');
-            overlay.className = 'lif-processing-overlay';
-            overlay.innerHTML = '<div class="lif-spinner"></div>Converting to 3D...';
-
-            // Debug: Check if we have a picture element, Facebook layout, or aspect ratio container using overlay approach
-            const currentPictureElement = img.closest('picture');
-            const isAspectRatioContainer = overlayContainer.dataset.lifTargetWidth && overlayContainer.dataset.lifTargetHeight;
-
-            if (isDebugEnabled) {
-                console.log('Overlay creation debug:', {
-                    hasPictureElement: !!currentPictureElement,
-                    isFacebookStyle: layoutAnalysis?.isFacebookStyle,
-                    isAspectRatioContainer: !!isAspectRatioContainer,
-                    overlayContainer: overlayContainer.className || overlayContainer.tagName,
-                    pictureElementClass: currentPictureElement?.className || 'none',
-                    hasStoredDimensions: !!isAspectRatioContainer
-                });
-            }
-
-            // For picture element overlays, Facebook layouts, or aspect ratio containers, position absolutely to cover the image
-            if (currentPictureElement || layoutAnalysis?.isFacebookStyle || isAspectRatioContainer) {
-                // Get dimensions from the image
-                const imgRect = img.getBoundingClientRect();
-                const containerRect = overlayContainer.getBoundingClientRect();
-
-                // Calculate relative position using the image's position
-                const relativeTop = imgRect.top - containerRect.top;
-                const relativeLeft = imgRect.left - containerRect.left;
-
-                // Use custom positioning for picture elements and Facebook layouts
-                overlay.style.cssText = `
-                    position: absolute;
-                    top: ${relativeTop}px;
-                    left: ${relativeLeft}px;
-                    width: ${imgRect.width}px;
-                    height: ${imgRect.height}px;
-                    background: rgba(0,0,0,0.3);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-size: 14px;
-                    z-index: 5000;
-                `;
-
-                const layoutType = currentPictureElement ? 'picture element' :
-                    layoutAnalysis?.isFacebookStyle ? 'Facebook layout' :
-                        'aspect ratio container';
-                if (isDebugEnabled) {
-                    console.log(`Positioning overlay at ${relativeLeft},${relativeTop} with size ${imgRect.width}x${imgRect.height} (${layoutType})`);
-                }
-
-                // Ensure the overlay container can contain absolutely positioned elements
-                const containerStyle = window.getComputedStyle(overlayContainer);
-                if (containerStyle.position === 'static') {
-                    overlayContainer.style.position = 'relative';
-                }
-            } else {
-                // For non-picture elements, use the default CSS positioning (fills container)
-                overlay.style.zIndex = Z_INDEX_CONFIG.PROCESSING_OVERLAY;
-                if (isDebugEnabled) {
-                    console.log('Using default overlay positioning for regular image');
-                }
-            }
-
-            // Store reference to overlay container on the overlay for later removal
-            overlay.dataset.overlayContainer = overlayContainer.className || 'unknown';
-            overlayContainer.appendChild(overlay);
+        // Create processing overlay similar to canvas pattern - clean DOM insertion
+        const overlay = createProcessingOverlay(img);
+        if (overlay) {
+            // Store reference for cleanup
+            img.dataset.lifProcessingOverlay = 'true';
         }
 
         console.log('Starting 2D to 3D conversion for image:', img.src);
@@ -1143,87 +1167,8 @@ async function convertTo3D(img, button, options = {}) {
             // Context menu approach: VR functionality is now available via right-click menu
             // No need for VR button visibility management since we use context menu
 
-            // Remove processing overlay - check both container and overlayContainer
-            const overlay = container?.querySelector('.lif-processing-overlay');
-            if (overlay) {
-                overlay.remove();
-            }
-            if (container) {
-                container.classList.remove('processing');
-            }
-
-            // Also check for Facebook-style layouts that might have overlays in different containers
-            if (layoutAnalysis?.isFacebookStyle) {
-                // Search for Facebook overlays in parent hierarchy
-                let searchElement = img.parentElement;
-                for (let i = 0; i < 3 && searchElement; i++) {
-                    const facebookOverlay = searchElement.querySelector('.lif-processing-overlay');
-                    if (facebookOverlay) {
-                        console.log('Removing Facebook overlay from parent hierarchy');
-                        facebookOverlay.remove();
-                        searchElement.classList.remove('processing');
-                        break;
-                    }
-                    searchElement = searchElement.parentElement;
-                }
-            }
-
-            // Comprehensive overlay removal - search for any remaining overlays
-            const allOverlays = document.querySelectorAll('.lif-processing-overlay');
-            if (allOverlays.length > 0) {
-                console.log(`Found ${allOverlays.length} remaining overlay(s), removing them`);
-                allOverlays.forEach(remainingOverlay => {
-                    try {
-                        const overlayParent = remainingOverlay.parentElement;
-                        remainingOverlay.remove();
-                        if (overlayParent) {
-                            overlayParent.classList.remove('processing');
-                        }
-                    } catch (error) {
-                        console.warn('Error removing overlay:', error);
-                    }
-                });
-            }
-
-            // Also check for picture element overlay in overlayContainer (could be different from container)
-            if (pictureElement) {
-                // For picture elements, we need to check the overlayContainer which might be different
-                const imageContainer = pictureElement.parentElement; // image__container
-                const imageDiv = imageContainer?.parentElement; // image div
-                const containerMedia = imageDiv?.parentElement; // container__item-media
-
-                // Check all possible overlay containers
-                [containerMedia, imageDiv, imageContainer].forEach(possibleContainer => {
-                    if (possibleContainer) {
-                        const pictureOverlay = possibleContainer.querySelector('.lif-processing-overlay');
-                        if (pictureOverlay) {
-                            pictureOverlay.remove();
-                            possibleContainer.classList.remove('processing');
-                        }
-                    }
-                });
-            }
-
-            // Also check for picture element overlay and aspect ratio container overlays
-            const pictureParent = img.closest('picture')?.parentElement;
-            if (pictureParent) {
-                const pictureOverlay = pictureParent.querySelector('.lif-processing-overlay');
-                if (pictureOverlay) {
-                    pictureOverlay.remove();
-                }
-                pictureParent.classList.remove('processing');
-            }
-
-            // Check for aspect ratio container overlays that might have stored dimensions
-            const aspectRatioContainers = document.querySelectorAll('[data-lif-target-width]');
-            aspectRatioContainers.forEach(aspectContainer => {
-                const aspectOverlay = aspectContainer.querySelector('.lif-processing-overlay');
-                if (aspectOverlay) {
-                    console.log('Removing aspect ratio container overlay');
-                    aspectOverlay.remove();
-                    aspectContainer.classList.remove('processing');
-                }
-            });
+            // Remove processing overlay using clean removal function
+            removeProcessingOverlay(img);
 
             // Create the LIF viewer with effective dimensions
             // For padding-based layouts, prioritize container dimensions over image dimensions
@@ -1379,87 +1324,8 @@ async function convertTo3D(img, button, options = {}) {
             console.log('Temporary button removed due to conversion error');
         }
 
-        // Remove processing overlay - check both container and overlayContainer
-        const overlay = container?.querySelector('.lif-processing-overlay');
-        if (overlay) {
-            overlay.remove();
-        }
-        if (container) {
-            container.classList.remove('processing');
-        }
-
-        // Also check for Facebook-style layouts that might have overlays in different containers
-        if (layoutAnalysis?.isFacebookStyle) {
-            // Search for Facebook overlays in parent hierarchy
-            let searchElement = img.parentElement;
-            for (let i = 0; i < 3 && searchElement; i++) {
-                const facebookOverlay = searchElement.querySelector('.lif-processing-overlay');
-                if (facebookOverlay) {
-                    console.log('Removing Facebook overlay from parent hierarchy');
-                    facebookOverlay.remove();
-                    searchElement.classList.remove('processing');
-                    break;
-                }
-                searchElement = searchElement.parentElement;
-            }
-        }
-
-        // Comprehensive overlay removal - search for any remaining overlays
-        const allOverlays = document.querySelectorAll('.lif-processing-overlay');
-        if (allOverlays.length > 0) {
-            console.log(`Found ${allOverlays.length} remaining overlay(s), removing them`);
-            allOverlays.forEach(remainingOverlay => {
-                try {
-                    const overlayParent = remainingOverlay.parentElement;
-                    remainingOverlay.remove();
-                    if (overlayParent) {
-                        overlayParent.classList.remove('processing');
-                    }
-                } catch (error) {
-                    console.warn('Error removing overlay:', error);
-                }
-            });
-        }
-
-        // Also check for picture element overlay in overlayContainer (could be different from container)
-        if (pictureElement) {
-            // For picture elements, we need to check the overlayContainer which might be different
-            const imageContainer = pictureElement.parentElement; // image__container
-            const imageDiv = imageContainer?.parentElement; // image div
-            const containerMedia = imageDiv?.parentElement; // container__item-media
-
-            // Check all possible overlay containers
-            [containerMedia, imageDiv, imageContainer].forEach(possibleContainer => {
-                if (possibleContainer) {
-                    const pictureOverlay = possibleContainer.querySelector('.lif-processing-overlay');
-                    if (pictureOverlay) {
-                        pictureOverlay.remove();
-                        possibleContainer.classList.remove('processing');
-                    }
-                }
-            });
-        }
-
-        // Also check for picture element overlay and aspect ratio container overlays
-        const pictureParent = img.closest('picture')?.parentElement;
-        if (pictureParent) {
-            const pictureOverlay = pictureParent.querySelector('.lif-processing-overlay');
-            if (pictureOverlay) {
-                pictureOverlay.remove();
-            }
-            pictureParent.classList.remove('processing');
-        }
-
-        // Check for aspect ratio container overlays that might have stored dimensions
-        const aspectRatioContainers = document.querySelectorAll('[data-lif-target-width]');
-        aspectRatioContainers.forEach(aspectContainer => {
-            const aspectOverlay = aspectContainer.querySelector('.lif-processing-overlay');
-            if (aspectOverlay) {
-                console.log('Removing aspect ratio container overlay (error handling)');
-                aspectOverlay.remove();
-                aspectContainer.classList.remove('processing');
-            }
-        });
+        // Remove processing overlay using clean removal function
+        removeProcessingOverlay(img);
 
         // Provide specific error messages based on error type
         let errorMessage = 'Failed to convert image to 3D. ';
@@ -3556,10 +3422,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             tempButton.style.display = 'none';
             overlayContainer.appendChild(tempButton);
 
-            // 4. Show conversion started notification
-            showDownloadNotification('Converting image to 3D...', 'info');
-
-            // 5. Call the conversion directly, passing the temp button and correct dimensions
+            // 4. Call the conversion directly, passing the temp button and correct dimensions
             convertTo3D(img, tempButton, { width: effectiveWidth, height: effectiveHeight });
         }
     } else if (message.action === "downloadLIF") {
