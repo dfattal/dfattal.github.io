@@ -817,13 +817,25 @@ class lifViewer {
         // }
 
         // GENERALIZED: Detect centered/fitted images using CSS and class patterns
-        if ((originalImage.classList.contains('centered') ||
+        const isCenteredOrFitted = (
+            // Generic class patterns
+            originalImage.classList.contains('centered') ||
             originalImage.classList.contains('aspect-fit') ||
             originalImage.classList.contains('aspect-fill') ||
+            // Site-specific prefixed classes (keeping pattern recognition)
+            originalImage.className.includes('centered') ||
+            originalImage.className.includes('aspect-fit') ||
+            originalImage.className.includes('aspect-fill') ||
+            // CSS object-fit detection
             originalImage.style.objectFit === 'contain' ||
-            originalImage.style.objectFit === 'cover') &&
-            layoutAnalysis?.containerHasPaddingAspectRatio) {
+            originalImage.style.objectFit === 'cover'
+        );
 
+        // Get computed style for comprehensive object-fit detection
+        const computedStyle = window.getComputedStyle(originalImage);
+        const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
+
+        if (isCenteredOrFitted && layoutAnalysis?.containerHasPaddingAspectRatio) {
             // Use image dimensions for fitted images in aspect ratio containers
             if (originalImage.width && originalImage.height) {
                 targetDimensions = {
@@ -833,6 +845,35 @@ class lifViewer {
                 layoutMode = 'aspectRatio';
                 console.log('🎯 Centered/fitted image in aspect ratio container - using image dimensions');
             }
+        } else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
+            // Use aspectRatio mode for any object-fit image or centered/fitted image with dimensions
+            const hasExplicitDimensions = originalImage.width && originalImage.height;
+
+            if (hasExplicitDimensions && isCenteredOrFitted) {
+                // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
+                targetDimensions = {
+                    width: originalImage.width || originalImage.naturalWidth || targetDimensions.width,
+                    height: originalImage.height || originalImage.naturalHeight || targetDimensions.height
+                };
+            } else {
+                // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
+                targetDimensions = {
+                    width: originalImage.naturalWidth || originalImage.width || targetDimensions.width,
+                    height: originalImage.naturalHeight || originalImage.height || targetDimensions.height
+                };
+            }
+
+            layoutMode = 'aspectRatio';
+            console.log('🎯 Object-fit or centered/fitted image detected - using aspectRatio mode with image dimensions:', {
+                hasObjectFit,
+                objectFit: computedStyle.objectFit,
+                isCenteredOrFitted,
+                hasExplicitDimensions,
+                naturalSize: originalImage.naturalWidth + 'x' + originalImage.naturalHeight,
+                attributeSize: originalImage.width + 'x' + originalImage.height,
+                targetDimensions,
+                priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
+            });
         }
 
         // Apply dimension corrections for picture elements

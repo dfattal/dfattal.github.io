@@ -1421,7 +1421,8 @@ function analyzeLayoutPattern(element, img) {
     let paddingContainerInfo = null;
     let currentElement = element.parentElement;
 
-    for (let i = 0; i < 3 && currentElement; i++) {
+    // Enhanced search: look further up the hierarchy for aspect ratio containers
+    for (let i = 0; i < 6 && currentElement; i++) {
         const parentComputedStyle = window.getComputedStyle(currentElement);
         const parentPaddingBottom = parentComputedStyle.paddingBottom;
         const parentPaddingTop = parentComputedStyle.paddingTop;
@@ -1471,13 +1472,13 @@ function analyzeLayoutPattern(element, img) {
 
         analysis.containerHasPaddingAspectRatio = true;
 
-        if (isDebugEnabled) {
-            console.log('Padding-based aspect ratio detected:', {
-                directPadding: { paddingTop, paddingBottom, height, paddingTopValue, paddingBottomValue, heightValue, hasPercentagePadding },
-                parentPadding: paddingContainerInfo,
-                foundPaddingContainer
-            });
-        }
+        console.log('🔍 Aspect ratio container analysis:', {
+            element: element.className || element.tagName,
+            directPadding: { paddingTop, paddingBottom, height, paddingTopValue, paddingBottomValue, heightValue, hasPercentagePadding },
+            parentPadding: paddingContainerInfo,
+            foundPaddingContainer,
+            containerHasPaddingAspectRatio: analysis.containerHasPaddingAspectRatio
+        });
     }
 
     // 2. Detect absolutely positioned images within containers
@@ -3313,17 +3314,47 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 //     console.log('🎯 LinkedIn centered image - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
                 // } else {
 
-                // GENERALIZED: For aspect ratio containers, prefer image dimensions over container when image has explicit size
-                if (img.width && img.height &&
-                    (img.classList.contains('centered') ||
-                        img.classList.contains('aspect-fit') ||
-                        img.classList.contains('aspect-fill') ||
-                        img.style.objectFit === 'contain' ||
-                        img.style.objectFit === 'cover')) {
-                    // Use image dimensions for explicitly sized, fitted images
-                    effectiveWidth = img.width;
-                    effectiveHeight = img.height;
-                    console.log('🎯 Centered/fitted image detected - using image dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                // GENERALIZED: For aspect ratio containers, prefer image dimensions over container when image has explicit size or uses object-fit
+                const hasExplicitDimensions = img.width && img.height;
+                const isCenteredOrFitted = (
+                    // Generic class patterns
+                    img.classList.contains('centered') ||
+                    img.classList.contains('aspect-fit') ||
+                    img.classList.contains('aspect-fill') ||
+                    // LinkedIn-style prefixed classes (keeping pattern recognition)
+                    img.className.includes('centered') ||
+                    img.className.includes('aspect-fit') ||
+                    img.className.includes('aspect-fill') ||
+                    // CSS object-fit detection
+                    img.style.objectFit === 'contain' ||
+                    img.style.objectFit === 'cover'
+                );
+
+                // Get computed style for comprehensive object-fit detection
+                const computedStyle = window.getComputedStyle(img);
+                const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
+
+                if ((hasExplicitDimensions && isCenteredOrFitted) || hasObjectFit) {
+                    // For centered/fitted images with explicit dimensions, prefer HTML attributes over natural size
+                    // For object-fit images without explicit dimensions, use natural size
+                    if (hasExplicitDimensions && isCenteredOrFitted) {
+                        // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
+                        effectiveWidth = img.width || img.naturalWidth || imgRect.width;
+                        effectiveHeight = img.height || img.naturalHeight || imgRect.height;
+                    } else {
+                        // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
+                        effectiveWidth = img.naturalWidth || img.width || imgRect.width;
+                        effectiveHeight = img.naturalHeight || img.height || imgRect.height;
+                    }
+                    console.log('🎯 Centered/fitted/object-fit image detected - using image dimensions:', effectiveWidth + 'x' + effectiveHeight, {
+                        hasExplicitDimensions,
+                        isCenteredOrFitted,
+                        hasObjectFit,
+                        objectFit: computedStyle.objectFit,
+                        naturalSize: img.naturalWidth + 'x' + img.naturalHeight,
+                        attributeSize: img.width + 'x' + img.height,
+                        priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
+                    });
                 } else {
                     // Default behavior: use container dimensions for aspect ratio containers
                     effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;

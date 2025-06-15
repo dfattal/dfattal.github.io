@@ -190,3 +190,163 @@ render() {
 - `libs/VRPageSystem.js` - Syntax fix (missing closing brace)
 
 This cleanup represents a complete architectural shift from automatic button-based processing to user-initiated context menu actions, resulting in a more reliable, performant, and user-friendly extension. 
+
+# ImmersityLens Development Log
+
+## Recent Changes & Fixes (Latest Session)
+
+### 🎯 **Universal Object-Fit Detection & Smart Dimension Priority System**
+
+#### **Problem Solved:**
+- **LinkedIn**: Canvas was too big (800×606 instead of 600×455)
+- **DeviantArt**: Canvas wasn't appearing due to wrong layout mode detection
+- **Root Cause**: Inconsistent dimension detection logic between sites using different CSS patterns
+
+#### **Key Changes Made:**
+
+### 1. **Enhanced Object-Fit Detection in Context Menu Handler** (`content.js`)
+
+**Location**: Lines 3327-3350
+
+**Before**: Only detected inline `style.objectFit`
+```javascript
+// CSS object-fit detection
+img.style.objectFit === 'contain' ||
+img.style.objectFit === 'cover'
+```
+
+**After**: Added computed style detection
+```javascript
+// Get computed style for comprehensive object-fit detection
+const computedStyle = window.getComputedStyle(img);
+const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
+```
+
+### 2. **Smart Dimension Priority System** (`content.js`)
+
+**Location**: Lines 3330-3350
+
+**New Logic**: Different dimension priorities based on image type:
+
+```javascript
+if (hasExplicitDimensions && isCenteredOrFitted) {
+    // LinkedIn case: Prioritize HTML attributes for explicitly sized centered/fitted images
+    effectiveWidth = img.width || img.naturalWidth || imgRect.width;
+    effectiveHeight = img.height || img.naturalHeight || imgRect.height;
+} else {
+    // DeviantArt case: For object-fit images without explicit dimensions, use natural size
+    effectiveWidth = img.naturalWidth || img.width || imgRect.width;
+    effectiveHeight = img.naturalHeight || img.height || imgRect.height;
+}
+```
+
+**Result**:
+- **LinkedIn**: Uses HTML attributes (600×455) instead of natural size (800×606)
+- **DeviantArt**: Uses natural dimensions for full image detail
+
+### 3. **Universal Object-Fit Layout Mode Detection** (`libs/LIF.js`)
+
+**Location**: Lines 828-850
+
+**Before**: Only switched to `aspectRatio` mode for images in aspect ratio containers
+```javascript
+if (isCenteredOrFitted && layoutAnalysis?.containerHasPaddingAspectRatio) {
+    layoutMode = 'aspectRatio';
+}
+```
+
+**After**: Added universal object-fit detection
+```javascript
+} else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
+    // Use aspectRatio mode for any object-fit image or centered/fitted image with dimensions
+    layoutMode = 'aspectRatio';
+}
+```
+
+**Result**: DeviantArt now correctly uses `aspectRatio` layout mode instead of `standard`
+
+### 4. **Matching Dimension Priority in LIF.js**
+
+**Location**: Lines 840-860
+
+**Added**: Same smart priority system as context menu handler
+```javascript
+if (hasExplicitDimensions && isCenteredOrFitted) {
+    // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
+    targetDimensions = {
+        width: originalImage.width || originalImage.naturalWidth || targetDimensions.width,
+        height: originalImage.height || originalImage.naturalHeight || targetDimensions.height
+    };
+} else {
+    // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
+    targetDimensions = {
+        width: originalImage.naturalWidth || originalImage.width || targetDimensions.width,
+        height: originalImage.naturalHeight || originalImage.height || targetDimensions.height
+    };
+}
+```
+
+### **Technical Architecture:**
+
+#### **Detection Flow:**
+1. **Context Menu Handler** detects image patterns and calculates dimensions
+2. **Passes dimensions + layout analysis** to `convertTo3D()`
+3. **LIF.js createForLayout()** applies same logic for consistency
+4. **Canvas created** with correct dimensions and layout mode
+
+#### **Pattern Recognition:**
+- **Centered/Fitted Classes**: `centered`, `aspect-fit`, `aspect-fill`, plus prefixed variants
+- **CSS Object-Fit**: Both inline styles and computed styles
+- **Explicit Dimensions**: HTML `width`/`height` attributes
+
+#### **Layout Mode Logic:**
+- **`aspectRatio`**: For object-fit images, centered/fitted images
+- **`overlay`**: For complex positioned layouts
+- **`picture`**: For `<picture>` elements
+- **`standard`**: Fallback for simple images
+
+### **Results Achieved:**
+
+#### **LinkedIn** ✅
+- Canvas dimensions: 600×455 (matches HTML attributes)
+- Layout mode: `aspectRatio`
+- Canvas positioned correctly over image
+- Size matches intended display dimensions
+
+#### **DeviantArt** ✅
+- Canvas dimensions: Natural image size (full detail)
+- Layout mode: `aspectRatio` (was `standard`)
+- Canvas visible and functional
+- Object-fit: cover properly detected
+
+#### **Universal Compatibility** ✅
+- Works for any site using `object-fit: cover/contain`
+- Handles both explicit dimensions and natural sizing
+- Maintains backward compatibility with existing fixes
+- Comprehensive debug logging for troubleshooting
+
+### **Code Quality Improvements:**
+
+1. **Consistent Logic**: Same dimension detection in both files
+2. **Comprehensive Detection**: Covers inline styles, computed styles, and class patterns
+3. **Smart Prioritization**: Different strategies for different image types
+4. **Enhanced Logging**: Detailed debug information for troubleshooting
+5. **Future-Proof**: Generic patterns work across sites without site-specific code
+
+### **Previous Context (Earlier Sessions):**
+
+#### **Major Cleanup Phase:**
+- Removed legacy button-based system complexity
+- Commented out site-specific fixes in favor of universal patterns
+- Simplified container detection logic
+- Transitioned to context menu approach
+- Enhanced class detection patterns for broader compatibility
+
+#### **Generalization Effort:**
+- LinkedIn-specific fixes → Generic centered/fitted image detection
+- Facebook-specific fixes → Generic complex positioning detection
+- DeviantArt/RedBubble overrides → Removed in favor of universal logic
+- Enhanced pattern matching with substring detection
+- Extended container search range for aspect ratio detection
+
+This represents a significant evolution from site-specific patches to a robust, universal system that handles responsive images across the web. 
