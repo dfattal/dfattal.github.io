@@ -911,17 +911,19 @@ async function downloadLIFFile(lifDownloadUrl, originalImageSrc, imgElement = nu
 
                 // Show success notification
                 showDownloadNotification('LIF file downloaded successfully!', 'success');
-                return;
+                return; // Exit early to prevent fallback execution
             } catch (err) {
                 if (err.name === 'AbortError') {
                     console.log('User cancelled the download');
-                    return;
+                    return; // Exit early when user cancels
                 }
                 console.warn('File System Access API failed, falling back to traditional download:', err);
+                // Continue to fallback method below
             }
         }
 
         // Fallback for browsers that don't support File System Access API
+        console.log('Using fallback download method');
         const response = await fetch(lifDownloadUrl);
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
@@ -3103,16 +3105,10 @@ function setupMessageListener() {
             // message listener that includes proper layout analysis and container detection
             console.log('Old convertImage handler called - conversion handled by newer system');
         } else if (request.action === "downloadLIF") {
-            // Use the existing context menu image detection system
-            const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
-
-            if (img && imageLIFMap.has(img.src)) {
-                console.log('Context menu: Downloading LIF for image', img.src);
-                const lifUrl = imageLIFMap.get(img.src);
-                await downloadLIFFile(lifUrl, img.src, img);
-            } else {
-                console.warn('Context menu: No LIF available for image');
-            }
+            // This old downloadLIF handler is disabled - download is now handled by the newer
+            // message listener to prevent duplicate downloads
+            console.log('Old downloadLIF handler called - download handled by newer system');
+            return; // Let the newer handler process this
         } else if (request.action === "downloadMP4") {
             // Redirect to newer system - prevent duplicate handling
             console.log('Old downloadMP4 handler called - handled by newer system');
