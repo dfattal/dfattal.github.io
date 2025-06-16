@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP4 Download Feature Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 20px 0;
+        }
+
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .feature-list {
+            background: #f3e5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎬 MP4 Download Feature Test</h1>
+
+        <div class="feature-list">
+            <h3>✨ New Feature: Download MP4</h3>
+            <p>The Chrome extension now includes MP4 video generation! After converting an image to 3D, you can:</p>
+            <ul>
+                <li>🎥 <strong>Download MP4</strong> - Generate an animated video of the 3D effect</li>
+                <li>📁 <strong>Download LIF</strong> - Save the 3D image file</li>
+                <li>🥽 <strong>Enter VR</strong> - View in virtual reality (if supported)</li>
+            </ul>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Testing Instructions</h3>
+            <div class="step">
+                <strong>Step 1:</strong> Make sure the ImmersityLens Chrome extension is installed and enabled
+            </div>
+            <div class="step">
+                <strong>Step 2:</strong> Right-click on the image below and select "Convert to 3D"
+            </div>
+            <div class="step">
+                <strong>Step 3:</strong> Wait for the conversion to complete (image will show 3D animation)
+            </div>
+            <div class="step">
+                <strong>Step 4:</strong> Right-click on the image again - you should see three options:
+                <ul>
+                    <li>Download LIF</li>
+                    <li><strong>Download MP4</strong> 🆕</li>
+                    <li>Enter VR</li>
+                </ul>
+            </div>
+            <div class="step">
+                <strong>Step 5:</strong> Click "Download MP4" to test the new feature
+            </div>
+            <div class="step">
+                <strong>Step 6:</strong> The extension will prompt for:
+                <ul>
+                    <li>Video width (e.g., 1920)</li>
+                    <li>Video height (e.g., 1080)</li>
+                    <li>Frame rate (e.g., 30)</li>
+                </ul>
+            </div>
+            <div class="step">
+                <strong>Step 7:</strong> The MP4 video should download automatically after processing
+            </div>
+        </div>
+
+        <h3>🖼️ Test Image</h3>
+        <p>Right-click on this image to start testing:</p>
+
+        <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80"
+            alt="Mountain landscape with lake reflection" class="test-image"
+            title="Right-click to test MP4 download feature">
+
+        <div class="instructions">
+            <h3>🔧 Technical Details</h3>
+            <p>The MP4 generation feature:</p>
+            <ul>
+                <li>Uses the existing lifViewer animation system</li>
+                <li>Records the harmonic camera movement as video frames</li>
+                <li>Supports custom resolution and frame rate</li>
+                <li>Generates browser-compatible MP4 files</li>
+                <li>Downloads automatically when complete</li>
+            </ul>
+        </div>
+
+        <div class="feature-list">
+            <h3>⚡ Expected Behavior</h3>
+            <ul>
+                <li>✅ Context menu shows "Download MP4" after conversion</li>
+                <li>✅ User is prompted for video settings</li>
+                <li>✅ Progress notifications appear during generation</li>
+                <li>✅ MP4 file downloads automatically</li>
+                <li>✅ Original animation continues after download</li>
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>

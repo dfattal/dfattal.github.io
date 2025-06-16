@@ -2303,6 +2303,57 @@ class lifViewer {
         this.startTime = Date.now() / 1000; // Start transition timer
         this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
     }
+
+    // Helper method to render a single frame at a specific time (used for MP4 generation)
+    renderFrame(timeInSeconds) {
+        // Safety check: ensure currentAnimation is initialized
+        if (!this.currentAnimation || !this.currentAnimation.data) {
+            return;
+        }
+
+        const animTime = this.currentAnimation.duration_sec;
+        const t = timeInSeconds;
+
+        function harm(amp, ph, bias) {
+            return amp * Math.sin(2 * Math.PI * (t / animTime + ph)) + bias;
+        }
+
+        const invd = this.currentAnimation.data.invd;
+
+        // Update renderCam for this specific time
+        this.renderCam.pos.x = harm(
+            this.currentAnimation.data.position.x.amplitude,
+            this.currentAnimation.data.position.x.phase,
+            this.currentAnimation.data.position.x.bias
+        );
+        this.renderCam.pos.y = harm(
+            this.currentAnimation.data.position.y.amplitude,
+            this.currentAnimation.data.position.y.phase,
+            this.currentAnimation.data.position.y.bias
+        );
+        this.renderCam.pos.z = harm(
+            this.currentAnimation.data.position.z.amplitude,
+            this.currentAnimation.data.position.z.phase,
+            this.currentAnimation.data.position.z.bias
+        );
+
+        // No mouse input during recording
+        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd);
+        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd);
+
+        const vs = this.viewportScale(
+            { x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px },
+            { x: this.gl.canvas.width, y: this.gl.canvas.height }
+        );
+        this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd);
+
+        // Render the frame
+        if (this.views.length < 2) {
+            this.drawSceneMN(t);
+        } else {
+            this.drawSceneST(t);
+        }
+    }
 }
 
 // LifLoader class wrapper for VR compatibility

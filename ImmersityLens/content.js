@@ -555,6 +555,251 @@ async function showCorsInfoIfNeeded() {
     }, 10000);
 }
 
+// Function to generate MP4 by creating offscreen lifViewer with LIF file
+async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
+    console.log('🎬 Starting MP4 generation for image:', imgElement.src);
+    console.log('🎬 Using LIF URL:', lifDownloadUrl);
+
+    try {
+        // First, get the LIF image dimensions to use as defaults
+        let defaultWidth = 1920;
+        let defaultHeight = 1080;
+
+        try {
+            // Load the LIF image to get its natural dimensions
+            const lifImg = new Image();
+            lifImg.crossOrigin = 'anonymous';
+
+            await new Promise((resolve, reject) => {
+                lifImg.onload = () => {
+                    defaultWidth = lifImg.naturalWidth || lifImg.width || 1920;
+                    defaultHeight = lifImg.naturalHeight || lifImg.height || 1080;
+                    console.log('📐 LIF image dimensions:', { defaultWidth, defaultHeight });
+                    resolve();
+                };
+                lifImg.onerror = () => {
+                    console.warn('Could not load LIF image for dimensions, using defaults');
+                    resolve(); // Don't reject, just use defaults
+                };
+                lifImg.src = lifDownloadUrl;
+            });
+        } catch (error) {
+            console.warn('Error getting LIF dimensions, using defaults:', error);
+        }
+
+        // Get user preferences for video settings with LIF dimensions as defaults
+        const videoWidth = parseInt(prompt(`Enter video width:`, defaultWidth), 10) || defaultWidth;
+        const videoHeight = parseInt(prompt(`Enter video height:`, defaultHeight), 10) || defaultHeight;
+        const videoFps = parseInt(prompt("Enter video fps:", 30), 10) || 30;
+
+        console.log('📊 MP4 settings:', { videoWidth, videoHeight, videoFps });
+
+        // Show progress notification
+        showDownloadNotification('🎬 Generating MP4... This may take a moment.', 'info');
+
+        // Create offscreen canvas for MP4 generation
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = videoWidth;
+        offscreenCanvas.height = videoHeight;
+
+        // Create a temporary container for the offscreen lifViewer
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px';
+        tempContainer.style.top = '-9999px';
+        tempContainer.style.width = videoWidth + 'px';
+        tempContainer.style.height = videoHeight + 'px';
+        tempContainer.style.visibility = 'hidden';
+        tempContainer.style.pointerEvents = 'none';
+        tempContainer.style.overflow = 'hidden';
+        tempContainer.style.zIndex = '-1000';
+
+        // Add a placeholder image to prevent DOM errors in lifViewer
+        const placeholderImg = document.createElement('img');
+        placeholderImg.src = imgElement.src;
+        placeholderImg.style.width = '100%';
+        placeholderImg.style.height = '100%';
+        placeholderImg.style.objectFit = 'cover';
+        placeholderImg.dataset.lifButtonAdded = 'true'; // Prevent button processing
+        tempContainer.appendChild(placeholderImg);
+
+        document.body.appendChild(tempContainer);
+
+        try {
+            console.log('🔄 Creating offscreen lifViewer...');
+
+            // Create new lifViewer instance for MP4 generation with minimal options
+            const offscreenViewer = new lifViewer(lifDownloadUrl, tempContainer, {
+                height: videoHeight,
+                autoplay: false,
+                mouseOver: false,
+                originalImage: placeholderImg  // Provide the placeholder image to prevent null reference errors
+            });
+
+            // Set additional properties for offscreen use
+            offscreenViewer.disableAnim = true; // We'll control animation manually
+
+            // Wait for the viewer to be ready (init is called automatically by constructor)
+            // No need to call init() manually
+
+            // Wait a bit more for all resources to be loaded
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            console.log('✅ Offscreen lifViewer ready, starting recording...');
+
+            // Set up MediaRecorder for the offscreen canvas
+            const stream = offscreenCanvas.captureStream(videoFps);
+            const recorder = new MediaRecorder(stream, {
+                mimeType: 'video/mp4',
+                videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1)
+            });
+
+            const chunks = [];
+            recorder.ondataavailable = (e) => chunks.push(e.data);
+
+            // Calculate animation timing
+            const animDuration = offscreenViewer.currentAnimation?.duration_sec || 3.0;
+            const numFrames = Math.ceil(animDuration * videoFps);
+            const frameDuration = 1000 / videoFps;
+
+            console.log(`🎬 Recording ${numFrames} frames over ${animDuration} seconds...`);
+
+            // Warm-up phase: render a few frames before recording
+            console.log('🔥 Warming up...');
+            for (let i = 0; i < 5; i++) {
+                offscreenViewer.renderFrame(0); // Static frame
+                const ctx = offscreenCanvas.getContext('2d');
+                ctx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                ctx.drawImage(offscreenViewer.canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                await new Promise(resolve => setTimeout(resolve, frameDuration));
+            }
+
+            // Start recording
+            recorder.start();
+            console.log('🎬 Recording started...');
+
+            // Record animation frames
+            for (let i = 0; i < numFrames; i++) {
+                const progress = i / numFrames;
+                const animTime = progress * animDuration;
+
+                // Render frame at specific time
+                offscreenViewer.renderFrame(animTime);
+
+                // Copy to offscreen canvas
+                const ctx = offscreenCanvas.getContext('2d');
+                ctx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                ctx.drawImage(offscreenViewer.canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+
+                // Wait for frame timing
+                await new Promise(resolve => setTimeout(resolve, frameDuration));
+
+                // Progress update
+                if (i % Math.ceil(numFrames / 10) === 0) {
+                    console.log(`🎬 Recording progress: ${Math.round(progress * 100)}%`);
+                }
+            }
+
+            // Stop recording and process result
+            recorder.stop();
+            console.log('🎬 Recording completed, processing...');
+
+            return new Promise((resolve, reject) => {
+                recorder.onstop = async () => {
+                    try {
+                        const blob = new Blob(chunks, { type: 'video/mp4' });
+
+                        // Generate filename using same logic as LIF downloads
+                        let outputFileName = 'converted_3D.mp4';
+
+                        // Helper function to clean and shorten text for filename
+                        function cleanFilename(text, maxLength = 30) {
+                            return text
+                                .replace(/[^a-zA-Z0-9\s\-_]/g, '') // Remove special characters
+                                .replace(/\s+/g, '_') // Replace spaces with underscores
+                                .substring(0, maxLength) // Limit length
+                                .replace(/_+$/, ''); // Remove trailing underscores
+                        }
+
+                        // Try to use alt text first (usually most descriptive)
+                        if (imgElement && imgElement.alt && imgElement.alt.trim()) {
+                            const cleanAlt = cleanFilename(imgElement.alt.trim());
+                            if (cleanAlt) {
+                                outputFileName = `${cleanAlt}_3D.mp4`;
+                                console.log('Using alt text for MP4 filename:', outputFileName);
+                            }
+                        }
+                        // Fallback to image URL if no alt text
+                        else if (imgElement && imgElement.src) {
+                            try {
+                                const url = new URL(imgElement.src);
+                                const pathParts = url.pathname.split('/');
+                                const originalName = pathParts[pathParts.length - 1];
+
+                                // Extract name without extension and clean it
+                                let nameWithoutExt = originalName.split('.')[0] || 'image';
+
+                                // Handle common URL patterns (like random IDs, query params)
+                                if (nameWithoutExt.length > 20 || /^[a-f0-9]{8,}$/i.test(nameWithoutExt)) {
+                                    // If it's a long hash or ID, use a shorter version
+                                    nameWithoutExt = nameWithoutExt.substring(0, 8);
+                                }
+
+                                const cleanName = cleanFilename(nameWithoutExt);
+                                outputFileName = `${cleanName || 'image'}_3D.mp4`;
+                                console.log('Using URL-based MP4 filename:', outputFileName);
+                            } catch (e) {
+                                // Use default filename if URL parsing fails
+                                outputFileName = 'converted_3D.mp4';
+                                console.log('Using default MP4 filename due to URL parsing error');
+                            }
+                        }
+
+                        // Download the file
+                        const videoFile = new File([blob], outputFileName, { type: 'video/mp4' });
+                        const url = URL.createObjectURL(videoFile);
+
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = outputFileName;
+                        document.body.appendChild(a);
+                        a.click();
+
+                        URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+
+                        console.log('✅ MP4 download completed:', outputFileName);
+                        showDownloadNotification(`✅ MP4 video downloaded: ${outputFileName}`, 'success');
+                        resolve(outputFileName);
+                    } catch (error) {
+                        console.error('❌ Error processing MP4:', error);
+                        showDownloadNotification(`❌ MP4 processing failed: ${error.message}`, 'error');
+                        reject(error);
+                    }
+                };
+
+                recorder.onerror = (error) => {
+                    console.error('❌ MediaRecorder error:', error);
+                    showDownloadNotification(`❌ MP4 recording failed: ${error.message}`, 'error');
+                    reject(error);
+                };
+            });
+
+        } finally {
+            // Clean up temporary container
+            if (tempContainer.parentNode) {
+                document.body.removeChild(tempContainer);
+            }
+            console.log('🧹 Temporary container cleaned up');
+        }
+
+    } catch (error) {
+        console.error('❌ Error generating MP4:', error);
+        showDownloadNotification(`❌ MP4 generation failed: ${error.message}`, 'error');
+        throw error;
+    }
+}
+
 // Function to download LIF file when LIF button is clicked
 async function downloadLIFFile(lifDownloadUrl, originalImageSrc, imgElement = null) {
     try {
@@ -2830,6 +3075,10 @@ function setupMessageListener() {
             } else {
                 console.warn('Context menu: No LIF available for image');
             }
+        } else if (request.action === "downloadMP4") {
+            // Redirect to newer system - prevent duplicate handling
+            console.log('Old downloadMP4 handler called - handled by newer system');
+            return; // Let the newer handler process this
         } else if (request.action === "enterVR") {
             // This old VR handler is disabled - VR is now handled by the newer system
             // that uses pre-loaded VR files and the simple startVR() approach
@@ -3310,6 +3559,30 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         } else {
             console.warn('No LIF file available for this image');
             showDownloadNotification('No LIF file available for this image', 'error');
+        }
+    } else if (message.action === "downloadMP4") {
+        // Find the image at the clicked position
+        const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);
+
+        console.log('Download MP4 requested:', {
+            foundImage: !!img,
+            imageSrc: img?.src,
+            hasLIFInMap: img ? imageLIFMap.has(img.src) : false,
+            lifMapSize: imageLIFMap.size
+        });
+
+        if (img && imageLIFMap.has(img.src)) {
+            const lifDownloadUrl = imageLIFMap.get(img.src);
+            console.log('Generating MP4 for image:', img.src);
+            console.log('Using LIF URL:', lifDownloadUrl);
+            try {
+                await generateMP4FromLifFile(img, lifDownloadUrl);
+            } catch (error) {
+                console.error('MP4 generation failed:', error);
+            }
+        } else {
+            console.warn('No LIF file available for MP4 generation');
+            showDownloadNotification('No LIF file available for MP4 generation', 'error');
         }
     } else if (message.action === "enterVR") {
         // Find the image at the clicked position

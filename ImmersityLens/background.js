@@ -16,6 +16,13 @@ chrome.runtime.onInstalled.addListener(() => {
     });
 
     chrome.contextMenus.create({
+        id: "downloadMP4",
+        title: "Download MP4",
+        contexts: ["all"],
+        visible: false
+    });
+
+    chrome.contextMenus.create({
         id: "enterVR",
         title: "Enter VR",
         contexts: ["all"],
@@ -39,6 +46,13 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             clickX: info.x,
             clickY: info.y
         });
+    } else if (info.menuItemId === "downloadMP4") {
+        // Send message to content script to handle the MP4 download
+        chrome.tabs.sendMessage(tab.id, {
+            action: "downloadMP4",
+            clickX: info.x,
+            clickY: info.y
+        });
     } else if (info.menuItemId === "enterVR") {
         // Send message to content script to handle VR entry
         chrome.tabs.sendMessage(tab.id, {
@@ -58,6 +72,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // Show LIF options, hide convert option
             chrome.contextMenus.update("convertTo3D", { visible: false });
             chrome.contextMenus.update("downloadLIF", { visible: true });
+            chrome.contextMenus.update("downloadMP4", { visible: true });
             chrome.contextMenus.update("enterVR", { visible: message.webXRSupported });
 
             console.log('Background: Updated menu to show LIF options (VR:', message.webXRSupported, ')');
@@ -66,6 +81,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // Show convert option, hide LIF options
             chrome.contextMenus.update("convertTo3D", { visible: true });
             chrome.contextMenus.update("downloadLIF", { visible: false });
+            chrome.contextMenus.update("downloadMP4", { visible: false });
             chrome.contextMenus.update("enterVR", { visible: false });
 
             console.log('Background: Updated menu to show convert option');
