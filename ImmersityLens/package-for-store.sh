@@ -68,6 +68,7 @@ fi
 # Files and directories to include (whitelist approach for security)
 echo "📁 Including files:"
 echo "   ✅ manifest.json"
+echo "   ✅ background.js"
 echo "   ✅ content.js"
 echo "   ✅ popup.html"
 echo "   ✅ popup.js"
@@ -83,6 +84,7 @@ echo "   📄 popup.html"
 # Create the package
 zip -r "$PACKAGE_NAME" \
     manifest.json \
+    background.js \
     content.js \
     popup.html \
     popup.js \
