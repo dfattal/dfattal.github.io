@@ -3,7 +3,7 @@
 **Last Updated**: December 2024
 
 ## Overview
-ImmersityLens is a Chrome extension that converts 2D images into immersive 3D Leia Image Format (LIF) using artificial intelligence. This privacy policy explains how we handle data when you use our extension.
+ImmersityLens is a Chrome extension that converts 2D images into immersive 3D Leia Image Format (LIF) using artificial intelligence through a right-click context menu. This privacy policy explains how we handle data when you use our extension.
 
 ## Data Collection
 **We do not collect, store, or transmit any personal information.**
@@ -19,14 +19,14 @@ When you choose to convert an image to 3D:
 
 ### What Happens to Your Images
 - Images are processed using the Immersity AI service for 3D conversion
-- Images are only sent for processing when you explicitly click the "2D3D" button
+- Images are only sent for processing when you explicitly select "Convert to 3D" from the right-click context menu
 - No images are permanently stored by our extension
 - Images are not shared with any third parties beyond the conversion service
 - The conversion service processes images temporarily and does not retain them
 
 ### User Control
-- All image processing is initiated by your direct action
-- You can choose which images to convert
+- All image processing is initiated by your direct action through the context menu
+- You can choose which images to convert by right-clicking them
 - No automatic or background image processing occurs
 
 ## Local Storage
@@ -59,9 +59,9 @@ The extension stores minimal data locally in your browser:
 The extension requests the following permissions:
 
 ### `activeTab`
-- **Purpose**: To add 2D3D buttons to images on the current webpage
+- **Purpose**: To detect images and enable context menu functionality on the current webpage
 - **Scope**: Only the tab you're currently viewing
-- **Data Access**: Limited to DOM manipulation for button placement
+- **Data Access**: Limited to image detection and context menu integration
 
 ### `storage`
 - **Purpose**: To remember your extension preferences
