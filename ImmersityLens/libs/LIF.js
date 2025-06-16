@@ -709,10 +709,20 @@ class lifViewer {
         // SIMPLIFIED: Always use absolute positioning for canvas over image
         const dimensions = this.getEffectiveDimensions();
         let positioningStyle = 'top: 0; left: 0;';
+
+        // Handle centered image positioning (LinkedIn-style)
         if (this.centeredImageInfo) {
             positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
             console.log('🎯 Applying centered image positioning:', positioningStyle);
+        } else {
+            // Check for nested positioning containers (Flickr facade pattern, etc.)
+            const nestedOffset = this.calculateNestedContainerOffset();
+            if (nestedOffset) {
+                positioningStyle = `top: ${nestedOffset.top}px; left: ${nestedOffset.left}px;`;
+                console.log('🏗️ Applying nested container positioning:', positioningStyle);
+            }
         }
+
         this.canvas.style.cssText = `
             width: ${dimensions.width}px !important;
             height: ${dimensions.height}px !important;
@@ -725,6 +735,135 @@ class lifViewer {
             pointer-events: auto;
             cursor: pointer;
         `;
+    }
+
+    /**
+     * Calculate positioning offset for nested containers
+     * Detects patterns like Flickr's facade-of-protection, theater mode containers, etc.
+     */
+    calculateNestedContainerOffset() {
+        if (!this.originalImage || !this.container) {
+            return null;
+        }
+
+        // Get the original image's position relative to our container
+        const containerRect = this.container.getBoundingClientRect();
+        const imageRect = this.originalImage.getBoundingClientRect();
+
+        // Calculate the offset of the image relative to the container
+        const imageOffsetTop = imageRect.top - containerRect.top;
+        const imageOffsetLeft = imageRect.left - containerRect.left;
+
+        // If the image is significantly offset from the container's origin,
+        // it's likely positioned within a nested container
+        const hasSignificantOffset = Math.abs(imageOffsetTop) > 5 || Math.abs(imageOffsetLeft) > 5;
+
+        if (hasSignificantOffset) {
+            // Look for common nested container patterns
+            const nestedContainer = this.findNestedPositioningContainer();
+
+            if (nestedContainer) {
+                const nestedRect = nestedContainer.getBoundingClientRect();
+                const nestedOffsetTop = nestedRect.top - containerRect.top;
+                const nestedOffsetLeft = nestedRect.left - containerRect.left;
+
+                console.log('🏗️ Nested container detected:', {
+                    containerType: nestedContainer.className || nestedContainer.tagName,
+                    imageOffset: { top: imageOffsetTop, left: imageOffsetLeft },
+                    nestedOffset: { top: nestedOffsetTop, left: nestedOffsetLeft },
+                    usingNestedOffset: true
+                });
+
+                return {
+                    top: nestedOffsetTop,
+                    left: nestedOffsetLeft
+                };
+            } else {
+                // No specific nested container found, use image offset directly
+                console.log('🏗️ Image offset detected (no nested container):', {
+                    imageOffset: { top: imageOffsetTop, left: imageOffsetLeft },
+                    usingImageOffset: true
+                });
+
+                return {
+                    top: imageOffsetTop,
+                    left: imageOffsetLeft
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Find nested positioning containers using common patterns
+     */
+    findNestedPositioningContainer() {
+        // Common nested container selectors (ordered by specificity)
+        const nestedContainerSelectors = [
+            // Flickr patterns
+            '.facade-of-protection-neue',
+            '.facade-of-protection',
+
+            // Theater/modal patterns
+            '.theater-container',
+            '.modal-content',
+            '.lightbox-content',
+
+            // Media viewer patterns
+            '.media-viewer',
+            '.photo-viewer',
+            '.image-viewer',
+
+            // Generic positioned containers
+            '[style*="position: absolute"]',
+            '[style*="position: relative"]',
+
+            // Containers with explicit dimensions
+            '[style*="width:"][style*="height:"]'
+        ];
+
+        for (const selector of nestedContainerSelectors) {
+            try {
+                const nestedContainer = this.container.querySelector(selector);
+                if (nestedContainer && this.isValidNestedContainer(nestedContainer)) {
+                    return nestedContainer;
+                }
+            } catch (e) {
+                // Skip invalid selectors
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Validate that a potential nested container is actually positioning the image
+     */
+    isValidNestedContainer(container) {
+        if (!container || !this.originalImage) {
+            return false;
+        }
+
+        // Check if the image is a descendant of or sibling to this container
+        const isDescendant = container.contains(this.originalImage);
+        const isNextSibling = container.nextElementSibling === this.originalImage;
+        const isPreviousSibling = container.previousElementSibling === this.originalImage;
+
+        if (!isDescendant && !isNextSibling && !isPreviousSibling) {
+            return false;
+        }
+
+        // Check if container has positioning styles
+        const computedStyle = window.getComputedStyle(container);
+        const hasPositioning = computedStyle.position !== 'static';
+        const hasDimensions = computedStyle.width !== 'auto' || computedStyle.height !== 'auto';
+
+        // Check if container has explicit dimensions in style attribute (common pattern)
+        const hasInlineStyles = container.style.width || container.style.height;
+
+        return hasPositioning || hasDimensions || hasInlineStyles;
     }
 
     /**

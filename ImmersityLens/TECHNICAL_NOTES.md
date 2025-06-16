@@ -780,6 +780,118 @@ const Z_INDEX_CONFIG = {
 - **Consistent Layering**: All elements use the same configuration source
 - **Future-Proof**: Easy to adjust for new website compatibility issues
 
+## Nested Container Positioning System
+
+### Universal Nested Container Detection
+
+The extension automatically detects and handles nested positioning containers (like Flickr's facade pattern) without site-specific code:
+
+```javascript
+calculateNestedContainerOffset() {
+    // Get image position relative to container
+    const containerRect = this.container.getBoundingClientRect();
+    const imageRect = this.originalImage.getBoundingClientRect();
+    
+    const imageOffsetTop = imageRect.top - containerRect.top;
+    const imageOffsetLeft = imageRect.left - containerRect.left;
+    
+    // Detect significant offset indicating nested positioning
+    const hasSignificantOffset = Math.abs(imageOffsetTop) > 5 || Math.abs(imageOffsetLeft) > 5;
+    
+    if (hasSignificantOffset) {
+        const nestedContainer = this.findNestedPositioningContainer();
+        
+        if (nestedContainer) {
+            // Use nested container position
+            const nestedRect = nestedContainer.getBoundingClientRect();
+            return {
+                top: nestedRect.top - containerRect.top,
+                left: nestedRect.left - containerRect.left
+            };
+        } else {
+            // Use image position directly
+            return {
+                top: imageOffsetTop,
+                left: imageOffsetLeft
+            };
+        }
+    }
+    
+    return null;
+}
+```
+
+### Nested Container Pattern Recognition
+
+The system recognizes common nested container patterns:
+
+#### Flickr Theater Mode
+```html
+<div class="photo-well-media-scrappy-view"> <!-- Outer container -->
+    <span class="facade-of-protection-neue" style="width:747px;height:498px;"> <!-- Nested container -->
+        <!-- Theater mode elements -->
+    </span>
+    <img class="main-photo"> <!-- Image positioned relative to facade -->
+    <canvas> <!-- Canvas positioned to match facade offset -->
+</div>
+```
+
+#### Generic Modal/Lightbox Patterns
+```html
+<div class="modal-wrapper"> <!-- Outer container -->
+    <div class="modal-content" style="position: relative;"> <!-- Nested container -->
+        <img> <!-- Image within modal -->
+        <canvas> <!-- Canvas positioned to match modal content -->
+    </div>
+</div>
+```
+
+### Pattern Detection Selectors
+
+The system searches for nested containers using these selectors (in order of priority):
+
+```javascript
+const nestedContainerSelectors = [
+    // Flickr patterns
+    '.facade-of-protection-neue',
+    '.facade-of-protection',
+    
+    // Theater/modal patterns
+    '.theater-container',
+    '.modal-content',
+    '.lightbox-content',
+    
+    // Media viewer patterns
+    '.media-viewer',
+    '.photo-viewer',
+    '.image-viewer',
+    
+    // Generic positioned containers
+    '[style*="position: absolute"]',
+    '[style*="position: relative"]',
+    
+    // Containers with explicit dimensions
+    '[style*="width:"][style*="height:"]'
+];
+```
+
+### Validation Criteria
+
+A container is considered valid for nested positioning if it:
+
+1. **Contains or is adjacent to the image**
+2. **Has positioning styles** (`position: absolute/relative`)
+3. **Has explicit dimensions** (width/height in CSS or inline styles)
+4. **Is structurally related** to the image element
+
+### Benefits
+
+- **Universal Compatibility**: Works with any nested container pattern
+- **No Site-Specific Code**: Automatically adapts to new layouts
+- **Fallback Strategy**: Uses image position if no nested container found
+- **Performance Optimized**: Only calculates when significant offset detected
+- **Maintains Existing Behavior**: Doesn't affect standard layouts
+
 ### Efficient Resource Management
 ```javascript
 class ProcessingOverlayManager {
