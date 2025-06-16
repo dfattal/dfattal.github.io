@@ -647,12 +647,37 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
 
             console.log('✅ Offscreen lifViewer ready, starting recording...');
 
-            // Set up MediaRecorder for the offscreen canvas
+            // Set up MediaRecorder for the offscreen canvas with better codec compatibility
             const stream = offscreenCanvas.captureStream(videoFps);
-            const recorder = new MediaRecorder(stream, {
-                mimeType: 'video/mp4',
-                videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1)
-            });
+
+            // Try different codec options for better compatibility (especially QuickTime)
+            let recorderOptions = null;
+            const codecOptions = [
+                // H.264 with baseline profile for maximum compatibility
+                { mimeType: 'video/mp4; codecs="avc1.42E01E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
+                // H.264 with main profile
+                { mimeType: 'video/mp4; codecs="avc1.4D401E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
+                // Generic MP4 fallback
+                { mimeType: 'video/mp4', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
+                // WebM fallback (though less compatible with QuickTime)
+                { mimeType: 'video/webm; codecs="vp9"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
+                { mimeType: 'video/webm', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) }
+            ];
+
+            // Find the first supported codec
+            for (const options of codecOptions) {
+                if (MediaRecorder.isTypeSupported(options.mimeType)) {
+                    recorderOptions = options;
+                    console.log('🎥 Using codec:', options.mimeType);
+                    break;
+                }
+            }
+
+            if (!recorderOptions) {
+                throw new Error('No supported video codec found for MP4 recording');
+            }
+
+            const recorder = new MediaRecorder(stream, recorderOptions);
 
             const chunks = [];
             recorder.ondataavailable = (e) => chunks.push(e.data);
@@ -707,10 +732,13 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
             return new Promise((resolve, reject) => {
                 recorder.onstop = async () => {
                     try {
-                        const blob = new Blob(chunks, { type: 'video/mp4' });
+                        // Use the same MIME type that was used for recording
+                        const blobType = recorderOptions.mimeType.includes('webm') ? 'video/webm' : 'video/mp4';
+                        const blob = new Blob(chunks, { type: blobType });
 
                         // Generate filename using same logic as LIF downloads
-                        let outputFileName = 'converted_3D.mp4';
+                        const fileExtension = blobType.includes('webm') ? '.webm' : '.mp4';
+                        let outputFileName = `converted_3D${fileExtension}`;
 
                         // Helper function to clean and shorten text for filename
                         function cleanFilename(text, maxLength = 30) {
@@ -725,8 +753,8 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
                         if (imgElement && imgElement.alt && imgElement.alt.trim()) {
                             const cleanAlt = cleanFilename(imgElement.alt.trim());
                             if (cleanAlt) {
-                                outputFileName = `${cleanAlt}_3D.mp4`;
-                                console.log('Using alt text for MP4 filename:', outputFileName);
+                                outputFileName = `${cleanAlt}_3D${fileExtension}`;
+                                console.log('Using alt text for video filename:', outputFileName);
                             }
                         }
                         // Fallback to image URL if no alt text
@@ -746,17 +774,17 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
                                 }
 
                                 const cleanName = cleanFilename(nameWithoutExt);
-                                outputFileName = `${cleanName || 'image'}_3D.mp4`;
-                                console.log('Using URL-based MP4 filename:', outputFileName);
+                                outputFileName = `${cleanName || 'image'}_3D${fileExtension}`;
+                                console.log('Using URL-based video filename:', outputFileName);
                             } catch (e) {
                                 // Use default filename if URL parsing fails
-                                outputFileName = 'converted_3D.mp4';
-                                console.log('Using default MP4 filename due to URL parsing error');
+                                outputFileName = `converted_3D${fileExtension}`;
+                                console.log('Using default video filename due to URL parsing error');
                             }
                         }
 
                         // Download the file
-                        const videoFile = new File([blob], outputFileName, { type: 'video/mp4' });
+                        const videoFile = new File([blob], outputFileName, { type: blobType });
                         const url = URL.createObjectURL(videoFile);
 
                         const a = document.createElement('a');
@@ -768,8 +796,8 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
                         URL.revokeObjectURL(url);
                         document.body.removeChild(a);
 
-                        console.log('✅ MP4 download completed:', outputFileName);
-                        showDownloadNotification(`✅ MP4 video downloaded: ${outputFileName}`, 'success');
+                        console.log('✅ Video download completed:', outputFileName);
+                        showDownloadNotification(`✅ 3D video downloaded: ${outputFileName}`, 'success');
                         resolve(outputFileName);
                     } catch (error) {
                         console.error('❌ Error processing MP4:', error);
