@@ -1518,12 +1518,13 @@ class lifViewer {
             ['width_px', 'height_px', 'focal_px', 'inv_z_map', 'layers_top_to_bottom', 'frustum_skew', 'rotation_slant'],
             ['width', 'height', 'f', 'invZ', 'layers', 'sk', 'sl']
         );
+        console.log("stereo_render_data", this.lifInfo.stereo_render_data);
 
         if (this.lifInfo.animations) this.animations = this.lifInfo.animations;
         // for now hardcode animations[0];
         const zAmp = 0.5 / this.views[0].invZ.min;
         //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
-        const invd = Math.abs(this.views[0].sk.x) / 0.5 // usualy zero with no black band for pre-converged stereo
+        const invd = this.lifInfo.stereo_render_data.inv_convergence_distance; // only used for tracking shots
         const xc = this.views.length > 1 ? -0.5 : 0;
         this.animations[0] = {
             type: "harmonic",
@@ -1533,7 +1534,7 @@ class lifViewer {
                 focal_px: this.views[0].f,
                 width_px: this.views[0].width,
                 height_px: this.views[0].height,
-                invd: invd,
+                invd: 0, // focus at infinity
                 position: {
                     x: { amplitude: 0.0, phase: 0.0, bias: xc },
                     y: { amplitude: 0.0, phase: 0.0, bias: 0 },
@@ -2347,11 +2348,11 @@ class lifViewer {
         );
         this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd);
 
-        // Render the frame
+        // Render the frame - use fixed time 1.1 to avoid glow animation (which happens for t in 0..1)
         if (this.views.length < 2) {
-            this.drawSceneMN(t);
+            this.drawSceneMN(1.1);
         } else {
-            this.drawSceneST(t);
+            this.drawSceneST(1.1);
         }
     }
 }

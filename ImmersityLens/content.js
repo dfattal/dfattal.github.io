@@ -588,9 +588,14 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
         }
 
         // Get user preferences for video settings with LIF dimensions as defaults
-        const videoWidth = parseInt(prompt(`Enter video width:`, defaultWidth), 10) || defaultWidth;
-        const videoHeight = parseInt(prompt(`Enter video height:`, defaultHeight), 10) || defaultHeight;
-        const videoFps = parseInt(prompt("Enter video fps:", 30), 10) || 30;
+        // const videoWidth = parseInt(prompt(`Enter video width:`, defaultWidth), 10) || defaultWidth;
+        // const videoHeight = parseInt(prompt(`Enter video height:`, defaultHeight), 10) || defaultHeight;
+        // const videoFps = parseInt(prompt("Enter video fps:", 30), 10) || 30;
+
+        // Use default dimensions with 30fps always for now
+        const videoWidth = defaultWidth;
+        const videoHeight = defaultHeight;
+        const videoFps = 30;
 
         console.log('📊 MP4 settings:', { videoWidth, videoHeight, videoFps });
 
@@ -653,15 +658,15 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
             // Try different codec options for better compatibility (especially QuickTime)
             let recorderOptions = null;
             const codecOptions = [
-                // H.264 with baseline profile for maximum compatibility
-                { mimeType: 'video/mp4; codecs="avc1.42E01E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
-                // H.264 with main profile
-                { mimeType: 'video/mp4; codecs="avc1.4D401E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
-                // Generic MP4 fallback
-                { mimeType: 'video/mp4', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
-                // WebM fallback (though less compatible with QuickTime)
-                { mimeType: 'video/webm; codecs="vp9"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) },
-                { mimeType: 'video/webm', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.1) }
+                // H.264 with baseline profile for maximum compatibility - increased bitrate for better quality
+                { mimeType: 'video/mp4; codecs="avc1.42E01E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                // H.264 with main profile - increased bitrate for better quality
+                { mimeType: 'video/mp4; codecs="avc1.4D401E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                // Generic MP4 fallback - increased bitrate for better quality
+                { mimeType: 'video/mp4', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                // WebM fallback (though less compatible with QuickTime) - increased bitrate for better quality
+                { mimeType: 'video/webm; codecs="vp9"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                { mimeType: 'video/webm', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) }
             ];
 
             // Find the first supported codec
@@ -689,19 +694,24 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
 
             console.log(`🎬 Recording ${numFrames} frames over ${animDuration} seconds...`);
 
-            // Warm-up phase: render a few frames before recording
+            // Warm-up phase: render a few frames before recording to stabilize WebGL state
             console.log('🔥 Warming up...');
             for (let i = 0; i < 5; i++) {
                 offscreenViewer.renderFrame(0); // Static frame
-                const ctx = offscreenCanvas.getContext('2d');
-                ctx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-                ctx.drawImage(offscreenViewer.canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
                 await new Promise(resolve => setTimeout(resolve, frameDuration));
             }
 
             // Start recording
             recorder.start();
             console.log('🎬 Recording started...');
+
+            // Additional frame to ensure clean first capture
+            console.log('🎯 Rendering clean first frame...');
+            offscreenViewer.renderFrame(0);
+            const ctx = offscreenCanvas.getContext('2d');
+            ctx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+            ctx.drawImage(offscreenViewer.canvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+            await new Promise(resolve => setTimeout(resolve, frameDuration));
 
             // Record animation frames
             for (let i = 0; i < numFrames; i++) {
