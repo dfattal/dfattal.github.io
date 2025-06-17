@@ -1072,13 +1072,13 @@ function startPulsingAnimation(img) {
 
             // Create shimmer effect using CSS mask animation
             const shimmerPosition = (elapsed % duration) / duration;
-            const maskX = 200 - (shimmerPosition * 400); // Move from -200% to 200%
+            const maskX = 150 - (shimmerPosition * 300); // Move from -200% to 200%
 
             // Create shimmer mask - mostly transparent with small bright band
             const shimmerMask = `linear-gradient(120deg, 
                 rgba(255,255,255,1.0) 0%, 
                 rgba(255,255,255,1.0) ${maskX - 20}%, 
-                rgba(255,255,255,0.5) ${maskX}%, 
+                rgba(255, 255, 255, 0.5) ${maskX}%, 
                 rgba(255,255,255,1.0) ${maskX + 20}%, 
                 rgba(255,255,255,1.0) 100%)`;
 
