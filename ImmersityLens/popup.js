@@ -90,33 +90,66 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Function to load available animations dynamically
-    function loadAvailableAnimations(retryCount = 0, maxRetries = 5) {
+    // Function to load available animations dynamically from lifViewer instances
+    function loadAvailableAnimations(retryCount = 0, maxRetries = 3) {
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             if (!tabs[0]) {
                 console.error('No active tab found for animation loading');
-                fallbackToDefaultAnimations();
+                fallbackToStaticAnimations();
                 return;
             }
 
             chrome.tabs.sendMessage(tabs[0].id, { action: 'getAvailableAnimations' }, function (response) {
                 if (chrome.runtime.lastError) {
-                    // Content script not loaded yet - retry with exponential backoff
+                    // Content script not loaded yet - try fallback after limited retries
                     if (retryCount < maxRetries) {
-                        const delay = Math.min(500 + (retryCount * 300), 2000);
-                        console.log(`Content script not ready for animation loading, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+                        const delay = 500 + (retryCount * 200);
+                        console.log(`Content script not ready, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
                         setTimeout(() => {
                             loadAvailableAnimations(retryCount + 1, maxRetries);
                         }, delay);
                     } else {
-                        console.warn('Max retries reached for animation loading, using fallback');
-                        fallbackToDefaultAnimations();
+                        console.log('Using static animation definitions (no content script)');
+                        fallbackToStaticAnimations();
                     }
-                } else if (response && response.success && response.animations) {
+                } else if (response && response.success && response.animations && response.animations.length > 0) {
+                    console.log('Got dynamic animations from lifViewer:', response.animations);
                     buildAnimationOptions(response.animations);
                 } else {
-                    console.warn('No valid animation response, using fallback');
-                    fallbackToDefaultAnimations();
+                    console.log('No lifViewer instances found, using static definitions');
+                    fallbackToStaticAnimations();
+                }
+            });
+        });
+    }
+
+    // Fallback to static definitions when no instances are available
+    function fallbackToStaticAnimations() {
+        // Get static animation definitions from lifViewer class without needing instances
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+            if (!tabs[0]) {
+                // Ultimate fallback - hardcoded basic animations
+                buildAnimationOptions([
+                    { name: "Zoom In", index: 0 },
+                    { name: "Ken Burns", index: 1 }
+                ]);
+                return;
+            }
+
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'getStaticAnimations' }, function (response) {
+                if (chrome.runtime.lastError || !response || !response.success) {
+                    console.log('Content script not available, using hardcoded fallback');
+                    // Ultimate fallback - hardcoded basic animations
+                    buildAnimationOptions([
+                        { name: "Zoom In", index: 0 },
+                        { name: "Ken Burns", index: 1 },
+                        { name: "Panning Hor", index: 2 },
+                        { name: "Panning Vert", index: 3 },
+                        { name: "Static", index: 4 }
+                    ]);
+                } else {
+                    console.log('Got static animations from lifViewer class:', response.animations);
+                    buildAnimationOptions(response.animations);
                 }
             });
         });
@@ -146,20 +179,39 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Fallback function for when dynamic loading fails
-    function fallbackToDefaultAnimations() {
-        const defaultAnimations = [
-            { name: "Zoom In", index: 0 },
-            { name: "Ken Burns", index: 1 }
-        ];
-        buildAnimationOptions(defaultAnimations);
+
+
+    // Function to refresh animation list (can be called when lifViewer instances change)
+    function refreshAnimationList() {
+        console.log('Refreshing animation list...');
+        loadAvailableAnimations();
     }
 
-    // Load available animations on startup
+    // Load static animations immediately for instant display, then try to get dynamic ones
+    const defaultAnimations = [
+        { name: "Zoom In", index: 0 },
+        { name: "Ken Burns", index: 1 },
+        { name: "Panning Hor", index: 2 },
+        { name: "Panning Vert", index: 3 },
+        { name: "Static", index: 4 }
+    ];
+
+    // Show default animations immediately
+    buildAnimationOptions(defaultAnimations);
+
+    // Then try to load dynamic animations (will update if different)
     loadAvailableAnimations();
 
     // Check XR status after initial setup
     checkXRStatus();
+
+    // Listen for potential animation updates from content script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'animationsUpdated') {
+            console.log('Received animation update notification');
+            refreshAnimationList();
+        }
+    });
 
 
 

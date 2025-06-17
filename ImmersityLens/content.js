@@ -3678,15 +3678,40 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         sendResponse({ success: true, updatedInstances: updatedCount });
         return true; // Keep message channel open for async response
     } else if (message.action === "getAvailableAnimations") {
-        // Handle request for available animations from popup
-        console.log('Getting available animations...');
+        // Handle request for available animations from popup - prioritize actual instances
+        console.log('Getting available animations from instances...');
+
+        let animations = [];
+        if (typeof lifViewer !== 'undefined' && lifViewer.instances && lifViewer.instances.length > 0) {
+            // Try to get animations from the first active instance with loaded animations
+            const instanceWithAnimations = lifViewer.instances.find(instance =>
+                instance.animations && instance.animations.length > 0
+            );
+
+            if (instanceWithAnimations) {
+                animations = instanceWithAnimations.animations.map((anim, index) => ({
+                    name: anim.name,
+                    index: index,
+                    type: anim.type,
+                    duration: anim.duration_sec
+                }));
+                console.log('Found animations from active instance:', animations);
+            }
+        }
+
+        // If no instances with animations, return empty to trigger fallback
+        sendResponse({ success: true, animations: animations });
+        return true; // Keep message channel open for async response
+    } else if (message.action === "getStaticAnimations") {
+        // Handle request for static animation definitions from lifViewer class
+        console.log('Getting static animation definitions...');
 
         let animations = [];
         if (typeof lifViewer !== 'undefined' && lifViewer.getAvailableAnimations) {
             animations = lifViewer.getAvailableAnimations();
         }
 
-        console.log('Available animations:', animations);
+        console.log('Static animations:', animations);
         sendResponse({ success: true, animations: animations });
         return true; // Keep message channel open for async response
     } else if (message.action === "downloadMP4") {

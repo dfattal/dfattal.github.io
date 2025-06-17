@@ -565,6 +565,15 @@ class monoLdiGenerator {
     }
 }
 
+// Shared animation definitions - single source of truth
+const ANIMATION_DEFINITIONS = [
+    { name: "Zoom In", index: 0, type: "harmonic", duration: 4.0 },
+    { name: "Ken Burns", index: 1, type: "harmonic", duration: 4.0 },
+    { name: "Panning Hor", index: 2, type: "harmonic", duration: 4.0 },
+    { name: "Panning Vert", index: 3, type: "harmonic", duration: 4.0 },
+    { name: "Static", index: 4, type: "harmonic", duration: 4.0 }
+];
+
 class lifViewer {
     static instances = [];
 
@@ -2468,10 +2477,20 @@ class lifViewer {
     }
 
     /**
-     * Static method to get animation names from any active instance
+ * Static method to get animation metadata (names, types, etc.) without needing an instance
+ * This can be called before any lifViewer is instantiated
+ * @returns {Object[]} Array of animation objects with name, index, type, and duration
+ */
+    static getAvailableAnimations() {
+        // Return shared animation definitions
+        return [...ANIMATION_DEFINITIONS]; // Return a copy to prevent mutation
+    }
+
+    /**
+     * Static method to get animation names from any active instance (legacy method)
      * @returns {Object[]} Array of animation objects with name and index
      */
-    static getAvailableAnimations() {
+    static getAvailableAnimationsFromInstance() {
         // Find the first instance with animations loaded
         const instanceWithAnimations = lifViewer.instances.find(instance =>
             instance.animations && instance.animations.length > 0
@@ -2486,11 +2505,8 @@ class lifViewer {
             }));
         }
 
-        // Fallback: return default animation structure if no instances are loaded
-        return [
-            { name: "Zoom In", index: 0, type: "harmonic", duration: 4.0 },
-            { name: "Ken Burns", index: 1, type: "harmonic", duration: 4.0 }
-        ];
+        // Fallback to static method
+        return lifViewer.getAvailableAnimations();
     }
 
     /**
