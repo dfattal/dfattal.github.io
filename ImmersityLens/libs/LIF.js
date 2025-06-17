@@ -643,6 +643,10 @@ class lifViewer {
         this.focus = 0;
         this.animationFrame = null;
         this.render = this.render.bind(this);
+
+        // Feathering and background color properties
+        this.feathering = 0.1;
+        this.background = [0.1, 0.1, 0.1, 1.0];  // RGBA background color
     }
 
     /**
@@ -1783,7 +1787,11 @@ class lifViewer {
                 sl2: this.gl.getUniformLocation(shaderProgram, 'sl2'),
                 roll2: this.gl.getUniformLocation(shaderProgram, 'roll2'),
                 f2: this.gl.getUniformLocation(shaderProgram, 'f2'),
-                oRes: this.gl.getUniformLocation(shaderProgram, 'oRes')
+                oRes: this.gl.getUniformLocation(shaderProgram, 'oRes'),
+
+                // Feathering and background uniforms
+                feathering: this.gl.getUniformLocation(shaderProgram, 'feathering'),
+                background: this.gl.getUniformLocation(shaderProgram, 'background')
             },
         };
 
@@ -1871,7 +1879,11 @@ class lifViewer {
                 sl2: this.gl.getUniformLocation(shaderProgram, 'sl2'),
                 roll2: this.gl.getUniformLocation(shaderProgram, 'roll2'),
                 f2: this.gl.getUniformLocation(shaderProgram, 'f2'),
-                oRes: this.gl.getUniformLocation(shaderProgram, 'oRes')
+                oRes: this.gl.getUniformLocation(shaderProgram, 'oRes'),
+
+                // Feathering and background uniforms
+                feathering: this.gl.getUniformLocation(shaderProgram, 'feathering'),
+                background: this.gl.getUniformLocation(shaderProgram, 'background')
             },
         };
 
@@ -1984,6 +1996,10 @@ class lifViewer {
         const type = this.gl.UNSIGNED_SHORT;
         const offset = 0;
 
+        // Feathering and background uniforms
+        this.gl.uniform1f(this.programInfo.uniformLocations.feathering, this.feathering);
+        this.gl.uniform4fv(this.programInfo.uniformLocations.background, this.background);
+
         this.gl.drawElements(this.gl.TRIANGLES, vertexCount, type, offset);
         //this.logAllUniforms()
     }
@@ -2081,6 +2097,10 @@ class lifViewer {
         this.gl.uniform2f(this.programInfo.uniformLocations.sl2, this.renderCam.sl.x, this.renderCam.sl.y);
         this.gl.uniform1f(this.programInfo.uniformLocations.roll2, this.renderCam.roll);
         this.gl.uniform1f(this.programInfo.uniformLocations.f2, this.renderCam.f); // in px
+
+        // Feathering and background uniforms
+        this.gl.uniform1f(this.programInfo.uniformLocations.feathering, this.feathering);
+        this.gl.uniform4fv(this.programInfo.uniformLocations.background, this.background);
 
         const vertexCount = 6;
         const type = this.gl.UNSIGNED_SHORT;

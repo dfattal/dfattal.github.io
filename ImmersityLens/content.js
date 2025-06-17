@@ -657,16 +657,17 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
 
             // Try different codec options for better compatibility (especially QuickTime)
             let recorderOptions = null;
+            const bitrate = 0.2;
             const codecOptions = [
                 // H.264 with baseline profile for maximum compatibility - increased bitrate for better quality
-                { mimeType: 'video/mp4; codecs="avc1.42E01E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                { mimeType: 'video/mp4; codecs="avc1.42E01E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * bitrate) },
                 // H.264 with main profile - increased bitrate for better quality
-                { mimeType: 'video/mp4; codecs="avc1.4D401E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                { mimeType: 'video/mp4; codecs="avc1.4D401E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * bitrate) },
                 // Generic MP4 fallback - increased bitrate for better quality
-                { mimeType: 'video/mp4', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
+                { mimeType: 'video/mp4', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * bitrate) },
                 // WebM fallback (though less compatible with QuickTime) - increased bitrate for better quality
-                { mimeType: 'video/webm; codecs="vp9"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) },
-                { mimeType: 'video/webm', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * 0.2) }
+                { mimeType: 'video/webm; codecs="vp9"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * bitrate) },
+                { mimeType: 'video/webm', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * bitrate) }
             ];
 
             // Find the first supported codec
