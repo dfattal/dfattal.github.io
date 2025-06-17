@@ -178,6 +178,58 @@
             padding: 80px 0;
         }
 
+        /* Video Showcase */
+        .video-showcase {
+            max-width: 900px;
+            margin: 0 auto 4rem auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .video-showcase:hover {
+            transform: translateY(-5px);
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 54.56%;
+            /* 3024:1650 aspect ratio (native video dimensions) */
+            overflow: hidden;
+        }
+
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .video-caption {
+            padding: 2rem;
+            text-align: center;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+
+        .video-caption h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+
+        .video-caption p {
+            color: #6b7280;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
         .screenshot-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -317,6 +369,23 @@
                 flex-direction: column;
                 align-items: center;
             }
+
+            .video-showcase {
+                margin: 0 1rem 3rem 1rem;
+                border-radius: 15px;
+            }
+
+            .video-caption {
+                padding: 1.5rem;
+            }
+
+            .video-caption h3 {
+                font-size: 1.25rem;
+            }
+
+            .video-caption p {
+                font-size: 0.9rem;
+            }
         }
 
         /* Animations */
@@ -415,22 +484,42 @@
         <section id="screenshots" class="screenshots">
             <div class="container">
                 <h2 class="section-title">See It In Action</h2>
+
+                <!-- Featured YouTube Video Demo -->
+                <div class="video-showcase fade-in-up">
+                    <div class="video-container">
+                        <iframe
+                            src="https://www.youtube.com/embed/mazqvjk0Oi8?autoplay=1&loop=1&playlist=mazqvjk0Oi8&mute=1&controls=1&rel=0&modestbranding=1"
+                            title="ImmersityLens Demo Video" frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                    <div class="video-caption">
+                        <h3>🎬 Watch ImmersityLens Transform Images into 3D Magic</h3>
+                        <p>See the complete workflow from 2D image to interactive 3D experience with XR capabilities</p>
+                    </div>
+                </div>
+
+                <!-- Screenshot Gallery -->
                 <div class="screenshot-grid">
                     <div class="screenshot-card fade-in-up">
                         <img src="Pictures/IAI-Lens-store-1.png" alt="Enable ImmersityLens extension">
-                        <div class="caption">🚀 Power up the magic!</div>
+                        <div class="caption">🚀 Right click on any image and select "Convert to 3D" to start the
+                            conversion</div>
                     </div>
                     <div class="screenshot-card fade-in-up">
                         <img src="Pictures/IAI-Lens-store-2.png" alt="2D3D buttons on website images">
-                        <div class="caption">✨ Visit your favorite website and watch the buttons appear</div>
+                        <div class="caption">✨ An interactive Canvas appears and lets you interact with the 3D image
+                        </div>
                     </div>
                     <div class="screenshot-card fade-in-up">
                         <img src="Pictures/IAI-Lens-store-3.png" alt="Images converting with spinner">
-                        <div class="caption">🎭 AI works its conversion magic</div>
+                        <div class="caption">💾 download the 3D image as LIF file or export as MP4 animation</div>
                     </div>
                     <div class="screenshot-card fade-in-up">
                         <img src="Pictures/IAI-Lens-store-4.png" alt="LIF download and 3D animation">
-                        <div class="caption">🎮 Experience mesmerizing 3D depth effects & export MP4 animations</div>
+                        <div class="caption">🥽 view the 3D image in VR or 3D Screen</div>
                     </div>
                 </div>
             </div>
