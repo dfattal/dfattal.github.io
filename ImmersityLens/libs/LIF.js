@@ -571,7 +571,9 @@ const ANIMATION_DEFINITIONS = [
     { name: "Ken Burns", index: 1, type: "harmonic", duration: 4.0 },
     { name: "Panning Hor", index: 2, type: "harmonic", duration: 4.0 },
     { name: "Panning Vert", index: 3, type: "harmonic", duration: 4.0 },
-    { name: "Static", index: 4, type: "harmonic", duration: 4.0 }
+    { name: "Tracking Hor", index: 4, type: "harmonic", duration: 4.0 },
+    { name: "Tracking Vert", index: 5, type: "harmonic", duration: 4.0 },
+    { name: "Static", index: 6, type: "harmonic", duration: 4.0 }
 ];
 
 class lifViewer {
@@ -1611,6 +1613,38 @@ class lifViewer {
         }
         this.animations[4] = {
             type: "harmonic",
+            name: "Tracking Hor",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: invd, // focus used for tracking shots
+                position: {
+                    x: { amplitude: zAmp / 2, phase: 0.0, bias: xc },
+                    y: { amplitude: 0.0, phase: 0.0, bias: 0 },
+                    z: { amplitude: 0, phase: 0, bias: 0 }
+                }
+            }
+        }
+        this.animations[5] = {
+            type: "harmonic",
+            name: "Tracking Vert",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: invd, // focus used for tracking shots
+                position: {
+                    x: { amplitude: 0.0, phase: 0.0, bias: xc },
+                    y: { amplitude: zAmp / 2, phase: 0.0, bias: 0 },
+                    z: { amplitude: 0, phase: 0, bias: 0 }
+                }
+            }
+        }
+        this.animations[6] = {
+            type: "harmonic",
             name: "Static",
             duration_sec: 4.0,
             data: {
@@ -2468,7 +2502,7 @@ class lifViewer {
 
     /**
      * Set the current animation by index
-     * @param {number} animationIndex - Index of the animation to use (0 = Zoom In, 1 = Ken Burns)
+     * @param {number} animationIndex - Index of the animation to use (0 = Zoom In, 1 = Ken Burns, .., 6 = Static)
      */
     setAnimation(animationIndex) {
         if (this.animations && animationIndex >= 0 && animationIndex < this.animations.length) {
