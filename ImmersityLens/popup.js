@@ -113,10 +113,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         fallbackToStaticAnimations();
                     }
                 } else if (response && response.success && response.animations && response.animations.length > 0) {
-                    console.log('Got dynamic animations from lifViewer:', response.animations);
-                    buildAnimationOptions(response.animations);
+                    console.log('Got dynamic animations from active lifViewer instance:', response);
+                    buildAnimationOptions(response.animations, response.currentAnimation);
                 } else {
-                    console.log('No lifViewer instances found, using static definitions');
+                    console.log('No active lifViewer instance found, using static definitions');
                     fallbackToStaticAnimations();
                 }
             });
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Function to build animation dropdown options
-    function buildAnimationOptions(animations) {
+    function buildAnimationOptions(animations, currentAnimationIndex = null) {
         // Clear existing options
         animationSelect.innerHTML = '';
 
@@ -168,15 +168,22 @@ document.addEventListener('DOMContentLoaded', function () {
             animationSelect.appendChild(option);
         });
 
-        // Load and set the saved animation selection
-        chrome.storage.local.get([ANIMATION_STORAGE_KEY]).then((result) => {
-            const animationIndex = result[ANIMATION_STORAGE_KEY] !== undefined ? result[ANIMATION_STORAGE_KEY] : 0;
-            animationSelect.value = animationIndex.toString();
-            console.log('Loaded animations and set selection to:', animationIndex);
-        }).catch((error) => {
-            console.error('Error loading animation selection:', error);
-            animationSelect.value = '0';
-        });
+        // Set the current animation selection
+        if (currentAnimationIndex !== null && currentAnimationIndex !== undefined) {
+            // Use the current animation from the active lifViewer instance
+            animationSelect.value = currentAnimationIndex.toString();
+            console.log('Set selection to active instance current animation:', currentAnimationIndex);
+        } else {
+            // Fall back to saved selection from storage
+            chrome.storage.local.get([ANIMATION_STORAGE_KEY]).then((result) => {
+                const animationIndex = result[ANIMATION_STORAGE_KEY] !== undefined ? result[ANIMATION_STORAGE_KEY] : 0;
+                animationSelect.value = animationIndex.toString();
+                console.log('Set selection to saved preference:', animationIndex);
+            }).catch((error) => {
+                console.error('Error loading animation selection:', error);
+                animationSelect.value = '0';
+            });
+        }
     }
 
 

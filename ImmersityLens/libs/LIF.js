@@ -576,9 +576,13 @@ const ANIMATION_DEFINITIONS = [
 
 class lifViewer {
     static instances = [];
+    static activeInstance = null; // Track the currently active/focused instance
 
     constructor(lifUrl, container, heightOrOptions = 300, autoplay = false, mouseOver = true) {
         lifViewer.instances.push(this);
+
+        // Set this instance as active (most recently created)
+        lifViewer.activeInstance = this;
 
         // Enhanced constructor - support both old API and new options object
         let options = {};
@@ -1310,6 +1314,9 @@ class lifViewer {
     setupUnifiedEventHandlers() {
         let animationTimeoutId = null;
         const startAnimation = () => {
+            // Set this instance as active when user interacts with it
+            this.setAsActive();
+
             if (animationTimeoutId) {
                 clearTimeout(animationTimeoutId);
                 animationTimeoutId = null;
@@ -1339,6 +1346,9 @@ class lifViewer {
     setupOverlayEventHandlers() {
         let animationTimeoutId = null;
         const startAnimation = () => {
+            // Set this instance as active when user interacts with it
+            this.setAsActive();
+
             if (animationTimeoutId) {
                 clearTimeout(animationTimeoutId);
                 animationTimeoutId = null;
@@ -1372,6 +1382,9 @@ class lifViewer {
             let animationTimeoutId = null;
 
             const startAnimation = () => {
+                // Set this instance as active when user interacts with it
+                this.setAsActive();
+
                 if (animationTimeoutId) {
                     clearTimeout(animationTimeoutId);
                     animationTimeoutId = null;
@@ -2487,9 +2500,9 @@ class lifViewer {
     }
 
     /**
-     * Static method to get animation names from any active instance (legacy method)
-     * @returns {Object[]} Array of animation objects with name and index
-     */
+ * Static method to get animation names from any active instance (legacy method)
+ * @returns {Object[]} Array of animation objects with name and index
+ */
     static getAvailableAnimationsFromInstance() {
         // Find the first instance with animations loaded
         const instanceWithAnimations = lifViewer.instances.find(instance =>
@@ -2507,6 +2520,54 @@ class lifViewer {
 
         // Fallback to static method
         return lifViewer.getAvailableAnimations();
+    }
+
+    /**
+     * Static method to get animations from the currently active instance
+     * @returns {Object[]} Array of animation objects from active instance
+     */
+    static getActiveInstanceAnimations() {
+        if (lifViewer.activeInstance && lifViewer.activeInstance.animations && lifViewer.activeInstance.animations.length > 0) {
+            return {
+                success: true,
+                animations: lifViewer.activeInstance.animations.map((anim, index) => ({
+                    name: anim.name,
+                    index: index,
+                    type: anim.type,
+                    duration: anim.duration_sec
+                })),
+                currentAnimation: lifViewer.activeInstance.animations.indexOf(lifViewer.activeInstance.currentAnimation),
+                instanceId: lifViewer.instances.indexOf(lifViewer.activeInstance)
+            };
+        }
+
+        return { success: false, reason: 'No active instance with animations' };
+    }
+
+    /**
+     * Static method to set animation on the currently active instance only
+     * @param {number} animationIndex - Index of animation to set
+     * @returns {Object} Result of the operation
+     */
+    static setActiveInstanceAnimation(animationIndex) {
+        if (lifViewer.activeInstance && lifViewer.activeInstance.setAnimation) {
+            const success = lifViewer.activeInstance.setAnimation(animationIndex);
+            return {
+                success: success,
+                instanceId: lifViewer.instances.indexOf(lifViewer.activeInstance),
+                animationName: success ? lifViewer.activeInstance.currentAnimation.name : null
+            };
+        }
+
+        return { success: false, reason: 'No active instance available' };
+    }
+
+    /**
+     * Set this instance as the active one
+     */
+    setAsActive() {
+        lifViewer.activeInstance = this;
+        console.log(`Instance set as active: ${this.lifUrl} (${lifViewer.instances.indexOf(this)})`);
     }
 
     /**

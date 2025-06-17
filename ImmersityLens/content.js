@@ -3450,6 +3450,25 @@ document.addEventListener('contextmenu', function (e) {
 
     if (img) {
         lastContextMenuImage = img;
+
+        // Set the associated lifViewer instance as active if it exists
+        if (typeof lifViewer !== 'undefined' && lifViewer.instances) {
+            const associatedInstance = lifViewer.instances.find(instance => {
+                // Check if this instance is associated with the right-clicked image
+                return instance.originalImage === img ||
+                    instance.lifUrl === imageLIFMap.get(img.src) ||
+                    (instance.container && instance.container.contains(img));
+            });
+
+            if (associatedInstance) {
+                associatedInstance.setAsActive();
+                console.log('🎯 Set lifViewer instance as active based on right-click:', {
+                    instanceIndex: lifViewer.instances.indexOf(associatedInstance),
+                    lifUrl: associatedInstance.lifUrl
+                });
+            }
+        }
+
         console.log('Found image in clicked element:', {
             src: img.src,
             alt: img.alt,
@@ -3660,47 +3679,31 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             showDownloadNotification('No LIF file available for this image', 'error');
         }
     } else if (message.action === "setAnimation") {
-        // Handle animation change request from popup
+        // Handle animation change request from popup - only update active instance
         const animationIndex = message.animationIndex;
-        console.log('Setting animation to index:', animationIndex);
+        console.log('Setting animation to index for active instance:', animationIndex);
 
-        // Update all active lifViewer instances
-        let updatedCount = 0;
-        if (typeof lifViewer !== 'undefined' && lifViewer.instances) {
-            lifViewer.instances.forEach(instance => {
-                if (instance.setAnimation(animationIndex)) {
-                    updatedCount++;
-                }
-            });
+        if (typeof lifViewer !== 'undefined' && lifViewer.setActiveInstanceAnimation) {
+            const result = lifViewer.setActiveInstanceAnimation(animationIndex);
+            console.log('Set active instance animation result:', result);
+            sendResponse(result);
+        } else {
+            console.log('No lifViewer class or no active instance method available');
+            sendResponse({ success: false, reason: 'lifViewer not available' });
         }
-
-        console.log(`Updated ${updatedCount} lifViewer instances with animation index ${animationIndex}`);
-        sendResponse({ success: true, updatedInstances: updatedCount });
         return true; // Keep message channel open for async response
     } else if (message.action === "getAvailableAnimations") {
-        // Handle request for available animations from popup - prioritize actual instances
-        console.log('Getting available animations from instances...');
+        // Handle request for available animations from popup - use active instance
+        console.log('Getting available animations from active instance...');
 
-        let animations = [];
-        if (typeof lifViewer !== 'undefined' && lifViewer.instances && lifViewer.instances.length > 0) {
-            // Try to get animations from the first active instance with loaded animations
-            const instanceWithAnimations = lifViewer.instances.find(instance =>
-                instance.animations && instance.animations.length > 0
-            );
-
-            if (instanceWithAnimations) {
-                animations = instanceWithAnimations.animations.map((anim, index) => ({
-                    name: anim.name,
-                    index: index,
-                    type: anim.type,
-                    duration: anim.duration_sec
-                }));
-                console.log('Found animations from active instance:', animations);
-            }
+        if (typeof lifViewer !== 'undefined' && lifViewer.getActiveInstanceAnimations) {
+            const result = lifViewer.getActiveInstanceAnimations();
+            console.log('Active instance animation result:', result);
+            sendResponse(result);
+        } else {
+            console.log('No lifViewer class or no active instance method available');
+            sendResponse({ success: false, reason: 'lifViewer not available' });
         }
-
-        // If no instances with animations, return empty to trigger fallback
-        sendResponse({ success: true, animations: animations });
         return true; // Keep message channel open for async response
     } else if (message.action === "getStaticAnimations") {
         // Handle request for static animation definitions from lifViewer class
