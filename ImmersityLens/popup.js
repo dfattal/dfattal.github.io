@@ -268,32 +268,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Set up mouse event listeners for auto-close
     function setupAutoClose() {
-        // Start timer when popup opens
-        startAutoCloseTimer();
+        // Don't start timer immediately - only when mouse leaves popup
 
         // Cancel timer when mouse is over the popup
         document.body.addEventListener('mouseenter', () => {
             cancelAutoCloseTimer();
             document.body.classList.remove('fade-out');
+            console.log('Mouse entered popup - timer cancelled');
         });
 
         // Start timer when mouse leaves the popup
         document.body.addEventListener('mouseleave', () => {
             startAutoCloseTimer();
+            console.log('Mouse left popup - timer started');
         });
 
         // Cancel timer when interacting with controls
-        animationSelect.addEventListener('focus', cancelAutoCloseTimer);
-        animationSelect.addEventListener('change', () => {
-            // Give user a moment to see the change, then restart timer
+        animationSelect.addEventListener('focus', () => {
             cancelAutoCloseTimer();
-            setTimeout(startAutoCloseTimer, 1000);
+            console.log('Animation select focused - timer cancelled');
         });
 
-        // Also cancel timer when clicking anywhere (general interaction)
+        animationSelect.addEventListener('change', () => {
+            // Give user a moment to see the change, then wait for mouse leave
+            cancelAutoCloseTimer();
+            console.log('Animation changed - timer cancelled');
+        });
+
+        // Cancel timer when clicking anywhere (general interaction)
         document.addEventListener('click', () => {
             cancelAutoCloseTimer();
-            setTimeout(startAutoCloseTimer, 1500);
+            console.log('Popup clicked - timer cancelled');
         });
     }
 
