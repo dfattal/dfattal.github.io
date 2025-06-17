@@ -525,6 +525,30 @@ const LAYOUT_CONFIGS = {
 };
 ```
 
+### Configurable Parameters
+
+The lifViewer includes several configurable parameters for customizing user experience:
+
+#### Relaxation Time
+Controls the transition speed when mouse leaves the 3D canvas:
+```javascript
+// Configure during initialization
+const viewer = new lifViewer(lifUrl, container, {
+    relaxationTime: 0.8  // Slower transition (default: 0.5 seconds)
+});
+
+// Or modify dynamically
+viewer.setRelaxationTime(1.2);  // Very slow, dramatic transition
+```
+
+#### Feathering and Background Color
+Customize 3D rendering appearance:
+```javascript
+// Set in lifViewer constructor
+this.feathering = 0.1;                    // Edge softening (default: 0.1)
+this.background = [0.1, 0.1, 0.1, 1.0];  // RGBA background (default: dark gray)
+```
+
 ## Platform-Specific Optimizations
 
 ### Instagram Carousel Support
@@ -755,6 +779,34 @@ function validateAndCorrectDimensions(container, image, proposedDimensions) {
 ```
 
 ## Performance Optimizations
+
+### Configurable Video Quality
+
+MP4 generation bitrate is configurable for balancing quality vs file size:
+
+```javascript
+// Video configuration constants
+const VIDEO_CONFIG = {
+    DEFAULT_BITRATE: 0.2,  // Default bitrate multiplier
+    MIN_BITRATE: 0.05,     // Minimum bitrate (very low quality)
+    MAX_BITRATE: 2.0       // Maximum bitrate (very high quality)
+};
+
+// Global API for external control (popup menu integration)
+await window.setMP4Bitrate(0.8);        // Higher quality setting
+const currentBitrate = await window.getMP4Bitrate();
+const config = window.getMP4BitrateConfig(); // Get min/max/default values
+
+// Generate MP4 with custom bitrate
+await generateMP4FromLifFile(img, lifUrl, 1.5); // Override for specific video
+```
+
+**Quality Reference:**
+- `0.05`: Very low quality (smallest files)
+- `0.2`: Default quality (balanced)
+- `0.5`: Good quality
+- `1.0`: High quality
+- `2.0`: Maximum quality (largest files)
 
 ### Z-Index Configuration System
 

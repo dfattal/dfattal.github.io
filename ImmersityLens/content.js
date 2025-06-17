@@ -146,6 +146,56 @@ const Z_INDEX_CONFIG = {
     IMAGE: 4999             // Post-conversion image elements (passed to lifViewer)
 };
 
+// Video generation configuration - Centralized for easy maintenance
+const VIDEO_CONFIG = {
+    DEFAULT_BITRATE: 0.2,  // Default bitrate multiplier
+    MIN_BITRATE: 0.05,     // Minimum bitrate (very low quality)
+    MAX_BITRATE: 2.0       // Maximum bitrate (very high quality)
+};
+
+// Storage keys for settings
+const VIDEO_BITRATE_STORAGE_KEY = 'mp4BitrateMultiplier';
+
+// Bitrate management functions
+async function getMP4Bitrate() {
+    try {
+        const result = await chrome.storage.local.get([VIDEO_BITRATE_STORAGE_KEY]);
+        const storedBitrate = result[VIDEO_BITRATE_STORAGE_KEY];
+
+        if (storedBitrate !== undefined) {
+            // Clamp the stored value to valid range
+            return Math.max(VIDEO_CONFIG.MIN_BITRATE, Math.min(VIDEO_CONFIG.MAX_BITRATE, storedBitrate));
+        }
+
+        return VIDEO_CONFIG.DEFAULT_BITRATE;
+    } catch (error) {
+        console.warn('Failed to load MP4 bitrate setting, using default:', error);
+        return VIDEO_CONFIG.DEFAULT_BITRATE;
+    }
+}
+
+async function setMP4Bitrate(bitrate) {
+    try {
+        // Clamp the value to valid range
+        const clampedBitrate = Math.max(VIDEO_CONFIG.MIN_BITRATE, Math.min(VIDEO_CONFIG.MAX_BITRATE, bitrate));
+        await chrome.storage.local.set({ [VIDEO_BITRATE_STORAGE_KEY]: clampedBitrate });
+        console.log('MP4 bitrate setting saved:', clampedBitrate);
+        return clampedBitrate;
+    } catch (error) {
+        console.error('Failed to save MP4 bitrate setting:', error);
+        throw error;
+    }
+}
+
+// Make these functions available globally for popup menu
+window.getMP4Bitrate = getMP4Bitrate;
+window.setMP4Bitrate = setMP4Bitrate;
+window.getMP4BitrateConfig = () => ({
+    default: VIDEO_CONFIG.DEFAULT_BITRATE,
+    min: VIDEO_CONFIG.MIN_BITRATE,
+    max: VIDEO_CONFIG.MAX_BITRATE
+});
+
 // 🥽 WEBXR SUPPORT TEST - Inject script file into page context
 function testWebXRSupport() {
     console.log('🔍 Testing WebXR support by injecting test script into page context...');
@@ -556,7 +606,7 @@ async function showCorsInfoIfNeeded() {
 }
 
 // Function to generate MP4 by creating offscreen lifViewer with LIF file
-async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
+async function generateMP4FromLifFile(imgElement, lifDownloadUrl, customBitrate = null) {
     console.log('🎬 Starting MP4 generation for image:', imgElement.src);
     console.log('🎬 Using LIF URL:', lifDownloadUrl);
 
@@ -657,7 +707,9 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl) {
 
             // Try different codec options for better compatibility (especially QuickTime)
             let recorderOptions = null;
-            const bitrate = 0.2;
+            // Get bitrate from settings or use custom/default value
+            const bitrate = customBitrate !== null ? customBitrate : await getMP4Bitrate();
+            console.log('🎯 Using MP4 bitrate multiplier:', bitrate);
             const codecOptions = [
                 // H.264 with baseline profile for maximum compatibility - increased bitrate for better quality
                 { mimeType: 'video/mp4; codecs="avc1.42E01E"', videoBitsPerSecond: Math.floor((videoWidth * videoHeight * videoFps) * bitrate) },

@@ -647,6 +647,9 @@ class lifViewer {
         // Feathering and background color properties
         this.feathering = 0.1;
         this.background = [0.1, 0.1, 0.1, 1.0];  // RGBA background color
+
+        // Relaxation/transition time for renderOff animation (in seconds)
+        this.relaxationTime = options.relaxationTime !== undefined ? options.relaxationTime : 0.5;
     }
 
     /**
@@ -1303,18 +1306,13 @@ class lifViewer {
                 animationTimeoutId = null;
             }
             if (!this.running) {
-                this.canvas.style.opacity = '1';
-                this.running = true;
-                this.startTime = Date.now() / 1000;
-                this.animationFrame = requestAnimationFrame(this.render);
+                this.startAnimation(); // Use the proper method for smooth transitions
             }
         };
         const stopAnimation = () => {
             if (this.running) {
                 animationTimeoutId = setTimeout(() => {
-                    this.running = false;
-                    this.canvas.style.opacity = '0';
-                    cancelAnimationFrame(this.animationFrame);
+                    this.stopAnimation(); // Use the proper method for smooth renderOff transition
                     animationTimeoutId = null;
                 }, 100);
             }
@@ -1325,8 +1323,8 @@ class lifViewer {
         this.originalImage.addEventListener('mouseleave', stopAnimation, { passive: true });
         // Canvas always receives events
         this.canvas.style.pointerEvents = 'auto';
-        this.canvas.style.opacity = '0';
-        console.log('✅ Unified event handlers configured (opacity mode)');
+        this.canvas.style.display = 'none'; // Start hidden, will show on animation start
+        console.log('✅ Unified event handlers configured (display mode with smooth transitions)');
     }
 
     setupOverlayEventHandlers() {
@@ -1337,18 +1335,13 @@ class lifViewer {
                 animationTimeoutId = null;
             }
             if (!this.running) {
-                this.canvas.style.opacity = '1';
-                this.running = true;
-                this.startTime = Date.now() / 1000;
-                this.animationFrame = requestAnimationFrame(this.render);
+                this.startAnimation(); // Use the proper method for smooth transitions
             }
         };
         const stopAnimation = () => {
             if (this.running) {
                 animationTimeoutId = setTimeout(() => {
-                    this.running = false;
-                    this.canvas.style.opacity = '0';
-                    cancelAnimationFrame(this.animationFrame);
+                    this.stopAnimation(); // Use the proper method for smooth renderOff transition
                     animationTimeoutId = null;
                 }, 100);
             }
@@ -1359,8 +1352,8 @@ class lifViewer {
         this.originalImage.addEventListener('mouseleave', stopAnimation, { passive: true });
         // Canvas always receives events
         this.canvas.style.pointerEvents = 'auto';
-        this.canvas.style.opacity = '0';
-        console.log('Overlay event handlers configured (opacity mode)');
+        this.canvas.style.display = 'none'; // Start hidden, will show on animation start
+        console.log('✅ Overlay event handlers configured (display mode with smooth transitions)');
     }
 
     setupStandardEventHandlers() {
@@ -2245,7 +2238,7 @@ class lifViewer {
     }
 
     renderOff(transitionTime) {
-        if (this.running) { console.log("abort renderOFF !"); return; }
+        // Note: this.running should already be false when called from stopAnimation()
 
         // Safety check: ensure currentAnimation is initialized
         if (!this.currentAnimation || !this.currentAnimation.data) {
@@ -2256,21 +2249,51 @@ class lifViewer {
         }
 
         const elapsedTime = (Date.now() / 1000) - this.startTime;
+        const progress = Math.min(elapsedTime / transitionTime, 1); // progress goes from 0 to 1
 
-        //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
         const invd = this.currentAnimation.data.invd;
-        // Calculate a fade-out effect based on elapsed time and transition time
-        //const progress = Math.min(elapsedTime / transitionTime, 1); // progress goes from 0 to 1
 
-        const { x: xo, y: yo, z: zo } = this.renderCam.pos;
-        // Update some properties to create a transition effect
-        const xc = this.currentAnimation.data.position.x.bias;
-        this.renderCam.pos = { x: xc + (xo - xc) / 1.1, y: yo / 1.1, z: zo / 1.1 }; // Slow down z-axis movement
-        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
-        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        // Exponential decay factor - adjust this value to control smoothness
+        // Higher values = faster decay, lower values = slower/smoother decay
+        const decayConstant = 3.0; // Was effectively ~10 before (too fast)
+
+        // Calculate exponential decay: factor decreases smoothly from 1 to 0
+        const decayFactor = Math.exp(-decayConstant * progress);
+
+        // Target positions should be (0, 0, xc)
+        // xc = 0 for mono LIF (this.views.length == 1)
+        // xc = -0.5 for stereo LIF (this.views.length > 1)
+        const targetX = 0;
+        const targetY = 0;
+        const targetZ = this.views.length > 1 ? -0.5 : 0;
+
+        // Use the captured starting position when mouse left the screen
+        // If not available (shouldn't happen), fall back to current animation position
+        let startX, startY, startZ;
+        if (this.renderOffStartPos) {
+            startX = this.renderOffStartPos.x;
+            startY = this.renderOffStartPos.y;
+            startZ = this.renderOffStartPos.z;
+        } else {
+            // Fallback: calculate current animation position
+            const animTime = this.currentAnimation.duration_sec;
+            const t = elapsedTime;
+            function harm(amp, ph, bias) { return amp * Math.sin(2 * Math.PI * (t / animTime + ph)) + bias };
+            startX = harm(this.currentAnimation.data.position.x.amplitude, this.currentAnimation.data.position.x.phase, this.currentAnimation.data.position.x.bias);
+            startY = harm(this.currentAnimation.data.position.y.amplitude, this.currentAnimation.data.position.y.phase, this.currentAnimation.data.position.y.bias);
+            startZ = harm(this.currentAnimation.data.position.z.amplitude, this.currentAnimation.data.position.z.phase, this.currentAnimation.data.position.z.bias);
+        }
+
+        // Smoothly interpolate from starting position to target (origin) position
+        this.renderCam.pos.x = startX * decayFactor + targetX * (1 - decayFactor);
+        this.renderCam.pos.y = startY * decayFactor + targetY * (1 - decayFactor);
+        this.renderCam.pos.z = startZ * decayFactor + targetZ * (1 - decayFactor);
+
+        // Update camera parameters
+        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd);
+        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd);
         const vs = this.viewportScale({ x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
-        this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
-
+        this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd);
 
         if (this.views.length < 2) {
             this.drawSceneMN(10);
@@ -2278,12 +2301,16 @@ class lifViewer {
             this.drawSceneST(10);
         }
 
-        if ((elapsedTime < transitionTime) && !this.gl.isContextLost()) {
-            // Continue rendering if transitionTime hasn't elapsed
+        if ((progress < 1) && !this.gl.isContextLost()) {
+            // Continue rendering if transition hasn't completed
             this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
         } else {
-            // Only hide the canvas
+            // Only hide the canvas when transition is complete
             this.canvas.style.display = 'none';
+
+            // Clean up the captured starting position
+            this.renderOffStartPos = null;
+
             console.log('🔄 Animation ended - display states changed:');
             console.log('📊 Canvas state:', {
                 display: this.canvas.style.display,
@@ -2316,13 +2343,40 @@ class lifViewer {
         }
     }
 
-    stopAnimation(transitionTime = 0.5) { // Set a default transition time of 0.5 seconds
+    stopAnimation(transitionTime = null) { // Use instance property if not specified
         if (this.disableAnim) return;
         cancelAnimationFrame(this.animationFrame);
         this.running = false;
         this.mousePosOld = { x: 0, y: 0 };
+
+        // Use provided transitionTime or fall back to instance property
+        const actualTransitionTime = transitionTime !== null ? transitionTime : this.relaxationTime;
+
+        // Capture the current camera position when mouse leaves
+        this.renderOffStartPos = {
+            x: this.renderCam.pos.x,
+            y: this.renderCam.pos.y,
+            z: this.renderCam.pos.z
+        };
+
         this.startTime = Date.now() / 1000; // Start transition timer
-        this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
+        this.animationFrame = requestAnimationFrame(() => this.renderOff(actualTransitionTime));
+    }
+
+    /**
+     * Set the relaxation time for the renderOff animation
+     * @param {number} time - Transition time in seconds (e.g., 0.5 for half a second)
+     */
+    setRelaxationTime(time) {
+        this.relaxationTime = Math.max(0.1, Math.min(5.0, time)); // Clamp between 0.1 and 5.0 seconds
+    }
+
+    /**
+     * Get the current relaxation time
+     * @returns {number} Current relaxation time in seconds
+     */
+    getRelaxationTime() {
+        return this.relaxationTime;
     }
 
     // Helper method to render a single frame at a specific time (used for MP4 generation)
