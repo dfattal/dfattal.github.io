@@ -1525,7 +1525,7 @@ class lifViewer {
         const xc = this.views.length > 1 ? -0.5 : 0;
         this.animations[0] = {
             type: "harmonic",
-            name: "Default Animation",
+            name: "Zoom In",
             duration_sec: 4.0,
             data: {
                 focal_px: this.views[0].f,
@@ -1539,7 +1539,80 @@ class lifViewer {
                 }
             }
         }
-        this.currentAnimation = this.animations[0];
+        this.animations[1] = {
+            type: "harmonic",
+            name: "Ken Burns",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: invd, // focus used for tracking shots
+                position: {
+                    x: { amplitude: 0.0, phase: 0.0, bias: xc },
+                    y: { amplitude: 0.0, phase: 0.0, bias: 0 },
+                    z: { amplitude: -zAmp / 2, phase: -0.25, bias: -zAmp / 2 }
+                }
+            }
+        }
+        this.animations[2] = {
+            type: "harmonic",
+            name: "Panning Hor",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: 0, // focus used for tracking shots
+                position: {
+                    x: { amplitude: zAmp / 2, phase: 0.0, bias: xc },
+                    y: { amplitude: 0.0, phase: 0.0, bias: 0 },
+                    z: { amplitude: 0, phase: 0, bias: 0 }
+                }
+            }
+        }
+        this.animations[3] = {
+            type: "harmonic",
+            name: "Panning Vert",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: 0, // focus used for tracking shots
+                position: {
+                    x: { amplitude: 0.0, phase: 0.0, bias: xc },
+                    y: { amplitude: zAmp / 2, phase: 0.0, bias: 0 },
+                    z: { amplitude: 0, phase: 0, bias: 0 }
+                }
+            }
+        }
+        this.animations[4] = {
+            type: "harmonic",
+            name: "Static",
+            duration_sec: 4.0,
+            data: {
+                focal_px: this.views[0].f,
+                width_px: this.views[0].width,
+                height_px: this.views[0].height,
+                invd: 0, // focus used for tracking shots
+                position: {
+                    x: { amplitude: 0.0, phase: 0.0, bias: xc },
+                    y: { amplitude: 0, phase: 0.0, bias: 0 },
+                    z: { amplitude: 0, phase: 0, bias: 0 }
+                }
+            }
+        }
+        // Load saved animation preference from storage, default to animation 0 (Zoom In)
+        try {
+            const result = await chrome.storage.local.get(['lifAnimationIndex']);
+            const savedAnimationIndex = result.lifAnimationIndex !== undefined ? result.lifAnimationIndex : 0;
+            this.currentAnimation = this.animations[savedAnimationIndex] || this.animations[0];
+            console.log(`Loaded animation preference: ${this.currentAnimation.name} (index ${savedAnimationIndex})`);
+        } catch (error) {
+            console.warn('Could not load animation preference, using default:', error);
+            this.currentAnimation = this.animations[0];
+        }
 
         await this.initWebGLResources();
 
@@ -2369,6 +2442,55 @@ class lifViewer {
      */
     setRelaxationTime(time) {
         this.relaxationTime = Math.max(0.1, Math.min(5.0, time)); // Clamp between 0.1 and 5.0 seconds
+    }
+
+    /**
+     * Set the current animation by index
+     * @param {number} animationIndex - Index of the animation to use (0 = Zoom In, 1 = Ken Burns)
+     */
+    setAnimation(animationIndex) {
+        if (this.animations && animationIndex >= 0 && animationIndex < this.animations.length) {
+            this.currentAnimation = this.animations[animationIndex];
+            console.log(`Animation changed to: ${this.currentAnimation.name} (index ${animationIndex})`);
+            return true;
+        } else {
+            console.warn(`Invalid animation index: ${animationIndex}. Available animations: ${this.animations ? this.animations.length : 0}`);
+            return false;
+        }
+    }
+
+    /**
+     * Get available animation names
+     * @returns {string[]} Array of animation names
+     */
+    getAnimationNames() {
+        return this.animations ? this.animations.map(anim => anim.name) : [];
+    }
+
+    /**
+     * Static method to get animation names from any active instance
+     * @returns {Object[]} Array of animation objects with name and index
+     */
+    static getAvailableAnimations() {
+        // Find the first instance with animations loaded
+        const instanceWithAnimations = lifViewer.instances.find(instance =>
+            instance.animations && instance.animations.length > 0
+        );
+
+        if (instanceWithAnimations) {
+            return instanceWithAnimations.animations.map((anim, index) => ({
+                name: anim.name,
+                index: index,
+                type: anim.type,
+                duration: anim.duration_sec
+            }));
+        }
+
+        // Fallback: return default animation structure if no instances are loaded
+        return [
+            { name: "Zoom In", index: 0, type: "harmonic", duration: 4.0 },
+            { name: "Ken Burns", index: 1, type: "harmonic", duration: 4.0 }
+        ];
     }
 
     /**

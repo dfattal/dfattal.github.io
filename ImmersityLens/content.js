@@ -700,6 +700,18 @@ async function generateMP4FromLifFile(imgElement, lifDownloadUrl, customBitrate 
             // Wait a bit more for all resources to be loaded
             await new Promise(resolve => setTimeout(resolve, 1000));
 
+            // Ensure the offscreen viewer uses the selected animation preference
+            try {
+                const result = await chrome.storage.local.get(['lifAnimationIndex']);
+                const savedAnimationIndex = result.lifAnimationIndex !== undefined ? result.lifAnimationIndex : 0;
+                if (offscreenViewer.setAnimation) {
+                    offscreenViewer.setAnimation(savedAnimationIndex);
+                    console.log(`🎬 MP4 generation using animation: ${offscreenViewer.currentAnimation?.name || 'Unknown'} (index ${savedAnimationIndex})`);
+                }
+            } catch (error) {
+                console.warn('Could not load animation preference for MP4 generation, using default:', error);
+            }
+
             console.log('✅ Offscreen lifViewer ready, starting recording...');
 
             // Set up MediaRecorder for the offscreen canvas with better codec compatibility
@@ -3647,6 +3659,36 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             console.warn('No LIF file available for this image');
             showDownloadNotification('No LIF file available for this image', 'error');
         }
+    } else if (message.action === "setAnimation") {
+        // Handle animation change request from popup
+        const animationIndex = message.animationIndex;
+        console.log('Setting animation to index:', animationIndex);
+
+        // Update all active lifViewer instances
+        let updatedCount = 0;
+        if (typeof lifViewer !== 'undefined' && lifViewer.instances) {
+            lifViewer.instances.forEach(instance => {
+                if (instance.setAnimation(animationIndex)) {
+                    updatedCount++;
+                }
+            });
+        }
+
+        console.log(`Updated ${updatedCount} lifViewer instances with animation index ${animationIndex}`);
+        sendResponse({ success: true, updatedInstances: updatedCount });
+        return true; // Keep message channel open for async response
+    } else if (message.action === "getAvailableAnimations") {
+        // Handle request for available animations from popup
+        console.log('Getting available animations...');
+
+        let animations = [];
+        if (typeof lifViewer !== 'undefined' && lifViewer.getAvailableAnimations) {
+            animations = lifViewer.getAvailableAnimations();
+        }
+
+        console.log('Available animations:', animations);
+        sendResponse({ success: true, animations: animations });
+        return true; // Keep message channel open for async response
     } else if (message.action === "downloadMP4") {
         // Find the image at the clicked position
         const img = lastContextMenuImage || (lastRightClickedElement ? findImgInParentsAndSiblings(lastRightClickedElement) : null);

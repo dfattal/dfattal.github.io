@@ -1,19 +1,15 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const debugToggle = document.getElementById('debugToggle');
     const xrStatusDiv = document.getElementById('xrStatus');
     const xrStatusContainer = document.getElementById('xrStatusContainer');
-    const DEBUG_STORAGE_KEY = 'lifDebugEnabled';
+    const animationSelect = document.getElementById('animationSelect');
+    const ANIMATION_STORAGE_KEY = 'lifAnimationIndex';
 
-    // Function to update debug UI
-    function updateDebugUI(isDebugEnabled) {
-        if (isDebugEnabled) {
-            debugToggle.innerHTML = '<span>🐛</span><span>Debug Logs: On</span>';
-            debugToggle.className = 'toggle-btn debug-on';
-        } else {
-            debugToggle.innerHTML = '<span>🐛</span><span>Debug Logs: Off</span>';
-            debugToggle.className = 'toggle-btn secondary';
-        }
-    }
+    // Auto-close functionality
+    let autoCloseTimeout = null;
+    const AUTO_CLOSE_DELAY = 4000; // 4 seconds
+    const FADE_DURATION = 400; // 0.4 seconds
+
+
 
     // Function to update XR status UI
     function updateXRStatus(isSupported, reason) {
@@ -94,62 +90,170 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Load initial debug state from storage
-    chrome.storage.local.get([DEBUG_STORAGE_KEY]).then((result) => {
-        const isDebugEnabled = result[DEBUG_STORAGE_KEY] !== undefined ? result[DEBUG_STORAGE_KEY] : false;
-        updateDebugUI(isDebugEnabled);
-
-        // Check XR status after loading initial state (extension is always enabled now)
-        checkXRStatus();
-    }).catch((error) => {
-        console.error('Error loading debug state in popup:', error);
-        updateDebugUI(false);
-        checkXRStatus();
-    });
-
-    // Handle debug toggle button click
-    debugToggle.addEventListener('click', function () {
+    // Function to load available animations dynamically
+    function loadAvailableAnimations(retryCount = 0, maxRetries = 5) {
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             if (!tabs[0]) {
-                console.error('No active tab found');
+                console.error('No active tab found for animation loading');
+                fallbackToDefaultAnimations();
                 return;
             }
 
-            chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleDebug' }, function (response) {
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'getAvailableAnimations' }, function (response) {
                 if (chrome.runtime.lastError) {
-                    // Content script not loaded yet - handle via storage directly
-                    console.warn('Content script not available, toggling debug via storage:', chrome.runtime.lastError.message);
-
-                    // Get current debug state from storage and toggle it
-                    chrome.storage.local.get([DEBUG_STORAGE_KEY]).then((result) => {
-                        const currentDebugState = result[DEBUG_STORAGE_KEY] !== undefined ? result[DEBUG_STORAGE_KEY] : false;
-                        const newDebugState = !currentDebugState;
-
-                        // Save new debug state to storage
-                        chrome.storage.local.set({ [DEBUG_STORAGE_KEY]: newDebugState }).then(() => {
-                            console.log('Debug state updated via storage:', newDebugState);
-                            updateDebugUI(newDebugState);
-                        }).catch((error) => {
-                            console.error('Error saving debug state:', error);
-                        });
-                    }).catch((error) => {
-                        console.error('Error getting debug state:', error);
-                    });
-                } else if (response !== undefined) {
-                    updateDebugUI(response.debugEnabled);
+                    // Content script not loaded yet - retry with exponential backoff
+                    if (retryCount < maxRetries) {
+                        const delay = Math.min(500 + (retryCount * 300), 2000);
+                        console.log(`Content script not ready for animation loading, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+                        setTimeout(() => {
+                            loadAvailableAnimations(retryCount + 1, maxRetries);
+                        }, delay);
+                    } else {
+                        console.warn('Max retries reached for animation loading, using fallback');
+                        fallbackToDefaultAnimations();
+                    }
+                } else if (response && response.success && response.animations) {
+                    buildAnimationOptions(response.animations);
                 } else {
-                    console.warn('No response from content script for debug toggle');
+                    console.warn('No valid animation response, using fallback');
+                    fallbackToDefaultAnimations();
                 }
             });
         });
+    }
+
+    // Function to build animation dropdown options
+    function buildAnimationOptions(animations) {
+        // Clear existing options
+        animationSelect.innerHTML = '';
+
+        // Add animation options
+        animations.forEach(animation => {
+            const option = document.createElement('option');
+            option.value = animation.index.toString();
+            option.textContent = animation.name;
+            animationSelect.appendChild(option);
+        });
+
+        // Load and set the saved animation selection
+        chrome.storage.local.get([ANIMATION_STORAGE_KEY]).then((result) => {
+            const animationIndex = result[ANIMATION_STORAGE_KEY] !== undefined ? result[ANIMATION_STORAGE_KEY] : 0;
+            animationSelect.value = animationIndex.toString();
+            console.log('Loaded animations and set selection to:', animationIndex);
+        }).catch((error) => {
+            console.error('Error loading animation selection:', error);
+            animationSelect.value = '0';
+        });
+    }
+
+    // Fallback function for when dynamic loading fails
+    function fallbackToDefaultAnimations() {
+        const defaultAnimations = [
+            { name: "Zoom In", index: 0 },
+            { name: "Ken Burns", index: 1 }
+        ];
+        buildAnimationOptions(defaultAnimations);
+    }
+
+    // Load available animations on startup
+    loadAvailableAnimations();
+
+    // Check XR status after initial setup
+    checkXRStatus();
+
+
+
+    // Handle animation selection change
+    animationSelect.addEventListener('change', function () {
+        const selectedAnimationIndex = parseInt(animationSelect.value);
+
+        // Save to storage
+        chrome.storage.local.set({ [ANIMATION_STORAGE_KEY]: selectedAnimationIndex }).then(() => {
+            console.log('Animation selection saved:', selectedAnimationIndex);
+
+            // Send message to content script to update animation
+            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+                if (!tabs[0]) {
+                    console.error('No active tab found for animation change');
+                    return;
+                }
+
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    action: 'setAnimation',
+                    animationIndex: selectedAnimationIndex
+                }, function (response) {
+                    if (chrome.runtime.lastError) {
+                        console.warn('Content script not available for animation change:', chrome.runtime.lastError.message);
+                    } else if (response && response.success) {
+                        console.log('Animation changed successfully to:', selectedAnimationIndex);
+                    }
+                });
+            });
+        }).catch((error) => {
+            console.error('Error saving animation selection:', error);
+        });
     });
+
+    // Auto-close functions
+    function startAutoCloseTimer() {
+        clearTimeout(autoCloseTimeout);
+        autoCloseTimeout = setTimeout(() => {
+            fadeOutAndClose();
+        }, AUTO_CLOSE_DELAY);
+    }
+
+    function cancelAutoCloseTimer() {
+        clearTimeout(autoCloseTimeout);
+        autoCloseTimeout = null;
+    }
+
+    function fadeOutAndClose() {
+        document.body.classList.add('fade-out');
+        setTimeout(() => {
+            window.close();
+        }, FADE_DURATION);
+    }
+
+    // Set up mouse event listeners for auto-close
+    function setupAutoClose() {
+        // Start timer when popup opens
+        startAutoCloseTimer();
+
+        // Cancel timer when mouse is over the popup
+        document.body.addEventListener('mouseenter', () => {
+            cancelAutoCloseTimer();
+            document.body.classList.remove('fade-out');
+        });
+
+        // Start timer when mouse leaves the popup
+        document.body.addEventListener('mouseleave', () => {
+            startAutoCloseTimer();
+        });
+
+        // Cancel timer when interacting with controls
+        animationSelect.addEventListener('focus', cancelAutoCloseTimer);
+        animationSelect.addEventListener('change', () => {
+            // Give user a moment to see the change, then restart timer
+            cancelAutoCloseTimer();
+            setTimeout(startAutoCloseTimer, 1000);
+        });
+
+        // Also cancel timer when clicking anywhere (general interaction)
+        document.addEventListener('click', () => {
+            cancelAutoCloseTimer();
+            setTimeout(startAutoCloseTimer, 1500);
+        });
+    }
+
+    // Initialize auto-close after everything is loaded
+    setupAutoClose();
 
     // Listen for storage changes to keep popup in sync
     chrome.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'local') {
-            if (changes[DEBUG_STORAGE_KEY]) {
-                const newDebugValue = changes[DEBUG_STORAGE_KEY].newValue;
-                updateDebugUI(newDebugValue);
+            if (changes[ANIMATION_STORAGE_KEY]) {
+                const newAnimationValue = changes[ANIMATION_STORAGE_KEY].newValue;
+                animationSelect.value = newAnimationValue.toString();
             }
         }
     });

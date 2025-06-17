@@ -128,24 +128,36 @@
             transform: translateY(-1px);
         }
 
-        .toggle-btn.secondary {
-            background: #6c757d;
-            color: white;
+
+
+        .animation-label {
+            display: block;
             font-size: 12px;
-            padding: 8px 16px;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 6px;
         }
 
-        .toggle-btn.secondary:hover {
-            background: #545b62;
+        .animation-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+            color: #495057;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
         }
 
-        .toggle-btn.debug-on {
-            background: #ff6b35;
-            color: white;
+        .animation-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
         }
 
-        .toggle-btn.debug-on:hover {
-            background: #e55a2b;
+        .animation-select:hover {
+            border-color: #667eea;
         }
 
         .features-section {
@@ -227,6 +239,17 @@
             }
         }
 
+        /* Auto-close fade out animation */
+        body {
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+            transform-origin: center top;
+        }
+
+        body.fade-out {
+            opacity: 0;
+            transform: scale(0.95) translateY(-10px);
+        }
+
         /* Loading animation for XR status */
         .checking .status-value::after {
             content: '...';
@@ -303,10 +326,10 @@
 
         <div class="controls-section">
             <div class="control-group">
-                <button id="debugToggle" class="toggle-btn secondary">
-                    <span>🐛</span>
-                    <span>Debug Logs: Off</span>
-                </button>
+                <label class="animation-label">Animation Style:</label>
+                <select id="animationSelect" class="animation-select">
+                    <option value="">Loading animations...</option>
+                </select>
             </div>
         </div>
 
@@ -334,7 +357,7 @@
         <div class="powered-by">
             Powered by<br>
             <strong>Immersity AI</strong>
-            <div class="version">v4.0.3</div>
+            <div class="version">v4.1.0</div>
         </div>
     </div>
 
