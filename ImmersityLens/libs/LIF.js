@@ -657,6 +657,8 @@ class lifViewer {
         this.phase = 0;
         this.focus = 0;
         this.animationFrame = null;
+        this.renderOffAnimationFrame = null; // Track renderOff animation frame separately
+        this.isRenderingOff = false; // Track if renderOff animation is in progress
         this.render = this.render.bind(this);
 
         // Feathering and background color properties
@@ -2373,7 +2375,8 @@ class lifViewer {
         if (!this.currentAnimation || !this.currentAnimation.data) {
             // If animation data isn't ready, just hide canvas and return
             this.canvas.style.display = 'none';
-            cancelAnimationFrame(this.animationFrame);
+            this.isRenderingOff = false;
+            cancelAnimationFrame(this.renderOffAnimationFrame);
             return;
         }
 
@@ -2430,15 +2433,16 @@ class lifViewer {
             this.drawSceneST(10);
         }
 
-        if ((progress < 1) && !this.gl.isContextLost()) {
-            // Continue rendering if transition hasn't completed
-            this.animationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
+        if ((progress < 1) && !this.gl.isContextLost() && this.isRenderingOff) {
+            // Continue rendering if transition hasn't completed and renderOff hasn't been canceled
+            this.renderOffAnimationFrame = requestAnimationFrame(() => this.renderOff(transitionTime));
         } else {
             // Only hide the canvas when transition is complete
             this.canvas.style.display = 'none';
 
-            // Clean up the captured starting position
+            // Clean up the captured starting position and renderOff state
             this.renderOffStartPos = null;
+            this.isRenderingOff = false;
 
             console.log('🔄 Animation ended - display states changed:');
             console.log('📊 Canvas state:', {
@@ -2447,7 +2451,7 @@ class lifViewer {
                 zIndex: this.canvas.style.zIndex
             });
             console.log('✅ Animation ended - layout-aware positioning handled by enhanced architecture');
-            cancelAnimationFrame(this.animationFrame);
+            cancelAnimationFrame(this.renderOffAnimationFrame);
         }
     }
 
@@ -2455,6 +2459,16 @@ class lifViewer {
         if (this.disableAnim) return;
         if (!this.gl.isContextLost()) {
             if (this.running) return;
+
+            // Cancel any ongoing renderOff animation
+            if (this.isRenderingOff) {
+                console.log('🔄 Canceling renderOff animation - mouse re-entered during transition');
+                this.isRenderingOff = false;
+                cancelAnimationFrame(this.renderOffAnimationFrame);
+                this.renderOffAnimationFrame = null;
+                this.renderOffStartPos = null; // Clean up renderOff state
+            }
+
             this.running = true;
             // Only show the canvas
             this.canvas.style.display = 'block';
@@ -2488,8 +2502,10 @@ class lifViewer {
             z: this.renderCam.pos.z
         };
 
+        // Set renderOff state and start renderOff animation
+        this.isRenderingOff = true;
         this.startTime = Date.now() / 1000; // Start transition timer
-        this.animationFrame = requestAnimationFrame(() => this.renderOff(actualTransitionTime));
+        this.renderOffAnimationFrame = requestAnimationFrame(() => this.renderOff(actualTransitionTime));
     }
 
     /**
