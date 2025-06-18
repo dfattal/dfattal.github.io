@@ -1341,6 +1341,10 @@ class lifViewer {
         this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
         this.originalImage.addEventListener('mouseenter', startAnimation, { passive: true });
         this.originalImage.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+        // Detect and handle overlay elements that might interfere with mouse events
+        this.setupOverlayEventPropagation(startAnimation, stopAnimation);
+
         // Canvas always receives events
         this.canvas.style.pointerEvents = 'auto';
         this.canvas.style.display = 'none'; // Start hidden, will show on animation start
@@ -1373,6 +1377,10 @@ class lifViewer {
         this.canvas.addEventListener('mouseleave', stopAnimation, { passive: true });
         this.originalImage.addEventListener('mouseenter', startAnimation, { passive: true });
         this.originalImage.addEventListener('mouseleave', stopAnimation, { passive: true });
+
+        // Detect and handle overlay elements that might interfere with mouse events
+        this.setupOverlayEventPropagation(startAnimation, stopAnimation);
+
         // Canvas always receives events
         this.canvas.style.pointerEvents = 'auto';
         this.canvas.style.display = 'none'; // Start hidden, will show on animation start
@@ -1443,28 +1451,194 @@ class lifViewer {
             this.originalImage.addEventListener('mouseenter', startAnimation, { passive: true });
             this.originalImage.addEventListener('mouseleave', stopAnimation, { passive: true });
 
-            // COMMENTED OUT: Flickr-specific container event fallback
-            // TODO: Generalize overlay interference detection and fallback
-            // if (window.location.hostname.includes('flickr.com') && this.container) {
-            //     console.log('🔧 Adding Flickr container-level event fallback');
-            //     this.container.addEventListener('mouseenter', (e) => {
-            //         const canvasRect = this.canvas.getBoundingClientRect();
-            //         const mouseX = e.clientX;
-            //         const mouseY = e.clientY;
-            //         if (mouseX >= canvasRect.left && mouseX <= canvasRect.right &&
-            //             mouseY >= canvasRect.top && mouseY <= canvasRect.bottom) {
-            //             console.log('🎯 Flickr container mouseenter detected over canvas area');
-            //             startAnimation();
-            //         }
-            //     }, { passive: true });
-            //     this.container.addEventListener('mouseleave', () => {
-            //         console.log('🎯 Flickr container mouseleave detected');
-            //         stopAnimation();
-            //     }, { passive: true });
-            // }
+            // Detect and handle overlay elements that might interfere with mouse events
+            this.setupOverlayEventPropagation(startAnimation, stopAnimation);
 
             this.canvas.setAttribute('data-lif-events-added', 'true');
             console.log('Standard event handlers configured');
+        }
+    }
+
+    /**
+     * Setup event propagation for overlay elements that might cover the image
+     * This handles cases where clickable overlays (like <a> tags) prevent mouse events from reaching the image
+     */
+    setupOverlayEventPropagation(startAnimation, stopAnimation) {
+        if (!this.originalImage || !this.container) return;
+
+        // Find potential overlay elements that might cover the image
+        const overlayElements = this.findOverlayElements();
+
+        if (overlayElements.length > 0) {
+            overlayElements.forEach((overlay, index) => {
+                // Add mouse event handlers to overlay elements
+                const overlayMouseEnter = (e) => {
+                    // Check if mouse is actually over the image area
+                    if (this.isMouseOverImageArea(e)) {
+                        startAnimation();
+                    }
+                };
+
+                const overlayMouseLeave = (e) => {
+                    // For mouseleave, we want to stop animation when leaving the overlay entirely
+                    stopAnimation();
+                };
+
+                // Track mouse state for this overlay
+                let isMouseOverImage = false;
+
+                // Use mousemove for more precise detection
+                const overlayMouseMove = (e) => {
+                    const nowOverImage = this.isMouseOverImageArea(e);
+
+                    if (nowOverImage && !isMouseOverImage) {
+                        // Mouse entered image area
+                        isMouseOverImage = true;
+                        startAnimation();
+                    } else if (!nowOverImage && isMouseOverImage) {
+                        // Mouse left image area
+                        isMouseOverImage = false;
+                        stopAnimation();
+                    }
+                };
+
+                overlay.addEventListener('mouseenter', overlayMouseEnter, { passive: true });
+                overlay.addEventListener('mouseleave', overlayMouseLeave, { passive: true });
+                overlay.addEventListener('mousemove', overlayMouseMove, { passive: true });
+
+                // Store references for potential cleanup
+                if (!overlay._lifEventHandlers) {
+                    overlay._lifEventHandlers = [];
+                }
+                overlay._lifEventHandlers.push({ type: 'mouseenter', handler: overlayMouseEnter });
+                overlay._lifEventHandlers.push({ type: 'mouseleave', handler: overlayMouseLeave });
+                overlay._lifEventHandlers.push({ type: 'mousemove', handler: overlayMouseMove });
+            });
+        }
+    }
+
+    /**
+ * Find overlay elements that might be covering the image
+ */
+    findOverlayElements() {
+        const overlays = [];
+
+        // Method 1: Check parent elements (current approach)
+        let currentElement = this.originalImage.parentElement;
+        let searchDepth = 0;
+        const maxSearchDepth = 5; // Limit search to avoid performance issues
+
+        while (currentElement && searchDepth < maxSearchDepth) {
+            // Look for clickable overlays (links, buttons, etc.)
+            if (currentElement.tagName === 'A' ||
+                currentElement.tagName === 'BUTTON' ||
+                currentElement.classList.contains('overlay') ||
+                currentElement.classList.contains('link') ||
+                currentElement.hasAttribute('data-link-type') ||
+                currentElement.style.cursor === 'pointer' ||
+                currentElement.hasAttribute('href')) {
+
+                // Check if this element covers the image area
+                if (this.doesElementCoverImage(currentElement)) {
+                    overlays.push(currentElement);
+                }
+            }
+
+            currentElement = currentElement.parentElement;
+            searchDepth++;
+        }
+
+        // Method 2: Check for elements at the same level that might be positioned over the image
+        if (this.container && overlays.length === 0) {
+            const containerChildren = Array.from(this.container.parentElement?.children || []);
+            containerChildren.forEach(child => {
+                if (child !== this.container &&
+                    (child.tagName === 'A' || child.classList.contains('overlay') || child.hasAttribute('data-link-type'))) {
+                    if (this.doesElementCoverImage(child)) {
+                        overlays.push(child);
+                    }
+                }
+            });
+        }
+
+        // Method 3: Use document.elementsFromPoint as fallback
+        if (overlays.length === 0 && this.originalImage) {
+            try {
+                const imageRect = this.originalImage.getBoundingClientRect();
+                const centerX = imageRect.left + imageRect.width / 2;
+                const centerY = imageRect.top + imageRect.height / 2;
+
+                const elementsAtCenter = document.elementsFromPoint(centerX, centerY);
+
+                // Find clickable elements that are above the image in the stack
+                for (const element of elementsAtCenter) {
+                    if (element === this.originalImage) break; // Stop when we reach the image itself
+
+                    if ((element.tagName === 'A' ||
+                        element.tagName === 'BUTTON' ||
+                        element.hasAttribute('data-link-type') ||
+                        element.style.cursor === 'pointer') &&
+                        !overlays.includes(element)) {
+                        overlays.push(element);
+                    }
+                }
+            } catch (error) {
+                console.warn('Error using elementsFromPoint:', error);
+            }
+        }
+
+        return overlays;
+    }
+
+    /**
+     * Check if an element covers the image area
+     */
+    doesElementCoverImage(element) {
+        if (!element || !this.originalImage) return false;
+
+        try {
+            const elementRect = element.getBoundingClientRect();
+            const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Check if the element overlaps significantly with the image
+            const overlapLeft = Math.max(elementRect.left, imageRect.left);
+            const overlapRight = Math.min(elementRect.right, imageRect.right);
+            const overlapTop = Math.max(elementRect.top, imageRect.top);
+            const overlapBottom = Math.min(elementRect.bottom, imageRect.bottom);
+
+            const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+            const overlapHeight = Math.max(0, overlapBottom - overlapTop);
+            const overlapArea = overlapWidth * overlapHeight;
+
+            const imageArea = imageRect.width * imageRect.height;
+            const overlapPercentage = overlapArea / imageArea;
+
+            // Consider it a covering overlay if it overlaps more than 50% of the image
+            return overlapPercentage > 0.5;
+        } catch (error) {
+            console.warn('Error checking element overlap:', error);
+            return false;
+        }
+    }
+
+    /**
+ * Check if mouse position is over the image area
+ */
+    isMouseOverImageArea(event) {
+        if (!this.originalImage) return false;
+
+        try {
+            const imageRect = this.originalImage.getBoundingClientRect();
+            const mouseX = event.clientX;
+            const mouseY = event.clientY;
+
+            return mouseX >= imageRect.left &&
+                mouseX <= imageRect.right &&
+                mouseY >= imageRect.top &&
+                mouseY <= imageRect.bottom;
+        } catch (error) {
+            console.warn('Error checking mouse position:', error);
+            return false;
         }
     }
 
