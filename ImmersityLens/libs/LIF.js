@@ -2501,13 +2501,21 @@ class lifViewer {
     }
 
     /**
-     * Set the current animation by index
-     * @param {number} animationIndex - Index of the animation to use (0 = Zoom In, 1 = Ken Burns, .., 6 = Static)
-     */
+ * Set the current animation by index
+ * @param {number} animationIndex - Index of the animation to use (0 = Zoom In, 1 = Ken Burns, .., 6 = Static)
+ */
     setAnimation(animationIndex) {
         if (this.animations && animationIndex >= 0 && animationIndex < this.animations.length) {
             this.currentAnimation = this.animations[animationIndex];
             console.log(`Animation changed to: ${this.currentAnimation.name} (index ${animationIndex})`);
+
+            // Reset mouse position to center (0,0) for clean animation restart
+            this.mousePos = { x: 0, y: 0 };
+            this.mousePosOld = { x: 0, y: 0 };
+
+            // Start playing the animation immediately, same as after fresh conversion
+            this.startAnimation();
+
             return true;
         } else {
             console.warn(`Invalid animation index: ${animationIndex}. Available animations: ${this.animations ? this.animations.length : 0}`);

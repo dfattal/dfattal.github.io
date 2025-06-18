@@ -246,6 +246,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     } else if (response && response.success) {
                         console.log('Animation changed successfully to:', selectedAnimationIndex);
                     }
+
+                    // Check if mouse is currently over the popup, and if not, start the timer
+                    // Give a small delay to allow the animation change to be processed
+                    setTimeout(() => {
+                        if (!document.body.matches(':hover')) {
+                            console.log('Mouse not over popup after animation change - starting timer');
+                            startAutoCloseTimer();
+                        } else {
+                            console.log('Mouse over popup after animation change - timer will start on mouseleave');
+                        }
+                    }, 100);
                 });
             });
         }).catch((error) => {
@@ -297,9 +308,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         animationSelect.addEventListener('change', () => {
-            // Give user a moment to see the change, then wait for mouse leave
+            // Cancel timer immediately when animation is changed
+            // Timer restart logic is handled in the main change event handler above
             cancelAutoCloseTimer();
-            console.log('Animation changed - timer cancelled');
+            console.log('Animation changed - timer cancelled (restart handled by main handler)');
         });
 
         // Cancel timer when clicking anywhere (general interaction)
