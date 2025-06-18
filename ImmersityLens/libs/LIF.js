@@ -2348,8 +2348,8 @@ class lifViewer {
             this.renderCam.pos.y += smoothMouseY;
             this.mousePosOld = { x: smoothMouseX, y: smoothMouseY };
         }
-        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
-        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        this.renderCam.sl.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
+        this.renderCam.sl.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd); // sk2 = -C2.xy*invd/(1.0-C2.z*invd)
         const vs = this.viewportScale({ x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
         this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd); // f2 = f1/adjustAr(iRes,oRes)*max(1.0-C2.z*invd,1.0);
 
@@ -2422,8 +2422,8 @@ class lifViewer {
         this.renderCam.pos.z = startZ * decayFactor + targetZ * (1 - decayFactor);
 
         // Update camera parameters
-        this.renderCam.sk.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd);
-        this.renderCam.sk.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd);
+        this.renderCam.sl.x = -this.renderCam.pos.x * invd / (1 - this.renderCam.pos.z * invd);
+        this.renderCam.sl.y = -this.renderCam.pos.y * invd / (1 - this.renderCam.pos.z * invd);
         const vs = this.viewportScale({ x: this.currentAnimation.data.width_px, y: this.currentAnimation.data.height_px }, { x: this.gl.canvas.width, y: this.gl.canvas.height });
         this.renderCam.f = this.currentAnimation.data.focal_px * vs * (1 - this.renderCam.pos.z * invd);
 
