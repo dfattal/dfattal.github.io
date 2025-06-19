@@ -291,8 +291,8 @@
                 <div class="download-section">
                     <h2>🚀 Install from Chrome Web Store</h2>
                     <p>The easiest and safest way to install ImmersityLens</p>
-                    <a href="https://chromewebstore.google.com/detail/immersitylens-2d-to-3d-co/glkmnjbmkjkfioakkjfamamgpmkedgho" class="download-btn"
-                        target="_blank">
+                    <a href="https://chromewebstore.google.com/detail/immersitylens-2d-to-3d-co/glkmnjbmkjkfioakkjfamamgpmkedgho"
+                        class="download-btn" target="_blank">
                         🚀 Install from Chrome Web Store
                     </a>
                 </div>
@@ -515,7 +515,8 @@
                         <ul>
                             <li>Clone or download the repository</li>
                             <li>The extension uses Manifest V3</li>
-                            <li>Main files: <code>content.js</code>, <code>popup.js</code>, <code>manifest.json</code>
+                            <li>Main files: <code>content.js</code>, <code>popup.js</code>, <code>background.js</code>,
+                                <code>manifest.json</code>
                             </li>
                             <li>Dependencies are included in the <code>libs/</code> folder</li>
                         </ul>
@@ -529,9 +530,10 @@
                         <p>Understanding the extension architecture:</p>
                         <ul>
                             <li><code>content.js</code> - Main extension logic and image detection</li>
-                            <li><code>popup.js/html</code> - Extension popup interface</li>
-                            <li><code>libs/</code> - LIF processing libraries and dependencies</li>
-                            <li><code>shaders/</code> - WebGL shaders for 3D rendering</li>
+                            <li><code>popup.js/html</code> - Extension popup interface with animation selection</li>
+                            <li><code>background.js</code> - Background script for context menu handling</li>
+                            <li><code>libs/</code> - LIF processing libraries and 3D viewer components</li>
+                            <li><code>shaders/</code> - WebGL shaders for 3D rendering and effects</li>
                             <li><code>icons/</code> - Extension icons in different sizes</li>
                         </ul>
                     </div>
@@ -558,12 +560,12 @@
                     <div class="step-number">👀</div>
                     <div class="step-content">
                         <h3>Finding Convertible Images</h3>
-                        <p>ImmersityLens automatically detects suitable images on web pages.</p>
+                        <p>ImmersityLens adds context menu options to all images on web pages.</p>
                         <ul>
                             <li>Visit any website with images</li>
-                            <li>Look for the "2D3D" button that appears on images</li>
-                            <li>Only images larger than 100x100 pixels will show the button</li>
-                            <li>The extension works on most news sites, social media, and image galleries</li>
+                            <li>Right-click on any image to see conversion options</li>
+                            <li>Images larger than 100x100 pixels are recommended for best results</li>
+                            <li>The extension works universally on most websites with images</li>
                         </ul>
                     </div>
                 </div>
@@ -572,12 +574,13 @@
                     <div class="step-number">🔄</div>
                     <div class="step-content">
                         <h3>Converting Images</h3>
-                        <p>Transform 2D images into immersive 3D experiences.</p>
+                        <p>Transform 2D images into immersive 3D experiences using AI.</p>
                         <ul>
-                            <li>Click the "2D3D" button on any supported image</li>
+                            <li>Right-click on any image and select "Generate LIF"</li>
                             <li>The AI conversion process will start automatically</li>
                             <li>Processing includes: Outpainting → Depth Estimation → LDI Generation</li>
                             <li>Wait for the conversion to complete (usually 30-60 seconds)</li>
+                            <li>Monitor progress through the extension popup</li>
                         </ul>
                     </div>
                 </div>
@@ -586,12 +589,14 @@
                     <div class="step-number">🎮</div>
                     <div class="step-content">
                         <h3>Viewing 3D Results</h3>
-                        <p>Experience interactive 3D images with mouse controls.</p>
+                        <p>Experience interactive 3D images with mouse controls and animation selection.</p>
                         <ul>
                             <li>Once converted, hover your mouse over the image</li>
                             <li>Move your mouse to see the 3D parallax effect</li>
-                            <li>The image will respond to your mouse movement with depth</li>
-                            <li>Click the button again to download the LIF file</li>
+                            <li>The image will respond with realistic depth and movement</li>
+                            <li>Use the extension popup to select different animation styles (Zoom In, Ken Burns, etc.)
+                            </li>
+                            <li>Changes take effect immediately for the active image</li>
                         </ul>
                     </div>
                 </div>
@@ -599,13 +604,31 @@
                 <div class="step">
                     <div class="step-number">💾</div>
                     <div class="step-content">
-                        <h3>Downloading LIF Files</h3>
-                        <p>Save your 3D images for offline viewing and sharing.</p>
+                        <h3>Downloading & Exporting</h3>
+                        <p>Save your 3D images in multiple formats for sharing and viewing.</p>
                         <ul>
-                            <li>After conversion, the button changes to "⬇️ LIF"</li>
-                            <li>Click it to download the Leia Image Format file</li>
-                            <li>LIF files can be viewed with compatible 3D image viewers</li>
-                            <li>Share your 3D creations with others!</li>
+                            <li>Right-click on converted images for download options</li>
+                            <li><strong>Download LIF:</strong> Save the original Leia Image Format file</li>
+                            <li><strong>Download MP4:</strong> Export as video with your selected animation</li>
+                            <li>LIF files work with compatible 3D viewers and displays</li>
+                            <li>MP4 files can be shared anywhere as standard videos</li>
+                            <li>Both formats preserve the 3D effect for different use cases</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">🥽</div>
+                    <div class="step-content">
+                        <h3>VR & WebXR Experience</h3>
+                        <p>Experience your 3D images in virtual reality for ultimate immersion.</p>
+                        <ul>
+                            <li>Use a VR-compatible browser (Chrome, Firefox, or Edge)</li>
+                            <li>Right-click on converted images and select "Open in VR"</li>
+                            <li>Put on your VR headset for a fully immersive 3D experience</li>
+                            <li>Compatible with Oculus, HTC Vive, and other WebXR devices</li>
+                            <li>Move your head around to explore the 3D scene naturally</li>
+                            <li>VR mode provides the most impressive depth experience</li>
                         </ul>
                     </div>
                 </div>
@@ -616,22 +639,23 @@
                         <h3>Complete Workflow Example</h3>
                         <p>Here's the full magical journey from start to finish:</p>
                         <div class="step-screenshot">
-                            <img src="Pictures/IAI-Lens-store-1.png" alt="Enable extension">
-                            <p><strong>🚀 Power Up:</strong> Flip the switch and activate your 3D superpowers!</p>
+                            <img src="Pictures/IAI-Lens-store-1.png" alt="Right click to convert">
+                            <p><strong>🚀 Step 1:</strong> Right click on any image and select "Convert to 3D" to start
+                                the conversion</p>
                         </div>
                         <div class="step-screenshot">
-                            <img src="Pictures/IAI-Lens-store-2.png" alt="2D3D buttons appear">
-                            <p><strong>✨ Discovery:</strong> Visit your favorite website and watch magical buttons
-                                appear on images</p>
+                            <img src="Pictures/IAI-Lens-store-2.png" alt="Interactive 3D canvas">
+                            <p><strong>✨ Step 2:</strong> An interactive Canvas appears and lets you interact with the
+                                3D image</p>
                         </div>
                         <div class="step-screenshot">
-                            <img src="Pictures/IAI-Lens-store-3.png" alt="Conversion in progress">
-                            <p><strong>🎭 Transformation:</strong> Click and watch AI weave its conversion spell</p>
+                            <img src="Pictures/IAI-Lens-store-3.png" alt="Download options">
+                            <p><strong>💾 Step 3:</strong> Download the 3D image as LIF file or export as MP4 animation
+                            </p>
                         </div>
                         <div class="step-screenshot">
-                            <img src="Pictures/IAI-Lens-store-4.png" alt="3D results ready">
-                            <p><strong>🎮 Amazing Results:</strong> Move your mouse and experience mind-blowing 3D
-                                depth!</p>
+                            <img src="Pictures/IAI-Lens-store-4.png" alt="VR viewing">
+                            <p><strong>🥽 Step 4:</strong> View the 3D image in VR or 3D Screen</p>
                         </div>
                     </div>
                 </div>
@@ -639,12 +663,20 @@
                 <div class="troubleshooting">
                     <h3>⚠️ Troubleshooting</h3>
                     <ul>
-                        <li><strong>Button not appearing:</strong> Some images may be too small or have CORS
-                            restrictions</li>
+                        <li><strong>Context menu not appearing:</strong> Ensure the extension is enabled and you're
+                            right-clicking on an image</li>
                         <li><strong>Conversion fails:</strong> Check your Immersity AI subscription status and API
                             credentials</li>
-                        <li><strong>3D effect not working:</strong> Make sure your browser supports WebGL</li>
-                        <li><strong>Download not working:</strong> Check your browser's download settings</li>
+                        <li><strong>3D effect not working:</strong> Make sure your browser supports WebGL and hardware
+                            acceleration is enabled</li>
+                        <li><strong>Animation not responding to mouse:</strong> Some images may be covered by overlay
+                            elements - try different images</li>
+                        <li><strong>Download not working:</strong> Check your browser's download settings and popup
+                            blockers</li>
+                        <li><strong>VR mode issues:</strong> Ensure you have a WebXR-compatible browser and VR device
+                        </li>
+                        <li><strong>MP4 export problems:</strong> Wait for LIF conversion to complete before attempting
+                            MP4 export</li>
                         <li><strong>Subscription issues:</strong> Verify your API key and subscription status in the
                             extension popup</li>
                     </ul>
