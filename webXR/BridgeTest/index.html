@@ -608,6 +608,7 @@
 
                         <div class="button-row">
                             <button class="btn btn-danger" id="resetSettingsButton">Reset All Settings</button>
+                            <button class="btn btn-success" id="windowOverlayDemoButton">🎯 Window Overlay Demo</button>
                         </div>
                     </div>
                 </div>
@@ -1041,6 +1042,11 @@
                 window.WebXROpenXRBridge.resetSettings(1.0);
                 logMessage('Settings reset', 'success');
                 setTimeout(updateAllSettings, 500);
+            });
+
+            document.getElementById('windowOverlayDemoButton').addEventListener('click', () => {
+                window.open('./window-overlay-demo.html', '_blank');
+                logMessage('Opening Window Overlay Demo', 'info');
             });
 
             // Head pose control event listeners
