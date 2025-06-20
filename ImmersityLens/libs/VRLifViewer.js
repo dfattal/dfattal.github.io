@@ -21,7 +21,7 @@ class VRLifViewer {
     }
 
     async init(lifUrl, originalButton) {
-        console.log('🚀 Initializing VR viewer for:', lifUrl);
+        console.log('🚀 Starting VR session...');
 
         this.lifUrl = lifUrl;
         this.originalButton = originalButton;
@@ -31,8 +31,7 @@ class VRLifViewer {
             // Set up message communication first
             this.setupMessageCommunication();
 
-            // Fetch LIF file in content script context (has extension permissions)
-            console.log('📦 Fetching LIF file in content script context...');
+            // Fetch LIF file
             const lifBlob = await this.fetchLifFile(lifUrl);
 
             // Inject Three.js
@@ -41,18 +40,16 @@ class VRLifViewer {
             // Inject VR system
             await this.injectVRSystem();
 
-            // Pass the LIF blob data to page context
+            // Start VR with LIF data
             await this.startVRWithBlob(lifBlob);
 
         } catch (error) {
-            console.error('❌ Failed to initialize VR viewer:', error);
+            console.error('❌ VR initialization failed:', error);
             this.showError('Failed to initialize VR: ' + error.message);
         }
     }
 
     async fetchLifFile(lifUrl) {
-        console.log('🌐 Fetching LIF file from content script context:', lifUrl);
-
         try {
             const response = await fetch(lifUrl);
             if (!response.ok) {
@@ -60,7 +57,7 @@ class VRLifViewer {
             }
 
             const blob = await response.blob();
-            console.log('✅ LIF file fetched successfully, size:', blob.size);
+            console.log('✅ LIF file loaded');
             return blob;
         } catch (error) {
             console.error('❌ Failed to fetch LIF file:', error);
@@ -69,12 +66,10 @@ class VRLifViewer {
     }
 
     async startVRWithBlob(lifBlob) {
-        console.log('🎯 Starting VR with LIF blob data...');
-
-        // Convert blob to array buffer and pass to page context
+        // Convert blob to array buffer
         const arrayBuffer = await lifBlob.arrayBuffer();
 
-        // Send the LIF data to page context
+        // Send the LIF data to VR system
         window.postMessage({
             type: 'VR_LIF_COMMAND_START_VR_WITH_DATA',
             lifData: arrayBuffer
@@ -82,13 +77,9 @@ class VRLifViewer {
     }
 
     setupMessageCommunication() {
-        console.log('🔄 Setting up message communication...');
-
-        // Listen for messages from page context
+        // Listen for messages from VR system
         this.messageHandler = (event) => {
             if (event.source !== window || !event.data.type?.startsWith('VR_LIF_')) return;
-
-            console.log('📨 Received message from page context:', event.data);
 
             switch (event.data.type) {
                 case 'VR_LIF_SESSION_STARTED':
@@ -101,7 +92,7 @@ class VRLifViewer {
                     this.showError(event.data.message);
                     break;
                 case 'VR_LIF_LOG':
-                    console.log('📄 Page context log:', event.data.message);
+                    // VR system logs are handled elsewhere
                     break;
             }
         };
@@ -110,12 +101,9 @@ class VRLifViewer {
     }
 
     async injectThreeJS() {
-        console.log('📦 Checking and injecting Three.js into page context...');
-
         return new Promise((resolve, reject) => {
-            // Check if Three.js is already available in page context
+            // Check if Three.js is already available
             if (window.THREE) {
-                console.log('✅ Three.js already available in page context');
                 resolve();
                 return;
             }
@@ -123,14 +111,11 @@ class VRLifViewer {
             // Check if Three.js script is already injected
             const existingScript = document.querySelector('script[src*="three.min.js"]');
             if (existingScript) {
-                console.log('⏳ Three.js script already injected, waiting for load...');
                 // Wait a bit for it to load, then check again
                 setTimeout(() => {
                     if (window.THREE) {
-                        console.log('✅ Three.js loaded successfully');
                         resolve();
                     } else {
-                        console.log('📦 Three.js script found but not loaded, injecting fresh copy...');
                         this.injectThreeJSScript(resolve, reject);
                     }
                 }, 500);
@@ -138,7 +123,6 @@ class VRLifViewer {
             }
 
             // Inject Three.js
-            console.log('📦 Injecting Three.js into page context...');
             this.injectThreeJSScript(resolve, reject);
         });
     }
@@ -148,7 +132,6 @@ class VRLifViewer {
         const script = document.createElement('script');
         script.src = chrome.runtime.getURL('libs/three.min.js');
         script.onload = () => {
-            console.log('✅ Three.js injected into page context');
             resolve();
         };
         script.onerror = () => {
@@ -159,12 +142,9 @@ class VRLifViewer {
     }
 
     async injectVRSystem() {
-        console.log('🚀 Injecting VR system from separate file (CSP-safe)...');
-
         return new Promise((resolve, reject) => {
             // Check if VR system is already loaded
             if (window.vrSystem) {
-                console.log('✅ VR system already loaded');
                 resolve();
                 return;
             }
@@ -172,16 +152,9 @@ class VRLifViewer {
             // Check if VR system script is already injected to prevent BinaryStream conflicts
             const existingVRScript = document.querySelector(`script[src*="VRPageSystem.js"], script#${this.injectedScriptId}`);
             if (existingVRScript) {
-                console.log('⏳ VR system script already injected, waiting for initialization...');
                 // Wait for the VR system to initialize
                 setTimeout(() => {
-                    if (window.vrSystem) {
-                        console.log('✅ VR system initialized successfully');
-                        resolve();
-                    } else {
-                        console.log('⚠️ VR system script found but not initialized, proceeding anyway...');
-                        resolve(); // Proceed even if not fully initialized to avoid conflicts
-                    }
+                    resolve(); // Proceed even if not fully initialized to avoid conflicts
                 }, 500);
                 return;
             }
@@ -192,8 +165,6 @@ class VRLifViewer {
             vrScript.src = chrome.runtime.getURL('libs/VRPageSystem.js');
 
             vrScript.onload = () => {
-                console.log('✅ VR system file loaded successfully');
-
                 // Give the VR system a moment to initialize
                 setTimeout(() => {
                     resolve();
@@ -210,7 +181,7 @@ class VRLifViewer {
     }
 
     onVRSessionStarted() {
-        console.log('🎯 VR session started - updating UI');
+        console.log('✅ VR session started');
         // Keep the original button visible but change its appearance to show VR is active
         if (this.originalButton) {
             const vrButton = this.originalButton.querySelector('.vr-button');
@@ -222,7 +193,7 @@ class VRLifViewer {
     }
 
     onVRSessionEnded() {
-        console.log('🚪 VR session ended - updating UI');
+        console.log('🚪 VR session ended');
         // Restore original button appearance
         if (this.originalButton) {
             const vrButton = this.originalButton.querySelector('.vr-button');
@@ -255,9 +226,7 @@ class VRLifViewer {
     }
 
     close() {
-        console.log('🧹 Cleaning up VR viewer...');
-
-        // Send exit command to page context
+        // Send exit command to VR system
         window.postMessage({ type: 'VR_LIF_COMMAND_EXIT_VR' }, '*');
 
         // Remove message listener

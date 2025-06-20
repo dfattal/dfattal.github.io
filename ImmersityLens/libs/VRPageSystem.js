@@ -850,7 +850,7 @@ if (typeof BinaryStream === 'undefined') {
         }
 
         log(message) {
-            console.log('🎯 PAGE VR:', message);
+            console.log('🎯 VR:', message);
             window.postMessage({ type: 'VR_LIF_LOG', message: message }, '*');
         }
 
@@ -892,80 +892,103 @@ if (typeof BinaryStream === 'undefined') {
         }
 
         async positionOpenXRWindow() {
+            console.log('🔧 OPENXR POSITIONING: Starting window positioning...');
+
             // Check if WebXROpenXRBridge is available
             if (typeof window.WebXROpenXRBridge === 'undefined') {
-                this.log('WebXROpenXRBridge not available - OpenXR window positioning not possible');
+                console.log('❌ OPENXR POSITIONING: WebXROpenXRBridge not available');
+                console.log('🔍 OPENXR DEBUG: window.WebXROpenXRBridge =', window.WebXROpenXRBridge);
+                console.log('🔍 OPENXR DEBUG: typeof check =', typeof window.WebXROpenXRBridge);
+                this.log('WebXROpenXRBridge not available - positioning skipped');
                 return;
             }
+            console.log('✅ OPENXR POSITIONING: WebXROpenXRBridge is available');
 
             if (!this.targetImageElement) {
-                this.log('No target image element set - cannot position OpenXR window');
+                console.log('❌ OPENXR POSITIONING: No target image element set');
+                this.log('No target image element - positioning skipped');
                 return;
             }
+            console.log('✅ OPENXR POSITIONING: Target image element found:', this.targetImageElement.src);
 
             try {
-                this.log('Positioning OpenXR window as overlay...');
-
                 // Get the image element's screen coordinates
                 const overlayRect = this.getScreenCoordinates(this.targetImageElement);
+                console.log('🎯 OPENXR POSITIONING: Calculated overlay coordinates:', overlayRect);
 
-                this.log('OpenXR overlay coordinates: ' + JSON.stringify(overlayRect));
-
-                // Debug info for troubleshooting
+                // Debug detailed positioning info
                 const rect = this.targetImageElement.getBoundingClientRect();
                 const chromeInfo = this.getBrowserChromeInfo();
-                this.log('Image positioning details: ' + JSON.stringify({
-                    imageRect: rect,
-                    chromeInfo: chromeInfo,
-                    scrollPosition: {
-                        scrollX: window.scrollX || window.pageXOffset || 0,
-                        scrollY: window.scrollY || window.pageYOffset || 0
-                    },
-                    finalOverlayRect: overlayRect,
-                    imageSrc: this.targetImageElement.src
-                }));
+                console.log('🔍 OPENXR DEBUG: Image rect from getBoundingClientRect():', rect);
+                console.log('🔍 OPENXR DEBUG: Browser chrome info:', chromeInfo);
+                console.log('🔍 OPENXR DEBUG: Scroll position:', {
+                    scrollX: window.scrollX || window.pageXOffset || 0,
+                    scrollY: window.scrollY || window.pageYOffset || 0
+                });
 
                 // CRITICAL: Handle fullscreen exit timing
+                console.log('🔧 OPENXR POSITIONING: Checking fullscreen state...');
                 try {
                     const isFullscreen = await window.WebXROpenXRBridge.getFullScreen();
+                    console.log('🔍 OPENXR DEBUG: Current fullscreen state:', isFullscreen);
+
                     if (isFullscreen) {
-                        this.log('Exiting OpenXR fullscreen mode...');
+                        console.log('🔧 OPENXR POSITIONING: Exiting fullscreen mode...');
                         await window.WebXROpenXRBridge.setFullScreen(0);
-                        // Give time for fullscreen exit to complete
+                        console.log('⏱️ OPENXR POSITIONING: Waiting 500ms for fullscreen exit...');
                         await new Promise(resolve => setTimeout(resolve, 500));
+                        console.log('✅ OPENXR POSITIONING: Fullscreen exit complete');
+                    } else {
+                        console.log('✅ OPENXR POSITIONING: Already in windowed mode');
                     }
                 } catch (error) {
-                    this.log('Could not check/set OpenXR fullscreen state: ' + error.message);
+                    console.log('⚠️ OPENXR POSITIONING: Fullscreen check failed:', error.message);
                 }
 
-                this.log('Setting OpenXR window position and size...');
+                // Attempt to set window rectangle
+                console.log('🎯 OPENXR POSITIONING: Calling setWindowRect with:', overlayRect);
+                console.log('🔧 OPENXR POSITIONING: About to call window.WebXROpenXRBridge.setWindowRect...');
 
-                // Set the OpenXR window to overlay the image using the precise coordinates
-                await window.WebXROpenXRBridge.setWindowRect(overlayRect);
+                const setRectResult = await window.WebXROpenXRBridge.setWindowRect(overlayRect);
 
-                this.log('✅ OpenXR window positioned successfully as overlay over image');
+                console.log('✅ OPENXR POSITIONING: setWindowRect completed successfully');
+                console.log('🔍 OPENXR DEBUG: setWindowRect result:', setRectResult);
+
+                this.log('OpenXR window positioned at: ' + overlayRect.x + ',' + overlayRect.y + ' size: ' + overlayRect.width + 'x' + overlayRect.height);
 
             } catch (error) {
-                this.log('❌ Error positioning OpenXR window: ' + error.message);
+                console.log('❌ OPENXR POSITIONING: Error occurred:', error);
+                console.log('🔍 OPENXR DEBUG: Error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+                this.log('OpenXR positioning failed: ' + error.message);
                 throw error; // Re-throw so caller can handle it
             }
         }
 
         applyOpenXRSettings(leftCam, rightCam) {
-            this.log("Setting WebXROpenXRBridge projection method after positioning");
+            console.log('🔧 OPENXR SETTINGS: Applying projection method and settings...');
             try {
+                console.log('🔧 OPENXR SETTINGS: Calling setProjectionMethod(1)...');
                 window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
-                this.log("Projection Method set to Display Centric");
+                console.log('✅ OPENXR SETTINGS: Projection method set to Display Centric');
+
                 setTimeout(() => {
+                    console.log('🔧 OPENXR SETTINGS: Calling resetSettings(1.0)...');
                     window.WebXROpenXRBridge.resetSettings(1.0);
-                    this.log("Settings reset to default");
+                    console.log('✅ OPENXR SETTINGS: Settings reset to default');
+
                     setTimeout(() => {
+                        console.log('🔧 OPENXR SETTINGS: Resetting convergence plane...');
                         const resetSuccess = this.resetConvergencePlane(leftCam, rightCam);
-                        this.log("Convergence plane reset: " + (resetSuccess ? "SUCCESS" : "FAILED"));
+                        console.log('✅ OPENXR SETTINGS: Convergence plane reset:', resetSuccess ? "SUCCESS" : "FAILED");
                     }, 500);
                 }, 500);
 
             } catch (error) {
+                console.log('❌ OPENXR SETTINGS: Error setting projection method:', error.message);
                 this.log("Error setting projection method: " + error.message);
             }
         }
@@ -1022,7 +1045,7 @@ if (typeof BinaryStream === 'undefined') {
         }
 
         async loadAndStartVR(lifUrl) {
-            this.log('Loading LIF file directly in page context: ' + lifUrl);
+            this.log('Loading LIF file: ' + lifUrl);
 
             try {
                 // Fetch LIF file
@@ -1055,7 +1078,7 @@ if (typeof BinaryStream === 'undefined') {
         }
 
         async startVRWithBlobData(arrayBuffer) {
-            this.log('Starting VR with blob data from content script context...');
+            this.log('Starting VR with blob data...');
 
             try {
                 // Convert array buffer to blob and then to file
@@ -2499,30 +2522,40 @@ void main(void) {
                 // OpenXR window positioning and display switch with timing (matching webXR approach)
                 if (!this.displaySwitch) {
                     this.displaySwitch = true;
+                    console.log('🚀 OPENXR SETUP: Starting OpenXR configuration after VR session start...');
                     setTimeout(() => {
+                        console.log('⏰ OPENXR SETUP: 1-second delay complete, checking bridge availability...');
                         if (window.WebXROpenXRBridge) {
-                            this.log("WebXROpenXRBridge available - positioning window first...");
+                            console.log('✅ OPENXR SETUP: WebXROpenXRBridge is available');
+                            console.log('🔍 OPENXR SETUP: Bridge methods available:', Object.getOwnPropertyNames(window.WebXROpenXRBridge));
 
                             // FIRST: Position OpenXR window as overlay (do this BEFORE projection method)
                             if (!this.openXRWindowPositioned && this.targetImageElement) {
+                                console.log('🎯 OPENXR SETUP: Starting window positioning (target image available)');
                                 this.positionOpenXRWindow()
                                     .then(() => {
-                                        this.log("OpenXR window positioning completed");
+                                        console.log('✅ OPENXR SETUP: Window positioning completed successfully');
                                         this.openXRWindowPositioned = true;
                                     })
                                     .catch(error => {
-                                        this.log("OpenXR window positioning failed: " + error.message);
+                                        console.log('❌ OPENXR SETUP: Window positioning failed:', error.message);
                                         // Continue with projection method even if positioning fails
                                     })
                                     .finally(() => {
+                                        console.log('🔧 OPENXR SETUP: Proceeding to apply projection settings...');
                                         // THEN: Set projection method and reset settings
                                         this.applyOpenXRSettings(leftCam, rightCam);
                                     });
                             } else {
+                                console.log('⚠️ OPENXR SETUP: Skipping window positioning (no target image or already positioned)');
+                                console.log('🔍 OPENXR SETUP: openXRWindowPositioned =', this.openXRWindowPositioned);
+                                console.log('🔍 OPENXR SETUP: targetImageElement =', !!this.targetImageElement);
                                 // No target image, just apply settings
                                 this.applyOpenXRSettings(leftCam, rightCam);
                             }
                         } else {
+                            console.log('❌ OPENXR SETUP: WebXROpenXRBridge not available');
+                            console.log('🔍 OPENXR SETUP: window.WebXROpenXRBridge =', window.WebXROpenXRBridge);
                             this.log("WebXROpenXRBridge not available");
                         }
                     }, 1000); // 1 second delay
@@ -2629,28 +2662,28 @@ void main(void) {
         }
     }
 
-    // Initialize the clean VR system
-    console.log('🚀 Creating clean page context VR system...');
+    // Initialize the VR system
+    console.log('🚀 Initializing VR system...');
     window.vrSystem = new PageContextVRSystem();
 
     // Auto-initialize
     window.vrSystem.init().then(() => {
-        console.log('✅ Clean VR system auto-initialized');
+        console.log('✅ VR system initialized successfully');
     }).catch(error => {
-        console.error('❌ Clean VR system initialization failed:', error);
+        console.error('❌ VR system initialization failed:', error);
     });
 
     // Listen for commands from content script  
     window.addEventListener('message', (event) => {
         if (event.source !== window || !event.data.type?.startsWith('VR_LIF_COMMAND_')) return;
 
-        console.log('📨 Page context received command:', event.data);
+        console.log('📨 VR command received:', event.data.type);
 
         switch (event.data.type) {
             case 'VR_LIF_COMMAND_INIT':
-                console.log('🎬 VR system initialization command received');
+                console.log('🎬 VR initialization command');
                 // System is already initialized, just acknowledge
-                window.postMessage({ type: 'VR_LIF_LOG', message: 'VR system ready for commands' }, '*');
+                window.postMessage({ type: 'VR_LIF_LOG', message: 'VR system ready' }, '*');
                 break;
             case 'VR_LIF_COMMAND_START_VR':
                 if (event.data.lifUrl) {
@@ -2670,5 +2703,5 @@ void main(void) {
         }
     });
 
-    console.log('✅ Clean page context VR system ready for commands');
+    console.log('✅ VR system ready for commands');
 }
