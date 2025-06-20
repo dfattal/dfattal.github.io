@@ -859,6 +859,68 @@ if (typeof BinaryStream === 'undefined') {
             this.log('Image coordinates set for OpenXR window positioning: ' + JSON.stringify(coordinates));
         }
 
+        async ensureVRSessionClosed() {
+            // Check if there's an active VR session
+            if (this.renderer && this.renderer.xr && this.renderer.xr.isPresenting) {
+                console.log('🔄 VR SESSION: Existing VR session detected, closing it...');
+                this.log('Closing existing VR session before starting new one');
+
+                try {
+                    // End the current VR session
+                    const session = this.renderer.xr.getSession();
+                    if (session) {
+                        // Wait for session to end properly
+                        await new Promise((resolve) => {
+                            // Listen for session end event
+                            const onSessionEnd = () => {
+                                console.log('✅ VR SESSION: Previous session closed successfully');
+                                this.log('Previous VR session closed');
+                                session.removeEventListener('end', onSessionEnd);
+                                resolve();
+                            };
+
+                            session.addEventListener('end', onSessionEnd);
+
+                            // Request session end
+                            session.end().catch(error => {
+                                console.log('⚠️ VR SESSION: Error ending session:', error.message);
+                                // Still resolve to continue - session might already be ending
+                                resolve();
+                            });
+
+                            // Timeout fallback - don't wait forever
+                            setTimeout(() => {
+                                console.log('⏰ VR SESSION: Session close timeout, proceeding anyway');
+                                session.removeEventListener('end', onSessionEnd);
+                                resolve();
+                            }, 2000); // 2 second timeout
+                        });
+
+                        // Small delay to ensure cleanup is complete
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (error) {
+                    console.log('❌ VR SESSION: Error during session cleanup:', error.message);
+                    this.log('Error closing previous VR session: ' + error.message);
+                    // Continue anyway - might be able to start new session
+                }
+            } else {
+                console.log('✅ VR SESSION: No active VR session detected');
+            }
+
+            // Reset flags for new session
+            this.displaySwitch = false;
+            this.openXRWindowPositioned = false;
+            this.xrCanvasInitialized = false;
+
+            // Reset tracking variables for new session
+            this.initialY = undefined;
+            this.initialZ = undefined;
+            this.IPD = null;
+
+            console.log('🔄 VR SESSION: Session state reset for new VR session');
+        }
+
         // OpenXR Window Positioning using pre-calculated coordinates from content script
 
         async positionOpenXRWindow() {
@@ -1015,6 +1077,9 @@ if (typeof BinaryStream === 'undefined') {
             this.log('Loading LIF file: ' + lifUrl);
 
             try {
+                // CRITICAL: End any existing VR session before starting new one
+                await this.ensureVRSessionClosed();
+
                 // Fetch LIF file
                 const response = await fetch(lifUrl);
                 if (!response.ok) {
@@ -1053,6 +1118,9 @@ if (typeof BinaryStream === 'undefined') {
             }
 
             try {
+                // CRITICAL: End any existing VR session before starting new one
+                await this.ensureVRSessionClosed();
+
                 // Convert array buffer to blob and then to file
                 const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
                 const file = new File([blob], 'temp.lif', { type: 'application/octet-stream' });
