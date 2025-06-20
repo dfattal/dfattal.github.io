@@ -843,11 +843,131 @@ if (typeof BinaryStream === 'undefined') {
             this.leftXButtonPressed = false;
             this.leftXButtonJustPressed = false;
             this.displaySwitch = false; // For WebXROpenXRBridge timing
+            this.openXRWindowPositioned = false; // Flag to ensure OpenXR window positioning only happens once
+
+            // Target image element for OpenXR window positioning
+            this.targetImageElement = null;
         }
 
         log(message) {
             console.log('🎯 PAGE VR:', message);
             window.postMessage({ type: 'VR_LIF_LOG', message: message }, '*');
+        }
+
+        setTargetImageElement(imageElement) {
+            this.targetImageElement = imageElement;
+            this.log('Target image element set for OpenXR window positioning');
+        }
+
+        // OpenXR Window Positioning Functions (based on window-overlay-demo.html)
+        getBrowserChromeInfo() {
+            const devicePixelRatio = window.devicePixelRatio || 1;
+
+            // Calculate viewport screen coordinates using the precise formula
+            const borderWidth = (window.outerWidth - window.innerWidth) / 2;
+            const viewportX = window.screenX + borderWidth;
+            const viewportY = window.screenY + window.outerHeight - window.innerHeight - borderWidth;
+
+            return {
+                viewportX,
+                viewportY,
+                borderWidth,
+                devicePixelRatio,
+                totalChrome: window.outerHeight - window.innerHeight,
+                chromeWidth: window.outerWidth - window.innerWidth
+            };
+        }
+
+        getScreenCoordinates(element) {
+            const rect = element.getBoundingClientRect();
+            const chromeInfo = this.getBrowserChromeInfo();
+
+            // Convert viewport-relative coordinates to absolute screen coordinates
+            return {
+                x: Math.round((chromeInfo.viewportX + rect.left) * chromeInfo.devicePixelRatio),
+                y: Math.round((chromeInfo.viewportY + rect.top) * chromeInfo.devicePixelRatio),
+                width: Math.round(rect.width * chromeInfo.devicePixelRatio),
+                height: Math.round(rect.height * chromeInfo.devicePixelRatio)
+            };
+        }
+
+        async positionOpenXRWindow() {
+            // Check if WebXROpenXRBridge is available
+            if (typeof window.WebXROpenXRBridge === 'undefined') {
+                this.log('WebXROpenXRBridge not available - OpenXR window positioning not possible');
+                return;
+            }
+
+            if (!this.targetImageElement) {
+                this.log('No target image element set - cannot position OpenXR window');
+                return;
+            }
+
+            try {
+                this.log('Positioning OpenXR window as overlay...');
+
+                // Get the image element's screen coordinates
+                const overlayRect = this.getScreenCoordinates(this.targetImageElement);
+
+                this.log('OpenXR overlay coordinates: ' + JSON.stringify(overlayRect));
+
+                // Debug info for troubleshooting
+                const rect = this.targetImageElement.getBoundingClientRect();
+                const chromeInfo = this.getBrowserChromeInfo();
+                this.log('Image positioning details: ' + JSON.stringify({
+                    imageRect: rect,
+                    chromeInfo: chromeInfo,
+                    scrollPosition: {
+                        scrollX: window.scrollX || window.pageXOffset || 0,
+                        scrollY: window.scrollY || window.pageYOffset || 0
+                    },
+                    finalOverlayRect: overlayRect,
+                    imageSrc: this.targetImageElement.src
+                }));
+
+                // CRITICAL: Handle fullscreen exit timing
+                try {
+                    const isFullscreen = await window.WebXROpenXRBridge.getFullScreen();
+                    if (isFullscreen) {
+                        this.log('Exiting OpenXR fullscreen mode...');
+                        await window.WebXROpenXRBridge.setFullScreen(0);
+                        // Give time for fullscreen exit to complete
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    this.log('Could not check/set OpenXR fullscreen state: ' + error.message);
+                }
+
+                this.log('Setting OpenXR window position and size...');
+
+                // Set the OpenXR window to overlay the image using the precise coordinates
+                await window.WebXROpenXRBridge.setWindowRect(overlayRect);
+
+                this.log('✅ OpenXR window positioned successfully as overlay over image');
+
+            } catch (error) {
+                this.log('❌ Error positioning OpenXR window: ' + error.message);
+                throw error; // Re-throw so caller can handle it
+            }
+        }
+
+        applyOpenXRSettings(leftCam, rightCam) {
+            this.log("Setting WebXROpenXRBridge projection method after positioning");
+            try {
+                window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                this.log("Projection Method set to Display Centric");
+                setTimeout(() => {
+                    window.WebXROpenXRBridge.resetSettings(1.0);
+                    this.log("Settings reset to default");
+                    setTimeout(() => {
+                        const resetSuccess = this.resetConvergencePlane(leftCam, rightCam);
+                        this.log("Convergence plane reset: " + (resetSuccess ? "SUCCESS" : "FAILED"));
+                    }, 500);
+                }, 500);
+
+            } catch (error) {
+                this.log("Error setting projection method: " + error.message);
+            }
         }
 
         async init() {
@@ -2376,26 +2496,31 @@ void main(void) {
                     rightCam.layers.enable(2);
                 }
 
-                // WebXROpenXRBridge display switch with timing (matching webXR approach)
+                // OpenXR window positioning and display switch with timing (matching webXR approach)
                 if (!this.displaySwitch) {
                     this.displaySwitch = true;
                     setTimeout(() => {
                         if (window.WebXROpenXRBridge) {
-                            this.log("Setting WebXROpenXRBridge projection method after 1 second delay");
-                            try {
-                                window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
-                                this.log("Projection Method set to Display Centric");
-                                setTimeout(() => {
-                                    window.WebXROpenXRBridge.resetSettings(1.0);
-                                    this.log("Settings reset to default");
-                                    setTimeout(() => {
-                                        const resetSuccess = this.resetConvergencePlane(leftCam, rightCam);
-                                        this.log("Convergence plane reset: " + (resetSuccess ? "SUCCESS" : "FAILED"));
-                                    }, 500);
-                                }, 500);
+                            this.log("WebXROpenXRBridge available - positioning window first...");
 
-                            } catch (error) {
-                                this.log("Error setting projection method: " + error.message);
+                            // FIRST: Position OpenXR window as overlay (do this BEFORE projection method)
+                            if (!this.openXRWindowPositioned && this.targetImageElement) {
+                                this.positionOpenXRWindow()
+                                    .then(() => {
+                                        this.log("OpenXR window positioning completed");
+                                        this.openXRWindowPositioned = true;
+                                    })
+                                    .catch(error => {
+                                        this.log("OpenXR window positioning failed: " + error.message);
+                                        // Continue with projection method even if positioning fails
+                                    })
+                                    .finally(() => {
+                                        // THEN: Set projection method and reset settings
+                                        this.applyOpenXRSettings(leftCam, rightCam);
+                                    });
+                            } else {
+                                // No target image, just apply settings
+                                this.applyOpenXRSettings(leftCam, rightCam);
                             }
                         } else {
                             this.log("WebXROpenXRBridge not available");
