@@ -4,158 +4,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenXR Window Overlay Demo</title>
+    <title>OpenXR Window Overlay - Simple Demo</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
             min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        }
-
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .demo-area {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin: 30px 0;
-        }
-
-        .target-element {
-            border: 3px dashed #007acc;
-            background: linear-gradient(45deg, #f0f8ff, #e6f3ff);
-            padding: 20px;
-            border-radius: 10px;
-            min-height: 200px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
         }
 
-        .target-element:hover {
-            border-color: #0056b3;
-            background: linear-gradient(45deg, #e6f3ff, #cce7ff);
-            transform: scale(1.02);
-        }
-
-        .target-element h3 {
-            margin: 0 0 10px 0;
-            color: #007acc;
-        }
-
-        .target-element p {
-            margin: 5px 0;
-            color: #666;
+        .demo-container {
             text-align: center;
+            max-width: 600px;
         }
 
-        .controls {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-
-        .control-group {
-            margin: 15px 0;
-        }
-
-        .control-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+        h1 {
             color: #333;
+            margin-bottom: 20px;
         }
 
-        .control-row {
-            display: flex;
-            gap: 10px;
-            align-items: center;
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 20px 0;
+            border: 3px solid #007acc;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
-        input[type="number"] {
-            width: 80px;
-            padding: 5px 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+        .demo-image {
+            width: 400px;
+            height: 300px;
+            object-fit: cover;
+            display: block;
         }
 
-        button {
+        .overlay-button {
             background: #007acc;
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
-            margin: 5px;
+            margin: 20px 0;
             transition: background 0.3s ease;
         }
 
-        button:hover {
+        .overlay-button:hover {
             background: #0056b3;
         }
 
-        button:disabled {
+        .overlay-button:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
 
         .status {
-            background: #e8f5e8;
-            border: 1px solid #28a745;
-            color: #155724;
-            padding: 10px;
+            padding: 10px 20px;
             border-radius: 5px;
             margin: 10px 0;
-            display: none;
+            font-weight: bold;
         }
 
-        .error {
-            background: #f8d7da;
-            border: 1px solid #dc3545;
-            color: #721c24;
-        }
-
-        .info {
+        .status.info {
             background: #d1ecf1;
-            border: 1px solid #17a2b8;
             color: #0c5460;
+            border: 1px solid #17a2b8;
         }
 
-        .current-rect {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            color: #856404;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-family: monospace;
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #dc3545;
         }
 
         .instructions {
-            background: #f0f8ff;
-            border-left: 4px solid #007acc;
-            padding: 15px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             margin: 20px 0;
+            text-align: left;
         }
 
         .instructions h3 {
@@ -163,14 +105,18 @@
             color: #007acc;
         }
 
+        .instructions ol {
+            line-height: 1.6;
+        }
+
         .overlay-indicator {
             position: absolute;
-            top: 5px;
-            right: 5px;
+            top: 10px;
+            right: 10px;
             background: #28a745;
             color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
+            padding: 5px 10px;
+            border-radius: 15px;
             font-size: 12px;
             font-weight: bold;
             display: none;
@@ -179,338 +125,313 @@
 </head>
 
 <body>
-    <div class="container">
+    <div class="demo-container">
         <h1>🎮 OpenXR Window Overlay Demo</h1>
 
         <div class="instructions">
-            <h3>How to use:</h3>
+            <h3>Simple OpenXR Overlay Reference</h3>
             <ol>
                 <li>Make sure the OpenXR runtime is running</li>
-                <li>Click on any target element below to overlay the OpenXR window on top of it</li>
-                <li>Use the manual controls to set custom positions and sizes</li>
-                <li>The OpenXR window will automatically exit fullscreen when positioned</li>
+                <li>Click "Create OpenXR Overlay" to position the OpenXR window over the image</li>
+                <li>The OpenXR content area will align exactly with the image bounds</li>
+                <li>The title bar will extend above the image</li>
             </ol>
         </div>
 
-        <div class="demo-area">
-            <div class="target-element" id="target1">
-                <span class="overlay-indicator">OpenXR Here!</span>
-                <h3>🎯 Target Area 1</h3>
-                <p>Video Player Region</p>
-                <p>Click to overlay OpenXR window here</p>
-                <p id="target1-info"></p>
-            </div>
-
-            <div class="target-element" id="target2">
-                <span class="overlay-indicator">OpenXR Here!</span>
-                <h3>🎯 Target Area 2</h3>
-                <p>3D Content Region</p>
-                <p>Click to overlay OpenXR window here</p>
-                <p id="target2-info"></p>
-            </div>
-
-            <div class="target-element" id="target3">
-                <span class="overlay-indicator">OpenXR Here!</span>
-                <h3>🎯 Target Area 3</h3>
-                <p>Game Display Region</p>
-                <p>Click to overlay OpenXR window here</p>
-                <p id="target3-info"></p>
-            </div>
-
-            <div class="target-element" id="target4">
-                <span class="overlay-indicator">OpenXR Here!</span>
-                <h3>🎯 Target Area 4</h3>
-                <p>Media Preview Region</p>
-                <p>Click to overlay OpenXR window here</p>
-                <p id="target4-info"></p>
-            </div>
+        <div class="image-container" id="targetImage">
+            <div class="overlay-indicator">OpenXR Overlay Active</div>
+            <img src="https://picsum.photos/400/300?random=1" alt="Demo Image" class="demo-image">
         </div>
 
-        <div class="controls">
-            <h3>Manual Window Controls</h3>
+        <button class="overlay-button" onclick="createOverlay()" id="overlayButton">
+            Create OpenXR Overlay
+        </button>
 
-            <div class="control-group">
-                <label>Position:</label>
-                <div class="control-row">
-                    <span>X:</span>
-                    <input type="number" id="posX" value="100" min="0" max="3000">
-                    <span>Y:</span>
-                    <input type="number" id="posY" value="100" min="0" max="3000">
-                </div>
-            </div>
-
-            <div class="control-group">
-                <label>Size:</label>
-                <div class="control-row">
-                    <span>Width:</span>
-                    <input type="number" id="width" value="800" min="100" max="3000">
-                    <span>Height:</span>
-                    <input type="number" id="height" value="600" min="100" max="3000">
-                </div>
-            </div>
-
-            <div class="control-group">
-                <button onclick="setCustomWindowRect()">Set Custom Position</button>
-                <button onclick="getCurrentWindowRect()">Get Current Position</button>
-                <button onclick="centerWindow()">Center Window</button>
-                <button onclick="resetToCorner()">Reset to Corner</button>
-            </div>
+        <div style="margin: 20px 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button class="overlay-button" onclick="positionAtScreenTopLeft()"
+                style="font-size: 14px; padding: 10px 15px;">
+                Position at Screen (0,0)
+            </button>
+            <button class="overlay-button" onclick="positionAtViewportTopLeft()"
+                style="font-size: 14px; padding: 10px 15px;">
+                Position at Viewport (0,0)
+            </button>
         </div>
 
-        <div id="status" class="status"></div>
-        <div id="currentRect" class="current-rect" style="display: none;"></div>
+
+
+        <div id="status" style="display: none;"></div>
     </div>
 
-    <script>
-        let currentOverlayTarget = null;
+    <!-- Include the WebXR-OpenXR Bridge API -->
+    <script src="../webxr-api.js"></script>
 
-        // Check if extension is available and wait for it to load
+    <script>
+        let isOverlayActive = false;
+
+        // Helper function to calculate accurate browser chrome dimensions
+        function getBrowserChromeInfo() {
+            const devicePixelRatio = window.devicePixelRatio || 1;
+
+            // New approach: Calculate viewport top-left corner directly
+            const borderWidth = (window.outerWidth - window.innerWidth) / 2;
+            const viewportX = window.screenX + borderWidth;
+            const viewportY = window.screenY + window.outerHeight - window.innerHeight - borderWidth;
+
+            return {
+                viewportX,
+                viewportY,
+                borderWidth,
+                devicePixelRatio,
+                // Keep old values for debugging comparison
+                oldBrowserX: window.screenX ?? window.screenLeft ?? 0,
+                oldBrowserY: window.screenY ?? window.screenTop ?? 0,
+                totalChrome: window.outerHeight - window.innerHeight,
+                chromeWidth: window.outerWidth - window.innerWidth
+            };
+        }
+
+        // Convert element coordinates to screen coordinates
+        function getScreenCoordinates(element) {
+            const rect = element.getBoundingClientRect();
+            const chromeInfo = getBrowserChromeInfo();
+
+            // Account for page scroll
+            const scrollX = window.scrollX || window.pageXOffset || 0;
+            const scrollY = window.scrollY || window.pageYOffset || 0;
+
+            // Calculate final screen coordinates using new viewport calculation
+            return {
+                x: Math.round((chromeInfo.viewportX + rect.left + scrollX) * chromeInfo.devicePixelRatio),
+                y: Math.round((chromeInfo.viewportY + rect.top + scrollY) * chromeInfo.devicePixelRatio),
+                width: Math.round(rect.width * chromeInfo.devicePixelRatio),
+                height: Math.round(rect.height * chromeInfo.devicePixelRatio)
+            };
+        }
+
+        // Check if extension is available
         function checkExtensionAvailability() {
             if (typeof WebXROpenXRBridge === 'undefined') {
-                showStatus('Waiting for WebXR OpenXR Bridge extension...', 'info');
+                showStatus('WebXR OpenXR Bridge extension not detected. Please install the extension and make sure the OpenXR runtime is running.', 'error');
+                document.getElementById('overlayButton').disabled = true;
                 return false;
+            }
+            return true;
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check extension availability immediately
+            if (!checkExtensionAvailability()) {
+                // Retry after a delay to handle cases where extension loads after page
+                setTimeout(() => {
+                    if (checkExtensionAvailability()) {
+                        showStatus('WebXR OpenXR Bridge detected and ready!', 'success');
+                        setTimeout(() => hideStatus(), 3000);
+                    }
+                }, 2000);
             } else {
                 showStatus('WebXR OpenXR Bridge detected and ready!', 'success');
-                return true;
+                setTimeout(() => hideStatus(), 3000);
             }
-        }
-
-        // Initialize target elements
-        document.addEventListener('DOMContentLoaded', function () {
-            updateTargetInfo();
-
-            // Check extension availability immediately
-            checkExtensionAvailability();
-
-            // Recheck extension status every 2 seconds for the first 10 seconds
-            // This handles cases where the extension loads after the page
-            let recheckCount = 0;
-            const recheckInterval = setInterval(() => {
-                if (checkExtensionAvailability()) {
-                    clearInterval(recheckInterval);
-                    // Extension is now available, get current window rect
-                    getCurrentWindowRect();
-                } else {
-                    recheckCount++;
-                    if (recheckCount >= 5) {
-                        clearInterval(recheckInterval);
-                        showStatus('WebXR OpenXR Bridge extension not detected. Make sure the extension is installed and the runtime is running.', 'error');
-                    }
-                }
-            }, 2000);
-
-            // Add click handlers for target elements
-            document.querySelectorAll('.target-element').forEach(element => {
-                element.addEventListener('click', function () {
-                    overlayWindowOnElement(this);
-                });
-            });
-
-            // Update target info when window resizes
-            window.addEventListener('resize', updateTargetInfo);
         });
 
-        function updateTargetInfo() {
-            document.querySelectorAll('.target-element').forEach(element => {
-                const rect = element.getBoundingClientRect();
-                const info = element.querySelector('[id$="-info"]');
-                if (info) {
-                    info.textContent = `${Math.round(rect.width)}×${Math.round(rect.height)} at (${Math.round(rect.left)}, ${Math.round(rect.top)})`;
+        async function createOverlay() {
+            if (typeof WebXROpenXRBridge === 'undefined') {
+                showStatus('WebXR OpenXR Bridge not available. Please install the extension.', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Creating OpenXR overlay...', 'info');
+
+                // Get the image element position and size
+                const imageElement = document.getElementById('targetImage');
+                const overlayRect = getScreenCoordinates(imageElement);
+
+                console.log('Overlay coordinates:', overlayRect);
+
+                // Debug info
+                const rect = imageElement.getBoundingClientRect();
+                const chromeInfo = getBrowserChromeInfo();
+                const scrollX = window.scrollX || window.pageXOffset || 0;
+                const scrollY = window.scrollY || window.pageYOffset || 0;
+                console.log('Image positioning details:', {
+                    imageRect: rect,
+                    chromeInfo: chromeInfo,
+                    scrollPosition: { scrollX, scrollY },
+                    calculatedX: (chromeInfo.viewportX + rect.left + scrollX) * chromeInfo.devicePixelRatio,
+                    calculatedY: (chromeInfo.viewportY + rect.top + scrollY) * chromeInfo.devicePixelRatio
+                });
+
+                // First, check if we need to exit fullscreen
+                try {
+                    const isFullscreen = await WebXROpenXRBridge.getFullScreen();
+                    if (isFullscreen) {
+                        showStatus('Exiting fullscreen first...', 'info');
+                        await WebXROpenXRBridge.setFullScreen(0);
+                        // Give time for fullscreen exit to complete
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    console.warn('Could not check/set fullscreen state:', error);
                 }
-            });
-        }
 
-        async function overlayWindowOnElement(element) {
-            if (typeof WebXROpenXRBridge === 'undefined') {
-                showStatus('WebXR OpenXR Bridge not available. Make sure the extension is installed.', 'error');
-                return;
-            }
+                showStatus('Setting window position and size...', 'info');
 
-            try {
-                showStatus('Positioning OpenXR window...', 'info');
+                // Set the OpenXR window to overlay the image
+                await WebXROpenXRBridge.setWindowRect(overlayRect);
 
-                // Clear previous overlay indicators
-                document.querySelectorAll('.overlay-indicator').forEach(indicator => {
-                    indicator.style.display = 'none';
-                });
+                // Update UI
+                document.querySelector('.overlay-indicator').style.display = 'block';
 
-                // Get element position and size
-                const rect = element.getBoundingClientRect();
-
-                // Account for scroll position
-                const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-                const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-
-                const windowRect = {
-                    x: Math.round(rect.left + scrollX),
-                    y: Math.round(rect.top + scrollY),
-                    width: Math.round(rect.width),
-                    height: Math.round(rect.height)
-                };
-
-                // Update input fields
-                document.getElementById('posX').value = windowRect.x;
-                document.getElementById('posY').value = windowRect.y;
-                document.getElementById('width').value = windowRect.width;
-                document.getElementById('height').value = windowRect.height;
-
-                // Set the OpenXR window position
-                await WebXROpenXRBridge.setWindowRect(windowRect);
-
-                // Show overlay indicator
-                element.querySelector('.overlay-indicator').style.display = 'block';
-                currentOverlayTarget = element;
-
-                showStatus(`OpenXR window overlaid on ${element.querySelector('h3').textContent}`, 'success');
-                updateCurrentRectDisplay(windowRect);
+                if (!isOverlayActive) {
+                    document.getElementById('overlayButton').textContent = 'Snap OpenXR Window to Image';
+                    isOverlayActive = true;
+                    showStatus('✅ OpenXR overlay created! The OpenXR window content area should now align with the image.', 'success');
+                } else {
+                    showStatus('✅ OpenXR window snapped back to image position!', 'success');
+                }
 
             } catch (error) {
-                showStatus(`Error: ${error.message}`, 'error');
-                console.error('Error overlaying window:', error);
+                showStatus(`❌ Error creating overlay: ${error.message}`, 'error');
+                console.error('Overlay error:', error);
             }
         }
 
-        async function setCustomWindowRect() {
-            if (typeof WebXROpenXRBridge === 'undefined') {
-                showStatus('WebXR OpenXR Bridge not available. Make sure the extension is installed.', 'error');
-                return;
-            }
-
-            try {
-                const rect = {
-                    x: parseInt(document.getElementById('posX').value),
-                    y: parseInt(document.getElementById('posY').value),
-                    width: parseInt(document.getElementById('width').value),
-                    height: parseInt(document.getElementById('height').value)
-                };
-
-                showStatus('Setting custom window position...', 'info');
-                await WebXROpenXRBridge.setWindowRect(rect);
-
-                // Clear overlay indicators since this is a custom position
-                document.querySelectorAll('.overlay-indicator').forEach(indicator => {
-                    indicator.style.display = 'none';
-                });
-                currentOverlayTarget = null;
-
-                showStatus(`Window positioned at (${rect.x}, ${rect.y}) with size ${rect.width}×${rect.height}`, 'success');
-                updateCurrentRectDisplay(rect);
-
-            } catch (error) {
-                showStatus(`Error: ${error.message}`, 'error');
-                console.error('Error setting window rect:', error);
-            }
-        }
-
-        async function getCurrentWindowRect() {
-            if (typeof WebXROpenXRBridge === 'undefined') {
-                showStatus('WebXR OpenXR Bridge not available. Make sure the extension is installed.', 'error');
-                return;
-            }
-
-            try {
-                showStatus('Getting current window position...', 'info');
-                const rect = await WebXROpenXRBridge.getWindowRect();
-
-                // Update input fields
-                document.getElementById('posX').value = Math.round(rect.x);
-                document.getElementById('posY').value = Math.round(rect.y);
-                document.getElementById('width').value = Math.round(rect.width);
-                document.getElementById('height').value = Math.round(rect.height);
-
-                showStatus('Current window position retrieved', 'success');
-                updateCurrentRectDisplay(rect);
-
-            } catch (error) {
-                showStatus(`Error: ${error.message}`, 'error');
-                console.error('Error getting window rect:', error);
-            }
-        }
-
-        async function centerWindow() {
-            if (typeof WebXROpenXRBridge === 'undefined') {
-                showStatus('WebXR OpenXR Bridge not available. Make sure the extension is installed.', 'error');
-                return;
-            }
-
-            try {
-                const screenWidth = window.screen.width;
-                const screenHeight = window.screen.height;
-                const windowWidth = 800;
-                const windowHeight = 600;
-
-                const rect = {
-                    x: Math.round((screenWidth - windowWidth) / 2),
-                    y: Math.round((screenHeight - windowHeight) / 2),
-                    width: windowWidth,
-                    height: windowHeight
-                };
-
-                document.getElementById('posX').value = rect.x;
-                document.getElementById('posY').value = rect.y;
-                document.getElementById('width').value = rect.width;
-                document.getElementById('height').value = rect.height;
-
-                await setCustomWindowRect();
-
-            } catch (error) {
-                showStatus(`Error: ${error.message}`, 'error');
-                console.error('Error centering window:', error);
-            }
-        }
-
-        async function resetToCorner() {
-            if (typeof WebXROpenXRBridge === 'undefined') {
-                showStatus('WebXR OpenXR Bridge not available. Make sure the extension is installed.', 'error');
-                return;
-            }
-
-            try {
-                const rect = {
-                    x: 100,
-                    y: 100,
-                    width: 800,
-                    height: 600
-                };
-
-                document.getElementById('posX').value = rect.x;
-                document.getElementById('posY').value = rect.y;
-                document.getElementById('width').value = rect.width;
-                document.getElementById('height').value = rect.height;
-
-                await setCustomWindowRect();
-
-            } catch (error) {
-                showStatus(`Error: ${error.message}`, 'error');
-                console.error('Error resetting window:', error);
-            }
-        }
-
-        function showStatus(message, type = 'info') {
+        function showStatus(message, type) {
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.className = `status ${type}`;
             statusElement.style.display = 'block';
+        }
 
-            // Auto-hide success messages after 3 seconds
-            if (type === 'success') {
-                setTimeout(() => {
-                    statusElement.style.display = 'none';
-                }, 3000);
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+
+
+
+        // Position OpenXR window at screen top-left (0,0)
+        async function positionAtScreenTopLeft() {
+            if (typeof WebXROpenXRBridge === 'undefined') {
+                showStatus('WebXR OpenXR Bridge not available. Please install the extension.', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Positioning OpenXR window at screen (0,0)...', 'info');
+
+                const chromeInfo = getBrowserChromeInfo();
+
+                // Position content area at absolute screen coordinates (0,0)
+                const overlayRect = {
+                    x: 0,
+                    y: 0,
+                    width: Math.round(400 * chromeInfo.devicePixelRatio),
+                    height: Math.round(300 * chromeInfo.devicePixelRatio)
+                };
+
+                console.log('Screen (0,0) coordinates:', overlayRect);
+
+                // First, check if we need to exit fullscreen
+                try {
+                    const isFullscreen = await WebXROpenXRBridge.getFullScreen();
+                    if (isFullscreen) {
+                        showStatus('Exiting fullscreen first...', 'info');
+                        await WebXROpenXRBridge.setFullScreen(0);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    console.warn('Could not check/set fullscreen state:', error);
+                }
+
+                await WebXROpenXRBridge.setWindowRect(overlayRect);
+                showStatus('✅ OpenXR window positioned at screen (0,0) - content area should be at top-left corner of screen', 'success');
+
+            } catch (error) {
+                showStatus(`❌ Error positioning at screen (0,0): ${error.message}`, 'error');
+                console.error('Screen positioning error:', error);
             }
         }
 
-        function updateCurrentRectDisplay(rect) {
-            const currentRectElement = document.getElementById('currentRect');
-            currentRectElement.innerHTML = `
-                <strong>Current Window Position:</strong><br>
-                Position: (${rect.x}, ${rect.y})<br>
-                Size: ${rect.width} × ${rect.height} pixels
-            `;
-            currentRectElement.style.display = 'block';
+        // Position OpenXR window at browser viewport top-left (0,0)
+        async function positionAtViewportTopLeft() {
+            if (typeof WebXROpenXRBridge === 'undefined') {
+                showStatus('WebXR OpenXR Bridge not available. Please install the extension.', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Positioning OpenXR window at viewport (0,0)...', 'info');
+
+                const chromeInfo = getBrowserChromeInfo();
+
+                // Position OpenXR content area at viewport (0,0) using new calculation
+                const overlayRect = {
+                    x: Math.round(chromeInfo.viewportX * chromeInfo.devicePixelRatio),
+                    y: Math.round(chromeInfo.viewportY * chromeInfo.devicePixelRatio),
+                    width: Math.round(400 * chromeInfo.devicePixelRatio),
+                    height: Math.round(300 * chromeInfo.devicePixelRatio)
+                };
+
+                console.log('Viewport (0,0) coordinates:', overlayRect);
+                console.log('New viewport calculation:', {
+                    viewportX: chromeInfo.viewportX,
+                    viewportY: chromeInfo.viewportY,
+                    borderWidth: chromeInfo.borderWidth,
+                    formula: {
+                        borderWidth: `(${window.outerWidth} - ${window.innerWidth}) / 2 = ${chromeInfo.borderWidth}`,
+                        viewportX: `${window.screenX} + ${chromeInfo.borderWidth} = ${chromeInfo.viewportX}`,
+                        viewportY: `${window.screenY} + ${window.outerHeight} - ${window.innerHeight} - ${chromeInfo.borderWidth} = ${chromeInfo.viewportY}`
+                    },
+                    oldMethod: {
+                        oldX: chromeInfo.oldBrowserX,
+                        oldY: chromeInfo.oldBrowserY,
+                        comparison: {
+                            xDiff: chromeInfo.viewportX - chromeInfo.oldBrowserX,
+                            yDiff: chromeInfo.viewportY - chromeInfo.oldBrowserY
+                        }
+                    }
+                });
+                console.log('Detailed browser info:', {
+                    screenX: window.screenX,
+                    screenY: window.screenY,
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                    outerWidth: window.outerWidth,
+                    outerHeight: window.outerHeight,
+                    devicePixelRatio: window.devicePixelRatio,
+                    scrollX: window.scrollX,
+                    scrollY: window.scrollY,
+                    visualViewport: window.visualViewport ? {
+                        offsetLeft: window.visualViewport.offsetLeft,
+                        offsetTop: window.visualViewport.offsetTop,
+                        pageLeft: window.visualViewport.pageLeft,
+                        pageTop: window.visualViewport.pageTop
+                    } : 'not supported'
+                });
+
+                // First, check if we need to exit fullscreen
+                try {
+                    const isFullscreen = await WebXROpenXRBridge.getFullScreen();
+                    if (isFullscreen) {
+                        showStatus('Exiting fullscreen first...', 'info');
+                        await WebXROpenXRBridge.setFullScreen(0);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    console.warn('Could not check/set fullscreen state:', error);
+                }
+
+                await WebXROpenXRBridge.setWindowRect(overlayRect);
+                showStatus('✅ OpenXR window positioned at viewport (0,0) - content area should align with browser top-left', 'success');
+
+            } catch (error) {
+                showStatus(`❌ Error positioning at viewport (0,0): ${error.message}`, 'error');
+                console.error('Viewport positioning error:', error);
+            }
         }
-
-
     </script>
 </body>
 
