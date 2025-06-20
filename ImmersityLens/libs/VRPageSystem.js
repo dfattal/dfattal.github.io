@@ -971,7 +971,7 @@ if (typeof BinaryStream === 'undefined') {
 
                 // Create WebGL renderer with XR support
                 const canvas = document.createElement('canvas');
-                canvas.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 10000; display: none;';
+                canvas.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 10000; display: none; pointer-events: none;';
                 document.body.appendChild(canvas);
 
                 this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
