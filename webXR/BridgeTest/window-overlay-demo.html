@@ -146,6 +146,9 @@
                 </li>
                 <li><strong>Border calculations:</strong> The OpenXR runtime handles window decorations automatically
                     when using client area positioning</li>
+                <li><strong>Fullscreen timing:</strong> When OpenXR is in fullscreen mode, must call
+                    <code>setFullScreen(0)</code> and wait 500ms before positioning to allow the transition to complete
+                </li>
             </ol>
             <p><strong>Usage:</strong> Click "Create OpenXR Overlay" to position the OpenXR window content area to align
                 exactly with the image bounds. Works perfectly with scrolling and high-DPI displays.</p>
@@ -336,13 +339,16 @@
                     actualOverlayRect: overlayRect
                 });
 
-                // First, check if we need to exit fullscreen
+                // CRITICAL: Handle fullscreen exit timing
+                // ISSUE: If OpenXR is in fullscreen mode, positioning commands are ignored or incorrect
+                // SOLUTION: Exit fullscreen and wait 500ms for the transition to complete
+                // This timing is essential - without the delay, the first positioning attempt fails
                 try {
                     const isFullscreen = await WebXROpenXRBridge.getFullScreen();
                     if (isFullscreen) {
                         showStatus('Exiting fullscreen first...', 'info');
                         await WebXROpenXRBridge.setFullScreen(0);
-                        // Give time for fullscreen exit to complete
+                        // TIMING REQUIREMENT: 500ms delay is critical for fullscreen transition
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
                 } catch (error) {
@@ -406,13 +412,13 @@
 
                 console.log('Screen (0,0) coordinates:', overlayRect);
 
-                // First, check if we need to exit fullscreen
+                // Handle fullscreen exit timing (see main createOverlay function for detailed explanation)
                 try {
                     const isFullscreen = await WebXROpenXRBridge.getFullScreen();
                     if (isFullscreen) {
                         showStatus('Exiting fullscreen first...', 'info');
                         await WebXROpenXRBridge.setFullScreen(0);
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Critical 500ms delay
                     }
                 } catch (error) {
                     console.warn('Could not check/set fullscreen state:', error);
@@ -490,13 +496,13 @@
                     } : 'not supported'
                 });
 
-                // First, check if we need to exit fullscreen
+                // Handle fullscreen exit timing (see main createOverlay function for detailed explanation)
                 try {
                     const isFullscreen = await WebXROpenXRBridge.getFullScreen();
                     if (isFullscreen) {
                         showStatus('Exiting fullscreen first...', 'info');
                         await WebXROpenXRBridge.setFullScreen(0);
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Critical 500ms delay
                     }
                 } catch (error) {
                     console.warn('Could not check/set fullscreen state:', error);

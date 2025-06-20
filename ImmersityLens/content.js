@@ -3775,6 +3775,14 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     const vrViewer = new window.VRLifViewer();
                     await vrViewer.init(lifDownloadUrl, null);
                     console.log('VR session started successfully');
+
+                    // Position OpenXR window as overlay over the image
+                    try {
+                        await positionOpenXRWindow(img);
+                    } catch (overlayError) {
+                        console.warn('Failed to position OpenXR window as overlay:', overlayError);
+                        // Don't show error to user - VR still works, just without overlay positioning
+                    }
                 } else {
                     console.warn('VRLifViewer not found - VR system may not be pre-loaded');
                     showDownloadNotification('VR system not ready - please try again in a moment', 'error');
@@ -3789,6 +3797,119 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         }
     }
 });
+
+// OpenXR Window Positioning Functions
+// Based on the precise coordinate calculation from window-overlay-demo.html
+
+/**
+ * Calculate accurate viewport screen coordinates for OpenXR window positioning
+ * 
+ * CRITICAL INSIGHTS:
+ * 1. OpenXR setWindowRect positions the CONTENT AREA (not the window frame)
+ * 2. Viewport coordinates = screen coordinates of browser content area
+ * 3. Must account for browser chrome (title bar, borders, etc.)
+ * 4. Must multiply by devicePixelRatio for high-DPI displays
+ */
+function getBrowserChromeInfo() {
+    const devicePixelRatio = window.devicePixelRatio || 1;
+
+    // Calculate viewport screen coordinates using the precise formula
+    const borderWidth = (window.outerWidth - window.innerWidth) / 2;
+    const viewportX = window.screenX + borderWidth;
+    const viewportY = window.screenY + window.outerHeight - window.innerHeight - borderWidth;
+
+    return {
+        viewportX,
+        viewportY,
+        borderWidth,
+        devicePixelRatio,
+        totalChrome: window.outerHeight - window.innerHeight,
+        chromeWidth: window.outerWidth - window.innerWidth
+    };
+}
+
+/**
+ * Convert DOM element coordinates to absolute screen coordinates for OpenXR positioning
+ * 
+ * SCROLL HANDLING: getBoundingClientRect() automatically accounts for scroll,
+ * so DO NOT manually add scroll values - this would double-count the offset.
+ */
+function getScreenCoordinates(element) {
+    const rect = element.getBoundingClientRect();
+    const chromeInfo = getBrowserChromeInfo();
+
+    // Convert viewport-relative coordinates to absolute screen coordinates
+    return {
+        x: Math.round((chromeInfo.viewportX + rect.left) * chromeInfo.devicePixelRatio),
+        y: Math.round((chromeInfo.viewportY + rect.top) * chromeInfo.devicePixelRatio),
+        width: Math.round(rect.width * chromeInfo.devicePixelRatio),
+        height: Math.round(rect.height * chromeInfo.devicePixelRatio)
+    };
+}
+
+/**
+ * Position OpenXR window as overlay over the specified image element
+ * 
+ * This function:
+ * 1. Gets the image's screen coordinates using precise viewport calculation
+ * 2. Exits OpenXR fullscreen mode if needed
+ * 3. Uses WebXROpenXRBridge.setWindowRect() to position the OpenXR window
+ * 4. The OpenXR content area will align exactly with the image bounds
+ */
+async function positionOpenXRWindow(imageElement) {
+    // Check if WebXROpenXRBridge is available
+    if (typeof window.WebXROpenXRBridge === 'undefined') {
+        console.log('WebXROpenXRBridge not available - OpenXR window positioning not possible');
+        return;
+    }
+
+    try {
+        console.log('Positioning OpenXR window as overlay...');
+
+        // Get the image element's screen coordinates
+        const overlayRect = getScreenCoordinates(imageElement);
+
+        console.log('OpenXR overlay coordinates:', overlayRect);
+
+        // Debug info for troubleshooting
+        const rect = imageElement.getBoundingClientRect();
+        const chromeInfo = getBrowserChromeInfo();
+        console.log('Image positioning details:', {
+            imageRect: rect,
+            chromeInfo: chromeInfo,
+            scrollPosition: {
+                scrollX: window.scrollX || window.pageXOffset || 0,
+                scrollY: window.scrollY || window.pageYOffset || 0
+            },
+            finalOverlayRect: overlayRect,
+            imageSrc: imageElement.src
+        });
+
+        // First, check if we need to exit fullscreen
+        try {
+            const isFullscreen = await window.WebXROpenXRBridge.getFullScreen();
+            if (isFullscreen) {
+                console.log('Exiting OpenXR fullscreen mode...');
+                await window.WebXROpenXRBridge.setFullScreen(0);
+                // Give time for fullscreen exit to complete
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (error) {
+            console.warn('Could not check/set OpenXR fullscreen state:', error);
+        }
+
+        console.log('Setting OpenXR window position and size...');
+
+        // Set the OpenXR window to overlay the image using the precise coordinates
+        await window.WebXROpenXRBridge.setWindowRect(overlayRect);
+
+        console.log('✅ OpenXR window positioned successfully as overlay over image');
+
+    } catch (error) {
+        console.error('❌ Error positioning OpenXR window:', error);
+        throw error; // Re-throw so caller can handle it
+    }
+}
 
 // Helper function to get element path for debugging
 function getElementPath(element) {
