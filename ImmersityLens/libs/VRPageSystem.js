@@ -845,8 +845,8 @@ if (typeof BinaryStream === 'undefined') {
             this.displaySwitch = false; // For WebXROpenXRBridge timing
             this.openXRWindowPositioned = false; // Flag to ensure OpenXR window positioning only happens once
 
-            // Target image element for OpenXR window positioning
-            this.targetImageElement = null;
+            // Image coordinates for OpenXR window positioning (passed from content script)
+            this.imageCoordinates = null;
         }
 
         log(message) {
@@ -854,42 +854,12 @@ if (typeof BinaryStream === 'undefined') {
             window.postMessage({ type: 'VR_LIF_LOG', message: message }, '*');
         }
 
-        setTargetImageElement(imageElement) {
-            this.targetImageElement = imageElement;
-            this.log('Target image element set for OpenXR window positioning');
+        setImageCoordinates(coordinates) {
+            this.imageCoordinates = coordinates;
+            this.log('Image coordinates set for OpenXR window positioning: ' + JSON.stringify(coordinates));
         }
 
-        // OpenXR Window Positioning Functions (based on window-overlay-demo.html)
-        getBrowserChromeInfo() {
-            const devicePixelRatio = window.devicePixelRatio || 1;
-
-            // Calculate viewport screen coordinates using the precise formula
-            const borderWidth = (window.outerWidth - window.innerWidth) / 2;
-            const viewportX = window.screenX + borderWidth;
-            const viewportY = window.screenY + window.outerHeight - window.innerHeight - borderWidth;
-
-            return {
-                viewportX,
-                viewportY,
-                borderWidth,
-                devicePixelRatio,
-                totalChrome: window.outerHeight - window.innerHeight,
-                chromeWidth: window.outerWidth - window.innerWidth
-            };
-        }
-
-        getScreenCoordinates(element) {
-            const rect = element.getBoundingClientRect();
-            const chromeInfo = this.getBrowserChromeInfo();
-
-            // Convert viewport-relative coordinates to absolute screen coordinates
-            return {
-                x: Math.round((chromeInfo.viewportX + rect.left) * chromeInfo.devicePixelRatio),
-                y: Math.round((chromeInfo.viewportY + rect.top) * chromeInfo.devicePixelRatio),
-                width: Math.round(rect.width * chromeInfo.devicePixelRatio),
-                height: Math.round(rect.height * chromeInfo.devicePixelRatio)
-            };
-        }
+        // OpenXR Window Positioning using pre-calculated coordinates from content script
 
         async positionOpenXRWindow() {
             console.log('🔧 OPENXR POSITIONING: Starting window positioning...');
@@ -904,27 +874,24 @@ if (typeof BinaryStream === 'undefined') {
             }
             console.log('✅ OPENXR POSITIONING: WebXROpenXRBridge is available');
 
-            if (!this.targetImageElement) {
-                console.log('❌ OPENXR POSITIONING: No target image element set');
-                this.log('No target image element - positioning skipped');
+            if (!this.imageCoordinates) {
+                console.log('❌ OPENXR POSITIONING: No image coordinates available');
+                this.log('No image coordinates - positioning skipped');
                 return;
             }
-            console.log('✅ OPENXR POSITIONING: Target image element found:', this.targetImageElement.src);
+            console.log('✅ OPENXR POSITIONING: Using pre-calculated coordinates:', this.imageCoordinates);
 
             try {
-                // Get the image element's screen coordinates
-                const overlayRect = this.getScreenCoordinates(this.targetImageElement);
-                console.log('🎯 OPENXR POSITIONING: Calculated overlay coordinates:', overlayRect);
+                // Use the pre-calculated coordinates from content script
+                const overlayRect = {
+                    x: this.imageCoordinates.x,
+                    y: this.imageCoordinates.y,
+                    width: this.imageCoordinates.width,
+                    height: this.imageCoordinates.height
+                };
 
-                // Debug detailed positioning info
-                const rect = this.targetImageElement.getBoundingClientRect();
-                const chromeInfo = this.getBrowserChromeInfo();
-                console.log('🔍 OPENXR DEBUG: Image rect from getBoundingClientRect():', rect);
-                console.log('🔍 OPENXR DEBUG: Browser chrome info:', chromeInfo);
-                console.log('🔍 OPENXR DEBUG: Scroll position:', {
-                    scrollX: window.scrollX || window.pageXOffset || 0,
-                    scrollY: window.scrollY || window.pageYOffset || 0
-                });
+                console.log('🎯 OPENXR POSITIONING: Overlay coordinates:', overlayRect);
+                console.log('🔍 OPENXR DEBUG: Original calculation details:', this.imageCoordinates);
 
                 // CRITICAL: Handle fullscreen exit timing
                 console.log('🔧 OPENXR POSITIONING: Checking fullscreen state...');
@@ -1077,8 +1044,13 @@ if (typeof BinaryStream === 'undefined') {
             }
         }
 
-        async startVRWithBlobData(arrayBuffer) {
+        async startVRWithBlobData(arrayBuffer, imageCoordinates = null) {
             this.log('Starting VR with blob data...');
+
+            // Store image coordinates if provided
+            if (imageCoordinates) {
+                this.setImageCoordinates(imageCoordinates);
+            }
 
             try {
                 // Convert array buffer to blob and then to file
@@ -2530,8 +2502,8 @@ void main(void) {
                             console.log('🔍 OPENXR SETUP: Bridge methods available:', Object.getOwnPropertyNames(window.WebXROpenXRBridge));
 
                             // FIRST: Position OpenXR window as overlay (do this BEFORE projection method)
-                            if (!this.openXRWindowPositioned && this.targetImageElement) {
-                                console.log('🎯 OPENXR SETUP: Starting window positioning (target image available)');
+                            if (!this.openXRWindowPositioned && this.imageCoordinates) {
+                                console.log('🎯 OPENXR SETUP: Starting window positioning (image coordinates available)');
                                 this.positionOpenXRWindow()
                                     .then(() => {
                                         console.log('✅ OPENXR SETUP: Window positioning completed successfully');
@@ -2547,10 +2519,10 @@ void main(void) {
                                         this.applyOpenXRSettings(leftCam, rightCam);
                                     });
                             } else {
-                                console.log('⚠️ OPENXR SETUP: Skipping window positioning (no target image or already positioned)');
+                                console.log('⚠️ OPENXR SETUP: Skipping window positioning (no image coordinates or already positioned)');
                                 console.log('🔍 OPENXR SETUP: openXRWindowPositioned =', this.openXRWindowPositioned);
-                                console.log('🔍 OPENXR SETUP: targetImageElement =', !!this.targetImageElement);
-                                // No target image, just apply settings
+                                console.log('🔍 OPENXR SETUP: imageCoordinates =', !!this.imageCoordinates);
+                                // No coordinates, just apply settings
                                 this.applyOpenXRSettings(leftCam, rightCam);
                             }
                         } else {
@@ -2692,7 +2664,7 @@ void main(void) {
                 break;
             case 'VR_LIF_COMMAND_START_VR_WITH_DATA':
                 if (event.data.lifData) {
-                    window.vrSystem.startVRWithBlobData(event.data.lifData);
+                    window.vrSystem.startVRWithBlobData(event.data.lifData, event.data.imageCoordinates);
                 }
                 break;
             case 'VR_LIF_COMMAND_EXIT_VR':

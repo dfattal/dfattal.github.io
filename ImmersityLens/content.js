@@ -3774,13 +3774,15 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     console.log('VRLifViewer found, initializing VR session...');
                     const vrViewer = new window.VRLifViewer();
 
-                    // Pass image element context to VR system for OpenXR window positioning
-                    if (window.vrSystem && img) {
-                        console.log('Setting target image for OpenXR window positioning...');
-                        window.vrSystem.setTargetImageElement(img);
+                    // Calculate image coordinates for OpenXR window positioning (before VR starts)
+                    let imageCoordinates = null;
+                    if (img) {
+                        console.log('Calculating image coordinates for OpenXR window positioning...');
+                        imageCoordinates = calculateImageCoordinates(img);
+                        console.log('Image coordinates calculated:', imageCoordinates);
                     }
 
-                    await vrViewer.init(lifDownloadUrl, null);
+                    await vrViewer.init(lifDownloadUrl, null, imageCoordinates);
                     console.log('VR session started successfully');
                 } else {
                     console.warn('VRLifViewer not found - VR system may not be pre-loaded');
@@ -3797,6 +3799,36 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     }
 });
 
+
+// Calculate image coordinates for OpenXR window positioning
+function calculateImageCoordinates(imageElement) {
+    const devicePixelRatio = window.devicePixelRatio || 1;
+
+    // Calculate viewport screen coordinates using the precise formula
+    const borderWidth = (window.outerWidth - window.innerWidth) / 2;
+    const viewportX = window.screenX + borderWidth;
+    const viewportY = window.screenY + window.outerHeight - window.innerHeight - borderWidth;
+
+    // Get element's viewport coordinates
+    const rect = imageElement.getBoundingClientRect();
+
+    // Convert to absolute screen coordinates
+    return {
+        x: Math.round((viewportX + rect.left) * devicePixelRatio),
+        y: Math.round((viewportY + rect.top) * devicePixelRatio),
+        width: Math.round(rect.width * devicePixelRatio),
+        height: Math.round(rect.height * devicePixelRatio),
+        // Debug info
+        imageRect: rect,
+        viewportX: viewportX,
+        viewportY: viewportY,
+        devicePixelRatio: devicePixelRatio,
+        scrollPosition: {
+            scrollX: window.scrollX || window.pageXOffset || 0,
+            scrollY: window.scrollY || window.pageYOffset || 0
+        }
+    };
+}
 
 // Helper function to get element path for debugging
 function getElementPath(element) {

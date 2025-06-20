@@ -20,11 +20,12 @@ class VRLifViewer {
         this.messageHandler = null;
     }
 
-    async init(lifUrl, originalButton) {
+    async init(lifUrl, originalButton, imageCoordinates = null) {
         console.log('🚀 Starting VR session...');
 
         this.lifUrl = lifUrl;
         this.originalButton = originalButton;
+        this.imageCoordinates = imageCoordinates;
         this.injectedScriptId = 'vr-lif-system-' + Date.now();
 
         try {
@@ -69,10 +70,11 @@ class VRLifViewer {
         // Convert blob to array buffer
         const arrayBuffer = await lifBlob.arrayBuffer();
 
-        // Send the LIF data to VR system
+        // Send the LIF data and image coordinates to VR system
         window.postMessage({
             type: 'VR_LIF_COMMAND_START_VR_WITH_DATA',
-            lifData: arrayBuffer
+            lifData: arrayBuffer,
+            imageCoordinates: this.imageCoordinates
         }, '*');
     }
 
