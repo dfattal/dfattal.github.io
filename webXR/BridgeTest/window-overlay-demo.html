@@ -129,13 +129,26 @@
         <h1>🎮 OpenXR Window Overlay Demo</h1>
 
         <div class="instructions">
-            <h3>Simple OpenXR Overlay Reference</h3>
+            <h3>OpenXR Window Positioning - Technical Reference</h3>
+            <p><strong>Key Discoveries:</strong></p>
             <ol>
-                <li>Make sure the OpenXR runtime is running</li>
-                <li>Click "Create OpenXR Overlay" to position the OpenXR window over the image</li>
-                <li>The OpenXR content area will align exactly with the image bounds</li>
-                <li>The title bar will extend above the image</li>
+                <li><strong>OpenXR setWindowRect behavior:</strong> Positions the <em>content area</em> (excluding title
+                    bar) at the specified screen coordinates. The title bar extends above the positioned area.</li>
+                <li><strong>Screen coordinate calculation:</strong> Use
+                    <code>borderWidth = (outerWidth - innerWidth) / 2</code>, then
+                    <code>viewportX = screenX + borderWidth</code> and
+                    <code>viewportY = screenY + outerHeight - innerHeight - borderWidth</code>
+                </li>
+                <li><strong>Scroll handling:</strong> <code>getBoundingClientRect()</code> returns viewport-relative
+                    coordinates that automatically adjust for scroll - do NOT add scroll values manually</li>
+                <li><strong>Device pixel ratio:</strong> Multiply all coordinates by
+                    <code>window.devicePixelRatio</code> for high-DPI displays
+                </li>
+                <li><strong>Border calculations:</strong> The OpenXR runtime handles window decorations automatically
+                    when using client area positioning</li>
             </ol>
+            <p><strong>Usage:</strong> Click "Create OpenXR Overlay" to position the OpenXR window content area to align
+                exactly with the image bounds. Works perfectly with scrolling and high-DPI displays.</p>
         </div>
 
         <div class="image-container" id="targetImage">
@@ -169,11 +182,38 @@
     <script>
         let isOverlayActive = false;
 
-        // Helper function to calculate accurate browser chrome dimensions
+        /**
+ * Calculate accurate viewport screen coordinates for OpenXR window positioning
+ * 
+ * CRITICAL INSIGHTS DISCOVERED:
+ * 
+ * 1. OPENXR SETWINDOWRECT BEHAVIOR:
+ *    - setWindowRect(x, y, width, height) positions the CONTENT AREA (not the window frame)
+ *    - The title bar extends ABOVE the specified coordinates
+ *    - This is why we need precise content area positioning, not window frame positioning
+ * 
+ * 2. BROWSER COORDINATE SYSTEM:
+ *    - window.screenX/screenY = position of browser window frame on screen
+ *    - window.outerWidth/outerHeight = total window size including borders/chrome
+ *    - window.innerWidth/innerHeight = viewport size (content area)
+ *    - Viewport top-left is NOT at (screenX, screenY) due to borders and chrome
+ * 
+ * 3. VIEWPORT POSITION CALCULATION:
+ *    - borderWidth = (outerWidth - innerWidth) / 2  // Assumes equal left/right borders
+ *    - viewportX = screenX + borderWidth            // Account for left border
+ *    - viewportY = screenY + topChrome             // Account for title bar + tabs + address bar
+ *    - topChrome = outerHeight - innerHeight - borderWidth  // Total chrome minus bottom border
+ * 
+ * 4. HIGH-DPI DISPLAYS:
+ *    - All coordinates must be multiplied by devicePixelRatio
+ *    - Browser reports logical pixels, OpenXR expects physical pixels
+ * 
+ * This formula was the breakthrough that achieved perfect positioning accuracy.
+ */
         function getBrowserChromeInfo() {
             const devicePixelRatio = window.devicePixelRatio || 1;
 
-            // New approach: Calculate viewport top-left corner directly
+            // Calculate viewport screen coordinates using the precise formula
             const borderWidth = (window.outerWidth - window.innerWidth) / 2;
             const viewportX = window.screenX + borderWidth;
             const viewportY = window.screenY + window.outerHeight - window.innerHeight - borderWidth;
@@ -191,16 +231,27 @@
             };
         }
 
-        // Convert element coordinates to screen coordinates
+        /**
+ * Convert DOM element coordinates to absolute screen coordinates for OpenXR positioning
+ * 
+ * SCROLL HANDLING INSIGHT:
+ * - getBoundingClientRect() returns coordinates relative to the VIEWPORT, not the page
+ * - When you scroll, rect.left/top automatically adjust to reflect the new viewport position
+ * - DO NOT manually add scroll values - this would double-count the scroll offset
+ * - Example: Element at page position (100, 500) with scroll (0, 200) 
+ *   -> getBoundingClientRect() returns top: 300 (already accounting for scroll)
+ * 
+ * COORDINATE CONVERSION:
+ * - rect.left/top = element position relative to viewport (0,0)
+ * - viewportX/Y = screen coordinates of viewport (0,0) 
+ * - Final screen position = viewport screen position + element viewport position
+ * - Multiply by devicePixelRatio for high-DPI displays
+ */
         function getScreenCoordinates(element) {
             const rect = element.getBoundingClientRect();
             const chromeInfo = getBrowserChromeInfo();
 
-            // getBoundingClientRect() returns viewport-relative coordinates
-            // So we DON'T need to add scroll - it's already accounted for
-            // rect.left/top change automatically when you scroll
-
-            // Calculate final screen coordinates using new viewport calculation
+            // Convert viewport-relative coordinates to absolute screen coordinates
             return {
                 x: Math.round((chromeInfo.viewportX + rect.left) * chromeInfo.devicePixelRatio),
                 y: Math.round((chromeInfo.viewportY + rect.top) * chromeInfo.devicePixelRatio),
@@ -236,6 +287,20 @@
             }
         });
 
+        /**
+         * Create OpenXR overlay positioned exactly over a DOM element
+         * 
+         * IMPLEMENTATION SUMMARY:
+         * 1. Get DOM element's viewport coordinates using getBoundingClientRect()
+         * 2. Convert to absolute screen coordinates using precise viewport calculation
+         * 3. Account for device pixel ratio for high-DPI displays
+         * 4. Send coordinates to OpenXR runtime via setWindowRect()
+         * 5. OpenXR positions the CONTENT AREA at the specified coordinates
+         * 6. Title bar appears above the content area automatically
+         * 
+         * RESULT: Perfect pixel-accurate overlay that follows DOM elements,
+         * works with scrolling, window resizing, and high-DPI displays.
+         */
         async function createOverlay() {
             if (typeof WebXROpenXRBridge === 'undefined') {
                 showStatus('WebXR OpenXR Bridge not available. Please install the extension.', 'error');
@@ -245,7 +310,7 @@
             try {
                 showStatus('Creating OpenXR overlay...', 'info');
 
-                // Get the image element position and size
+                // Get the image element position and size using our precise coordinate conversion
                 const imageElement = document.getElementById('targetImage');
                 const overlayRect = getScreenCoordinates(imageElement);
 
@@ -362,7 +427,13 @@
             }
         }
 
-        // Position OpenXR window at browser viewport top-left (0,0)
+        /**
+         * Test function: Position OpenXR window at browser viewport top-left (0,0)
+         * 
+         * This demonstrates the precise viewport coordinate calculation.
+         * The OpenXR content area should align perfectly with the browser's
+         * content area top-left corner, proving our coordinate math is correct.
+         */
         async function positionAtViewportTopLeft() {
             if (typeof WebXROpenXRBridge === 'undefined') {
                 showStatus('WebXR OpenXR Bridge not available. Please install the extension.', 'error');
