@@ -196,14 +196,14 @@
             const rect = element.getBoundingClientRect();
             const chromeInfo = getBrowserChromeInfo();
 
-            // Account for page scroll
-            const scrollX = window.scrollX || window.pageXOffset || 0;
-            const scrollY = window.scrollY || window.pageYOffset || 0;
+            // getBoundingClientRect() returns viewport-relative coordinates
+            // So we DON'T need to add scroll - it's already accounted for
+            // rect.left/top change automatically when you scroll
 
             // Calculate final screen coordinates using new viewport calculation
             return {
-                x: Math.round((chromeInfo.viewportX + rect.left + scrollX) * chromeInfo.devicePixelRatio),
-                y: Math.round((chromeInfo.viewportY + rect.top + scrollY) * chromeInfo.devicePixelRatio),
+                x: Math.round((chromeInfo.viewportX + rect.left) * chromeInfo.devicePixelRatio),
+                y: Math.round((chromeInfo.viewportY + rect.top) * chromeInfo.devicePixelRatio),
                 width: Math.round(rect.width * chromeInfo.devicePixelRatio),
                 height: Math.round(rect.height * chromeInfo.devicePixelRatio)
             };
@@ -260,8 +260,15 @@
                     imageRect: rect,
                     chromeInfo: chromeInfo,
                     scrollPosition: { scrollX, scrollY },
-                    calculatedX: (chromeInfo.viewportX + rect.left + scrollX) * chromeInfo.devicePixelRatio,
-                    calculatedY: (chromeInfo.viewportY + rect.top + scrollY) * chromeInfo.devicePixelRatio
+                    calculatedWithScroll: {
+                        x: (chromeInfo.viewportX + rect.left + scrollX) * chromeInfo.devicePixelRatio,
+                        y: (chromeInfo.viewportY + rect.top + scrollY) * chromeInfo.devicePixelRatio
+                    },
+                    calculatedWithoutScroll: {
+                        x: (chromeInfo.viewportX + rect.left) * chromeInfo.devicePixelRatio,
+                        y: (chromeInfo.viewportY + rect.top) * chromeInfo.devicePixelRatio
+                    },
+                    actualOverlayRect: overlayRect
                 });
 
                 // First, check if we need to exit fullscreen
