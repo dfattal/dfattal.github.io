@@ -860,52 +860,41 @@ if (typeof BinaryStream === 'undefined') {
         }
 
         async ensureVRSessionClosed() {
-            // Check if there's an active VR session
-            if (this.renderer && this.renderer.xr && this.renderer.xr.isPresenting) {
-                console.log('🔄 VR SESSION: Existing VR session detected, closing it...');
-                this.log('Closing existing VR session before starting new one');
+            console.log('🔄 VR SESSION: Checking for existing VR sessions...');
 
+            // FIRST: Check if OpenXR bridge can handle global session management
+            if (window.WebXROpenXRBridge) {
                 try {
-                    // End the current VR session
-                    const session = this.renderer.xr.getSession();
-                    if (session) {
-                        // Wait for session to end properly
-                        await new Promise((resolve) => {
-                            // Listen for session end event
-                            const onSessionEnd = () => {
-                                console.log('✅ VR SESSION: Previous session closed successfully');
-                                this.log('Previous VR session closed');
-                                session.removeEventListener('end', onSessionEnd);
-                                resolve();
-                            };
+                    // Check if bridge has the new session management methods
+                    if (typeof window.WebXROpenXRBridge.forceCloseActiveSession === 'function') {
+                        console.log('🔧 VR SESSION: Using OpenXR bridge global session management');
 
-                            session.addEventListener('end', onSessionEnd);
+                        // Check if any session is active system-wide
+                        const isAnyActive = await window.WebXROpenXRBridge.isAnySessionActive();
+                        if (isAnyActive) {
+                            console.log('⚠️ VR SESSION: Active session detected system-wide, forcing close...');
+                            await window.WebXROpenXRBridge.forceCloseActiveSession();
+                            console.log('✅ VR SESSION: Global session closed via OpenXR bridge');
 
-                            // Request session end
-                            session.end().catch(error => {
-                                console.log('⚠️ VR SESSION: Error ending session:', error.message);
-                                // Still resolve to continue - session might already be ending
-                                resolve();
-                            });
-
-                            // Timeout fallback - don't wait forever
-                            setTimeout(() => {
-                                console.log('⏰ VR SESSION: Session close timeout, proceeding anyway');
-                                session.removeEventListener('end', onSessionEnd);
-                                resolve();
-                            }, 2000); // 2 second timeout
-                        });
-
-                        // Small delay to ensure cleanup is complete
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                            // Wait a moment for cleanup
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        } else {
+                            console.log('✅ VR SESSION: No active sessions detected system-wide');
+                        }
+                    } else {
+                        console.log('⚠️ VR SESSION: OpenXR bridge does not support global session management');
+                        console.log('💡 VR SESSION: Consider updating the WebXR-OpenXR Bridge extension');
+                        // Fall back to local session check
+                        await this.ensureLocalVRSessionClosed();
                     }
                 } catch (error) {
-                    console.log('❌ VR SESSION: Error during session cleanup:', error.message);
-                    this.log('Error closing previous VR session: ' + error.message);
-                    // Continue anyway - might be able to start new session
+                    console.log('❌ VR SESSION: Error with OpenXR bridge session management:', error.message);
+                    // Fall back to local session check
+                    await this.ensureLocalVRSessionClosed();
                 }
             } else {
-                console.log('✅ VR SESSION: No active VR session detected');
+                console.log('⚠️ VR SESSION: OpenXR bridge not available, checking local session only');
+                await this.ensureLocalVRSessionClosed();
             }
 
             // Reset flags for new session
@@ -919,6 +908,56 @@ if (typeof BinaryStream === 'undefined') {
             this.IPD = null;
 
             console.log('🔄 VR SESSION: Session state reset for new VR session');
+        }
+
+        async ensureLocalVRSessionClosed() {
+            // Check if there's an active VR session in this tab only
+            if (this.renderer && this.renderer.xr && this.renderer.xr.isPresenting) {
+                console.log('🔄 VR SESSION: Local VR session detected, closing it...');
+                this.log('Closing local VR session before starting new one');
+
+                try {
+                    // End the current VR session
+                    const session = this.renderer.xr.getSession();
+                    if (session) {
+                        // Wait for session to end properly
+                        await new Promise((resolve) => {
+                            // Listen for session end event
+                            const onSessionEnd = () => {
+                                console.log('✅ VR SESSION: Local session closed successfully');
+                                this.log('Local VR session closed');
+                                session.removeEventListener('end', onSessionEnd);
+                                resolve();
+                            };
+
+                            session.addEventListener('end', onSessionEnd);
+
+                            // Request session end
+                            session.end().catch(error => {
+                                console.log('⚠️ VR SESSION: Error ending local session:', error.message);
+                                // Still resolve to continue - session might already be ending
+                                resolve();
+                            });
+
+                            // Timeout fallback - don't wait forever
+                            setTimeout(() => {
+                                console.log('⏰ VR SESSION: Local session close timeout, proceeding anyway');
+                                session.removeEventListener('end', onSessionEnd);
+                                resolve();
+                            }, 2000); // 2 second timeout
+                        });
+
+                        // Small delay to ensure cleanup is complete
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (error) {
+                    console.log('❌ VR SESSION: Error during local session cleanup:', error.message);
+                    this.log('Error closing local VR session: ' + error.message);
+                    // Continue anyway - might be able to start new session
+                }
+            } else {
+                console.log('✅ VR SESSION: No local VR session detected in this tab');
+            }
         }
 
         // OpenXR Window Positioning using pre-calculated coordinates from content script

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenXR Session Management Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .demo-container {
+            text-align: center;
+            max-width: 800px;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .control-button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s ease;
+            min-width: 200px;
+        }
+
+        .control-button:hover {
+            background: #0056b3;
+        }
+
+        .control-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .danger-button {
+            background: #dc3545;
+        }
+
+        .danger-button:hover {
+            background: #c82333;
+        }
+
+        .status {
+            padding: 15px 20px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #17a2b8;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #dc3545;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
+        }
+
+        .session-info {
+            background: #e9ecef;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .session-info h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+
+        .session-info pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+
+        .auto-refresh {
+            margin: 20px 0;
+        }
+
+        .auto-refresh label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+            border-left: 4px solid #007acc;
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+            color: #007acc;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="demo-container">
+        <h1>🎮 OpenXR Session Management Demo</h1>
+
+        <div class="instructions">
+            <h3>Session Management Features</h3>
+            <p>This demo showcases the new session management capabilities of the OpenXR bridge:</p>
+            <ul>
+                <li><strong>Check Session Status:</strong> Detect if any VR session is currently active system-wide</li>
+                <li><strong>Get Session Info:</strong> Retrieve detailed information about the active session</li>
+                <li><strong>Force Close Session:</strong> Forcibly terminate any active VR session (use with caution)
+                </li>
+            </ul>
+            <p><strong>Note:</strong> These functions work globally across all browser tabs and applications using the
+                OpenXR runtime.</p>
+        </div>
+
+        <div class="auto-refresh">
+            <label>
+                <input type="checkbox" id="autoRefresh" checked>
+                Auto-refresh session status every 2 seconds
+            </label>
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button class="control-button" onclick="checkSessionStatus()">
+                📊 Check Session Status
+            </button>
+            <button class="control-button" onclick="getSessionInfo()">
+                📋 Get Session Info
+            </button>
+            <button class="control-button danger-button" onclick="forceCloseSession()">
+                ⚠️ Force Close Session
+            </button>
+        </div>
+
+        <div id="status" style="display: none;"></div>
+
+        <div class="session-info" id="sessionInfo" style="display: none;">
+            <h3>Session Information</h3>
+            <pre id="sessionData"></pre>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        let extensionAvailable = false;
+
+        // Check if extension is available
+        function checkExtensionAvailability() {
+            if (typeof WebXROpenXRBridge === 'undefined') {
+                showStatus('WebXR OpenXR Bridge extension not detected. Please install the extension and make sure the OpenXR runtime is running.', 'error');
+                return false;
+            }
+            extensionAvailable = true;
+            return true;
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            if (!checkExtensionAvailability()) {
+                // Retry after a delay
+                setTimeout(() => {
+                    if (checkExtensionAvailability()) {
+                        showStatus('WebXR OpenXR Bridge detected and ready!', 'success');
+                        setTimeout(() => hideStatus(), 3000);
+                        startAutoRefresh();
+                    }
+                }, 2000);
+            } else {
+                showStatus('WebXR OpenXR Bridge detected and ready!', 'success');
+                setTimeout(() => hideStatus(), 3000);
+                startAutoRefresh();
+            }
+
+            // Set up auto-refresh toggle
+            document.getElementById('autoRefresh').addEventListener('change', function (e) {
+                if (e.target.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+        });
+
+        function startAutoRefresh() {
+            if (!extensionAvailable) return;
+
+            stopAutoRefresh(); // Clear any existing interval
+            autoRefreshInterval = setInterval(() => {
+                checkSessionStatus(true); // Silent refresh
+            }, 2000);
+
+            // Initial check
+            checkSessionStatus(true);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        async function checkSessionStatus(silent = false) {
+            if (!extensionAvailable) {
+                showStatus('Extension not available', 'error');
+                return;
+            }
+
+            try {
+                if (!silent) {
+                    showStatus('Checking session status...', 'info');
+                }
+
+                const isActive = await WebXROpenXRBridge.isAnySessionActive();
+
+                if (!silent) {
+                    if (isActive) {
+                        showStatus('✅ VR Session is currently ACTIVE', 'success');
+                    } else {
+                        showStatus('❌ No VR session currently active', 'warning');
+                    }
+                } else {
+                    // Update a small indicator for silent refresh
+                    updateSessionIndicator(isActive);
+                }
+
+            } catch (error) {
+                showStatus(`❌ Error checking session status: ${error.message}`, 'error');
+                console.error('Session status error:', error);
+            }
+        }
+
+        async function getSessionInfo() {
+            if (!extensionAvailable) {
+                showStatus('Extension not available', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Getting session information...', 'info');
+
+                const sessionInfo = await WebXROpenXRBridge.getActiveSessionInfo();
+
+                // Display the session info
+                document.getElementById('sessionData').textContent = JSON.stringify(sessionInfo, null, 2);
+                document.getElementById('sessionInfo').style.display = 'block';
+
+                if (sessionInfo.isActive) {
+                    showStatus('✅ Retrieved active session information', 'success');
+                } else {
+                    showStatus('ℹ️ No active session found', 'info');
+                }
+
+            } catch (error) {
+                showStatus(`❌ Error getting session info: ${error.message}`, 'error');
+                console.error('Session info error:', error);
+            }
+        }
+
+        async function forceCloseSession() {
+            if (!extensionAvailable) {
+                showStatus('Extension not available', 'error');
+                return;
+            }
+
+            // Confirm the action
+            if (!confirm('Are you sure you want to force close the active VR session? This will immediately terminate any running VR application.')) {
+                return;
+            }
+
+            try {
+                showStatus('Force closing active session...', 'warning');
+
+                await WebXROpenXRBridge.forceCloseActiveSession();
+
+                showStatus('✅ Force close command sent successfully', 'success');
+
+                // Refresh session status after a short delay
+                setTimeout(() => {
+                    checkSessionStatus();
+                }, 1000);
+
+            } catch (error) {
+                showStatus(`❌ Error force closing session: ${error.message}`, 'error');
+                console.error('Force close error:', error);
+            }
+        }
+
+        function updateSessionIndicator(isActive) {
+            const indicator = document.getElementById('sessionIndicator');
+            if (!indicator) {
+                // Create indicator if it doesn't exist
+                const newIndicator = document.createElement('div');
+                newIndicator.id = 'sessionIndicator';
+                newIndicator.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 8px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    z-index: 1000;
+                `;
+                document.body.appendChild(newIndicator);
+            }
+
+            const indicator_elem = document.getElementById('sessionIndicator');
+            if (isActive) {
+                indicator_elem.textContent = '🟢 VR Active';
+                indicator_elem.style.background = '#d4edda';
+                indicator_elem.style.color = '#155724';
+                indicator_elem.style.border = '1px solid #28a745';
+            } else {
+                indicator_elem.textContent = '🔴 VR Inactive';
+                indicator_elem.style.background = '#fff3cd';
+                indicator_elem.style.color = '#856404';
+                indicator_elem.style.border = '1px solid #ffc107';
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+            statusElement.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+    </script>
+</body>
+
+</html>
