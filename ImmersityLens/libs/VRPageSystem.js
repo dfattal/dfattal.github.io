@@ -863,7 +863,7 @@ if (typeof BinaryStream === 'undefined') {
             console.log('🔄 VR SESSION: Checking for existing VR sessions...');
 
             // FIRST: Check if OpenXR bridge can handle global session management
-            if (window.WebXROpenXRBridge) {
+            if (typeof window.WebXROpenXRBridge !== 'undefined') {
                 try {
                     // Check if bridge has the new session management methods
                     if (typeof window.WebXROpenXRBridge.forceCloseActiveSession === 'function') {
@@ -968,8 +968,6 @@ if (typeof BinaryStream === 'undefined') {
             // Check if WebXROpenXRBridge is available
             if (typeof window.WebXROpenXRBridge === 'undefined') {
                 console.log('❌ OPENXR POSITIONING: WebXROpenXRBridge not available');
-                console.log('🔍 OPENXR DEBUG: window.WebXROpenXRBridge =', window.WebXROpenXRBridge);
-                console.log('🔍 OPENXR DEBUG: typeof check =', typeof window.WebXROpenXRBridge);
                 this.log('WebXROpenXRBridge not available - positioning skipped');
                 return;
             }
@@ -1037,6 +1035,13 @@ if (typeof BinaryStream === 'undefined') {
         }
 
         applyOpenXRSettings(leftCam, rightCam) {
+            // Check if WebXROpenXRBridge is available first
+            if (typeof window.WebXROpenXRBridge === 'undefined') {
+                console.log('🔧 OPENXR SETTINGS: WebXROpenXRBridge not available, skipping settings');
+                this.log('WebXROpenXRBridge not available - settings skipped');
+                return;
+            }
+
             console.log('🔧 OPENXR SETTINGS: Applying projection method and settings...');
             try {
                 console.log('🔧 OPENXR SETTINGS: Calling setProjectionMethod(1)...');
@@ -2604,38 +2609,37 @@ void main(void) {
                     console.log('🚀 OPENXR SETUP: Starting OpenXR configuration after VR session start...');
                     setTimeout(() => {
                         console.log('⏰ OPENXR SETUP: 1-second delay complete, checking bridge availability...');
-                        if (window.WebXROpenXRBridge) {
-                            console.log('✅ OPENXR SETUP: WebXROpenXRBridge is available');
-                            console.log('🔍 OPENXR SETUP: Bridge methods available:', Object.getOwnPropertyNames(window.WebXROpenXRBridge));
+                        if (typeof window.WebXROpenXRBridge === 'undefined') {
+                            console.log('❌ OPENXR SETUP: WebXROpenXRBridge not available, skipping all OpenXR operations');
+                            this.log("WebXROpenXRBridge not available - all operations skipped");
+                            return;
+                        }
 
-                            // FIRST: Position OpenXR window as overlay (do this BEFORE projection method)
-                            if (!this.openXRWindowPositioned && this.imageCoordinates) {
-                                console.log('🎯 OPENXR SETUP: Starting window positioning (image coordinates available)');
-                                this.positionOpenXRWindow()
-                                    .then(() => {
-                                        console.log('✅ OPENXR SETUP: Window positioning completed successfully');
-                                        this.openXRWindowPositioned = true;
-                                    })
-                                    .catch(error => {
-                                        console.log('❌ OPENXR SETUP: Window positioning failed:', error.message);
-                                        // Continue with projection method even if positioning fails
-                                    })
-                                    .finally(() => {
-                                        console.log('🔧 OPENXR SETUP: Proceeding to apply projection settings...');
-                                        // THEN: Set projection method and reset settings
-                                        this.applyOpenXRSettings(leftCam, rightCam);
-                                    });
-                            } else {
-                                console.log('⚠️ OPENXR SETUP: Skipping window positioning (no image coordinates or already positioned)');
-                                console.log('🔍 OPENXR SETUP: openXRWindowPositioned =', this.openXRWindowPositioned);
-                                console.log('🔍 OPENXR SETUP: imageCoordinates =', !!this.imageCoordinates);
-                                // No coordinates, just apply settings
-                                this.applyOpenXRSettings(leftCam, rightCam);
-                            }
+                        console.log('✅ OPENXR SETUP: WebXROpenXRBridge is available');
+
+                        // FIRST: Position OpenXR window as overlay (do this BEFORE projection method)
+                        if (!this.openXRWindowPositioned && this.imageCoordinates) {
+                            console.log('🎯 OPENXR SETUP: Starting window positioning (image coordinates available)');
+                            this.positionOpenXRWindow()
+                                .then(() => {
+                                    console.log('✅ OPENXR SETUP: Window positioning completed successfully');
+                                    this.openXRWindowPositioned = true;
+                                })
+                                .catch(error => {
+                                    console.log('❌ OPENXR SETUP: Window positioning failed:', error.message);
+                                    // Continue with projection method even if positioning fails
+                                })
+                                .finally(() => {
+                                    console.log('🔧 OPENXR SETUP: Proceeding to apply projection settings...');
+                                    // THEN: Set projection method and reset settings
+                                    this.applyOpenXRSettings(leftCam, rightCam);
+                                });
                         } else {
-                            console.log('❌ OPENXR SETUP: WebXROpenXRBridge not available');
-                            console.log('🔍 OPENXR SETUP: window.WebXROpenXRBridge =', window.WebXROpenXRBridge);
-                            this.log("WebXROpenXRBridge not available");
+                            console.log('⚠️ OPENXR SETUP: Skipping window positioning (no image coordinates or already positioned)');
+                            console.log('🔍 OPENXR SETUP: openXRWindowPositioned =', this.openXRWindowPositioned);
+                            console.log('🔍 OPENXR SETUP: imageCoordinates =', !!this.imageCoordinates);
+                            // No coordinates, just apply settings
+                            this.applyOpenXRSettings(leftCam, rightCam);
                         }
                     }, 1000); // 1 second delay
                 }
