@@ -799,6 +799,27 @@ class lifViewer {
             return null;
         }
 
+        // GENERIC: Skip nested container detection for carousel/list items
+        // Images in carousels/lists are typically positioned correctly relative to their immediate container
+        const carouselContainer = this.originalImage.closest('li') ||
+            this.originalImage.closest('[class*="carousel"]') ||
+            this.originalImage.closest('[class*="slider"]') ||
+            this.originalImage.closest('[class*="feed"]') ||
+            this.originalImage.closest('[class*="list-item"]') ||
+            this.originalImage.closest('[role="listitem"]');
+
+        if (carouselContainer) {
+            console.log('🎠 Carousel/list item detected:', {
+                carouselElement: carouselContainer.className || carouselContainer.tagName,
+                containerElement: this.container.className || this.container.tagName
+            });
+
+            // For carousel items, always skip nested container offset calculation
+            // The image should be positioned relative to its immediate container (usually an <a> tag)
+            console.log('🎠 Skipping nested container offset calculation for carousel item');
+            return null;
+        }
+
         // Get the original image's position relative to our container
         const containerRect = this.container.getBoundingClientRect();
         const imageRect = this.originalImage.getBoundingClientRect();
@@ -1423,19 +1444,25 @@ class lifViewer {
         // Detect and handle overlay elements that might interfere with mouse events
         this.setupOverlayEventPropagation(startAnimation, stopAnimation);
 
-        // Add container-level fallback for Instagram carousel interference
-        if (this.container && window.location.hostname.includes('instagram.com')) {
+        // GENERIC: Add container-level fallback for carousel/interactive element interference
+        const hasCarouselInterference = this.originalImage.closest('li') ||
+            this.originalImage.closest('[class*="carousel"]') ||
+            this.originalImage.closest('[class*="slider"]') ||
+            this.originalImage.closest('[tabindex]') ||
+            this.originalImage.closest('[role="listitem"]');
+
+        if (this.container && hasCarouselInterference) {
             let containerMouseState = false;
             const containerMouseMove = (e) => {
                 const nowOverImage = this.isMouseOverImageArea(e);
                 if (nowOverImage && !containerMouseState) {
                     containerMouseState = true;
                     startAnimation();
-                    console.log('🎯 Instagram container fallback: mouse enter');
+                    console.log('🎠 Carousel interference fallback: mouse enter');
                 } else if (!nowOverImage && containerMouseState) {
                     containerMouseState = false;
                     stopAnimation();
-                    console.log('🎯 Instagram container fallback: mouse leave');
+                    console.log('🎠 Carousel interference fallback: mouse leave');
                 }
             };
 
@@ -1443,11 +1470,8 @@ class lifViewer {
             this.container.addEventListener('mouseleave', () => {
                 containerMouseState = false;
                 stopAnimation();
-                console.log('🎯 Instagram container fallback: container leave');
+                console.log('🎠 Carousel interference fallback: container leave');
             }, { passive: true });
-
-            // Set up mutation observer to detect carousel changes and re-establish event handlers
-            this.setupCarouselMutationObserver(startAnimation, stopAnimation);
         }
 
         // Canvas always receives events
@@ -1608,11 +1632,17 @@ class lifViewer {
                 currentElement.hasAttribute('data-link-type') ||
                 currentElement.style.cursor === 'pointer' ||
                 currentElement.hasAttribute('href') ||
-                // Instagram-specific carousel patterns
+                // GENERIC: Carousel and interactive element patterns
                 (currentElement.className && (
-                    currentElement.className.includes('x1i10hfl') || // Instagram clickable div
-                    currentElement.className.includes('_acaz') ||    // Instagram carousel item
-                    currentElement.className.includes('_aagu')      // Instagram image wrapper
+                    currentElement.className.includes('carousel') ||
+                    currentElement.className.includes('slider') ||
+                    currentElement.className.includes('list-item') ||
+                    currentElement.className.includes('feed') ||
+                    // Generic clickable patterns (short class names often indicate interactive elements)
+                    (currentElement.className.split(' ').some(cls =>
+                        cls.length <= 10 && /^[a-z0-9_-]+$/i.test(cls) &&
+                        (cls.includes('x') || cls.includes('_') || cls.includes('-'))
+                    ))
                 ))) {
 
                 // Check if this element covers the image area
@@ -1718,8 +1748,6 @@ class lifViewer {
             return false;
         }
     }
-
-    
 
     async replaceKeys(obj, oldKeys, newKeys) {
         if (typeof obj !== 'object' || obj === null) {

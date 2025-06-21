@@ -1882,6 +1882,22 @@ function analyzeLayoutPattern(element, img) {
         }
     }
 
+    // 7. GENERIC: Detect carousel/list/feed patterns
+    const isInCarousel = img.closest('li') ||
+        img.closest('[class*="carousel"]') ||
+        img.closest('[class*="slider"]') ||
+        img.closest('[class*="feed"]') ||
+        img.closest('[class*="list-item"]') ||
+        img.closest('[role="listitem"]');
+
+    if (isInCarousel) {
+        analysis.isCarouselItem = true;
+        if (!analysis.preserveOriginal) {
+            analysis.type = 'carousel-item';
+            analysis.reason = 'Image is part of a carousel/list/feed layout';
+        }
+    }
+
     return analysis;
 }
 
