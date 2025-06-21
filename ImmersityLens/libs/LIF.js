@@ -1423,6 +1423,33 @@ class lifViewer {
         // Detect and handle overlay elements that might interfere with mouse events
         this.setupOverlayEventPropagation(startAnimation, stopAnimation);
 
+        // Add container-level fallback for Instagram carousel interference
+        if (this.container && window.location.hostname.includes('instagram.com')) {
+            let containerMouseState = false;
+            const containerMouseMove = (e) => {
+                const nowOverImage = this.isMouseOverImageArea(e);
+                if (nowOverImage && !containerMouseState) {
+                    containerMouseState = true;
+                    startAnimation();
+                    console.log('🎯 Instagram container fallback: mouse enter');
+                } else if (!nowOverImage && containerMouseState) {
+                    containerMouseState = false;
+                    stopAnimation();
+                    console.log('🎯 Instagram container fallback: mouse leave');
+                }
+            };
+
+            this.container.addEventListener('mousemove', containerMouseMove, { passive: true });
+            this.container.addEventListener('mouseleave', () => {
+                containerMouseState = false;
+                stopAnimation();
+                console.log('🎯 Instagram container fallback: container leave');
+            }, { passive: true });
+
+            // Set up mutation observer to detect carousel changes and re-establish event handlers
+            this.setupCarouselMutationObserver(startAnimation, stopAnimation);
+        }
+
         // Canvas always receives events
         this.canvas.style.pointerEvents = 'auto';
         this.canvas.style.display = 'none'; // Start hidden, will show on animation start
@@ -1537,10 +1564,12 @@ class lifViewer {
                         // Mouse entered image area
                         isMouseOverImage = true;
                         startAnimation();
+                        console.log('🎯 Overlay detected mouse enter image area');
                     } else if (!nowOverImage && isMouseOverImage) {
                         // Mouse left image area
                         isMouseOverImage = false;
                         stopAnimation();
+                        console.log('🎯 Overlay detected mouse leave image area');
                     }
                 };
 
@@ -1578,7 +1607,13 @@ class lifViewer {
                 currentElement.classList.contains('link') ||
                 currentElement.hasAttribute('data-link-type') ||
                 currentElement.style.cursor === 'pointer' ||
-                currentElement.hasAttribute('href')) {
+                currentElement.hasAttribute('href') ||
+                // Instagram-specific carousel patterns
+                (currentElement.className && (
+                    currentElement.className.includes('x1i10hfl') || // Instagram clickable div
+                    currentElement.className.includes('_acaz') ||    // Instagram carousel item
+                    currentElement.className.includes('_aagu')      // Instagram image wrapper
+                ))) {
 
                 // Check if this element covers the image area
                 if (this.doesElementCoverImage(currentElement)) {
@@ -1683,6 +1718,8 @@ class lifViewer {
             return false;
         }
     }
+
+    
 
     async replaceKeys(obj, oldKeys, newKeys) {
         if (typeof obj !== 'object' || obj === null) {
