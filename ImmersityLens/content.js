@@ -3596,25 +3596,19 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
 
                     if ((hasExplicitDimensions && isCenteredOrFitted) || hasObjectFit) {
-                        // For centered/fitted images with explicit dimensions, prefer HTML attributes over natural size
-                        // For object-fit images without explicit dimensions, use natural size
-                        if (hasExplicitDimensions && isCenteredOrFitted) {
-                            // Prioritize HTML attributes for explicitly sized centered/fitted images (LinkedIn case)
-                            effectiveWidth = img.width || img.naturalWidth || imgRect.width;
-                            effectiveHeight = img.height || img.naturalHeight || imgRect.height;
-                        } else {
-                            // For object-fit images without explicit dimensions, use natural size (DeviantArt case)
-                            effectiveWidth = img.naturalWidth || img.width || imgRect.width;
-                            effectiveHeight = img.naturalHeight || img.height || imgRect.height;
-                        }
-                        console.log('🎯 Centered/fitted/object-fit image detected - using image dimensions:', effectiveWidth + 'x' + effectiveHeight, {
+                        // For centered/fitted images, use the image's actual rendered size
+                        // Since the canvas will inherit the same CSS classes, it should get the same constraints
+                        effectiveWidth = imgRect.width;
+                        effectiveHeight = imgRect.height;
+
+                        console.log('🎯 Centered/fitted/object-fit image detected - canvas will inherit image classes for proper sizing:', Math.round(effectiveWidth) + 'x' + Math.round(effectiveHeight), {
                             hasExplicitDimensions,
                             isCenteredOrFitted,
                             hasObjectFit,
                             objectFit: computedStyle.objectFit,
-                            naturalSize: img.naturalWidth + 'x' + img.naturalHeight,
-                            attributeSize: img.width + 'x' + img.height,
-                            priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
+                            renderedSize: Math.round(imgRect.width) + 'x' + Math.round(imgRect.height),
+                            containerSize: Math.round(containerRect.width) + 'x' + Math.round(containerRect.height),
+                            imageClasses: img.className
                         });
                     } else {
                         // Default behavior: use container dimensions for aspect ratio containers

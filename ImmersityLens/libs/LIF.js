@@ -724,6 +724,12 @@ class lifViewer {
         this.gl = this.canvas.getContext('webgl');
         this.canvas.style.display = 'none';
         this.canvas.dataset.lifLayoutMode = this.layoutMode;
+
+        // Inherit CSS classes from the original image for proper styling constraints
+        if (this.originalImage && this.originalImage.className) {
+            this.canvas.className = this.originalImage.className;
+            console.log('🎨 Canvas inheriting image classes:', this.originalImage.className);
+        }
     }
 
     /**
@@ -747,18 +753,41 @@ class lifViewer {
             }
         }
 
-        this.canvas.style.cssText = `
-            width: ${dimensions.width}px !important;
-            height: ${dimensions.height}px !important;
-            max-width: none !important;
-            max-height: none !important;
-            position: absolute;
-            ${positioningStyle}
-            z-index: ${this.canvasZIndex};
-            display: none;
-            pointer-events: auto;
-            cursor: pointer;
-        `;
+        // Check if canvas has inherited CSS classes that should handle sizing
+        const hasInheritedClasses = this.canvas.className && this.canvas.className.trim().length > 0;
+
+        if (hasInheritedClasses) {
+            // Let inherited CSS classes handle width/height, only set positioning and display properties
+            this.canvas.style.cssText = `
+                max-width: none !important;
+                max-height: none !important;
+                position: absolute !important;
+                ${positioningStyle}
+                z-index: ${this.canvasZIndex} !important;
+                display: none !important;
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                object-fit: none !important;
+                object-position: initial !important;
+            `;
+            console.log('🎨 Canvas has inherited classes - letting CSS handle sizing');
+        } else {
+            // No inherited classes, use explicit dimensions
+            this.canvas.style.cssText = `
+                width: ${dimensions.width}px !important;
+                height: ${dimensions.height}px !important;
+                max-width: none !important;
+                max-height: none !important;
+                position: absolute !important;
+                ${positioningStyle}
+                z-index: ${this.canvasZIndex} !important;
+                display: none !important;
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                object-fit: none !important;
+                object-position: initial !important;
+            `;
+        }
     }
 
     /**
@@ -1223,19 +1252,32 @@ class lifViewer {
 
                         console.log(`✅ Standard layout sync - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                     } else {
-                        // Complex layouts: Use LIF result for internal dimensions, target for display
-                        this.canvas.width = lifWidth;
-                        this.canvas.height = lifHeight;
+                        // Complex layouts: For images with inherited CSS classes, use the original image's rendered size
+                        // This ensures canvas attributes match what the user actually sees
+                        const originalImageRect = this.originalImage.getBoundingClientRect();
+                        const useRenderedSize = originalImageRect.width > 0 && originalImageRect.height > 0;
 
-                        if (targetDimensions) {
-                            this.canvas.style.width = `${targetDimensions.width}px`;
-                            this.canvas.style.height = `${targetDimensions.height}px`;
+                        if (useRenderedSize) {
+                            // Use the original image's actual rendered size for both internal and display
+                            this.canvas.width = Math.round(originalImageRect.width);
+                            this.canvas.height = Math.round(originalImageRect.height);
+                            // Remove explicit style dimensions to let CSS classes handle sizing
+                            this.canvas.style.width = '';
+                            this.canvas.style.height = '';
+                            console.log(`✅ Complex layout sync - Using original image rendered size: ${this.canvas.width}x${this.canvas.height} (CSS classes will handle display sizing)`);
                         } else {
-                            this.canvas.style.width = `${lifWidth}px`;
-                            this.canvas.style.height = `${lifHeight}px`;
+                            // Fallback to previous behavior if rendered size is not available
+                            this.canvas.width = lifWidth;
+                            this.canvas.height = lifHeight;
+                            if (targetDimensions) {
+                                this.canvas.style.width = `${targetDimensions.width}px`;
+                                this.canvas.style.height = `${targetDimensions.height}px`;
+                            } else {
+                                this.canvas.style.width = `${lifWidth}px`;
+                                this.canvas.style.height = `${lifHeight}px`;
+                            }
+                            console.log(`✅ Complex layout sync - Fallback: Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                         }
-
-                        console.log(`✅ Complex layout sync - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                     }
 
                     resolve();
