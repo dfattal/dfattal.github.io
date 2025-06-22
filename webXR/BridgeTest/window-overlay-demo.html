@@ -174,6 +174,13 @@
             </button>
         </div>
 
+        <div style="margin: 20px 0; text-align: center;">
+            <p style="font-size: 14px; color: #666; margin: 0;">
+                <strong>Now with async/await timing!</strong> Settings are applied when Promises resolve,
+                eliminating the need for guesswork delays.
+            </p>
+        </div>
+
 
 
         <div id="status" style="display: none;"></div>
@@ -339,17 +346,17 @@
                     actualOverlayRect: overlayRect
                 });
 
-                // CRITICAL: Handle fullscreen exit timing
+                // CRITICAL: Handle fullscreen exit with async/await timing
                 // ISSUE: If OpenXR is in fullscreen mode, positioning commands are ignored or incorrect
-                // SOLUTION: Exit fullscreen and wait 500ms for the transition to complete
-                // This timing is essential - without the delay, the first positioning attempt fails
+                // SOLUTION: Exit fullscreen and await the setting to be applied - no more guesswork delays!
+                // The new async system ensures the fullscreen state is actually changed before proceeding
                 try {
                     const isFullscreen = await WebXROpenXRBridge.getFullScreen();
                     if (isFullscreen) {
-                        showStatus('Exiting fullscreen first...', 'info');
+                        showStatus('Exiting fullscreen...', 'info');
                         await WebXROpenXRBridge.setFullScreen(0);
-                        // TIMING REQUIREMENT: 500ms delay is critical for fullscreen transition
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // No setTimeout needed! The Promise resolves when fullscreen is actually disabled
+                        showStatus('Fullscreen exited, positioning window...', 'info');
                     }
                 } catch (error) {
                     console.warn('Could not check/set fullscreen state:', error);
@@ -412,13 +419,13 @@
 
                 console.log('Screen (0,0) coordinates:', overlayRect);
 
-                // Handle fullscreen exit timing (see main createOverlay function for detailed explanation)
+                // Handle fullscreen exit with async/await timing (no more delays needed!)
                 try {
                     const isFullscreen = await WebXROpenXRBridge.getFullScreen();
                     if (isFullscreen) {
-                        showStatus('Exiting fullscreen first...', 'info');
+                        showStatus('Exiting fullscreen...', 'info');
                         await WebXROpenXRBridge.setFullScreen(0);
-                        await new Promise(resolve => setTimeout(resolve, 500)); // Critical 500ms delay
+                        // No setTimeout needed! Promise resolves when fullscreen is actually disabled
                     }
                 } catch (error) {
                     console.warn('Could not check/set fullscreen state:', error);
@@ -496,13 +503,13 @@
                     } : 'not supported'
                 });
 
-                // Handle fullscreen exit timing (see main createOverlay function for detailed explanation)
+                // Handle fullscreen exit with async/await timing (no more delays needed!)
                 try {
                     const isFullscreen = await WebXROpenXRBridge.getFullScreen();
                     if (isFullscreen) {
-                        showStatus('Exiting fullscreen first...', 'info');
+                        showStatus('Exiting fullscreen...', 'info');
                         await WebXROpenXRBridge.setFullScreen(0);
-                        await new Promise(resolve => setTimeout(resolve, 500)); // Critical 500ms delay
+                        // No setTimeout needed! Promise resolves when fullscreen is actually disabled
                     }
                 } catch (error) {
                     console.warn('Could not check/set fullscreen state:', error);

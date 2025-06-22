@@ -4,130 +4,354 @@ This document describes the JavaScript API for interacting with OpenXR runtime s
 
 ## Overview
 
-The WebXR-OpenXR Bridge provides a JavaScript API that allows WebXR applications to read and modify OpenXR runtime settings. This enables custom IPD adjustments, scene scaling, and projection modifications directly from web applications.
+The WebXR-OpenXR Bridge provides a JavaScript API to control OpenXR runtime settings from web applications. **All methods return Promises** and can be used with async/await for clean, sequential operations.
+
+⚡ **True Async Behavior**: SET operations now wait for **actual confirmation** from the OpenXR runtime that settings have been applied, not just that the message was sent.
 
 The API is exposed as `window.WebXROpenXRBridge` and is available on any webpage after the extension is installed.
 
-## API Methods
+## API Reference
 
-All methods return Promises that resolve with the requested data or reject with an error.
-
-### Getting Values
-
-#### `getIPDScale()`
-
-Returns the current IPD scale value.
-
+### IPD Scale
 ```javascript
-window.WebXROpenXRBridge.getIPDScale()
-  .then(scale => console.log('Current IPD Scale:', scale))
-  .catch(err => console.error('Error:', err));
+// Get current IPD scale
+const ipdScale = await WebXROpenXRBridge.getIPDScale();
+
+// Set IPD scale (async - waits for actual application)
+await WebXROpenXRBridge.setIPDScale(1.2);
+console.log("IPD scale is now actually applied!"); // ✅ This runs AFTER setting is applied
 ```
 
-#### `getSceneScale()`
-
-Returns the current scene scale value.
-
+### Scene Scale
 ```javascript
-window.WebXROpenXRBridge.getSceneScale()
-  .then(scale => console.log('Current Scene Scale:', scale))
-  .catch(err => console.error('Error:', err));
+// Get current scene scale
+const sceneScale = await WebXROpenXRBridge.getSceneScale();
+
+// Set scene scale (async - waits for actual application)
+await WebXROpenXRBridge.setSceneScale(1.5);
 ```
 
-#### `getParallaxStrength()`
-
-Returns the current parallax strength value.
-
+### Projection Method
 ```javascript
-window.WebXROpenXRBridge.getParallaxStrength()
-  .then(strength => console.log('Current Parallax Strength:', strength))
-  .catch(err => console.error('Error:', err));
+// Get current projection method (0 = Camera Centric, 1 = Display Centric)
+const method = await WebXROpenXRBridge.getProjectionMethod();
+
+// Set projection method (async - waits for actual application)
+await WebXROpenXRBridge.setProjectionMethod(1); // Display Centric
+console.log("Projection method change is now visible!"); // ✅ Runs after visual change
 ```
 
-#### `getSessionProjection()`
-
-Returns the current session projection settings.
-
+### Parallax Strength
 ```javascript
-window.WebXROpenXRBridge.getSessionProjection()
-  .then(projection => console.log('Current Projection:', projection))
-  .catch(err => console.error('Error:', err));
+// Get current parallax strength
+const parallax = await WebXROpenXRBridge.getParallaxStrength();
+
+// Set parallax strength (async - waits for actual application)
+await WebXROpenXRBridge.setParallaxStrength(0.8);
 ```
 
-The returned projection object has the following structure:
+### Convergence
 ```javascript
-{
-  type: 0, // Projection type (integer)
-  fov: 90  // Field of view in degrees
+// Get current convergence offset
+const convergence = await WebXROpenXRBridge.getConvergence();
+
+// Set convergence offset (async - waits for actual application)
+await WebXROpenXRBridge.setConvergence(0.3);
+```
+
+### Perspective Factor
+```javascript
+// Get current perspective factor
+const perspective = await WebXROpenXRBridge.getPerspectiveFactor();
+
+// Set perspective factor (async - waits for actual application)
+await WebXROpenXRBridge.setPerspectiveFactor(1.1);
+```
+
+### Control Mode
+```javascript
+// Get current control mode (0 = First Person, 1 = Fly)
+const controlMode = await WebXROpenXRBridge.getControlMode();
+
+// Set control mode (async - waits for actual application)
+await WebXROpenXRBridge.setControlMode(1); // Fly mode
+```
+
+### Head Pose
+```javascript
+// Get current head pose
+const headPose = await WebXROpenXRBridge.getHeadPose();
+// Returns: { position: {x, y, z}, orientation: {x, y, z, w} }
+
+// Set head pose (async - waits for actual application)
+await WebXROpenXRBridge.setHeadPose({
+    position: { x: 0, y: 1.75, z: 0 },
+    orientation: { x: 0, y: 0, z: 0, w: 1 }
+});
+```
+
+### Fullscreen Control
+```javascript
+// Check if in fullscreen
+const isFullscreen = await WebXROpenXRBridge.getFullScreen();
+
+// Set fullscreen state (async - waits for actual application)
+await WebXROpenXRBridge.setFullScreen(1); // Enter fullscreen
+await WebXROpenXRBridge.setFullScreen(0); // Exit fullscreen
+```
+
+### Window Positioning
+```javascript
+// Get current window position and size
+const windowRect = await WebXROpenXRBridge.getWindowRect();
+// Returns: { x: number, y: number, width: number, height: number }
+
+// Set window position and size (async - waits for actual application)
+await WebXROpenXRBridge.setWindowRect({
+    x: 100,
+    y: 100, 
+    width: 800,
+    height: 600
+});
+```
+
+### 🔄 Automatic Window Rect Events
+
+The bridge automatically sends window rect updates when the OpenXR runtime window is resized, moved, or changes fullscreen state. **No polling required!**
+
+```javascript
+// Listen for automatic window rect updates
+window.addEventListener('message', function(event) {
+    if (event.source !== window || !event.data) return;
+    
+    // Check for automatic window rect updates
+    if (event.data.type === 'webxr-openxr-bridge-response' && 
+        event.data.setting === 'WindowRect' && 
+        event.data.success && 
+        event.data.data) {
+        
+        const rect = event.data.data;
+        console.log(`🔄 Window moved/resized: ${rect.x},${rect.y} ${rect.width}x${rect.height}`);
+        
+        // Update your UI immediately
+        updateWindowDisplay(rect);
+    }
+});
+
+function updateWindowDisplay(windowRect) {
+    // Update your application's window rect display
+    document.getElementById('windowInfo').textContent = 
+        `Position: (${rect.x}, ${rect.y}) Size: ${rect.width}x${rect.height}`;
 }
 ```
 
-#### `getSessionConvergenceOffset()`
+**Triggers automatically on:**
+- ✅ Manual window resizing (dragging edges/corners)
+- ✅ Window dragging/moving
+- ✅ Entering/exiting fullscreen mode
+- ✅ Programmatic window changes via `setWindowRect()`
+- ✅ System-level window management (minimize/maximize/restore)
 
-Returns the current session convergence offset value.
+**Benefits:**
+- **Real-time updates** - No polling delays or missed changes
+- **Perfect timing** - Events fire immediately when window changes
+- **Efficient** - No unnecessary API calls every second
+- **Complete coverage** - Catches all window state changes
 
+### Session Management
 ```javascript
-window.WebXROpenXRBridge.getSessionConvergenceOffset()
-  .then(offset => console.log('Current Convergence Offset:', offset))
-  .catch(err => console.error('Error:', err));
+// Check if any VR session is active system-wide
+const isActive = await WebXROpenXRBridge.isAnySessionActive();
+
+// Get detailed session information
+const sessionInfo = await WebXROpenXRBridge.getActiveSessionInfo();
+// Returns: { isActive: boolean, tabId: number, startTime: number }
+
+// Force close any active VR session (async - waits for actual application)
+await WebXROpenXRBridge.forceCloseActiveSession();
 ```
 
-#### `getSessionPerspectiveFactor()`
-
-Returns the current session perspective factor value.
-
+### Reset Settings
 ```javascript
-window.WebXROpenXRBridge.getSessionPerspectiveFactor()
-  .then(factor => console.log('Current Perspective Factor:', factor))
-  .catch(err => console.error('Error:', err));
+// Reset all settings to defaults (async - waits for actual application)
+await WebXROpenXRBridge.resetSettings();
 ```
 
-### Setting Values
+## 🚀 True Async Behavior
 
-#### `setIPDScale(scale)`
-
-Sets the IPD scale value. The scale parameter should be a float value.
-
+### Before (Message-based timing):
 ```javascript
-window.WebXROpenXRBridge.setIPDScale(1.2)
-  .then(() => console.log('IPD Scale set successfully'))
-  .catch(err => console.error('Error setting IPD Scale:', err));
+// OLD: Promise resolved when message was SENT, not applied
+await WebXROpenXRBridge.setProjectionMethod(1);
+console.log("Message sent!"); // ❌ Setting might not be applied yet
+// Visual change happens 1-3 frames later
 ```
 
-#### `setSceneScale(scale)`
-
-Sets the scene scale value. The scale parameter should be a float value.
-
+### After (Confirmation-based timing):
 ```javascript
-window.WebXROpenXRBridge.setSceneScale(2.0)
-  .then(() => console.log('Scene Scale set successfully'))
-  .catch(err => console.error('Error setting Scene Scale:', err));
+// NEW: Promise resolves when setting is ACTUALLY APPLIED
+await WebXROpenXRBridge.setProjectionMethod(1);
+console.log("Setting applied!"); // ✅ Setting is definitely applied
+// Visual change is already visible
+```
+
+## Usage Patterns
+
+### Sequential Operations with Perfect Timing
+```javascript
+async function setupVRSession() {
+    try {
+        console.log("🔄 Starting VR setup...");
+        
+        // Each step waits for actual completion
+        await WebXROpenXRBridge.setProjectionMethod(1);
+        console.log("✅ Projection method applied");
+        
+        await WebXROpenXRBridge.setIPDScale(1.2);
+        console.log("✅ IPD scale applied");
+        
+        await WebXROpenXRBridge.setSceneScale(1.0);
+        console.log("✅ Scene scale applied");
+        
+        // No artificial delays needed!
+        const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+        console.log(`✅ Convergence reset: ${resetSuccess ? "SUCCESS" : "FAILED"}`);
+        
+        console.log("🎉 VR session fully configured!");
+        
+    } catch (error) {
+        console.error("❌ VR setup failed:", error);
+    }
+}
+```
+
+### Parallel Operations (when order doesn't matter)
+```javascript
+async function configureVRSettings() {
+    try {
+        console.log("🔄 Applying VR settings in parallel...");
+        
+        // Execute multiple settings in parallel for faster setup
+        await Promise.all([
+            WebXROpenXRBridge.setIPDScale(1.2),
+            WebXROpenXRBridge.setSceneScale(1.0),
+            WebXROpenXRBridge.setParallaxStrength(0.8),
+            WebXROpenXRBridge.setConvergence(0.3)
+        ]);
+        
+        console.log("✅ All VR settings applied simultaneously!");
+        
+    } catch (error) {
+        console.error("❌ Failed to configure VR settings:", error);
+    }
+}
+
+### Error Handling and Retries
+```javascript
+async function setProjectionMethodWithRetry(method, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await WebXROpenXRBridge.setProjectionMethod(method);
+            console.log(`✅ Projection method applied on attempt ${attempt}`);
+            return;
+        } catch (error) {
+            console.warn(`⚠️ Attempt ${attempt} failed:`, error);
+            if (attempt === maxRetries) {
+                throw new Error(`Failed to set projection method after ${maxRetries} attempts`);
+            }
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+```
+
+### Real-world Example: Your Original Code
+```javascript
+// BEFORE: Clumsy nested timeouts
+if (!displaySwitch) {
+    displaySwitch = true;
+    setTimeout(() => {
+        window.WebXROpenXRBridge.setProjectionMethod(1);
+        setTimeout(() => {
+            window.WebXROpenXRBridge.resetSettings(1.0);
+            setTimeout(() => {
+                const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+            }, 500);
+        }, 500);
+    }, 1000);
+}
+
+// AFTER: Clean async flow
+if (!displaySwitch) {
+    displaySwitch = true;
+    
+    async function setupProjection() {
+        try {
+            // Optional: wait for user interaction to settle
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Each step waits for actual completion - no guessing!
+            await WebXROpenXRBridge.setProjectionMethod(1);
+            console.log("✅ Projection method applied and visible");
+            
+            await WebXROpenXRBridge.resetSettings();
+            console.log("✅ Settings reset and applied");
+            
+            // Now safe to proceed immediately
+            const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+            console.log(`✅ Convergence reset: ${resetSuccess ? "SUCCESS" : "FAILED"}`);
+            
+        } catch (error) {
+            console.error("❌ Setup failed:", error);
+        }
+    }
+    
+    setupProjection();
+}
 ```
 
 ## Error Handling
 
-All API methods return Promises that may reject with an error. Errors can occur for the following reasons:
+All methods can throw errors in the following cases:
+- Extension not installed or not available
+- OpenXR runtime not running
+- Invalid parameter values
+- **Built-in communication timeout (10 seconds)** ⚡ 
+- **Built-in confirmation timeout (5 seconds for SET operations)** ⚡ 
+- Runtime internal errors
 
-1. The native messaging host is not available
-2. The requested method is not supported
-3. The parameters are invalid
-4. The OpenXR runtime is not running or accessible
-5. No active OpenXR session was found
-6. The request timed out (after 5-10 seconds)
-
-Example of proper error handling:
+**No custom timeouts needed** - the API handles all timeout scenarios automatically. Simply wrap API calls in try-catch blocks:
 
 ```javascript
-window.WebXROpenXRBridge.getIPDScale()
-  .then(scale => {
-    console.log('Current IPD Scale:', scale);
-    // Do something with the scale value
-  })
-  .catch(err => {
-    console.error('Error getting IPD Scale:', err);
-    // Handle the error appropriately
-    // For example, show a user-friendly error message
-  });
+// Clean, simple error handling - no timeouts needed
+async function applyVRSettings() {
+  try {
+    await WebXROpenXRBridge.setIPDScale(1.2);
+    await WebXROpenXRBridge.setProjectionMethod(1);
+    console.log("✅ All settings applied successfully!");
+  } catch (error) {
+    console.error("❌ Setting failed:", error.message);
+    // Error could be: timeout, runtime not available, invalid value, etc.
+  }
+}
+```
+
+## Extension Detection
+
+```javascript
+function checkExtensionAvailability() {
+    if (typeof WebXROpenXRBridge === 'undefined') {
+        console.error('WebXR-OpenXR Bridge extension not available');
+        return false;
+    }
+    return true;
+}
+
+// Use before making API calls
+if (checkExtensionAvailability()) {
+    await WebXROpenXRBridge.setIPDScale(1.2);
+}
 ```
 
 ## Best Practices
@@ -151,19 +375,48 @@ window.WebXROpenXRBridge.getIPDScale()
 4. **Restore defaults:**
    Provide an option to restore default settings.
 
-5. **Add timeouts:**
-   Consider adding your own timeouts for requests that might take too long.
+5. **Use event-driven updates for window rect:**
+   Instead of polling `getWindowRect()` repeatedly, listen for automatic events:
    ```javascript
+   // ❌ DON'T: Poll for window rect changes
+   setInterval(async () => {
+     const rect = await WebXROpenXRBridge.getWindowRect();
+     updateUI(rect);
+   }, 1000);
+   
+   // ✅ DO: Listen for automatic events
+   window.addEventListener('message', (event) => {
+     if (event.data?.type === 'webxr-openxr-bridge-response' && 
+         event.data?.setting === 'WindowRect' && 
+         event.data?.success) {
+       updateUI(event.data.data);
+     }
+   });
+   
+   // Get initial state once
+   const initialRect = await WebXROpenXRBridge.getWindowRect();
+   updateUI(initialRect);
+   ```
+
+6. **No custom timeouts needed:**
+   The API now has built-in timeout protection - no need to add your own:
+   ```javascript
+   // ❌ DON'T: Add custom timeouts (no longer needed)
    const timeoutPromise = new Promise((_, reject) => {
      setTimeout(() => reject(new Error('Request timed out')), 5000);
    });
-   
    Promise.race([
-     window.WebXROpenXRBridge.getIPDScale(),
+     WebXROpenXRBridge.setIPDScale(1.2),
      timeoutPromise
-   ]).then(scale => {
-     // Handle the scale value
-   });
+   ]);
+   
+   // ✅ DO: Just use the API directly - it has built-in protection
+   try {
+     await WebXROpenXRBridge.setIPDScale(1.2);
+     console.log("Setting applied successfully!");
+   } catch (error) {
+     console.error("Setting failed or timed out:", error);
+   }
    ```
 
 ## Example Integration
@@ -172,10 +425,29 @@ window.WebXROpenXRBridge.getIPDScale()
 class OpenXRSettings {
   constructor() {
     this.available = !!window.WebXROpenXRBridge;
+    this.setupEventListeners();
   }
 
   isAvailable() {
     return this.available;
+  }
+
+  setupEventListeners() {
+    if (!this.available) return;
+    
+    // Listen for automatic window rect updates
+    window.addEventListener('message', (event) => {
+      if (event.data?.type === 'webxr-openxr-bridge-response' && 
+          event.data?.setting === 'WindowRect' && 
+          event.data?.success) {
+        this.onWindowRectChanged?.(event.data.data);
+      }
+    });
+  }
+
+  // Callback for window rect changes - override this
+  onWindowRectChanged(rect) {
+    console.log('Window rect changed:', rect);
   }
 
   async getIPDScale() {
@@ -220,14 +492,49 @@ class OpenXRSettings {
     }
   }
 
+  async getWindowRect() {
+    if (!this.available) return null;
+    try {
+      return await window.WebXROpenXRBridge.getWindowRect();
+    } catch (err) {
+      console.error('Error getting Window Rect:', err);
+      return null;
+    }
+  }
+
+  async setWindowRect(rect) {
+    if (!this.available) return false;
+    try {
+      await window.WebXROpenXRBridge.setWindowRect(rect);
+      return true;
+    } catch (err) {
+      console.error('Error setting Window Rect:', err);
+      return false;
+    }
+  }
+
   // Add similar methods for other settings
 }
 
 // Usage
 const xrSettings = new OpenXRSettings();
+
+// Override the window rect change callback
+xrSettings.onWindowRectChanged = (rect) => {
+  console.log(`🔄 OpenXR window: ${rect.x},${rect.y} ${rect.width}x${rect.height}`);
+  document.getElementById('windowStatus').textContent = 
+    `OpenXR Window: (${rect.x}, ${rect.y}) ${rect.width}×${rect.height}`;
+};
+
 if (xrSettings.isAvailable()) {
+  // Get initial values
   xrSettings.getIPDScale().then(scale => {
     // Update UI with current scale
+  });
+  
+  // Get initial window rect (events will handle updates)
+  xrSettings.getWindowRect().then(rect => {
+    xrSettings.onWindowRectChanged(rect);
   });
 }
 ```
@@ -237,3 +544,12 @@ if (xrSettings.isAvailable()) {
 - The API only works with OpenXR runtimes that support the corresponding IPC calls
 - Changes to settings take effect immediately, but may require a session restart for some settings
 - If no active OpenXR session is found, operations will fail with an appropriate error 
+
+## Performance Notes
+
+- **GET operations**: Immediate response (no confirmation needed)
+- **SET operations**: Wait for actual application (1-3 frame delay typically)
+- **Parallel SET operations**: All complete when the slowest one finishes
+- **Built-in timeout protection**: Operations automatically fail after 5 seconds if no confirmation
+- **No artificial delays needed**: Promises resolve when settings are actually applied
+- **No custom timeouts needed**: All timeout scenarios are handled internally 
