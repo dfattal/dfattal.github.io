@@ -10,74 +10,121 @@ The WebXR-OpenXR Bridge provides a JavaScript API to control OpenXR runtime sett
 
 The API is exposed as `window.WebXROpenXRBridge` and is available on any webpage after the extension is installed.
 
+## Method Summary
+
+| Category | Method | GET | SET | Description |
+|----------|--------|-----|-----|-------------|
+| **Visual Settings** | `IPDScale` | ✅ | ✅ | Interpupillary distance scale (stereo separation) |
+| | `SceneScale` | ✅ | ✅ | Overall scene scale/zoom level |
+| | `ProjectionMethod` | ✅ | ✅ | Projection rendering method (Camera/Display centric) |
+| | `ParallaxStrength` | ✅ | ✅ | Parallax/lookaround effect strength |
+| | `Convergence` | ✅ | ✅ | Convergence offset for depth perception |
+| | `PerspectiveFactor` | ✅ | ✅ | Perspective distortion factor |
+| **Control Settings** | `ControlMode` | ✅ | ✅ | Camera/view control method (First Person/Fly) |
+| **Pose Control** | `HeadPose` | ✅ | ✅ | Head/camera position and orientation |
+| | `LeftHandPose` | ✅ | ✅ | Left hand position and orientation |
+| | `RightHandPose` | ✅ | ✅ | Right hand position and orientation |
+| **Window Management** | `FullScreen` | ✅ | ✅ | Fullscreen state of OpenXR window |
+| | `WindowRect` | ✅ | ✅ | Window position and size |
+| **Session Management** | `isAnySessionActive()` | ✅ | ❌ | Check if any VR session is active |
+| | `getActiveSessionInfo()` | ✅ | ❌ | Get active session details |
+| | `forceCloseActiveSession()` | ❌ | ✅ | Force close active VR session |
+| **System Control** | `resetSettings()` | ❌ | ✅ | Reset all settings to defaults |
+
 ## API Reference
 
-### IPD Scale
+### Visual Settings
+
+#### `getIPDScale()` / `setIPDScale(value)`
+Controls the interpupillary distance scale (stereo separation).
 ```javascript
 // Get current IPD scale
 const ipdScale = await WebXROpenXRBridge.getIPDScale();
+// Returns: number (default: 1.0)
 
 // Set IPD scale (async - waits for actual application)
 await WebXROpenXRBridge.setIPDScale(1.2);
-console.log("IPD scale is now actually applied!"); // ✅ This runs AFTER setting is applied
+// Parameters: value (number) - Scale factor (0.1 to 3.0 recommended)
 ```
 
-### Scene Scale
+#### `getSceneScale()` / `setSceneScale(value)`
+Controls the overall scene scale/zoom level.
 ```javascript
 // Get current scene scale
 const sceneScale = await WebXROpenXRBridge.getSceneScale();
+// Returns: number (default: 1.0)
 
 // Set scene scale (async - waits for actual application)
 await WebXROpenXRBridge.setSceneScale(1.5);
+// Parameters: value (number) - Scale factor (0.1 to 5.0 recommended)
 ```
 
-### Projection Method
+#### `getProjectionMethod()` / `setProjectionMethod(method)`
+Controls the projection rendering method.
 ```javascript
-// Get current projection method (0 = Camera Centric, 1 = Display Centric)
+// Get current projection method
 const method = await WebXROpenXRBridge.getProjectionMethod();
+// Returns: number (0 = Camera Centric, 1 = Display Centric)
 
 // Set projection method (async - waits for actual application)
-await WebXROpenXRBridge.setProjectionMethod(1); // Display Centric
-console.log("Projection method change is now visible!"); // ✅ Runs after visual change
+await WebXROpenXRBridge.setProjectionMethod(1);
+// Parameters: method (number) - 0 for Camera Centric, 1 for Display Centric
 ```
 
-### Parallax Strength
+#### `getParallaxStrength()` / `setParallaxStrength(value)`
+Controls the parallax/lookaround effect strength.
 ```javascript
 // Get current parallax strength
 const parallax = await WebXROpenXRBridge.getParallaxStrength();
+// Returns: number (default: 1.0)
 
 // Set parallax strength (async - waits for actual application)
 await WebXROpenXRBridge.setParallaxStrength(0.8);
+// Parameters: value (number) - Strength factor (0.0 to 2.0 recommended)
 ```
 
-### Convergence
+#### `getConvergence()` / `setConvergence(value)`
+Controls the convergence offset for depth perception.
 ```javascript
 // Get current convergence offset
 const convergence = await WebXROpenXRBridge.getConvergence();
+// Returns: number (default: 0.5)
 
 // Set convergence offset (async - waits for actual application)
 await WebXROpenXRBridge.setConvergence(0.3);
+// Parameters: value (number) - Offset value (0.0 to 1.0 recommended)
 ```
 
-### Perspective Factor
+#### `getPerspectiveFactor()` / `setPerspectiveFactor(value)`
+Controls the perspective distortion factor.
 ```javascript
 // Get current perspective factor
 const perspective = await WebXROpenXRBridge.getPerspectiveFactor();
+// Returns: number (default: 1.0)
 
 // Set perspective factor (async - waits for actual application)
 await WebXROpenXRBridge.setPerspectiveFactor(1.1);
+// Parameters: value (number) - Factor value (0.5 to 2.0 recommended)
 ```
 
-### Control Mode
+### Control Settings
+
+#### `getControlMode()` / `setControlMode(mode)`
+Controls the camera/view control method.
 ```javascript
-// Get current control mode (0 = First Person, 1 = Fly)
+// Get current control mode
 const controlMode = await WebXROpenXRBridge.getControlMode();
+// Returns: number (0 = First Person, 1 = Fly)
 
 // Set control mode (async - waits for actual application)
-await WebXROpenXRBridge.setControlMode(1); // Fly mode
+await WebXROpenXRBridge.setControlMode(1);
+// Parameters: mode (number) - 0 for First Person, 1 for Fly mode
 ```
 
-### Head Pose
+### Pose Control
+
+#### `getHeadPose()` / `setHeadPose(pose)`
+Controls the head/camera position and orientation.
 ```javascript
 // Get current head pose
 const headPose = await WebXROpenXRBridge.getHeadPose();
@@ -85,22 +132,59 @@ const headPose = await WebXROpenXRBridge.getHeadPose();
 
 // Set head pose (async - waits for actual application)
 await WebXROpenXRBridge.setHeadPose({
-    position: { x: 0, y: 1.75, z: 0 },
-    orientation: { x: 0, y: 0, z: 0, w: 1 }
+    position: { x: 0, y: 1.75, z: 0 },    // Position in meters (OpenXR coordinates)
+    orientation: { x: 0, y: 0, z: 0, w: 1 } // Quaternion rotation
 });
+// Parameters: pose (object) - Position (x,y,z) and orientation quaternion (x,y,z,w)
 ```
 
-### Fullscreen Control
+#### `getLeftHandPose()` / `setLeftHandPose(pose)`
+Controls the left hand position and orientation.
+```javascript
+// Get current left hand pose
+const leftHandPose = await WebXROpenXRBridge.getLeftHandPose();
+// Returns: { position: {x, y, z}, orientation: {x, y, z, w} }
+
+// Set left hand pose (async - waits for actual application)
+await WebXROpenXRBridge.setLeftHandPose({
+    position: { x: -0.3, y: 1.4, z: -0.4 },
+    orientation: { x: 0, y: 0.2164, z: 0, w: 0.9763 }
+});
+// Parameters: pose (object) - Position (x,y,z) and orientation quaternion (x,y,z,w)
+```
+
+#### `getRightHandPose()` / `setRightHandPose(pose)`
+Controls the right hand position and orientation.
+```javascript
+// Get current right hand pose
+const rightHandPose = await WebXROpenXRBridge.getRightHandPose();
+// Returns: { position: {x, y, z}, orientation: {x, y, z, w} }
+
+// Set right hand pose (async - waits for actual application)
+await WebXROpenXRBridge.setRightHandPose({
+    position: { x: 0.3, y: 1.4, z: -0.4 },
+    orientation: { x: 0, y: -0.2164, z: 0, w: 0.9763 }
+});
+// Parameters: pose (object) - Position (x,y,z) and orientation quaternion (x,y,z,w)
+```
+
+### Window Management
+
+#### `getFullScreen()` / `setFullScreen(state)`
+Controls the fullscreen state of the OpenXR window.
 ```javascript
 // Check if in fullscreen
 const isFullscreen = await WebXROpenXRBridge.getFullScreen();
+// Returns: number (0 = windowed, 1 = fullscreen)
 
 // Set fullscreen state (async - waits for actual application)
 await WebXROpenXRBridge.setFullScreen(1); // Enter fullscreen
 await WebXROpenXRBridge.setFullScreen(0); // Exit fullscreen
+// Parameters: state (number) - 0 for windowed, 1 for fullscreen
 ```
 
-### Window Positioning
+#### `getWindowRect()` / `setWindowRect(rect)`
+Controls the window position and size.
 ```javascript
 // Get current window position and size
 const windowRect = await WebXROpenXRBridge.getWindowRect();
@@ -108,17 +192,38 @@ const windowRect = await WebXROpenXRBridge.getWindowRect();
 
 // Set window position and size (async - waits for actual application)
 await WebXROpenXRBridge.setWindowRect({
-    x: 100,
-    y: 100, 
-    width: 800,
-    height: 600
+    x: 100,      // X position in pixels
+    y: 100,      // Y position in pixels
+    width: 800,  // Width in pixels
+    height: 600  // Height in pixels
 });
+// Parameters: rect (object) - Window rectangle {x, y, width, height}
 ```
 
-### 🔄 Automatic Window Rect Events
+## Events
 
-The bridge automatically sends window rect updates when the OpenXR runtime window is resized, moved, or changes fullscreen state. **No polling required!**
+The bridge automatically sends events for certain state changes, eliminating the need for polling.
 
+### Window Rect Change Event
+
+The bridge automatically sends window rect updates when the OpenXR runtime window is resized, moved, or changes fullscreen state.
+
+**Event Structure:**
+```javascript
+{
+  type: "webxr-openxr-bridge-response",
+  setting: "WindowRect",
+  success: true,
+  data: {
+    x: number,      // Window X position in pixels
+    y: number,      // Window Y position in pixels  
+    width: number,  // Window width in pixels
+    height: number  // Window height in pixels
+  }
+}
+```
+
+**Usage:**
 ```javascript
 // Listen for automatic window rect updates
 window.addEventListener('message', function(event) {
@@ -141,7 +246,7 @@ window.addEventListener('message', function(event) {
 function updateWindowDisplay(windowRect) {
     // Update your application's window rect display
     document.getElementById('windowInfo').textContent = 
-        `Position: (${rect.x}, ${rect.y}) Size: ${rect.width}x${rect.height}`;
+        `Position: (${windowRect.x}, ${windowRect.y}) Size: ${windowRect.width}x${windowRect.height}`;
 }
 ```
 
@@ -158,23 +263,73 @@ function updateWindowDisplay(windowRect) {
 - **Efficient** - No unnecessary API calls every second
 - **Complete coverage** - Catches all window state changes
 
+### Setting Confirmation Events
+
+When using SET operations, the bridge sends confirmation events when settings are actually applied in the runtime.
+
+**Event Structure:**
+```javascript
+{
+  type: "webxr-openxr-bridge-response",
+  setting: string,     // The setting that was changed (e.g., "IPDScale", "ProjectionMethod")
+  success: boolean,    // Whether the operation succeeded
+  requestId?: number,  // Request ID if provided in original call
+  tabId?: number,      // Tab ID if provided in original call
+  data?: any,          // Setting value for GET operations
+  error?: string       // Error message if success is false
+}
+```
+
+**Example:**
+```javascript
+// These events are automatically handled by the API Promise resolution
+// But you can also listen for them directly:
+window.addEventListener('message', function(event) {
+    if (event.data?.type === 'webxr-openxr-bridge-response' && 
+        event.data?.setting === 'IPDScale' && 
+        event.data?.success) {
+        console.log('IPD Scale was successfully applied!');
+    }
+});
+```
+
 ### Session Management
+
+#### `isAnySessionActive()`
+Checks if any VR session is currently active system-wide.
 ```javascript
 // Check if any VR session is active system-wide
 const isActive = await WebXROpenXRBridge.isAnySessionActive();
+// Returns: boolean - true if any session is active, false otherwise
+```
 
+#### `getActiveSessionInfo()`
+Gets detailed information about the currently active VR session.
+```javascript
 // Get detailed session information
 const sessionInfo = await WebXROpenXRBridge.getActiveSessionInfo();
 // Returns: { isActive: boolean, tabId: number, startTime: number }
-
-// Force close any active VR session (async - waits for actual application)
-await WebXROpenXRBridge.forceCloseActiveSession();
+//   - isActive: Whether a session is currently active
+//   - tabId: Unique identifier for the session/application
+//   - startTime: Session start timestamp (milliseconds since epoch)
 ```
 
-### Reset Settings
+#### `forceCloseActiveSession()`
+Forces closure of any active VR session system-wide.
+```javascript
+// Force close any active VR session (async - waits for actual application)
+await WebXROpenXRBridge.forceCloseActiveSession();
+// Returns: Promise<void> - Resolves when session is closed
+```
+
+### System Control
+
+#### `resetSettings()`
+Resets all OpenXR settings to their default values.
 ```javascript
 // Reset all settings to defaults (async - waits for actual application)
 await WebXROpenXRBridge.resetSettings();
+// Returns: Promise<void> - Resolves when all settings are reset
 ```
 
 ## 🚀 True Async Behavior
