@@ -622,6 +622,21 @@
                     <div class="status-grid" id="liveSettings">
                         <!-- Live settings will be populated here -->
                     </div>
+
+                    <!-- Always visible window rect section -->
+                    <div class="status-item window-rect-item grouped"
+                        style="margin-top: 10px; border: 1px solid #444; padding: 8px;">
+                        <div class="group-title">🖼️ Window Rect (auto-updated)</div>
+                        <div class="group-values" id="windowRectValues">
+                            <span class="value-pair" id="windowRectX">X: Loading...</span>
+                            <span class="value-pair" id="windowRectY">Y: Loading...</span>
+                            <span class="value-pair" id="windowRectW">W: Loading...</span>
+                            <span class="value-pair" id="windowRectH">H: Loading...</span>
+                        </div>
+                        <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                            Updates automatically on resize/move
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -728,14 +743,6 @@
         // Helper function to update live settings display
         function updateLiveSettings(settings) {
             const liveSettings = document.getElementById('liveSettings');
-
-            // Preserve window rect display if it exists
-            let windowRectItem = document.querySelector('.window-rect-item');
-            let windowRectHTML = '';
-            if (windowRectItem) {
-                windowRectHTML = windowRectItem.outerHTML;
-            }
-
             liveSettings.innerHTML = '';
 
             for (const [key, value] of Object.entries(settings)) {
@@ -753,11 +760,6 @@
                 statusItem.appendChild(label);
                 statusItem.appendChild(valueDiv);
                 liveSettings.appendChild(statusItem);
-            }
-
-            // Restore window rect display if it existed
-            if (windowRectHTML) {
-                liveSettings.insertAdjacentHTML('beforeend', windowRectHTML);
             }
         }
 
@@ -975,39 +977,51 @@
 
         // Function to get and display window rect (called once on load, then updated via events)
         async function updateWindowRectFromRuntime() {
-            if (!checkExtensionAvailable()) return;
+            if (!checkExtensionAvailable()) {
+                // Show "Extension not available" state
+                updateWindowRectDisplay(null);
+                return;
+            }
 
             try {
                 const windowRect = await window.WebXROpenXRBridge.getWindowRect();
                 updateWindowRectDisplay(windowRect);
+                logMessage(`🖼️ Window rect loaded: ${Math.round(windowRect.x)},${Math.round(windowRect.y)} ${Math.round(windowRect.width)}x${Math.round(windowRect.height)}`, 'success');
             } catch (error) {
-                logMessage(`Get window rect error: ${error}`, 'error');
+                logMessage(`❌ Get window rect error: ${error}`, 'error');
+                updateWindowRectDisplay(null);
             }
         }
 
         // Function to update window rect display
         function updateWindowRectDisplay(windowRect) {
-            if (!windowRect) return;
+            // Update the individual span elements
+            const xElement = document.getElementById('windowRectX');
+            const yElement = document.getElementById('windowRectY');
+            const wElement = document.getElementById('windowRectW');
+            const hElement = document.getElementById('windowRectH');
 
-            // Find or create window rect display in live settings
-            const liveSettings = document.getElementById('liveSettings');
-            let windowRectItem = document.querySelector('.window-rect-item');
+            if (!xElement || !yElement || !wElement || !hElement) return;
 
-            if (!windowRectItem) {
-                windowRectItem = document.createElement('div');
-                windowRectItem.className = 'status-item window-rect-item grouped';
-                liveSettings.appendChild(windowRectItem);
+            if (windowRect && typeof windowRect === 'object') {
+                // Valid window rect data
+                xElement.textContent = `X: ${Math.round(windowRect.x)}`;
+                yElement.textContent = `Y: ${Math.round(windowRect.y)}`;
+                wElement.textContent = `W: ${Math.round(windowRect.width)}`;
+                hElement.textContent = `H: ${Math.round(windowRect.height)}`;
+            } else if (!window.WebXROpenXRBridge) {
+                // Extension not available
+                xElement.textContent = 'X: No Extension';
+                yElement.textContent = 'Y: No Extension';
+                wElement.textContent = 'W: No Extension';
+                hElement.textContent = 'H: No Extension';
+            } else {
+                // API call failed or other error
+                xElement.textContent = 'X: Error';
+                yElement.textContent = 'Y: Error';
+                wElement.textContent = 'W: Error';
+                hElement.textContent = 'H: Error';
             }
-
-            windowRectItem.innerHTML = `
-                <div class="group-title">Window Rect (auto-updated)</div>
-                <div class="group-values">
-                    <span class="value-pair">X: ${Math.round(windowRect.x)}</span>
-                    <span class="value-pair">Y: ${Math.round(windowRect.y)}</span>
-                    <span class="value-pair">W: ${Math.round(windowRect.width)}</span>
-                    <span class="value-pair">H: ${Math.round(windowRect.height)}</span>
-                </div>
-            `;
         }
 
         // Initialize the app
