@@ -709,6 +709,12 @@
                     <span class="status-text">Extension Ready</span>
                 `;
                 logMessage('WebXR-OpenXR Bridge extension detected', 'success');
+
+                // Get initial window rect now that extension is available
+                setTimeout(() => {
+                    logMessage('📍 Getting initial window rect...', 'info');
+                    updateWindowRectFromRuntime();
+                }, 100); // Small delay to ensure extension is fully ready
             } else {
                 // Extension not found - show install link
                 statusElement.className = 'extension-status not-installed';
@@ -727,6 +733,9 @@
                 statusElement.title = 'Click to install the WebXR-OpenXR Bridge extension';
 
                 logMessage('WebXR-OpenXR Bridge extension not found. Click the red indicator to install.', 'error');
+
+                // Update window rect display to show "No Extension"
+                updateWindowRectDisplay(null);
             }
         }
 
@@ -977,18 +986,19 @@
 
         // Function to get and display window rect (called once on load, then updated via events)
         async function updateWindowRectFromRuntime() {
-            if (!checkExtensionAvailable()) {
-                // Show "Extension not available" state
+            if (!checkExtensionAvailable('Get window rect')) {
+                // Extension not available - updateWindowRectDisplay will handle this
                 updateWindowRectDisplay(null);
                 return;
             }
 
             try {
+                logMessage('🔍 Calling getWindowRect() API...', 'info');
                 const windowRect = await window.WebXROpenXRBridge.getWindowRect();
                 updateWindowRectDisplay(windowRect);
-                logMessage(`🖼️ Window rect loaded: ${Math.round(windowRect.x)},${Math.round(windowRect.y)} ${Math.round(windowRect.width)}x${Math.round(windowRect.height)}`, 'success');
+                logMessage(`✅ Initial window rect: (${Math.round(windowRect.x)}, ${Math.round(windowRect.y)}) ${Math.round(windowRect.width)}×${Math.round(windowRect.height)}`, 'success');
             } catch (error) {
-                logMessage(`❌ Get window rect error: ${error}`, 'error');
+                logMessage(`❌ Failed to get window rect: ${error}`, 'error');
                 updateWindowRectDisplay(null);
             }
         }
@@ -1009,18 +1019,21 @@
                 yElement.textContent = `Y: ${Math.round(windowRect.y)}`;
                 wElement.textContent = `W: ${Math.round(windowRect.width)}`;
                 hElement.textContent = `H: ${Math.round(windowRect.height)}`;
-            } else if (!window.WebXROpenXRBridge) {
-                // Extension not available
-                xElement.textContent = 'X: No Extension';
-                yElement.textContent = 'Y: No Extension';
-                wElement.textContent = 'W: No Extension';
-                hElement.textContent = 'H: No Extension';
             } else {
-                // API call failed or other error
-                xElement.textContent = 'X: Error';
-                yElement.textContent = 'Y: Error';
-                wElement.textContent = 'W: Error';
-                hElement.textContent = 'H: Error';
+                // Check current extension state
+                if (!window.WebXROpenXRBridge) {
+                    // Extension not available
+                    xElement.textContent = 'X: No Extension';
+                    yElement.textContent = 'Y: No Extension';
+                    wElement.textContent = 'W: No Extension';
+                    hElement.textContent = 'H: No Extension';
+                } else {
+                    // Extension available but API call failed
+                    xElement.textContent = 'X: API Error';
+                    yElement.textContent = 'Y: API Error';
+                    wElement.textContent = 'W: API Error';
+                    hElement.textContent = 'H: API Error';
+                }
             }
         }
 
@@ -1213,7 +1226,7 @@
             // Initial updates
             updateAllSettings();
             updateHeadPoseFromRuntime();
-            updateWindowRectFromRuntime(); // Get initial window rect, then rely on events
+            // Note: updateWindowRectFromRuntime() is now called from checkExtensionStatus()
 
             // Log about the new event-driven window rect feature
             logMessage('✨ Window Rect now updates automatically on resize/move - no polling needed!', 'success');
