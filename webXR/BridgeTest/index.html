@@ -728,6 +728,14 @@
         // Helper function to update live settings display
         function updateLiveSettings(settings) {
             const liveSettings = document.getElementById('liveSettings');
+
+            // Preserve window rect display if it exists
+            let windowRectItem = document.querySelector('.window-rect-item');
+            let windowRectHTML = '';
+            if (windowRectItem) {
+                windowRectHTML = windowRectItem.outerHTML;
+            }
+
             liveSettings.innerHTML = '';
 
             for (const [key, value] of Object.entries(settings)) {
@@ -745,6 +753,11 @@
                 statusItem.appendChild(label);
                 statusItem.appendChild(valueDiv);
                 liveSettings.appendChild(statusItem);
+            }
+
+            // Restore window rect display if it existed
+            if (windowRectHTML) {
+                liveSettings.insertAdjacentHTML('beforeend', windowRectHTML);
             }
         }
 
