@@ -858,20 +858,18 @@ function animate() {
 
             if (!displaySwitch) {
                 displaySwitch = true;
-                setTimeout(() => {
+                setTimeout(async () => {
                     if (window.WebXROpenXRBridge) {
                         console.log("Setting WebXROpenXRBridge projection method after 1 second delay");
                         try {
-                            window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                            await window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
                             console.log("Projection Method set to Display Centric");
-                            setTimeout(() => {
-                                window.WebXROpenXRBridge.resetSettings(1.0);
-                                console.log("Settings reset to default");
-                                setTimeout(() => {
-                                    const resetSuccess = resetConvergencePlane(leftCam, rightCam);
-                                    console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
-                                }, 500);
-                            }, 500);
+
+                            await window.WebXROpenXRBridge.resetSettings(1.0);
+                            console.log("Settings reset to default");
+
+                            const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                            console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
 
                         } catch (error) {
                             console.error("Error setting projection method:", error);
