@@ -151,51 +151,61 @@
 
         // Check for WebXR Bridge API
         function initializeTest() {
-            if (window.WebXROpenXRBridge && window.WebXROpenXRBridge.onWindowChange) {
-                addLogEntry('✅ WebXR-OpenXR Bridge API detected');
-                addLogEntry('🎯 Listening for window move and resize events...');
+            addLogEntry('🔍 Checking for WebXR-OpenXR Bridge API...');
 
-                // Set up window change listener
-                window.WebXROpenXRBridge.onWindowChange((windowRect) => {
-                    // Determine event type by comparing with previous values
-                    let eventType = 'unknown';
-                    let eventClass = '';
+            if (window.WebXROpenXRBridge) {
+                addLogEntry('✅ WebXROpenXRBridge object found');
 
-                    if (lastPosition === null && lastSize === null) {
-                        eventType = 'initial';
-                        eventClass = '';
-                        addLogEntry(`Initial window state: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, eventClass);
-                    } else {
-                        const positionChanged = (lastPosition.x !== windowRect.x || lastPosition.y !== windowRect.y);
-                        const sizeChanged = (lastSize.width !== windowRect.width || lastSize.height !== windowRect.height);
+                if (window.WebXROpenXRBridge.onWindowChange) {
+                    addLogEntry('✅ onWindowChange method available');
+                    addLogEntry('🎯 Setting up window move and resize event listener...');
 
-                        if (positionChanged && sizeChanged) {
-                            eventType = 'move + resize';
-                            eventClass = 'move-event';
-                            moveCount++;
-                            resizeCount++;
-                            addLogEntry(`MOVE + RESIZE: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, eventClass);
-                        } else if (positionChanged) {
-                            eventType = 'move';
-                            eventClass = 'move-event';
-                            moveCount++;
-                            addLogEntry(`MOVE: from (${lastPosition.x},${lastPosition.y}) to (${windowRect.x},${windowRect.y})`, eventClass);
-                        } else if (sizeChanged) {
-                            eventType = 'resize';
-                            eventClass = 'resize-event';
-                            resizeCount++;
-                            addLogEntry(`RESIZE: from ${lastSize.width}×${lastSize.height} to ${windowRect.width}×${windowRect.height}`, eventClass);
+                    // Set up window change listener
+                    window.WebXROpenXRBridge.onWindowChange((windowRect) => {
+                        // Determine event type by comparing with previous values
+                        let eventType = 'unknown';
+                        let eventClass = '';
+
+                        if (lastPosition === null && lastSize === null) {
+                            eventType = 'initial';
+                            eventClass = '';
+                            addLogEntry(`Initial window state: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, eventClass);
+                        } else {
+                            const positionChanged = (lastPosition.x !== windowRect.x || lastPosition.y !== windowRect.y);
+                            const sizeChanged = (lastSize.width !== windowRect.width || lastSize.height !== windowRect.height);
+
+                            if (positionChanged && sizeChanged) {
+                                eventType = 'move + resize';
+                                eventClass = 'move-event';
+                                moveCount++;
+                                resizeCount++;
+                                addLogEntry(`MOVE + RESIZE: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, eventClass);
+                            } else if (positionChanged) {
+                                eventType = 'move';
+                                eventClass = 'move-event';
+                                moveCount++;
+                                addLogEntry(`MOVE: from (${lastPosition.x},${lastPosition.y}) to (${windowRect.x},${windowRect.y})`, eventClass);
+                            } else if (sizeChanged) {
+                                eventType = 'resize';
+                                eventClass = 'resize-event';
+                                resizeCount++;
+                                addLogEntry(`RESIZE: from ${lastSize.width}×${lastSize.height} to ${windowRect.width}×${windowRect.height}`, eventClass);
+                            }
                         }
-                    }
 
-                    // Update tracking variables
-                    lastPosition = { x: windowRect.x, y: windowRect.y };
-                    lastSize = { width: windowRect.width, height: windowRect.height };
+                        // Update tracking variables
+                        lastPosition = { x: windowRect.x, y: windowRect.y };
+                        lastSize = { width: windowRect.width, height: windowRect.height };
 
-                    // Update status display
-                    updateStatus(windowRect);
-                });
+                        // Update status display
+                        updateStatus(windowRect);
+                    });
 
+                    addLogEntry('✅ Window event listener is now active');
+
+                } else {
+                    addLogEntry('❌ onWindowChange method not found on WebXROpenXRBridge');
+                }
             } else {
                 addLogEntry('❌ WebXR-OpenXR Bridge API not found');
                 addLogEntry('Please install the Chrome extension and ensure the OpenXR runtime is running');
@@ -205,7 +215,12 @@
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', () => {
             // Give the extension time to inject the API
+            addLogEntry('📄 Page loaded, waiting for extension...');
             setTimeout(initializeTest, 1000);
+
+            // Retry a few times in case the extension loads slowly
+            setTimeout(initializeTest, 3000);
+            setTimeout(initializeTest, 5000);
         });
     </script>
 </body>

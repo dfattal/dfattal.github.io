@@ -608,6 +608,8 @@
 
                         <div class="button-row">
                             <button class="btn btn-danger" id="resetSettingsButton">Reset All Settings</button>
+                            <button class="btn btn-primary" id="testGetWindowRectButton">🔍 Test Get Window
+                                Rect</button>
                             <button class="btn btn-success" id="windowOverlayDemoButton">🎯 Window Overlay Demo</button>
                             <button class="btn btn-info" id="sessionManagementDemoButton">🎮 Session Management
                                 Demo</button>
@@ -1041,6 +1043,22 @@
                 setTimeout(updateAllSettings, 500);
             });
 
+            document.getElementById('testGetWindowRectButton').addEventListener('click', async () => {
+                if (!checkExtensionAvailable('Get Window Rect')) return;
+
+                try {
+                    const rect = await window.WebXROpenXRBridge.getWindowRect();
+                    logMessage(`Window rect: x=${rect.x}, y=${rect.y}, width=${rect.width}, height=${rect.height}`, 'success');
+
+                    // Update the window monitor display
+                    document.getElementById('windowPosition').textContent = `(${rect.x}, ${rect.y})`;
+                    document.getElementById('windowSize').textContent = `${rect.width} × ${rect.height}`;
+                    document.getElementById('lastWindowUpdate').textContent = new Date().toLocaleTimeString();
+                } catch (error) {
+                    logMessage(`Get window rect error: ${error}`, 'error');
+                }
+            });
+
             document.getElementById('windowOverlayDemoButton').addEventListener('click', () => {
                 window.open('./window-overlay-demo.html', '_blank');
                 logMessage('Opening Window Overlay Demo', 'info');
@@ -1089,38 +1107,53 @@
             let windowEventCount = 0;
 
             // Set up window change event listener
-            if (window.WebXROpenXRBridge && window.WebXROpenXRBridge.onWindowChange) {
-                window.WebXROpenXRBridge.onWindowChange((windowRect) => {
-                    windowEventCount++;
+            function setupWindowChangeListener() {
+                if (window.WebXROpenXRBridge && window.WebXROpenXRBridge.onWindowChange) {
+                    logMessage('✅ Setting up window change listener', 'success');
 
-                    // Update window position display
-                    document.getElementById('windowPosition').textContent = `(${windowRect.x}, ${windowRect.y})`;
+                    window.WebXROpenXRBridge.onWindowChange((windowRect) => {
+                        windowEventCount++;
 
-                    // Update window size display  
-                    document.getElementById('windowSize').textContent = `${windowRect.width} × ${windowRect.height}`;
+                        logMessage(`🪟 Window change event #${windowEventCount} received!`, 'success');
 
-                    // Update timestamp
-                    const now = new Date();
-                    document.getElementById('lastWindowUpdate').textContent = now.toLocaleTimeString();
+                        // Update window position display
+                        document.getElementById('windowPosition').textContent = `(${windowRect.x}, ${windowRect.y})`;
 
-                    // Update event count
-                    document.getElementById('windowEventCount').textContent = windowEventCount;
+                        // Update window size display  
+                        document.getElementById('windowSize').textContent = `${windowRect.width} × ${windowRect.height}`;
 
-                    // Enhanced logging with event type detection
-                    const eventType = windowEventCount === 1 ? 'Initial' : 'Move/Resize';
-                    logMessage(`${eventType} window event: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, 'info');
-                });
-            } else {
-                // Fallback message if API not available
-                setTimeout(() => {
-                    if (!window.WebXROpenXRBridge || !window.WebXROpenXRBridge.onWindowChange) {
-                        document.getElementById('windowPosition').textContent = 'API not available';
-                        document.getElementById('windowSize').textContent = 'API not available';
-                        document.getElementById('lastWindowUpdate').textContent = 'Extension missing';
-                        logMessage('WebXR-OpenXR Bridge API not available for window events', 'error');
-                    }
-                }, 3000);
+                        // Update timestamp
+                        const now = new Date();
+                        document.getElementById('lastWindowUpdate').textContent = now.toLocaleTimeString();
+
+                        // Update event count
+                        document.getElementById('windowEventCount').textContent = windowEventCount;
+
+                        // Enhanced logging with event type detection
+                        const eventType = windowEventCount === 1 ? 'Initial' : 'Move/Resize';
+                        logMessage(`${eventType} window event: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, 'info');
+                    });
+
+                    logMessage('🎯 Window change listener active - try moving/resizing the OpenXR window', 'info');
+                } else {
+                    logMessage('❌ WebXR-OpenXR Bridge API or onWindowChange not available', 'error');
+
+                    // Fallback message if API not available
+                    setTimeout(() => {
+                        if (!window.WebXROpenXRBridge || !window.WebXROpenXRBridge.onWindowChange) {
+                            document.getElementById('windowPosition').textContent = 'API not available';
+                            document.getElementById('windowSize').textContent = 'API not available';
+                            document.getElementById('lastWindowUpdate').textContent = 'Extension missing';
+                            logMessage('WebXR-OpenXR Bridge API not available for window events', 'error');
+                        }
+                    }, 3000);
+                }
             }
+
+            // Try setting up the listener multiple times to handle timing issues
+            setupWindowChangeListener();
+            setTimeout(setupWindowChangeListener, 1000);
+            setTimeout(setupWindowChangeListener, 3000);
 
             // Clear window events button
             document.getElementById('clearWindowEvents').addEventListener('click', () => {
