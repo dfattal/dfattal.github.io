@@ -622,56 +622,36 @@
                     <div class="status-grid" id="liveSettings">
                         <!-- Live settings will be populated here -->
                     </div>
-
-                    <!-- Always visible window rect section -->
-                    <div class="status-item window-rect-item grouped"
-                        style="margin-top: 10px; border: 1px solid #444; padding: 8px;">
-                        <div class="group-title">🖼️ Window Rect (auto-updated)</div>
-                        <div class="group-values" id="windowRectValues">
-                            <span class="value-pair" id="windowRectX">X: Loading...</span>
-                            <span class="value-pair" id="windowRectY">Y: Loading...</span>
-                            <span class="value-pair" id="windowRectW">W: Loading...</span>
-                            <span class="value-pair" id="windowRectH">H: Loading...</span>
-                        </div>
-                        <div style="font-size: 11px; color: #888; margin-top: 5px;">
-                            Updates automatically on resize/move
-                        </div>
-                    </div>
                 </div>
             </div>
 
             <div class="quadrant bottom-left">
-                <h2 class="quadrant-title">Head Pose Control</h2>
+                <h2 class="quadrant-title">Window Events (Real-time)</h2>
                 <div class="quadrant-content">
-                    <div class="settings-grid">
-                        <div class="setting-row">
-                            <span class="setting-label">Height</span>
-                            <input type="range" class="slider" id="displayHeight" min="0" max="2" step="0.01"
-                                value="1.75">
-                            <span class="setting-value" id="displayHeightValue">1.75m</span>
+                    <div class="status-grid single-column" id="windowEventMonitor">
+                        <div class="status-item">
+                            <div class="status-label">Position</div>
+                            <div class="status-value" id="windowPosition">Not detected</div>
                         </div>
 
-                        <div class="setting-row">
-                            <span class="setting-label">Yaw</span>
-                            <input type="range" class="slider" id="displayYaw" min="-180" max="180" step="1" value="0">
-                            <span class="setting-value" id="displayYawValue">0°</span>
+                        <div class="status-item">
+                            <div class="status-label">Size</div>
+                            <div class="status-value" id="windowSize">Not detected</div>
                         </div>
 
-                        <div class="setting-row">
-                            <span class="setting-label">Pitch</span>
-                            <input type="range" class="slider" id="displayPitch" min="-89" max="89" step="1" value="0">
-                            <span class="setting-value" id="displayPitchValue">0°</span>
+                        <div class="status-item">
+                            <div class="status-label">Last Event</div>
+                            <div class="status-value" id="lastWindowUpdate">Never</div>
                         </div>
 
-                        <div class="setting-row">
-                            <span class="setting-label">Roll</span>
-                            <input type="range" class="slider" id="displayRoll" min="-180" max="180" step="1" value="0">
-                            <span class="setting-value" id="displayRollValue">0°</span>
+                        <div class="status-item">
+                            <div class="status-label">Move + Resize Count</div>
+                            <div class="status-value" id="windowEventCount">0</div>
                         </div>
+                    </div>
 
-                        <div class="button-row">
-                            <button class="btn btn-primary" id="resetPoseButton">Reset Pose</button>
-                        </div>
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="clearWindowEvents">Clear Events</button>
                     </div>
                 </div>
             </div>
@@ -709,12 +689,6 @@
                     <span class="status-text">Extension Ready</span>
                 `;
                 logMessage('WebXR-OpenXR Bridge extension detected', 'success');
-
-                // Get initial window rect now that extension is available
-                setTimeout(() => {
-                    logMessage('📍 Getting initial window rect...', 'info');
-                    updateWindowRectFromRuntime();
-                }, 100); // Small delay to ensure extension is fully ready
             } else {
                 // Extension not found - show install link
                 statusElement.className = 'extension-status not-installed';
@@ -733,9 +707,6 @@
                 statusElement.title = 'Click to install the WebXR-OpenXR Bridge extension';
 
                 logMessage('WebXR-OpenXR Bridge extension not found. Click the red indicator to install.', 'error');
-
-                // Update window rect display to show "No Extension"
-                updateWindowRectDisplay(null);
             }
         }
 
@@ -882,8 +853,8 @@
             return true;
         }
 
-        // Function to set head pose based on UI controls with async/await for perfect timing
-        async function setHeadPoseFromUI() {
+        // Function to set head pose based on UI controls
+        function setHeadPoseFromUI() {
             if (!checkExtensionAvailable('Set head pose')) return;
 
             const height = parseFloat(document.getElementById('displayHeight').value);
@@ -901,10 +872,10 @@
             };
 
             try {
-                await window.WebXROpenXRBridge.setHeadPose(headPose);
-                logMessage(`✅ Pose applied: ${height}m, Y:${yaw}° P:${pitch}° R:${roll}°`, 'success');
+                window.WebXROpenXRBridge.setHeadPose(headPose);
+                logMessage(`Pose: ${height}m, Y:${yaw}° P:${pitch}° R:${roll}°`, 'success');
             } catch (error) {
-                logMessage(`❌ Pose error: ${error}`, 'error');
+                logMessage(`Error: ${error}`, 'error');
             }
         }
 
@@ -984,59 +955,6 @@
             }
         }
 
-        // Function to get and display window rect (called once on load, then updated via events)
-        async function updateWindowRectFromRuntime() {
-            if (!checkExtensionAvailable('Get window rect')) {
-                // Extension not available - updateWindowRectDisplay will handle this
-                updateWindowRectDisplay(null);
-                return;
-            }
-
-            try {
-                logMessage('🔍 Calling getWindowRect() API...', 'info');
-                const windowRect = await window.WebXROpenXRBridge.getWindowRect();
-                updateWindowRectDisplay(windowRect);
-                logMessage(`✅ Initial window rect: (${Math.round(windowRect.x)}, ${Math.round(windowRect.y)}) ${Math.round(windowRect.width)}×${Math.round(windowRect.height)}`, 'success');
-            } catch (error) {
-                logMessage(`❌ Failed to get window rect: ${error}`, 'error');
-                updateWindowRectDisplay(null);
-            }
-        }
-
-        // Function to update window rect display
-        function updateWindowRectDisplay(windowRect) {
-            // Update the individual span elements
-            const xElement = document.getElementById('windowRectX');
-            const yElement = document.getElementById('windowRectY');
-            const wElement = document.getElementById('windowRectW');
-            const hElement = document.getElementById('windowRectH');
-
-            if (!xElement || !yElement || !wElement || !hElement) return;
-
-            if (windowRect && typeof windowRect === 'object') {
-                // Valid window rect data
-                xElement.textContent = `X: ${Math.round(windowRect.x)}`;
-                yElement.textContent = `Y: ${Math.round(windowRect.y)}`;
-                wElement.textContent = `W: ${Math.round(windowRect.width)}`;
-                hElement.textContent = `H: ${Math.round(windowRect.height)}`;
-            } else {
-                // Check current extension state
-                if (!window.WebXROpenXRBridge) {
-                    // Extension not available
-                    xElement.textContent = 'X: No Extension';
-                    yElement.textContent = 'Y: No Extension';
-                    wElement.textContent = 'W: No Extension';
-                    hElement.textContent = 'H: No Extension';
-                } else {
-                    // Extension available but API call failed
-                    xElement.textContent = 'X: API Error';
-                    yElement.textContent = 'Y: API Error';
-                    wElement.textContent = 'W: API Error';
-                    hElement.textContent = 'H: API Error';
-                }
-            }
-        }
-
         // Initialize the app
         document.addEventListener('DOMContentLoaded', () => {
             // Check extension status immediately
@@ -1053,104 +971,74 @@
                 }
             }, 2000);
 
-            // Slider event listeners with async/await for perfect timing
-            document.getElementById('ipdScale').addEventListener('input', async function () {
+            // Slider event listeners
+            document.getElementById('ipdScale').addEventListener('input', function () {
                 document.getElementById('ipdScaleValue').textContent = this.value;
                 if (checkExtensionAvailable('IPD Scale')) {
-                    try {
-                        await window.WebXROpenXRBridge.setIPDScale(parseFloat(this.value));
-                        logMessage(`✅ IPD Scale applied: ${this.value}`, 'success');
-                    } catch (error) {
-                        logMessage(`❌ IPD Scale error: ${error}`, 'error');
-                    }
+                    window.WebXROpenXRBridge.setIPDScale(parseFloat(this.value));
                 }
             });
-            document.getElementById('sceneScale').addEventListener('input', async function () {
+            document.getElementById('sceneScale').addEventListener('input', function () {
                 document.getElementById('sceneScaleValue').textContent = this.value;
                 if (checkExtensionAvailable('Scene Scale')) {
-                    try {
-                        await window.WebXROpenXRBridge.setSceneScale(parseFloat(this.value));
-                        logMessage(`✅ Scene Scale applied: ${this.value}`, 'success');
-                    } catch (error) {
-                        logMessage(`❌ Scene Scale error: ${error}`, 'error');
-                    }
+                    window.WebXROpenXRBridge.setSceneScale(parseFloat(this.value));
                 }
             });
-            document.getElementById('parallaxStrength').addEventListener('input', async function () {
+            document.getElementById('parallaxStrength').addEventListener('input', function () {
                 document.getElementById('parallaxStrengthValue').textContent = this.value;
                 if (checkExtensionAvailable('Parallax Strength')) {
-                    try {
-                        await window.WebXROpenXRBridge.setParallaxStrength(parseFloat(this.value));
-                        logMessage(`✅ Parallax Strength applied: ${this.value}`, 'success');
-                    } catch (error) {
-                        logMessage(`❌ Parallax Strength error: ${error}`, 'error');
-                    }
+                    window.WebXROpenXRBridge.setParallaxStrength(parseFloat(this.value));
                 }
             });
-            document.getElementById('convergence').addEventListener('input', async function () {
+            document.getElementById('convergence').addEventListener('input', function () {
                 document.getElementById('convergenceValue').textContent = this.value;
                 if (checkExtensionAvailable('Convergence')) {
-                    try {
-                        await window.WebXROpenXRBridge.setConvergence(parseFloat(this.value));
-                        logMessage(`✅ Convergence applied: ${this.value}`, 'success');
-                    } catch (error) {
-                        logMessage(`❌ Convergence error: ${error}`, 'error');
-                    }
+                    window.WebXROpenXRBridge.setConvergence(parseFloat(this.value));
                 }
             });
-            document.getElementById('perspectiveFactor').addEventListener('input', async function () {
+            document.getElementById('perspectiveFactor').addEventListener('input', function () {
                 document.getElementById('perspectiveFactorValue').textContent = this.value;
                 if (checkExtensionAvailable('Perspective Factor')) {
-                    try {
-                        await window.WebXROpenXRBridge.setPerspectiveFactor(parseFloat(this.value));
-                        logMessage(`✅ Perspective Factor applied: ${this.value}`, 'success');
-                    } catch (error) {
-                        logMessage(`❌ Perspective Factor error: ${error}`, 'error');
-                    }
+                    window.WebXROpenXRBridge.setSessionPerspectiveFactor(parseFloat(this.value));
                 }
             });
 
-            // Toggle event listeners with async/await for perfect timing
-            document.getElementById('projectionMethod').addEventListener('change', async (e) => {
+            // Toggle event listeners
+            document.getElementById('projectionMethod').addEventListener('change', (e) => {
                 if (!checkExtensionAvailable('Projection Method')) return;
 
                 try {
                     const newMethod = e.target.checked ? 0 : 1;
-                    await window.WebXROpenXRBridge.setProjectionMethod(newMethod);
+                    window.WebXROpenXRBridge.setProjectionMethod(newMethod);
                     const method = newMethod === 1 ? 'Display' : 'Camera';
                     document.getElementById('projectionMethodValue').textContent = method;
-                    logMessage(`✅ Projection applied: ${method}`, 'success');
+                    logMessage(`Projection: ${method}`, 'success');
                 } catch (error) {
-                    logMessage(`❌ Projection error: ${error}`, 'error');
+                    logMessage(`Projection error: ${error}`, 'error');
                 }
             });
 
-            document.getElementById('controlMode').addEventListener('change', async (e) => {
+            document.getElementById('controlMode').addEventListener('change', (e) => {
                 if (!checkExtensionAvailable('Control Mode')) return;
 
                 try {
                     const newMode = e.target.checked ? 1 : 0;
-                    await window.WebXROpenXRBridge.setControlMode(newMode);
+                    window.WebXROpenXRBridge.setControlMode(newMode);
                     const mode = newMode === 0 ? 'First Person' : 'Fly';
                     document.getElementById('controlModeValue').textContent = mode;
-                    logMessage(`✅ Control applied: ${mode}`, 'success');
+                    logMessage(`Control: ${mode}`, 'success');
                 } catch (error) {
-                    logMessage(`❌ Control error: ${error}`, 'error');
+                    logMessage(`Control error: ${error}`, 'error');
                 }
             });
 
-            // Button event listeners with async/await for perfect timing
-            document.getElementById('resetSettingsButton').addEventListener('click', async () => {
+            // Button event listeners
+            document.getElementById('resetSettingsButton').addEventListener('click', () => {
                 if (!checkExtensionAvailable('Reset Settings')) return;
 
-                try {
-                    await window.WebXROpenXRBridge.resetSettings(1.0);
-                    logMessage('✅ Settings reset successfully', 'success');
-                    // No need for setTimeout - settings are already applied when Promise resolves
-                    await updateAllSettings();
-                } catch (error) {
-                    logMessage(`❌ Reset error: ${error}`, 'error');
-                }
+                window.WebXROpenXRBridge.resetSettings(1.0);
+                logMessage('Settings reset', 'success');
+                setTimeout(updateAllSettings, 500);
             });
 
             document.getElementById('windowOverlayDemoButton').addEventListener('click', () => {
@@ -1163,28 +1051,28 @@
                 logMessage('Opening Session Management Demo', 'info');
             });
 
-            // Head pose control event listeners with async/await for perfect timing
-            document.getElementById('displayHeight').addEventListener('input', async function () {
+            // Head pose control event listeners
+            document.getElementById('displayHeight').addEventListener('input', function () {
                 document.getElementById('displayHeightValue').textContent = this.value + 'm';
-                await setHeadPoseFromUI();
+                setHeadPoseFromUI();
             });
 
-            document.getElementById('displayYaw').addEventListener('input', async function () {
+            document.getElementById('displayYaw').addEventListener('input', function () {
                 document.getElementById('displayYawValue').textContent = this.value + '°';
-                await setHeadPoseFromUI();
+                setHeadPoseFromUI();
             });
 
-            document.getElementById('displayPitch').addEventListener('input', async function () {
+            document.getElementById('displayPitch').addEventListener('input', function () {
                 document.getElementById('displayPitchValue').textContent = this.value + '°';
-                await setHeadPoseFromUI();
+                setHeadPoseFromUI();
             });
 
-            document.getElementById('displayRoll').addEventListener('input', async function () {
+            document.getElementById('displayRoll').addEventListener('input', function () {
                 document.getElementById('displayRollValue').textContent = this.value + '°';
-                await setHeadPoseFromUI();
+                setHeadPoseFromUI();
             });
 
-            document.getElementById('resetPoseButton').addEventListener('click', async () => {
+            document.getElementById('resetPoseButton').addEventListener('click', () => {
                 document.getElementById('displayHeight').value = 1.75;
                 document.getElementById('displayHeightValue').textContent = '1.75m';
                 document.getElementById('displayYaw').value = 0;
@@ -1193,43 +1081,62 @@
                 document.getElementById('displayPitchValue').textContent = '0°';
                 document.getElementById('displayRoll').value = 0;
                 document.getElementById('displayRollValue').textContent = '0°';
-
-                try {
-                    await setHeadPoseFromUI();
-                    logMessage('✅ Pose reset successfully', 'success');
-                } catch (error) {
-                    logMessage(`❌ Pose reset error: ${error}`, 'error');
-                }
+                setHeadPoseFromUI();
+                logMessage('Pose reset', 'success');
             });
 
-            // Set up event listener for automatic window rect updates from OpenXR runtime
-            // The runtime sends these when the window is resized or moved
-            window.addEventListener('message', function (event) {
-                if (event.source !== window || !event.data) return;
+            // Window change event handling
+            let windowEventCount = 0;
 
-                // Listen for window rect updates from the bridge
-                if (event.data.type === 'webxr-openxr-bridge-response' &&
-                    event.data.setting === 'WindowRect' &&
-                    event.data.success &&
-                    event.data.data) {
+            // Set up window change event listener
+            if (window.WebXROpenXRBridge && window.WebXROpenXRBridge.onWindowChange) {
+                window.WebXROpenXRBridge.onWindowChange((windowRect) => {
+                    windowEventCount++;
 
-                    // This is an automatic window rect update from the runtime
-                    updateWindowRectDisplay(event.data.data);
-                    logMessage(`🔄 Window rect auto-updated: ${Math.round(event.data.data.x)},${Math.round(event.data.data.y)} ${Math.round(event.data.data.width)}x${Math.round(event.data.data.height)}`, 'info');
-                }
+                    // Update window position display
+                    document.getElementById('windowPosition').textContent = `(${windowRect.x}, ${windowRect.y})`;
+
+                    // Update window size display  
+                    document.getElementById('windowSize').textContent = `${windowRect.width} × ${windowRect.height}`;
+
+                    // Update timestamp
+                    const now = new Date();
+                    document.getElementById('lastWindowUpdate').textContent = now.toLocaleTimeString();
+
+                    // Update event count
+                    document.getElementById('windowEventCount').textContent = windowEventCount;
+
+                    // Enhanced logging with event type detection
+                    const eventType = windowEventCount === 1 ? 'Initial' : 'Move/Resize';
+                    logMessage(`${eventType} window event: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, 'info');
+                });
+            } else {
+                // Fallback message if API not available
+                setTimeout(() => {
+                    if (!window.WebXROpenXRBridge || !window.WebXROpenXRBridge.onWindowChange) {
+                        document.getElementById('windowPosition').textContent = 'API not available';
+                        document.getElementById('windowSize').textContent = 'API not available';
+                        document.getElementById('lastWindowUpdate').textContent = 'Extension missing';
+                        logMessage('WebXR-OpenXR Bridge API not available for window events', 'error');
+                    }
+                }, 3000);
+            }
+
+            // Clear window events button
+            document.getElementById('clearWindowEvents').addEventListener('click', () => {
+                windowEventCount = 0;
+                document.getElementById('windowEventCount').textContent = '0';
+                document.getElementById('lastWindowUpdate').textContent = 'Cleared';
+                logMessage('Window events cleared - both move and resize events will be tracked', 'info');
             });
 
-            // Update intervals (window rect is now event-driven, no polling needed)
+            // Update intervals
             setInterval(updateAllSettings, 1000);
             setInterval(updateHeadPoseFromRuntime, 500);
 
             // Initial updates
             updateAllSettings();
             updateHeadPoseFromRuntime();
-            // Note: updateWindowRectFromRuntime() is now called from checkExtensionStatus()
-
-            // Log about the new event-driven window rect feature
-            logMessage('✨ Window Rect now updates automatically on resize/move - no polling needed!', 'success');
         });
     </script>
 </body>

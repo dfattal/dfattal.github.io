@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Window Move/Resize Event Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+        }
+
+        .event-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .event-entry {
+            margin: 2px 0;
+            padding: 2px 4px;
+        }
+
+        .move-event {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .resize-event {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .status-item {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .status-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .status-value {
+            font-size: 16px;
+            color: #333;
+            margin-top: 4px;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+        <h1>🪟 Window Move/Resize Event Test</h1>
+
+        <div class="instructions">
+            <strong>Instructions:</strong> Move and resize the OpenXR window to test both events.
+            This page will show real-time notifications for both window moves and resizes.
+        </div>
+
+        <div class="status">
+            <div class="status-item">
+                <div class="status-label">Current Position</div>
+                <div class="status-value" id="currentPosition">Unknown</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Current Size</div>
+                <div class="status-value" id="currentSize">Unknown</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Move Events</div>
+                <div class="status-value" id="moveCount">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Resize Events</div>
+                <div class="status-value" id="resizeCount">0</div>
+            </div>
+        </div>
+
+        <h3>Event Log:</h3>
+        <div class="event-log" id="eventLog">
+            <div class="event-entry">Waiting for window events...</div>
+        </div>
+
+        <button onclick="clearLog()" style="margin-top: 10px; padding: 8px 16px;">Clear Log</button>
+    </div>
+
+    <script>
+        let moveCount = 0;
+        let resizeCount = 0;
+        let lastPosition = null;
+        let lastSize = null;
+
+        function addLogEntry(message, type = '') {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = `event-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateStatus(windowRect) {
+            document.getElementById('currentPosition').textContent = `(${windowRect.x}, ${windowRect.y})`;
+            document.getElementById('currentSize').textContent = `${windowRect.width} × ${windowRect.height}`;
+            document.getElementById('moveCount').textContent = moveCount;
+            document.getElementById('resizeCount').textContent = resizeCount;
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '<div class="event-entry">Log cleared. Waiting for events...</div>';
+            moveCount = 0;
+            resizeCount = 0;
+            lastPosition = null;
+            lastSize = null;
+            updateStatus({ x: 0, y: 0, width: 0, height: 0 });
+        }
+
+        // Check for WebXR Bridge API
+        function initializeTest() {
+            if (window.WebXROpenXRBridge && window.WebXROpenXRBridge.onWindowChange) {
+                addLogEntry('✅ WebXR-OpenXR Bridge API detected');
+                addLogEntry('🎯 Listening for window move and resize events...');
+
+                // Set up window change listener
+                window.WebXROpenXRBridge.onWindowChange((windowRect) => {
+                    // Determine event type by comparing with previous values
+                    let eventType = 'unknown';
+                    let eventClass = '';
+
+                    if (lastPosition === null && lastSize === null) {
+                        eventType = 'initial';
+                        eventClass = '';
+                        addLogEntry(`Initial window state: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, eventClass);
+                    } else {
+                        const positionChanged = (lastPosition.x !== windowRect.x || lastPosition.y !== windowRect.y);
+                        const sizeChanged = (lastSize.width !== windowRect.width || lastSize.height !== windowRect.height);
+
+                        if (positionChanged && sizeChanged) {
+                            eventType = 'move + resize';
+                            eventClass = 'move-event';
+                            moveCount++;
+                            resizeCount++;
+                            addLogEntry(`MOVE + RESIZE: pos=(${windowRect.x},${windowRect.y}) size=${windowRect.width}×${windowRect.height}`, eventClass);
+                        } else if (positionChanged) {
+                            eventType = 'move';
+                            eventClass = 'move-event';
+                            moveCount++;
+                            addLogEntry(`MOVE: from (${lastPosition.x},${lastPosition.y}) to (${windowRect.x},${windowRect.y})`, eventClass);
+                        } else if (sizeChanged) {
+                            eventType = 'resize';
+                            eventClass = 'resize-event';
+                            resizeCount++;
+                            addLogEntry(`RESIZE: from ${lastSize.width}×${lastSize.height} to ${windowRect.width}×${windowRect.height}`, eventClass);
+                        }
+                    }
+
+                    // Update tracking variables
+                    lastPosition = { x: windowRect.x, y: windowRect.y };
+                    lastSize = { width: windowRect.width, height: windowRect.height };
+
+                    // Update status display
+                    updateStatus(windowRect);
+                });
+
+            } else {
+                addLogEntry('❌ WebXR-OpenXR Bridge API not found');
+                addLogEntry('Please install the Chrome extension and ensure the OpenXR runtime is running');
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Give the extension time to inject the API
+            setTimeout(initializeTest, 1000);
+        });
+    </script>
+</body>
+
+</html>
