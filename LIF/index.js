@@ -63,6 +63,12 @@ class lifGenerator {
             formData.forEach((value, key) => {
                 params[key] = value;
             });
+            if (params.seed === "") {
+                delete params.seed;
+            } else {
+                params.seed = parseInt(params.seed);
+                if (isNaN(params.seed)) delete params.seed;
+            }
             params.outpaint = `${parseFloat(params.outpaint) + .000001}`; // avoid issue with 0
             delete params.outpaintNegativePrompt;
             delete params.outpaintPrompt;
@@ -80,7 +86,9 @@ class lifGenerator {
                         outputs: { outputLifUrl: this.outpaintImUploadUrl },
                         params: {
                             inpaintMethod: "lama",
-                            outpaint: "0.1"
+                            outpaint: "0.1",
+                            outpaintPrompt: "",
+                            outpaintNegativePrompt: ""
                         }
                     }
                 },
@@ -127,8 +135,22 @@ class lifGenerator {
             formData.forEach((value, key) => {
                 params[key] = value;
             });
+           
+            if (params.seed === "") {
+                delete params.seed;
+            } else {
+                params.seed = parseInt(params.seed);
+                if (isNaN(params.seed)) delete params.seed;
+            }
             result.executionPlan[0].productParams.params.outpaint = params.outpaint;
             result.executionPlan[0].productParams.params.inpaintMethod = params.inpaintMethod;
+            result.executionPlan[0].productParams.params.outpaintPrompt = params.outpaintPrompt;
+            result.executionPlan[0].productParams.params.outpaintNegativePrompt = params.outpaintNegativePrompt;
+
+            if ('seed' in params) {
+                result.executionPlan[0].productParams.params.seed = params.seed;
+            }
+
             params.outpaint = `${-parseFloat(params.outpaint)}`; // crop main image back to original size
             result.executionPlan[2].productParams.inputs.inputImageUrl = this.outpaintImDownloadUrl;
             result.executionPlan[2].productParams.inputs.inputDisparityUrl = this.dispDownloadUrl;

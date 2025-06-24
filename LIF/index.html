@@ -223,6 +223,17 @@
                     process.</span>
             </div>
         </div>
+
+        <!-- Stable-Diffusion Seed -->
+        <div class="form-row">
+            <div class="input-container tooltip">
+                <label for="seed">Seed:</label>
+                <input type="number" id="seed" name="seed">
+                <span class="tooltiptext">Seed for SD, Blank for random</span>
+            </div>
+        </div>
+
+
         <button type="button" id="ldlSubmit" onclick="ldlFormSubmit()">Create LDI</button>
         <button type="button" onclick="ldlFormReset()" style="float: right; background-color: #666;">Reset
             Parameters</button>
@@ -244,10 +255,11 @@
             document.getElementById('outpaintPrompt').value = 'inpaint';
             document.getElementById('outpaintNegativePrompt').value = '';
             document.getElementById('outpaint').value = 0.1;
+            document.getElementById('seed').value = '';
         }
         document.getElementById('inpaintMethod').addEventListener('change', function () {
             console.log(this.value);
-            const promptFields = document.querySelectorAll('#inpaintPrompt, #inpaintNegativePrompt, #outpaintPrompt, #outpaintNegativePrompt');
+            const promptFields = document.querySelectorAll('#inpaintPrompt, #inpaintNegativePrompt, #outpaintPrompt, #outpaintNegativePrompt, #seed');
 
             if (this.value === 'lama') {
                 promptFields.forEach(field => {
