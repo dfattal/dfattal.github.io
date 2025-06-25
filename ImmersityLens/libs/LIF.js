@@ -799,24 +799,33 @@ class lifViewer {
             return null;
         }
 
-        // GENERIC: Skip nested container detection for carousel/list items
-        // Images in carousels/lists are typically positioned correctly relative to their immediate container
-        const carouselContainer = this.originalImage.closest('li') ||
+        // GENERIC: Skip nested container detection for carousel/list/grid items
+        // Images in carousels/lists/grids are typically positioned correctly relative to their immediate container
+        const specialLayoutContainer = this.originalImage.closest('li') ||
             this.originalImage.closest('[class*="carousel"]') ||
             this.originalImage.closest('[class*="slider"]') ||
             this.originalImage.closest('[class*="feed"]') ||
             this.originalImage.closest('[class*="list-item"]') ||
+            this.originalImage.closest('[class*="masonry"]') ||
+            this.originalImage.closest('[class*="grid"]') ||
+            this.originalImage.closest('[data-testid*="grid"]') ||
+            this.originalImage.closest('[data-testid*="masonry"]') ||
+            this.originalImage.closest('[data-masonryposition]') ||
             this.originalImage.closest('[role="listitem"]');
 
-        if (carouselContainer) {
-            console.log('🎠 Carousel/list item detected:', {
-                carouselElement: carouselContainer.className || carouselContainer.tagName,
-                containerElement: this.container.className || this.container.tagName
+        if (specialLayoutContainer) {
+            console.log('🎠 Special layout container detected:', {
+                layoutElement: specialLayoutContainer.className || specialLayoutContainer.tagName,
+                containerElement: this.container.className || this.container.tagName,
+                layoutType: specialLayoutContainer.closest('[class*="masonry"], [data-testid*="masonry"], [data-masonryposition]') ? 'masonry' :
+                    specialLayoutContainer.closest('[class*="grid"], [data-testid*="grid"]') ? 'grid' :
+                        specialLayoutContainer.closest('[class*="carousel"], [class*="slider"]') ? 'carousel' :
+                            specialLayoutContainer.closest('[class*="feed"], [class*="list"]') ? 'feed/list' : 'other'
             });
 
-            // For carousel items, always skip nested container offset calculation
+            // For special layout containers, always skip nested container offset calculation
             // The image should be positioned relative to its immediate container (usually an <a> tag)
-            console.log('🎠 Skipping nested container offset calculation for carousel item');
+            console.log('🎠 Skipping nested container offset calculation for special layout item');
             return null;
         }
 
