@@ -1473,6 +1473,11 @@ class lifViewer {
                     stopAnimation();
                     console.log('🎠 Carousel interference fallback: mouse leave');
                 }
+
+                // CRITICAL: Forward mouse coordinates to lifViewer for 3D effect
+                if (nowOverImage && this.canvas && this.mousePos) {
+                    this.updateMousePosition(e);
+                }
             };
 
             this.container.addEventListener('mousemove', containerMouseMove, { passive: true });
@@ -1604,6 +1609,11 @@ class lifViewer {
                         stopAnimation();
                         console.log('🎯 Overlay detected mouse leave image area');
                     }
+
+                    // CRITICAL: Forward mouse coordinates to lifViewer for 3D effect
+                    if (nowOverImage && this.canvas && this.mousePos) {
+                        this.updateMousePosition(e);
+                    }
                 };
 
                 overlay.addEventListener('mouseenter', overlayMouseEnter, { passive: true });
@@ -1654,9 +1664,15 @@ class lifViewer {
                     ))
                 ))) {
 
-                // Check if this element covers the image area
-                if (this.doesElementCoverImage(currentElement)) {
+                // For anchor links, be more permissive since they often capture events
+                // even without significant visual overlap
+                const isAnchorLink = currentElement.tagName === 'A';
+                const coversImage = this.doesElementCoverImage(currentElement);
+
+                if (coversImage || (isAnchorLink && this.isAnchorLikelyInterferingWithMouse(currentElement))) {
                     overlays.push(currentElement);
+                    console.log('🔗 Found overlay element:', currentElement.tagName, currentElement.className || '[no class]',
+                        isAnchorLink ? '(anchor - permissive detection)' : '(covers image)');
                 }
             }
 
@@ -1665,13 +1681,32 @@ class lifViewer {
         }
 
         // Method 2: Check for elements at the same level that might be positioned over the image
-        if (this.container && overlays.length === 0) {
+        if (this.container) {
             const containerChildren = Array.from(this.container.parentElement?.children || []);
             containerChildren.forEach(child => {
                 if (child !== this.container &&
                     (child.tagName === 'A' || child.classList.contains('overlay') || child.hasAttribute('data-link-type'))) {
-                    if (this.doesElementCoverImage(child)) {
+
+                    const isAnchorLink = child.tagName === 'A';
+                    const coversImage = this.doesElementCoverImage(child);
+
+                    if (coversImage || (isAnchorLink && this.isAnchorLikelyInterferingWithMouse(child))) {
+                        if (!overlays.includes(child)) {
+                            overlays.push(child);
+                            console.log('🔗 Found sibling overlay element:', child.tagName, child.className || '[no class]',
+                                isAnchorLink ? '(anchor - permissive detection)' : '(covers image)');
+                        }
+                    }
+                }
+            });
+
+            // Also check one level up for anchor elements (common in card layouts)
+            const grandParentChildren = Array.from(this.container.parentElement?.parentElement?.children || []);
+            grandParentChildren.forEach(child => {
+                if (child.tagName === 'A' && this.isAnchorLikelyInterferingWithMouse(child)) {
+                    if (!overlays.includes(child)) {
                         overlays.push(child);
+                        console.log('🔗 Found parent-level anchor overlay:', child.className || '[no class]');
                     }
                 }
             });
@@ -1707,6 +1742,58 @@ class lifViewer {
     }
 
     /**
+     * Check if an anchor link is likely interfering with mouse events
+     * Even if it doesn't physically cover the image significantly
+     */
+    isAnchorLikelyInterferingWithMouse(anchorElement) {
+        if (!anchorElement || anchorElement.tagName !== 'A') return false;
+
+        try {
+            const anchorRect = anchorElement.getBoundingClientRect();
+            const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Check if anchor is positioned in a way that could interfere
+            // 1. Anchor is in the same general area as the image
+            const anchorCenterX = anchorRect.left + anchorRect.width / 2;
+            const anchorCenterY = anchorRect.top + anchorRect.height / 2;
+
+            const horizontalOverlap = anchorCenterX >= imageRect.left && anchorCenterX <= imageRect.right;
+            const verticalOverlap = anchorCenterY >= imageRect.top && anchorCenterY <= imageRect.bottom;
+
+            // 2. Or anchor completely contains the image (common in card layouts)
+            const containsImage = anchorRect.left <= imageRect.left &&
+                anchorRect.right >= imageRect.right &&
+                anchorRect.top <= imageRect.top &&
+                anchorRect.bottom >= imageRect.bottom;
+
+            // 3. Or there's ANY overlap (be more permissive for anchors)
+            const hasAnyOverlap = !(anchorRect.right < imageRect.left ||
+                anchorRect.left > imageRect.right ||
+                anchorRect.bottom < imageRect.top ||
+                anchorRect.top > imageRect.bottom);
+
+            const isInterfering = horizontalOverlap || verticalOverlap || containsImage || hasAnyOverlap;
+
+            if (isInterfering) {
+                console.log('🎯 Anchor likely interfering:', {
+                    className: anchorElement.className,
+                    horizontalOverlap,
+                    verticalOverlap,
+                    containsImage,
+                    hasAnyOverlap,
+                    anchorRect: { width: anchorRect.width, height: anchorRect.height },
+                    imageRect: { width: imageRect.width, height: imageRect.height }
+                });
+            }
+
+            return isInterfering;
+        } catch (error) {
+            console.warn('Error checking anchor interference:', error);
+            return true; // When in doubt, assume it might interfere
+        }
+    }
+
+    /**
      * Check if an element covers the image area
      */
     doesElementCoverImage(element) {
@@ -1738,8 +1825,31 @@ class lifViewer {
     }
 
     /**
- * Check if mouse position is over the image area
+ * Update mouse position for 3D effect tracking
+ * This is called when overlay elements are capturing mouse events
  */
+    updateMousePosition(event) {
+        if (!this.canvas || !this.mousePos) return;
+
+        try {
+            const rect = this.canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left - rect.width / 2;
+            const mouseY = event.clientY - rect.top - rect.height / 2;
+
+            // Calculate the position relative to the center, normalized between -0.5 and +0.5
+            this.mousePos.x = (mouseX / rect.width);
+            this.mousePos.y = (mouseY / rect.width);
+
+            // Optional: Add debug logging to verify mouse tracking is working
+            console.log(`🎯 Updated mouse position: (${this.mousePos.x.toFixed(3)}, ${this.mousePos.y.toFixed(3)})`);
+        } catch (error) {
+            console.warn('Error updating mouse position:', error);
+        }
+    }
+
+    /**
+     * Check if mouse position is over the image area
+     */
     isMouseOverImageArea(event) {
         if (!this.originalImage) return false;
 

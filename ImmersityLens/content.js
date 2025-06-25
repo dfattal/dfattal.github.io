@@ -1782,7 +1782,11 @@ function analyzeLayoutPattern(element, img) {
         // Detect aspect ratio containers and similar patterns
         const isRatioBox = currentElement.classList.contains('ratio-box') ||
             currentElement.classList.contains('aspect-ratio') ||
-            currentElement.classList.contains('ratio');
+            currentElement.classList.contains('ratio') ||
+            // Enhanced detection for various aspect ratio patterns
+            currentElement.className.includes('aspect-ratio') ||
+            currentElement.className.includes('ratio-frame') ||
+            currentElement.className.includes('aspect-container');
 
         if ((parentHasPaddingValue || parentHasPercentagePadding) && parentHasZeroHeight || isRatioBox) {
             foundPaddingContainer = true;
