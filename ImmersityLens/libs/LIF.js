@@ -630,6 +630,19 @@ class lifViewer {
         this.canvasZIndex = options.canvasZIndex || 4999;
         this.imageZIndex = options.imageZIndex || 4999;
 
+        // Theater mode detection for enhanced z-index handling
+        this.isTheaterMode = this.detectTheaterModeContext();
+
+        // Boost z-index for theater mode scenarios
+        if (this.isTheaterMode) {
+            this.canvasZIndex = Math.max(this.canvasZIndex, 999999);
+            this.imageZIndex = Math.max(this.imageZIndex, 999998);
+            console.log('🎭 Theater mode detected - boosting z-index:', {
+                canvasZIndex: this.canvasZIndex,
+                imageZIndex: this.imageZIndex
+            });
+        }
+
         // Get layout-specific configuration
         this.layoutConfig = this.getLayoutConfiguration();
 
@@ -1577,62 +1590,284 @@ class lifViewer {
     setupOverlayEventPropagation(startAnimation, stopAnimation) {
         if (!this.originalImage || !this.container) return;
 
-        // Find potential overlay elements that might cover the image
-        const overlayElements = this.findOverlayElements();
+        console.log('🔄 Setting up Universal Event Propagation System...');
 
-        if (overlayElements.length > 0) {
-            overlayElements.forEach((overlay, index) => {
-                // Add mouse event handlers to overlay elements
-                const overlayMouseEnter = (e) => {
-                    // Check if mouse is actually over the image area
-                    if (this.isMouseOverImageArea(e)) {
-                        startAnimation();
-                    }
-                };
+        // Universal system: Find ALL potential interfering elements
+        const interferingElements = this.findAllInterferingElements();
 
-                const overlayMouseLeave = (e) => {
-                    // For mouseleave, we want to stop animation when leaving the overlay entirely
-                    stopAnimation();
-                };
+        if (interferingElements.length > 0) {
+            console.log(`📡 Found ${interferingElements.length} potentially interfering elements, setting up event propagation`);
 
-                // Track mouse state for this overlay
-                let isMouseOverImage = false;
-
-                // Use mousemove for more precise detection
-                const overlayMouseMove = (e) => {
-                    const nowOverImage = this.isMouseOverImageArea(e);
-
-                    if (nowOverImage && !isMouseOverImage) {
-                        // Mouse entered image area
-                        isMouseOverImage = true;
-                        startAnimation();
-                        console.log('🎯 Overlay detected mouse enter image area');
-                    } else if (!nowOverImage && isMouseOverImage) {
-                        // Mouse left image area
-                        isMouseOverImage = false;
-                        stopAnimation();
-                        console.log('🎯 Overlay detected mouse leave image area');
-                    }
-
-                    // CRITICAL: Forward mouse coordinates to lifViewer for 3D effect
-                    if (nowOverImage && this.canvas && this.mousePos) {
-                        this.updateMousePosition(e);
-                    }
-                };
-
-                overlay.addEventListener('mouseenter', overlayMouseEnter, { passive: true });
-                overlay.addEventListener('mouseleave', overlayMouseLeave, { passive: true });
-                overlay.addEventListener('mousemove', overlayMouseMove, { passive: true });
-
-                // Store references for potential cleanup
-                if (!overlay._lifEventHandlers) {
-                    overlay._lifEventHandlers = [];
-                }
-                overlay._lifEventHandlers.push({ type: 'mouseenter', handler: overlayMouseEnter });
-                overlay._lifEventHandlers.push({ type: 'mouseleave', handler: overlayMouseLeave });
-                overlay._lifEventHandlers.push({ type: 'mousemove', handler: overlayMouseMove });
+            interferingElements.forEach((element, index) => {
+                this.setupElementEventPropagation(element, startAnimation, stopAnimation, index);
             });
         }
+
+        // Additional systematic approach: Setup global document-level event listener
+        // to catch events that might be captured before reaching our elements
+        this.setupGlobalEventFallback(startAnimation, stopAnimation);
+    }
+
+    /**
+     * Systematic approach: Find ALL elements that could potentially interfere with canvas mouse events
+     */
+    findAllInterferingElements() {
+        const interferingElements = new Set(); // Use Set to avoid duplicates
+
+        if (!this.originalImage) return Array.from(interferingElements);
+
+        try {
+            const imageRect = this.originalImage.getBoundingClientRect();
+
+            console.log('🔍 Scanning for interfering elements...');
+
+            // Method 1: Use document.elementsFromPoint at multiple points across the image
+            this.scanElementsAtImagePoints(imageRect, interferingElements);
+
+            // Method 2: Search DOM tree for potential overlays
+            this.searchDOMForOverlays(interferingElements);
+
+            // Method 3: Specific theater mode detection (Flickr, lightboxes, etc.)
+            this.detectTheaterModeElements(interferingElements);
+
+            // Method 4: Search for tall navigation elements that might cover image areas
+            this.detectTallNavigationElements(interferingElements);
+
+            console.log(`📊 Found ${interferingElements.size} total interfering elements`);
+
+        } catch (error) {
+            console.warn('⚠️ Error in findAllInterferingElements:', error);
+        }
+
+        return Array.from(interferingElements);
+    }
+
+    /**
+     * Scan for elements at multiple points across the image area
+     */
+    scanElementsAtImagePoints(imageRect, interferingElements) {
+        if (!imageRect || imageRect.width === 0 || imageRect.height === 0) return;
+
+        // Test points: corners, center, and edge midpoints
+        const testPoints = [
+            { x: imageRect.left + imageRect.width * 0.5, y: imageRect.top + imageRect.height * 0.5 }, // center
+            { x: imageRect.left + imageRect.width * 0.25, y: imageRect.top + imageRect.height * 0.25 }, // top-left quad
+            { x: imageRect.left + imageRect.width * 0.75, y: imageRect.top + imageRect.height * 0.25 }, // top-right quad
+            { x: imageRect.left + imageRect.width * 0.25, y: imageRect.top + imageRect.height * 0.75 }, // bottom-left quad
+            { x: imageRect.left + imageRect.width * 0.75, y: imageRect.top + imageRect.height * 0.75 }, // bottom-right quad
+        ];
+
+        testPoints.forEach((point, index) => {
+            try {
+                const elementsAtPoint = document.elementsFromPoint(point.x, point.y);
+                let foundImageInStack = false;
+
+                for (const element of elementsAtPoint) {
+                    // Stop scanning when we reach our image (elements below won't interfere)
+                    if (element === this.originalImage || element === this.canvas) {
+                        foundImageInStack = true;
+                        break;
+                    }
+
+                    // Check if this element could interfere with mouse events
+                    if (this.isElementPotentiallyInterfering(element)) {
+                        interferingElements.add(element);
+                        console.log(`📍 Point ${index + 1}: Found interfering element:`, element.tagName, element.className || '[no class]');
+                    }
+                }
+
+                if (!foundImageInStack) {
+                    console.warn(`📍 Point ${index + 1}: Image not found in element stack at (${point.x.toFixed(1)}, ${point.y.toFixed(1)})`);
+                }
+            } catch (error) {
+                console.warn(`📍 Point ${index + 1}: Error scanning elements:`, error);
+            }
+        });
+    }
+
+    /**
+     * Search DOM tree for potential overlay elements
+     */
+    searchDOMForOverlays(interferingElements) {
+        // Search parent hierarchy
+        let currentElement = this.originalImage.parentElement;
+        let searchDepth = 0;
+        const maxSearchDepth = 6;
+
+        while (currentElement && searchDepth < maxSearchDepth) {
+            if (this.isElementPotentiallyInterfering(currentElement)) {
+                const coversImage = this.doesElementCoverImage(currentElement);
+                const isAnchor = currentElement.tagName === 'A';
+
+                if (coversImage || (isAnchor && this.isAnchorLikelyInterferingWithMouse(currentElement))) {
+                    interferingElements.add(currentElement);
+                    console.log(`🏗️ Parent hierarchy: Found interfering element:`, currentElement.tagName, currentElement.className || '[no class]');
+                }
+            }
+            currentElement = currentElement.parentElement;
+            searchDepth++;
+        }
+
+        // Search sibling elements
+        if (this.container && this.container.parentElement) {
+            const siblings = Array.from(this.container.parentElement.children);
+            siblings.forEach(sibling => {
+                if (sibling !== this.container && this.isElementPotentiallyInterfering(sibling)) {
+                    const coversImage = this.doesElementCoverImage(sibling);
+                    const isAnchor = sibling.tagName === 'A';
+
+                    if (coversImage || (isAnchor && this.isAnchorLikelyInterferingWithMouse(sibling))) {
+                        interferingElements.add(sibling);
+                        console.log(`👥 Siblings: Found interfering element:`, sibling.tagName, sibling.className || '[no class]');
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Check if an element could potentially interfere with mouse events
+     */
+    isElementPotentiallyInterfering(element) {
+        if (!element || element === this.originalImage || element === this.canvas || element === this.container) {
+            return false;
+        }
+
+        // Check for clickable elements
+        const isClickable = element.tagName === 'A' ||
+            element.tagName === 'BUTTON' ||
+            element.hasAttribute('onclick') ||
+            element.hasAttribute('href') ||
+            element.style.cursor === 'pointer' ||
+            element.hasAttribute('data-track') ||
+            element.hasAttribute('tabindex') ||
+            element.getAttribute('role') === 'button';
+
+        // Check for overlay-like elements
+        const isOverlayLike = element.classList.contains('overlay') ||
+            element.classList.contains('navigation') ||
+            element.classList.contains('nav') ||
+            element.classList.contains('navigate') ||
+            element.classList.contains('link') ||
+            element.classList.contains('button') ||
+            element.classList.contains('photo-notes') ||
+            element.classList.contains('zoom') ||
+            element.hasAttribute('data-link-type');
+
+        // Check for theater mode navigation patterns
+        const isTheaterNav = this.isTheaterModeNavigationElement(element);
+
+        return isClickable || isOverlayLike || isTheaterNav;
+    }
+
+    /**
+     * Setup event propagation for a specific element
+     */
+    setupElementEventPropagation(element, startAnimation, stopAnimation, index) {
+        if (!element || element._lifEventPropagationSetup) return; // Prevent duplicate setup
+
+        console.log(`🎯 Setting up event propagation for element ${index + 1}:`, element.tagName, element.className || '[no class]');
+
+        // Track mouse state for this specific element
+        let isMouseOverImageViaThisElement = false;
+
+        const propagateMouseEnter = (e) => {
+            if (this.isMouseOverImageArea(e)) {
+                isMouseOverImageViaThisElement = true;
+                startAnimation();
+                console.log(`🎯 Element ${index + 1}: Propagated mouse enter`);
+            }
+        };
+
+        const propagateMouseLeave = (e) => {
+            if (isMouseOverImageViaThisElement) {
+                isMouseOverImageViaThisElement = false;
+                stopAnimation();
+                console.log(`🎯 Element ${index + 1}: Propagated mouse leave`);
+            }
+        };
+
+        const propagateMouseMove = (e) => {
+            const nowOverImage = this.isMouseOverImageArea(e);
+
+            if (nowOverImage && !isMouseOverImageViaThisElement) {
+                isMouseOverImageViaThisElement = true;
+                startAnimation();
+                console.log(`🎯 Element ${index + 1}: Propagated mouse enter via move`);
+            } else if (!nowOverImage && isMouseOverImageViaThisElement) {
+                isMouseOverImageViaThisElement = false;
+                stopAnimation();
+                console.log(`🎯 Element ${index + 1}: Propagated mouse leave via move`);
+            }
+
+            // Always forward mouse coordinates for 3D effect when over image
+            if (nowOverImage && this.canvas && this.mousePos) {
+                this.updateMousePosition(e);
+            }
+        };
+
+        // Add event listeners
+        element.addEventListener('mouseenter', propagateMouseEnter, { passive: true });
+        element.addEventListener('mouseleave', propagateMouseLeave, { passive: true });
+        element.addEventListener('mousemove', propagateMouseMove, { passive: true });
+
+        // Mark element as setup and store handlers for cleanup
+        element._lifEventPropagationSetup = true;
+        if (!element._lifEventHandlers) {
+            element._lifEventHandlers = [];
+        }
+        element._lifEventHandlers.push(
+            { type: 'mouseenter', handler: propagateMouseEnter },
+            { type: 'mouseleave', handler: propagateMouseLeave },
+            { type: 'mousemove', handler: propagateMouseMove }
+        );
+    }
+
+    /**
+     * Setup global document-level event fallback for edge cases
+     */
+    setupGlobalEventFallback(startAnimation, stopAnimation) {
+        if (this._globalEventFallbackSetup) return; // Prevent duplicate setup
+
+        console.log('🌐 Setting up global event fallback...');
+
+        let globalMouseOverImage = false;
+
+        const globalMouseMoveHandler = (e) => {
+            if (!this.originalImage) return;
+
+            const nowOverImage = this.isMouseOverImageArea(e);
+
+            if (nowOverImage && !globalMouseOverImage) {
+                globalMouseOverImage = true;
+                startAnimation();
+                console.log('🌐 Global fallback: Mouse enter detected');
+            } else if (!nowOverImage && globalMouseOverImage) {
+                globalMouseOverImage = false;
+                stopAnimation();
+                console.log('🌐 Global fallback: Mouse leave detected');
+            }
+
+            // Update mouse position for 3D effect
+            if (nowOverImage && this.canvas && this.mousePos) {
+                this.updateMousePosition(e);
+            }
+        };
+
+        // Use throttled global mouse move listener to avoid performance issues
+        let globalMoveThrottleId = null;
+        const throttledGlobalMove = (e) => {
+            if (globalMoveThrottleId) return;
+            globalMoveThrottleId = requestAnimationFrame(() => {
+                globalMouseMoveHandler(e);
+                globalMoveThrottleId = null;
+            });
+        };
+
+        document.addEventListener('mousemove', throttledGlobalMove, { passive: true });
+
+        this._globalEventFallbackSetup = true;
+        this._globalEventHandlers = [{ type: 'mousemove', handler: throttledGlobalMove }];
     }
 
     /**
@@ -1716,6 +1951,10 @@ class lifViewer {
             });
         }
 
+        // Method 2.5: Enhanced theater mode detection for navigation elements
+        // Specifically targets photo viewer/theater mode layouts like Flickr, Lightbox, etc.
+        this.detectTheaterModeNavigation(overlays);
+
         // Method 3: Use document.elementsFromPoint as fallback
         if (overlays.length === 0 && this.originalImage) {
             try {
@@ -1746,6 +1985,379 @@ class lifViewer {
     }
 
     /**
+     * Detect theater mode elements specifically for the universal interference system
+     */
+    detectTheaterModeElements(interferingElements) {
+        if (!this.container || !this.originalImage) return;
+
+        // Theater mode navigation patterns to detect
+        const theaterNavSelectors = [
+            // Flickr-specific navigation
+            '.navigate-target.navigate-prev',
+            '.navigate-target.navigate-next',
+            'a.navigate-prev',
+            'a.navigate-next',
+
+            // Generic photo navigation patterns
+            '.photo-nav-prev',
+            '.photo-nav-next',
+            '.prev-photo',
+            '.next-photo',
+            '.lightbox-prev',
+            '.lightbox-next',
+            '.gallery-prev',
+            '.gallery-next',
+            '.viewer-prev',
+            '.viewer-next',
+
+            // Photo notes and overlays
+            '.photo-notes',
+            '.photo-notes-scrappy-view',
+            '.vr-overlay-view',
+            '.zoom-view',
+
+            // Theater mode specific overlays
+            '.theater-overlay',
+            '.photo-overlay',
+            '.image-overlay'
+        ];
+
+        // Search from document level for theater mode elements
+        theaterNavSelectors.forEach(selector => {
+            try {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(element => {
+                    // Check if this element might interfere with our image
+                    if (this.isElementNearImage(element)) {
+                        interferingElements.add(element);
+                        console.log(`🎭 Theater mode: Found interfering element:`, element.tagName, element.className || '[no class]');
+                    }
+                });
+            } catch (error) {
+                console.warn(`⚠️ Error searching for selector ${selector}:`, error);
+            }
+        });
+
+        // Search within image container's parent for navigation elements
+        if (this.container && this.container.parentElement) {
+            const containerParent = this.container.parentElement;
+            const navElements = containerParent.querySelectorAll('a[class*="navigate"], a[class*="nav"], [class*="photo-notes"]');
+
+            navElements.forEach(element => {
+                if (this.isTheaterModeNavigationElement(element)) {
+                    interferingElements.add(element);
+                    console.log(`🎭 Container navigation: Found interfering element:`, element.tagName, element.className || '[no class]');
+                }
+            });
+        }
+    }
+
+    /**
+     * Enhanced method to detect tall navigation elements for the universal interference system
+     */
+    detectTallNavigationElements(interferingElements) {
+        if (!this.originalImage) return;
+
+        try {
+            const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Search for tall elements that might be navigation
+            const potentialNavElements = document.querySelectorAll('a, button, [role="button"]');
+
+            potentialNavElements.forEach(element => {
+                try {
+                    const elementRect = element.getBoundingClientRect();
+
+                    // Check if it's a tall element that might cover part of the image
+                    const isTall = elementRect.height > Math.min(200, imageRect.height * 0.5);
+                    const isWide = elementRect.width > Math.min(100, imageRect.width * 0.3);
+
+                    if (isTall || isWide) {
+                        // Check if it overlaps or is adjacent to the image
+                        const overlapsOrAdjacent = this.isElementAdjacentToImage(elementRect, imageRect) ||
+                            this.doesElementOverlapImage(elementRect, imageRect);
+
+                        if (overlapsOrAdjacent) {
+                            interferingElements.add(element);
+                            console.log(`📏 Tall/Wide navigation: Found interfering element:`, element.tagName, element.className || '[no class]',
+                                `${elementRect.width.toFixed(0)}x${elementRect.height.toFixed(0)}`);
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Error checking element dimensions:`, error);
+                }
+            });
+        } catch (error) {
+            console.warn(`⚠️ Error in detectTallNavigationElements:`, error);
+        }
+    }
+
+    /**
+     * Check if an element overlaps with the image
+     */
+    doesElementOverlapImage(elementRect, imageRect) {
+        return !(elementRect.right < imageRect.left ||
+            elementRect.left > imageRect.right ||
+            elementRect.bottom < imageRect.top ||
+            elementRect.top > imageRect.bottom);
+    }
+
+    /**
+     * Check if an element is near the image (for theater mode detection)
+     */
+    isElementNearImage(element, threshold = 50) {
+        if (!element || !this.originalImage) return false;
+
+        try {
+            const elementRect = element.getBoundingClientRect();
+            const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Check if element is within threshold distance of image
+            const horizontalDistance = Math.max(0,
+                Math.max(elementRect.left - imageRect.right, imageRect.left - elementRect.right));
+            const verticalDistance = Math.max(0,
+                Math.max(elementRect.top - imageRect.bottom, imageRect.top - elementRect.bottom));
+
+            return horizontalDistance <= threshold && verticalDistance <= threshold;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Detect theater mode navigation elements that might interfere with canvas interaction
+     * This specifically handles photo viewer layouts like Flickr, Lightbox, modal galleries, etc.
+     */
+    detectTheaterModeNavigation(overlays) {
+        if (!this.container || !this.originalImage) return;
+
+        // Theater mode navigation patterns to detect
+        const theaterNavSelectors = [
+            // Flickr-specific navigation
+            '.navigate-target.navigate-prev',
+            '.navigate-target.navigate-next',
+            'a.navigate-prev',
+            'a.navigate-next',
+
+            // Generic photo navigation patterns
+            '.photo-nav-prev',
+            '.photo-nav-next',
+            '.prev-photo',
+            '.next-photo',
+            '.lightbox-prev',
+            '.lightbox-next',
+            '.gallery-prev',
+            '.gallery-next',
+            '.viewer-prev',
+            '.viewer-next',
+
+            // Generic navigation by aria labels
+            '[aria-label*="prev" i][aria-label*="photo" i]',
+            '[aria-label*="next" i][aria-label*="photo" i]',
+            '[aria-label*="prev" i][aria-label*="image" i]',
+            '[aria-label*="next" i][aria-label*="image" i]',
+
+            // Common navigation button patterns
+            'button[class*="prev"]',
+            'button[class*="next"]',
+            'a[class*="prev"]',
+            'a[class*="next"]'
+        ];
+
+        // Search in multiple scopes to catch different layout structures
+        const searchScopes = [
+            this.container,
+            this.container.parentElement,
+            this.container.parentElement?.parentElement,
+            // Also search the document for positioned overlays
+            document
+        ].filter(Boolean);
+
+        searchScopes.forEach((scope, scopeIndex) => {
+            theaterNavSelectors.forEach(selector => {
+                try {
+                    const elements = scope.querySelectorAll(selector);
+                    elements.forEach(element => {
+                        // Skip if already found
+                        if (overlays.includes(element)) return;
+
+                        // Additional validation for theater mode elements
+                        if (this.isTheaterModeNavigationElement(element)) {
+                            overlays.push(element);
+                            console.log('🎭 Found theater mode navigation:', {
+                                selector,
+                                className: element.className,
+                                tagName: element.tagName,
+                                scope: scopeIndex === 0 ? 'container' :
+                                    scopeIndex === 1 ? 'parent' :
+                                        scopeIndex === 2 ? 'grandparent' : 'document',
+                                dimensions: this.getElementDimensions(element)
+                            });
+                        }
+                    });
+                } catch (error) {
+                    // Skip invalid selectors
+                    console.warn('Invalid theater nav selector:', selector, error);
+                }
+            });
+        });
+
+        // Special case: Height-based detection for tall navigation elements
+        // This catches Flickr-style navigation that spans the full height
+        this.detectTallNavigationElements(overlays);
+    }
+
+    /**
+     * Validate that an element is actually a theater mode navigation element
+     */
+    isTheaterModeNavigationElement(element) {
+        if (!element || !this.originalImage) return false;
+
+        try {
+            // Must be a clickable element (anchor or button)
+            if (element.tagName !== 'A' && element.tagName !== 'BUTTON') return false;
+
+            // Must have href or be a button with navigation indicators
+            const hasNavigation = element.hasAttribute('href') ||
+                element.tagName === 'BUTTON' ||
+                element.hasAttribute('data-track') ||
+                element.hasAttribute('data-action');
+
+            if (!hasNavigation) return false;
+
+            // Check positioning relative to image
+            const elementRect = element.getBoundingClientRect();
+            const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Element should be reasonably sized (not tiny icons)
+            const hasReasonableSize = elementRect.width >= 20 && elementRect.height >= 20;
+
+            // Element should be positioned near or overlapping the image area
+            const isNearImage = this.isElementNearImage(element, elementRect, imageRect);
+
+            // Check for navigation-specific class patterns
+            const hasNavClasses = element.className && (
+                element.className.includes('nav') ||
+                element.className.includes('prev') ||
+                element.className.includes('next') ||
+                element.className.includes('navigate')
+            );
+
+            // Check for navigation-specific content
+            const hasNavContent = element.textContent && (
+                element.textContent.includes('←') ||
+                element.textContent.includes('→') ||
+                element.textContent.includes('‹') ||
+                element.textContent.includes('›') ||
+                /prev|next/i.test(element.textContent)
+            );
+
+            return hasReasonableSize && isNearImage && (hasNavClasses || hasNavContent);
+
+        } catch (error) {
+            console.warn('Error validating theater navigation element:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if element is positioned near the image (within reasonable proximity)
+     */
+    isElementNearImage(element, elementRect, imageRect) {
+        // Define "near" as within the image bounds or reasonable proximity
+        const proximityThreshold = 100; // pixels
+
+        // Check if element overlaps image area
+        const hasOverlap = !(elementRect.right < imageRect.left ||
+            elementRect.left > imageRect.right ||
+            elementRect.bottom < imageRect.top ||
+            elementRect.top > imageRect.bottom);
+
+        if (hasOverlap) return true;
+
+        // Check if element is within proximity threshold
+        const minDistance = Math.min(
+            Math.abs(elementRect.right - imageRect.left),    // Element to left of image
+            Math.abs(elementRect.left - imageRect.right),    // Element to right of image
+            Math.abs(elementRect.bottom - imageRect.top),    // Element above image
+            Math.abs(elementRect.top - imageRect.bottom)     // Element below image
+        );
+
+        return minDistance <= proximityThreshold;
+    }
+
+    /**
+     * Detect tall navigation elements that span significant height (like Flickr navigation)
+     */
+    detectTallNavigationElements(overlays) {
+        if (!this.container || !this.originalImage) return;
+
+        try {
+            const imageRect = this.originalImage.getBoundingClientRect();
+            const containerRect = this.container.getBoundingClientRect();
+
+            // Look for anchor elements in the container's parent that are unusually tall
+            const parentElement = this.container.parentElement;
+            if (!parentElement) return;
+
+            const anchorElements = parentElement.querySelectorAll('a');
+
+            anchorElements.forEach(anchor => {
+                // Skip if already found
+                if (overlays.includes(anchor)) return;
+
+                const anchorRect = anchor.getBoundingClientRect();
+
+                // Detect "tall navigation" pattern:
+                // 1. Height is significantly larger than width (suggesting vertical navigation bar)
+                // 2. Height covers significant portion of container/image height
+                // 3. Element is positioned adjacent to or overlapping the image
+
+                const isTall = anchorRect.height >= Math.max(200, imageRect.height * 0.5);
+                const isNarrowOrWide = anchorRect.width <= 150 || anchorRect.width >= imageRect.width * 0.8;
+                const coversImageHeight = anchorRect.height >= imageRect.height * 0.7;
+
+                // Check positioning: should be to the left or right of image, or overlapping
+                const isLeftSide = anchorRect.right <= imageRect.left + 50;
+                const isRightSide = anchorRect.left >= imageRect.right - 50;
+                const overlapsHorizontally = !(anchorRect.right < imageRect.left || anchorRect.left > imageRect.right);
+
+                const isPositionedForNavigation = isLeftSide || isRightSide || overlapsHorizontally;
+
+                if (isTall && isNarrowOrWide && coversImageHeight && isPositionedForNavigation) {
+                    overlays.push(anchor);
+                    console.log('🎭 Found tall navigation element:', {
+                        className: anchor.className,
+                        dimensions: this.getElementDimensions(anchor),
+                        position: isLeftSide ? 'left' : isRightSide ? 'right' : 'overlapping',
+                        href: anchor.href?.substring(0, 50) + '...'
+                    });
+                }
+            });
+
+        } catch (error) {
+            console.warn('Error detecting tall navigation elements:', error);
+        }
+    }
+
+    /**
+     * Helper method to get element dimensions for debugging
+     */
+    getElementDimensions(element) {
+        try {
+            const rect = element.getBoundingClientRect();
+            return {
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+                top: Math.round(rect.top),
+                left: Math.round(rect.left)
+            };
+        } catch (error) {
+            return { width: 0, height: 0, top: 0, left: 0 };
+        }
+    }
+
+    /**
      * Check if an anchor link is likely interfering with mouse events
      * Even if it doesn't physically cover the image significantly
      */
@@ -1755,6 +2367,17 @@ class lifViewer {
         try {
             const anchorRect = anchorElement.getBoundingClientRect();
             const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Enhanced theater mode navigation detection
+            const isTheaterNavigation = this.isTheaterModeNavigationAnchor(anchorElement, anchorRect, imageRect);
+            if (isTheaterNavigation) {
+                console.log('🎭 Theater navigation anchor interfering:', {
+                    className: anchorElement.className,
+                    dimensions: this.getElementDimensions(anchorElement),
+                    href: anchorElement.href?.substring(0, 50) + '...'
+                });
+                return true;
+            }
 
             // Check if anchor is positioned in a way that could interfere
             // 1. Anchor is in the same general area as the image
@@ -1794,6 +2417,168 @@ class lifViewer {
         } catch (error) {
             console.warn('Error checking anchor interference:', error);
             return true; // When in doubt, assume it might interfere
+        }
+    }
+
+    /**
+     * Specific check for theater mode navigation anchors (like Flickr prev/next)
+     */
+    isTheaterModeNavigationAnchor(anchorElement, anchorRect, imageRect) {
+        try {
+            // Theater mode navigation indicators
+            const className = anchorElement.className || '';
+            const hasTheaterClasses = className.includes('navigate-target') ||
+                className.includes('navigate-prev') ||
+                className.includes('navigate-next') ||
+                className.includes('lightbox') ||
+                className.includes('theater') ||
+                className.includes('viewer');
+
+            // Check for data attributes commonly used in theater mode
+            const hasTheaterData = anchorElement.hasAttribute('data-track') ||
+                anchorElement.hasAttribute('data-action') ||
+                anchorElement.hasAttribute('data-direction');
+
+            // Check if this is a tall navigation element (Flickr pattern)
+            const isTallNavigation = anchorRect.height >= Math.max(200, imageRect.height * 0.5) &&
+                (anchorRect.width <= 150 || anchorRect.height / anchorRect.width > 2);
+
+            // Check positioning for theater navigation (should be adjacent to or overlapping image)
+            const isAdjacentToImage = this.isElementAdjacentToImage(anchorRect, imageRect);
+
+            // Text content check for navigation indicators
+            const textContent = anchorElement.textContent || '';
+            const hasNavText = textContent.includes('←') || textContent.includes('→') ||
+                /prev|next/i.test(textContent) ||
+                textContent.trim() === '' && anchorElement.querySelector('[class*="hide-text"]');
+
+            // Consider it theater navigation if it has the right characteristics
+            return (hasTheaterClasses || hasTheaterData || isTallNavigation) &&
+                (isAdjacentToImage || hasNavText);
+
+        } catch (error) {
+            console.warn('Error checking theater navigation anchor:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if element is positioned adjacent to the image (theater mode pattern)
+     */
+    isElementAdjacentToImage(elementRect, imageRect) {
+        const tolerance = 20; // pixels tolerance for "adjacent"
+
+        // Left side of image
+        const isLeftAdjacent = Math.abs(elementRect.right - imageRect.left) <= tolerance &&
+            elementRect.top <= imageRect.bottom + tolerance &&
+            elementRect.bottom >= imageRect.top - tolerance;
+
+        // Right side of image  
+        const isRightAdjacent = Math.abs(elementRect.left - imageRect.right) <= tolerance &&
+            elementRect.top <= imageRect.bottom + tolerance &&
+            elementRect.bottom >= imageRect.top - tolerance;
+
+        // Above image
+        const isTopAdjacent = Math.abs(elementRect.bottom - imageRect.top) <= tolerance &&
+            elementRect.left <= imageRect.right + tolerance &&
+            elementRect.right >= imageRect.left - tolerance;
+
+        // Below image
+        const isBottomAdjacent = Math.abs(elementRect.top - imageRect.bottom) <= tolerance &&
+            elementRect.left <= imageRect.right + tolerance &&
+            elementRect.right >= imageRect.left - tolerance;
+
+        // Overlapping with image
+        const isOverlapping = !(elementRect.right < imageRect.left ||
+            elementRect.left > imageRect.right ||
+            elementRect.bottom < imageRect.top ||
+            elementRect.top > imageRect.bottom);
+
+        return isLeftAdjacent || isRightAdjacent || isTopAdjacent || isBottomAdjacent || isOverlapping;
+    }
+
+    /**
+     * Detect if we're in a theater mode context (photo viewer, lightbox, etc.)
+     */
+    detectTheaterModeContext() {
+        if (!this.container || !this.originalImage) return false;
+
+        try {
+            // Method 1: Check for theater mode class indicators in the DOM hierarchy
+            let currentElement = this.container;
+            let searchDepth = 0;
+            const maxSearchDepth = 6;
+
+            while (currentElement && searchDepth < maxSearchDepth) {
+                const className = currentElement.className || '';
+
+                // Theater mode class patterns
+                if (className.includes('theater') ||
+                    className.includes('lightbox') ||
+                    className.includes('modal') ||
+                    className.includes('overlay') ||
+                    className.includes('viewer') ||
+                    className.includes('photo-well') ||
+                    className.includes('media-viewer') ||
+                    className.includes('fullscreen') ||
+                    className.includes('photo-page')) {
+                    console.log('🎭 Theater mode detected via class:', className);
+                    return true;
+                }
+
+                currentElement = currentElement.parentElement;
+                searchDepth++;
+            }
+
+            // Method 2: Check for facade/protection patterns (Flickr)
+            const facadeElement = this.container.querySelector('.facade-of-protection-neue, .facade-of-protection');
+            if (facadeElement) {
+                console.log('🎭 Theater mode detected via facade pattern');
+                return true;
+            }
+
+            // Method 3: Check URL patterns
+            const url = window.location.href;
+            if (url.includes('lightbox') ||
+                url.includes('theater') ||
+                url.includes('/photo/') ||
+                url.includes('/photos/') && url.includes('/in/')) {
+                console.log('🎭 Theater mode detected via URL pattern');
+                return true;
+            }
+
+            // Method 4: Check for navigation elements that suggest theater mode
+            const parentElement = this.container.parentElement;
+            if (parentElement) {
+                const hasTheaterNavigation = parentElement.querySelector('.navigate-target, .photo-nav, .lightbox-nav');
+                if (hasTheaterNavigation) {
+                    console.log('🎭 Theater mode detected via navigation elements');
+                    return true;
+                }
+            }
+
+            // Method 5: Check container positioning and dimensions
+            const containerRect = this.container.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // Theater mode often uses containers that take up significant viewport space
+            const isLargeContainer = (containerRect.width / viewportWidth) > 0.6 &&
+                (containerRect.height / viewportHeight) > 0.5;
+
+            // And are often centered or positioned in specific ways
+            const isCentered = Math.abs(containerRect.left + containerRect.width / 2 - viewportWidth / 2) < 100;
+
+            if (isLargeContainer && isCentered) {
+                console.log('🎭 Theater mode detected via container dimensions/positioning');
+                return true;
+            }
+
+            return false;
+
+        } catch (error) {
+            console.warn('Error detecting theater mode context:', error);
+            return false;
         }
     }
 
