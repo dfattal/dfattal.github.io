@@ -1766,14 +1766,38 @@ class lifViewer {
             this.originalImage.closest('[tabindex]') ||
             this.originalImage.closest('[role="listitem"]');
 
+        // VIRTUAL BACKGROUND IMAGES: Add direct mouseenter/mouseleave to background element for maximum reliability
+        if (this.originalImage._isVirtualBackgroundImage && this.originalImage._originalBackgroundElement) {
+            const backgroundElement = this.originalImage._originalBackgroundElement;
+            console.log('🎭 Adding direct mouse events to background element for renderOff reliability:', backgroundElement.tagName);
+
+            backgroundElement.addEventListener('mouseenter', () => {
+                console.log('🎭 Direct background element mouseenter - starting animation');
+                startAnimation();
+            }, { passive: true });
+
+            backgroundElement.addEventListener('mouseleave', () => {
+                console.log('🎭 Direct background element mouseleave - stopping animation');
+                stopAnimation();
+            }, { passive: true });
+        }
+
         if (this.container && hasCarouselInterference) {
             let containerMouseState = false;
             const containerMouseMove = (e) => {
                 const nowOverImage = this.isMouseOverImageArea(e);
-                if (nowOverImage && !containerMouseState) {
-                    containerMouseState = true;
-                    startAnimation();
-                    console.log('🎠 Carousel interference fallback: mouse enter');
+
+                // Enhanced logic for renderOff scenarios: always try to start if mouse is over image and animation isn't running
+                if (nowOverImage) {
+                    if (!containerMouseState || this.isRenderingOff || !this.running) {
+                        containerMouseState = true;
+                        startAnimation();
+                        if (this.isRenderingOff) {
+                            console.log('🎠 Carousel interference fallback: mouse re-enter during renderOff - restarting');
+                        } else {
+                            console.log('🎠 Carousel interference fallback: mouse enter');
+                        }
+                    }
                 } else if (!nowOverImage && containerMouseState) {
                     containerMouseState = false;
                     stopAnimation();
@@ -1791,6 +1815,13 @@ class lifViewer {
                 containerMouseState = false;
                 stopAnimation();
                 console.log('🎠 Carousel interference fallback: container leave');
+            }, { passive: true });
+
+            // Additional mouseenter handler on container for more reliable detection during renderOff
+            this.container.addEventListener('mouseenter', () => {
+                // Reset state and check immediately if mouse is over image area
+                const syntheticEvent = { clientX: 0, clientY: 0 }; // Will be overridden by actual mousemove
+                console.log('🎠 Container mouse enter - will check on next mousemove');
             }, { passive: true });
         }
 

@@ -1022,32 +1022,54 @@ function applyProcessingEffect(img) {
     try {
         console.log('LIF: Applying processing effect to image:', img.src);
 
-        // Store original styles for restoration
-        img.dataset.lifOriginalOpacity = img.style.opacity || '';
-        img.dataset.lifOriginalFilter = img.style.filter || '';
-        img.dataset.lifOriginalBorderRadius = img.style.borderRadius || '';
-        img.dataset.lifOriginalBoxShadow = img.style.boxShadow || '';
-        img.dataset.lifOriginalTransition = img.style.transition || '';
-        img.dataset.lifOriginalMaskImage = img.style.maskImage || img.style.webkitMaskImage || '';
-        img.dataset.lifOriginalMaskSize = img.style.maskSize || img.style.webkitMaskSize || '';
-        img.dataset.lifOriginalMaskPosition = img.style.maskPosition || img.style.webkitMaskPosition || '';
+        // Determine the target element for visual effects
+        let visualTarget = img;
+        if (img._isVirtualBackgroundImage && img._originalBackgroundElement) {
+            visualTarget = img._originalBackgroundElement;
+            console.log('🎭 Using background element for visual effects:', visualTarget.tagName, visualTarget.className);
+        }
 
+        // Store original styles for restoration (always on the img for consistency)
+        img.dataset.lifOriginalOpacity = visualTarget.style.opacity || '';
+        img.dataset.lifOriginalFilter = visualTarget.style.filter || '';
+        img.dataset.lifOriginalBorderRadius = visualTarget.style.borderRadius || '';
+        img.dataset.lifOriginalBoxShadow = visualTarget.style.boxShadow || '';
+        img.dataset.lifOriginalTransition = visualTarget.style.transition || '';
+        img.dataset.lifOriginalMaskImage = visualTarget.style.maskImage || visualTarget.style.webkitMaskImage || '';
+        img.dataset.lifOriginalMaskSize = visualTarget.style.maskSize || visualTarget.style.webkitMaskSize || '';
+        img.dataset.lifOriginalMaskPosition = visualTarget.style.maskPosition || visualTarget.style.webkitMaskPosition || '';
 
         // Mark as processing FIRST
         img.dataset.lifProcessing = 'true';
 
-        // Apply base processing effect - subtle brightness/contrast enhancement
-        img.style.setProperty('filter', 'contrast(1.15) brightness(1.1)', 'important');
-        img.style.setProperty('opacity', '0.95', 'important');
-        img.style.setProperty('border-radius', '8px', 'important');
+        // For virtual background images, apply effects to the background element
+        if (img._isVirtualBackgroundImage && img._originalBackgroundElement) {
+            // Apply effects to the background element (span, div, etc.)
+            visualTarget.style.setProperty('filter', 'contrast(1.15) brightness(1.1)', 'important');
+            visualTarget.style.setProperty('opacity', '0.95', 'important');
+            visualTarget.style.setProperty('border-radius', '8px', 'important');
 
-        // Initial subtle outer glow effect
-        const initialGlow = '0 0 15px 3px rgba(192, 128, 255, 0.5)';
-        const initialRim = '0 0 0 1px rgba(192, 128, 255, 0.8)';
-        img.style.setProperty('box-shadow', `${initialGlow}, ${initialRim}`, 'important');
+            // Initial subtle outer glow effect
+            const initialGlow = '0 0 15px 3px rgba(192, 128, 255, 0.5)';
+            const initialRim = '0 0 0 1px rgba(192, 128, 255, 0.8)';
+            visualTarget.style.setProperty('box-shadow', `${initialGlow}, ${initialRim}`, 'important');
 
-        // Add glowing class for identification
-        img.classList.add('lif-processing-glow');
+            // Add class to background element for identification
+            visualTarget.classList.add('lif-processing-glow');
+        } else {
+            // Apply effects to regular img element
+            img.style.setProperty('filter', 'contrast(1.15) brightness(1.1)', 'important');
+            img.style.setProperty('opacity', '0.95', 'important');
+            img.style.setProperty('border-radius', '8px', 'important');
+
+            // Initial subtle outer glow effect
+            const initialGlow = '0 0 15px 3px rgba(192, 128, 255, 0.5)';
+            const initialRim = '0 0 0 1px rgba(192, 128, 255, 0.8)';
+            img.style.setProperty('box-shadow', `${initialGlow}, ${initialRim}`, 'important');
+
+            // Add glowing class for identification
+            img.classList.add('lif-processing-glow');
+        }
 
         // Start JavaScript-based subtle glow animation immediately
         console.log('LIF: About to start subtle glow animation...');
@@ -1065,8 +1087,20 @@ function applyProcessingEffect(img) {
 function startPulsingAnimation(img) {
     console.log('LIF: Starting subtle glow animation for', img.src);
     let startTime = Date.now();
-    const duration = 3000; // Slower cycle - 4 seconds
+    const duration = 3000; // Slower cycle - 3 seconds
     let frameCount = 0;
+
+    // Determine the target element for shimmer effects
+    let shimmerTarget = img;
+    if (img._isVirtualBackgroundImage && img._originalBackgroundElement) {
+        shimmerTarget = img._originalBackgroundElement;
+        console.log('🎭 Applying shimmer to background element:', {
+            tagName: shimmerTarget.tagName,
+            className: shimmerTarget.className,
+            isPromoTile: shimmerTarget.className.includes('PromoTile'),
+            hasBackgroundImage: window.getComputedStyle(shimmerTarget).backgroundImage !== 'none'
+        });
+    }
 
     function animate() {
         if (!img.dataset.lifProcessing) {
@@ -1078,10 +1112,7 @@ function startPulsingAnimation(img) {
         const elapsed = Date.now() - startTime;
         const progress = (elapsed % duration) / duration;
 
-
-
         try {
-
             // Create shimmer effect using CSS mask animation
             const shimmerPosition = (elapsed % duration) / duration;
             const maskX = 150 - (shimmerPosition * 300); // Move from -200% to 200%
@@ -1094,13 +1125,13 @@ function startPulsingAnimation(img) {
                 rgba(255,255,255,1.0) ${maskX + 20}%, 
                 rgba(255,255,255,1.0) 100%)`;
 
-            // Apply shimmer mask with animated position
-            img.style.setProperty('-webkit-mask-image', shimmerMask, 'important');
-            img.style.setProperty('mask-image', shimmerMask, 'important');
-            img.style.setProperty('-webkit-mask-size', '200% 100%', 'important');
-            img.style.setProperty('mask-size', '200% 100%', 'important');
-            img.style.setProperty('-webkit-mask-position', `${maskX}% 0`, 'important');
-            img.style.setProperty('mask-position', `${maskX}% 0`, 'important');
+            // Apply shimmer mask with animated position to the correct target
+            shimmerTarget.style.setProperty('-webkit-mask-image', shimmerMask, 'important');
+            shimmerTarget.style.setProperty('mask-image', shimmerMask, 'important');
+            shimmerTarget.style.setProperty('-webkit-mask-size', '200% 100%', 'important');
+            shimmerTarget.style.setProperty('mask-size', '200% 100%', 'important');
+            shimmerTarget.style.setProperty('-webkit-mask-position', `${maskX}% 0`, 'important');
+            shimmerTarget.style.setProperty('mask-position', `${maskX}% 0`, 'important');
 
         } catch (error) {
             console.error('LIF: Animation error:', error);
@@ -1137,23 +1168,34 @@ function removeProcessingEffect(img) {
     try {
         console.log('LIF: Removing processing effect from image:', img.src);
 
-        // Remove glow class
-        img.classList.remove('lif-processing-glow');
+        // Determine the target element for cleanup
+        let cleanupTarget = img;
+        if (img._isVirtualBackgroundImage && img._originalBackgroundElement) {
+            cleanupTarget = img._originalBackgroundElement;
+            console.log('🎭 Cleaning up background element effects:', cleanupTarget.tagName, cleanupTarget.className);
+        }
 
-        // Restore original styles
-        img.style.opacity = img.dataset.lifOriginalOpacity || '';
-        img.style.filter = img.dataset.lifOriginalFilter || '';
-        img.style.borderRadius = img.dataset.lifOriginalBorderRadius || '';
-        img.style.boxShadow = img.dataset.lifOriginalBoxShadow || '';
-        img.style.transition = img.dataset.lifOriginalTransition || '';
-        img.style.maskImage = img.dataset.lifOriginalMaskImage || '';
-        img.style.webkitMaskImage = img.dataset.lifOriginalMaskImage || '';
-        img.style.maskSize = img.dataset.lifOriginalMaskSize || '';
-        img.style.webkitMaskSize = img.dataset.lifOriginalMaskSize || '';
-        img.style.maskPosition = img.dataset.lifOriginalMaskPosition || '';
-        img.style.webkitMaskPosition = img.dataset.lifOriginalMaskPosition || '';
+        // Remove glow class from appropriate element
+        if (img._isVirtualBackgroundImage && img._originalBackgroundElement) {
+            cleanupTarget.classList.remove('lif-processing-glow');
+        } else {
+            img.classList.remove('lif-processing-glow');
+        }
 
-        // Clean up data attributes
+        // Restore original styles to the correct target
+        cleanupTarget.style.opacity = img.dataset.lifOriginalOpacity || '';
+        cleanupTarget.style.filter = img.dataset.lifOriginalFilter || '';
+        cleanupTarget.style.borderRadius = img.dataset.lifOriginalBorderRadius || '';
+        cleanupTarget.style.boxShadow = img.dataset.lifOriginalBoxShadow || '';
+        cleanupTarget.style.transition = img.dataset.lifOriginalTransition || '';
+        cleanupTarget.style.maskImage = img.dataset.lifOriginalMaskImage || '';
+        cleanupTarget.style.webkitMaskImage = img.dataset.lifOriginalMaskImage || '';
+        cleanupTarget.style.maskSize = img.dataset.lifOriginalMaskSize || '';
+        cleanupTarget.style.webkitMaskSize = img.dataset.lifOriginalMaskSize || '';
+        cleanupTarget.style.maskPosition = img.dataset.lifOriginalMaskPosition || '';
+        cleanupTarget.style.webkitMaskPosition = img.dataset.lifOriginalMaskPosition || '';
+
+        // Clean up data attributes (always stored on the img)
         delete img.dataset.lifOriginalOpacity;
         delete img.dataset.lifOriginalFilter;
         delete img.dataset.lifOriginalBorderRadius;
@@ -3604,7 +3646,8 @@ function findAllImgsInTree(element) {
                             tagName: node.tagName,
                             className: node.className,
                             backgroundUrl: backgroundImageUrl.substring(0, 80) + '...',
-                            dimensions: `${virtualImg.width}x${virtualImg.height}`
+                            dimensions: `${virtualImg.width}x${virtualImg.height}`,
+                            isNatGeoPromo: node.className.includes('PromoTile') || node.className.includes('promo')
                         });
                         images.push(virtualImg);
                     }
@@ -3658,7 +3701,7 @@ function isSuitableBackgroundImageElement(element, backgroundImageUrl) {
     const contentIndicators = [
         'background-image', 'cover', 'hero', 'feature', 'main', 'content',
         'article', 'photo', 'picture', 'gallery', 'media', 'image', 'tile',
-        'card', 'item', 'slide', 'carousel'
+        'card', 'item', 'slide', 'carousel', 'promo'
     ];
 
     const hasContentIndicator = contentIndicators.some(indicator =>
@@ -3688,7 +3731,12 @@ function isSuitableBackgroundImageElement(element, backgroundImageUrl) {
         // Look for carousel slides and content tiles
         if (className.includes('slide') || className.includes('tile') ||
             className.includes('prism') || className.includes('carousel') ||
-            className.includes('backgroundimage')) {
+            className.includes('backgroundimage') || className.includes('promo')) {
+            return true;
+        }
+
+        // Special case for anchor elements with content tile patterns
+        if (tagName === 'a' && (className.includes('tile') || className.includes('promo'))) {
             return true;
         }
     }
