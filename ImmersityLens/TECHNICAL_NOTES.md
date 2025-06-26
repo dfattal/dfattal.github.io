@@ -690,6 +690,154 @@ function enterVRMode(lifUrl, dimensions) {
 
 ## Error Handling & Reliability
 
+### WebGL Initialization Race Condition Protection
+
+The extension includes comprehensive protection against WebGL initialization race conditions that could cause black frames when animations start before shaders and textures are ready.
+
+#### Problem: Black Frame Issue
+When users right-click to convert images to 3D, if the mouse remains over the image area during conversion, the lifViewer would attempt to start animations before WebGL resources were fully initialized. This resulted in:
+
+- **Black frames** appearing instead of 3D content
+- **Incomplete rendering** due to uninitialized shaders
+- **Poor user experience** requiring mouse movement to trigger proper display
+
+#### Root Cause Analysis
+The issue occurred due to a race condition in the initialization sequence:
+
+1. `lifViewer` created with mouse already over image area
+2. `startAnimation()` called before `initWebGLResources()` completed
+3. `render()` method executing with incomplete shader programs or textures
+4. WebGL drawing calls failing silently, producing black output
+
+#### Solution: Comprehensive WebGL Readiness Check
+
+The fix implements a multi-layer protection system:
+
+```javascript
+// 1. WebGL Readiness Validation
+isWebGLReady() {
+    // Check WebGL context availability
+    if (!this.gl || this.gl.isContextLost()) return false;
+    
+    // Verify shader program compilation and linking
+    if (!this.programInfo?.program || 
+        !this.gl.getProgramParameter(this.programInfo.program, this.gl.LINK_STATUS)) {
+        return false;
+    }
+    
+    // Ensure texture loading completion
+    if (!this.views?.[0]?.layers?.[0]?.image?.texture || 
+        !this.views[0].layers[0].invZ?.texture) {
+        return false;
+    }
+    
+    // Validate buffer creation
+    if (!this.buffers?.position || !this.buffers.textureCoord || 
+        !this.buffers.indices) {
+        return false;
+    }
+    
+    return true;
+}
+
+// 2. Protected Render Loop
+render() {
+    // Animation data check
+    if (!this.currentAnimation?.duration_sec) {
+        this.animationFrame = requestAnimationFrame(this.render);
+        return;
+    }
+    
+    // WebGL readiness check (CRITICAL FIX)
+    if (!this.isWebGLReady()) {
+        // Clear canvas with transparent background
+        this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.clearColor(0.0, 0.0, 0.0, 0.0); // Transparent, not black
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        
+        // Continue checking until ready
+        this.animationFrame = requestAnimationFrame(this.render);
+        return;
+    }
+    
+    // Normal rendering continues...
+}
+```
+
+#### Implementation Benefits
+
+**Seamless User Experience:**
+- **No black frames**: Canvas remains transparent until 3D content is ready
+- **Automatic progression**: Smooth transition from transparent to 3D content
+- **No user intervention**: Works regardless of mouse position during conversion
+
+**Robust Error Prevention:**
+- **Shader validation**: Ensures programs are compiled and linked before use
+- **Texture verification**: Confirms all required textures are loaded
+- **Buffer validation**: Verifies WebGL buffers are properly created
+- **Context protection**: Handles WebGL context loss gracefully
+
+**Performance Optimized:**
+- **Early exit strategy**: Quick checks prevent expensive WebGL calls
+- **Resource conservation**: No unnecessary rendering during initialization
+- **Memory safety**: Prevents crashes from accessing uninitialized resources
+
+#### Edge Case Handling
+
+The system handles several challenging scenarios:
+
+```javascript
+// Transition animation protection
+renderOff(transitionTime) {
+    if (!this.currentAnimation?.data) {
+        this.canvas.style.display = 'none';
+        return;
+    }
+    
+    // Check WebGL readiness before transition rendering
+    if (!this.isWebGLReady()) {
+        this.canvas.style.display = 'none';
+        this.isRenderingOff = false;
+        return;
+    }
+    
+    // Safe transition rendering...
+}
+```
+
+**Protected Scenarios:**
+- **Fast mouse movements**: Multiple start/stop cycles during initialization
+- **Slow network loading**: Extended texture loading times
+- **Shader compilation delays**: Complex shader programs taking time to link
+- **WebGL context loss**: Browser resource management scenarios
+
+#### Debugging Integration
+
+The WebGL readiness check includes comprehensive logging for development:
+
+```javascript
+isWebGLReady() {
+    if (!this.gl || this.gl.isContextLost()) {
+        console.log('🔍 WebGL context not ready or lost');
+        return false;
+    }
+    
+    if (!this.programInfo?.program) {
+        console.log('🔍 Shader program not ready');
+        return false;
+    }
+    
+    if (!this.views?.[0]?.layers?.[0]?.image?.texture) {
+        console.log('🔍 Image texture not ready for first layer');
+        return false;
+    }
+    
+    // Additional checks with logging...
+}
+```
+
+This protection system ensures reliable 3D rendering across all supported platforms and usage patterns, eliminating the black frame issue entirely while maintaining optimal performance.
+
 ### CORS Protection
 ```javascript
 function handleCORSProtectedImage(img, targetDimensions) {

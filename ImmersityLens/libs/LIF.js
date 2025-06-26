@@ -1249,6 +1249,10 @@ class lifViewer {
             this.canvas.style.opacity = '0';
         }
 
+        // CRITICAL FIX: Check if mouse is already over the image area when viewer is created
+        // This prevents the "black frame" issue when mouse is hovering during conversion
+        this.checkInitialMousePosition();
+
         console.log(`Canvas ready with dimensions: ${this.canvas.width}x${this.canvas.height}`);
     }
 
@@ -1864,6 +1868,116 @@ class lifViewer {
                 mouseY <= imageRect.bottom;
         } catch (error) {
             console.warn('Error checking mouse position:', error);
+            return false;
+        }
+    }
+
+    /**
+ * Check if mouse is currently over the image area during initialization
+ * This fixes the "black frame" issue when mouse is already hovering during 3D conversion
+ */
+    checkInitialMousePosition() {
+        if (!this.originalImage) return;
+
+        try {
+            // Get current mouse position relative to viewport
+            // We'll use a different approach since we don't have the actual mouse event
+
+            // Add a small delay to ensure DOM is fully settled
+            setTimeout(() => {
+                // Create a synthetic mouse event check by testing if the image area is under the cursor
+                const imageRect = this.originalImage.getBoundingClientRect();
+
+                // Check if the image is visible and has valid dimensions
+                if (imageRect.width > 0 && imageRect.height > 0) {
+                    // Use elementsFromPoint to check what's under the center of the image
+                    // This is a heuristic - if mouse was over image during conversion, it's likely still there
+                    const centerX = imageRect.left + imageRect.width / 2;
+                    const centerY = imageRect.top + imageRect.height / 2;
+
+                    const elementsAtCenter = document.elementsFromPoint(centerX, centerY);
+
+                    // Check if our canvas or original image is in the elements stack
+                    const isCanvasOrImageAtCenter = elementsAtCenter.some(el =>
+                        el === this.canvas || el === this.originalImage
+                    );
+
+                    // Alternative approach: Check if cursor is over image by testing hover state
+                    const isImageHovered = this.originalImage.matches(':hover');
+
+                    if (isImageHovered || isCanvasOrImageAtCenter) {
+                        console.log('🎯 Mouse detected over image area during initialization - starting animation');
+                        this.setAsActive();
+                        // Only start animation if WebGL is ready, otherwise the render loop will wait
+                        this.startAnimation();
+                    }
+                }
+            }, 100); // Small delay to ensure everything is properly initialized
+
+        } catch (error) {
+            console.warn('Error checking initial mouse position:', error);
+        }
+    }
+
+    /**
+     * Check if WebGL resources are fully initialized and ready for rendering
+     * This prevents black frames when rendering starts before shaders/textures are loaded
+     */
+    isWebGLReady() {
+        try {
+            // Check if basic WebGL context is available
+            if (!this.gl || this.gl.isContextLost()) {
+                console.log('🔍 WebGL context not ready or lost');
+                return false;
+            }
+
+            // Check if shader program is created and linked
+            if (!this.programInfo || !this.programInfo.program) {
+                console.log('🔍 Shader program not ready');
+                return false;
+            }
+
+            // Verify shader program is properly linked
+            if (!this.gl.getProgramParameter(this.programInfo.program, this.gl.LINK_STATUS)) {
+                console.log('🔍 Shader program not properly linked');
+                return false;
+            }
+
+            // Check if views data is loaded (required for textures)
+            if (!this.views || this.views.length === 0) {
+                console.log('🔍 Views data not loaded');
+                return false;
+            }
+
+            // Check if textures are created for the first view's layers
+            if (!this.views[0].layers || this.views[0].layers.length === 0) {
+                console.log('🔍 No layers found in views data');
+                return false;
+            }
+
+            // Verify that at least the first layer has its textures loaded
+            const firstLayer = this.views[0].layers[0];
+            if (!firstLayer.image || !firstLayer.image.texture) {
+                console.log('🔍 Image texture not ready for first layer');
+                return false;
+            }
+
+            if (!firstLayer.invZ || !firstLayer.invZ.texture) {
+                console.log('🔍 InvZ texture not ready for first layer');
+                return false;
+            }
+
+            // Check if buffers are created
+            if (!this.buffers || !this.buffers.position || !this.buffers.textureCoord || !this.buffers.indices) {
+                console.log('🔍 WebGL buffers not ready');
+                return false;
+            }
+
+            // All checks passed - WebGL is ready for rendering
+            return true;
+
+        } catch (error) {
+            console.warn('Error checking WebGL readiness:', error);
             return false;
         }
     }
@@ -2731,6 +2845,21 @@ class lifViewer {
             return;
         }
 
+        // CRITICAL FIX: Check if WebGL resources are fully initialized before rendering
+        // This prevents the black frame issue when animation starts before shaders/textures are ready
+        if (!this.isWebGLReady()) {
+            // Clear the canvas to prevent black frame artifacts
+            if (this.gl && !this.gl.isContextLost()) {
+                this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+                this.gl.clearColor(0.0, 0.0, 0.0, 0.0); // Transparent clear
+                this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+                // WebGL resources not ready yet, schedule another frame and return
+                this.animationFrame = requestAnimationFrame(this.render);
+            }
+            return;
+        }
+
         // assume harmonic for now
         const animTime = this.currentAnimation.duration_sec;
         const ut = Date.now() / 1000 - this.startTime;
@@ -2774,6 +2903,15 @@ class lifViewer {
         // Safety check: ensure currentAnimation is initialized
         if (!this.currentAnimation || !this.currentAnimation.data) {
             // If animation data isn't ready, just hide canvas and return
+            this.canvas.style.display = 'none';
+            this.isRenderingOff = false;
+            cancelAnimationFrame(this.renderOffAnimationFrame);
+            return;
+        }
+
+        // Check if WebGL resources are ready before rendering transition
+        if (!this.isWebGLReady()) {
+            // WebGL not ready - just hide canvas immediately
             this.canvas.style.display = 'none';
             this.isRenderingOff = false;
             cancelAnimationFrame(this.renderOffAnimationFrame);
