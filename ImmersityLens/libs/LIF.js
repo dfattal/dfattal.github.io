@@ -753,8 +753,21 @@ class lifViewer {
         const dimensions = this.getEffectiveDimensions();
         let positioningStyle = 'top: 0; left: 0;';
 
+        // Special handling for virtual images - calculate position relative to container
+        if (this.originalImage && this.originalImage._isVirtualBackgroundImage && this.originalImage._originalPictureElement) {
+            const pictureElement = this.originalImage._originalPictureElement;
+            const containerRect = this.container.getBoundingClientRect();
+            const pictureRect = pictureElement.getBoundingClientRect();
+
+            // Calculate offset of picture element relative to container
+            const offsetTop = pictureRect.top - containerRect.top;
+            const offsetLeft = pictureRect.left - containerRect.left;
+
+            positioningStyle = `top: ${offsetTop}px; left: ${offsetLeft}px;`;
+            console.log('🎭 Virtual image: positioning canvas relative to container at offset:', { top: offsetTop, left: offsetLeft });
+        }
         // Handle centered image positioning (LinkedIn-style)
-        if (this.centeredImageInfo) {
+        else if (this.centeredImageInfo) {
             positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
             console.log('🎯 Applying centered image positioning:', positioningStyle);
         } else {
@@ -809,6 +822,12 @@ class lifViewer {
      */
     calculateNestedContainerOffset() {
         if (!this.originalImage || !this.container) {
+            return null;
+        }
+
+        // Special handling for virtual images - skip nested container calculations
+        if (this.originalImage._isVirtualBackgroundImage) {
+            console.log('🎭 Virtual image detected - skipping nested container offset calculation');
             return null;
         }
 
@@ -1000,7 +1019,11 @@ class lifViewer {
         // Determine layout mode from analysis
         let layoutMode = 'standard';
 
-        if (originalImage.closest('picture')) {
+        // Special handling for virtual images (Getty Images background images)
+        if (originalImage._isVirtualBackgroundImage) {
+            layoutMode = 'overlay';
+            console.log('🎭 Virtual background image detected - using overlay mode');
+        } else if (originalImage.closest('picture')) {
             layoutMode = 'picture';
         } else if (layoutAnalysis?.isFacebookStyle) {
             layoutMode = 'facebook';
@@ -1023,12 +1046,21 @@ class lifViewer {
             layoutMode = 'overlay';
         }
 
-        // COMMENTED OUT: LinkedIn-specific centering fix
-        // TODO: Generalize this to detect centered/fitted images on any site
+        // Dimension handling for different image types
         let targetDimensions = {
             width: originalImage.width || originalImage.naturalWidth,
             height: originalImage.height || originalImage.naturalHeight
         };
+
+        // Special dimension handling for virtual images (Getty Images)
+        if (originalImage._isVirtualBackgroundImage && originalImage._originalPictureElement) {
+            const pictureRect = originalImage._originalPictureElement.getBoundingClientRect();
+            targetDimensions = {
+                width: pictureRect.width,
+                height: pictureRect.height
+            };
+            console.log('🎭 Virtual image dimensions from picture element:', targetDimensions);
+        }
 
         let centeredImageInfo = null;
         // if (window.location.hostname.includes('linkedin.com') &&
@@ -1068,8 +1100,9 @@ class lifViewer {
         const computedStyle = window.getComputedStyle(originalImage);
         const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
 
-        if (isCenteredOrFitted && layoutAnalysis?.containerHasPaddingAspectRatio) {
+        if (isCenteredOrFitted && layoutAnalysis?.containerHasPaddingAspectRatio && layoutMode !== 'overlay') {
             // Use image dimensions for fitted images in aspect ratio containers
+            // BUT: Don't override virtual image overlay mode
             if (originalImage.width && originalImage.height) {
                 targetDimensions = {
                     width: originalImage.width,
@@ -1080,8 +1113,8 @@ class lifViewer {
             }
         } else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
             // Use aspectRatio mode for any object-fit image or centered/fitted image with dimensions
-            // BUT: Don't override picture element layout mode - picture elements have their own dimension handling
-            if (layoutMode !== 'picture') {
+            // BUT: Don't override picture element layout mode or virtual image overlay mode - they have their own dimension handling
+            if (layoutMode !== 'picture' && layoutMode !== 'overlay') {
                 const hasExplicitDimensions = originalImage.width && originalImage.height;
 
                 if (hasExplicitDimensions && isCenteredOrFitted) {
@@ -2629,8 +2662,8 @@ class lifViewer {
             this.mousePos.x = (mouseX / rect.width);
             this.mousePos.y = (mouseY / rect.width);
 
-            // Optional: Add debug logging to verify mouse tracking is working
-            console.log(`🎯 Updated mouse position: (${this.mousePos.x.toFixed(3)}, ${this.mousePos.y.toFixed(3)})`);
+            // Optional: Add debug logging to verify mouse tracking is working (disabled for performance)
+            // console.log(`🎯 Updated mouse position: (${this.mousePos.x.toFixed(3)}, ${this.mousePos.y.toFixed(3)})`);
         } catch (error) {
             console.warn('Error updating mouse position:', error);
         }
@@ -2643,7 +2676,13 @@ class lifViewer {
         if (!this.originalImage) return false;
 
         try {
-            const imageRect = this.originalImage.getBoundingClientRect();
+            // For virtual images, use the original picture element's bounds
+            let targetElement = this.originalImage;
+            if (this.originalImage._isVirtualBackgroundImage && this.originalImage._originalPictureElement) {
+                targetElement = this.originalImage._originalPictureElement;
+            }
+
+            const imageRect = targetElement.getBoundingClientRect();
             const mouseX = event.clientX;
             const mouseY = event.clientY;
 
@@ -2671,7 +2710,12 @@ class lifViewer {
             // Add a small delay to ensure DOM is fully settled
             setTimeout(() => {
                 // Create a synthetic mouse event check by testing if the image area is under the cursor
-                const imageRect = this.originalImage.getBoundingClientRect();
+                // For virtual images, use the original picture element's bounds
+                let targetElement = this.originalImage;
+                if (this.originalImage._isVirtualBackgroundImage && this.originalImage._originalPictureElement) {
+                    targetElement = this.originalImage._originalPictureElement;
+                }
+                const imageRect = targetElement.getBoundingClientRect();
 
                 // Check if the image is visible and has valid dimensions
                 if (imageRect.width > 0 && imageRect.height > 0) {

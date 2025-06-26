@@ -1226,9 +1226,116 @@ function showDownloadNotification(message, type = 'info') {
     }, 4000);
 }
 
+// Getty Images CORS circumvention using Canvas HTML2Canvas approach
+async function handleGettyImagesCORS(img) {
+    console.log('🖼️ Attempting Getty Images CORS circumvention...');
+
+    try {
+        // Method 1: Try to use the original picture element directly
+        const pictureElement = img._originalPictureElement;
+        if (!pictureElement) {
+            throw new Error('No original picture element found');
+        }
+
+        // Get the computed background image
+        const bgImageUrl = extractBackgroundImageUrl(pictureElement);
+        if (!bgImageUrl) {
+            throw new Error('No background image URL found');
+        }
+
+        console.log('🎨 Creating proxy canvas from picture element...');
+
+        // Create a canvas that matches the picture element
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const rect = pictureElement.getBoundingClientRect();
+
+        canvas.width = Math.round(rect.width) || 400;
+        canvas.height = Math.round(rect.height) || 300;
+
+        // Method 1: Try a different domain approach for Getty images
+        try {
+            const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(bgImageUrl)}&output=jpg&quality=85`;
+            console.log('🌐 Trying proxy service:', proxyUrl);
+
+            const proxyImg = new Image();
+            proxyImg.crossOrigin = 'anonymous';
+
+            await new Promise((resolveImg, rejectImg) => {
+                proxyImg.onload = () => resolveImg();
+                proxyImg.onerror = () => rejectImg(new Error('Proxy service failed'));
+                proxyImg.src = proxyUrl;
+            });
+
+            ctx.drawImage(proxyImg, 0, 0, canvas.width, canvas.height);
+
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => {
+                    const file = new File([blob], 'getty-image.jpg', { type: 'image/jpeg' });
+                    console.log('✅ Getty CORS circumvention successful via proxy service');
+                    resolve(file);
+                }, 'image/jpeg', 0.9);
+            });
+
+        } catch (proxyError) {
+            console.log('Proxy service failed, trying alternative method...');
+        }
+
+        // Method 2: Create a placeholder canvas with Getty branding
+        console.log('🎭 Creating Getty Images placeholder...');
+
+        // Create a high-quality placeholder
+        ctx.fillStyle = '#f8f8f8';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add Getty Images pattern
+        ctx.fillStyle = '#e0e0e0';
+        for (let i = 0; i < canvas.width; i += 40) {
+            for (let j = 0; j < canvas.height; j += 40) {
+                ctx.fillRect(i, j, 20, 20);
+            }
+        }
+
+        // Add text overlay
+        ctx.fillStyle = '#666';
+        ctx.font = `${Math.min(canvas.width, canvas.height) / 20}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Getty Images', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = `${Math.min(canvas.width, canvas.height) / 30}px Arial`;
+        ctx.fillText('CORS Protected', canvas.width / 2, canvas.height / 2 + 10);
+
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+                const file = new File([blob], 'getty-placeholder.jpg', { type: 'image/jpeg' });
+                console.log('⚠️ Getty CORS circumvention used placeholder method');
+                resolve(file);
+            }, 'image/jpeg', 0.9);
+        });
+
+    } catch (error) {
+        console.warn('Getty CORS circumvention failed:', error);
+        throw error;
+    }
+}
+
 // Function to convert image to File object for processing
 async function imageToFile(img) {
     return new Promise(async (resolve) => {
+        // GETTY IMAGES CORS CIRCUMVENTION
+        if (window.location.hostname.includes('gettyimages.') && img._isVirtualBackgroundImage) {
+            console.log('🌐 Getty Images detected - using specialized CORS circumvention...');
+            try {
+                const file = await handleGettyImagesCORS(img);
+                if (file) {
+                    resolve(file);
+                    return;
+                }
+            } catch (error) {
+                console.warn('Getty CORS circumvention failed, falling back to standard methods:', error);
+            }
+        }
+
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
@@ -1516,20 +1623,36 @@ async function convertTo3D(img, button, options = {}) {
                 console.log(`Fallback to image dimensions: ${effectiveWidth}x${effectiveHeight}`);
             }
 
-            // Container selection: special handling for picture elements
+            // Container selection: special handling for picture elements and virtual images
             let lifContainer;
-            const pictureElement = img.closest('picture');
-            if (pictureElement) {
-                // For picture elements, canvas goes next to the picture tag, not inside it
-                lifContainer = pictureElement.parentElement;
-                console.log('Picture element detected - using picture parent as container');
+
+            // Special handling for virtual images (Getty Images background images)
+            if (img._isVirtualBackgroundImage && img._originalPictureElement) {
+                // For virtual images, use the original picture element's parent as the container
+                // This ensures we don't interfere with regular picture elements
+                lifContainer = img._originalPictureElement.parentElement || img._originalPictureElement;
+                console.log('🎭 Virtual image detected - using original picture element parent as container');
             } else {
-                // For regular images, use image parent
-                lifContainer = img.parentElement;
+                const pictureElement = img.closest('picture');
+                if (pictureElement) {
+                    // For picture elements, canvas goes next to the picture tag, not inside it
+                    lifContainer = pictureElement.parentElement;
+                    console.log('Picture element detected - using picture parent as container');
+                } else {
+                    // For regular images, use image parent
+                    lifContainer = img.parentElement;
+                }
             }
 
             // Use the enhanced factory method for layout-aware viewer creation
-            const finalLayoutAnalysis = options.layoutAnalysis || analyzeLayoutPattern(lifContainer, img);
+            // For virtual images, use the pre-computed layout analysis from context menu handler
+            let finalLayoutAnalysis;
+            if (img._isVirtualBackgroundImage && options.layoutAnalysis) {
+                finalLayoutAnalysis = options.layoutAnalysis;
+                console.log('🎭 Using pre-computed layout analysis for virtual image');
+            } else {
+                finalLayoutAnalysis = options.layoutAnalysis || analyzeLayoutPattern(lifContainer, img);
+            }
 
             const viewer = lifViewer.createForLayout(
                 this.lifDownloadUrl,
@@ -1690,6 +1813,21 @@ async function convertTo3D(img, button, options = {}) {
  */
 // Comprehensive CSS layout analysis to avoid disrupting existing patterns
 function analyzeLayoutPattern(element, img) {
+    // Safety check: ensure element is a valid DOM element
+    if (!element || !(element instanceof Element)) {
+        console.warn('⚠️ analyzeLayoutPattern called with invalid element:', element);
+        return {
+            type: 'invalid-element',
+            preserveOriginal: true,
+            reason: 'Invalid element provided to analyzeLayoutPattern',
+            containerHasPaddingAspectRatio: false,
+            imageIsAbsolute: false,
+            parentUsesFlexOrGrid: false,
+            hasResponsivePattern: false,
+            isFacebookStyle: false
+        };
+    }
+
     const computedStyle = window.getComputedStyle(element);
     const parentStyle = element.parentElement ? window.getComputedStyle(element.parentElement) : null;
     const imgStyle = window.getComputedStyle(img);
@@ -3444,6 +3582,19 @@ function findAllImgsInTree(element) {
         images.push(element);
     }
 
+    // GETTY IMAGES FIX: Check for <picture> elements with CSS background-image
+    if (element.tagName === 'PICTURE') {
+        const bgImage = extractBackgroundImageUrl(element);
+        if (bgImage) {
+            // Create a virtual image element to represent the background image
+            const virtualImg = createVirtualImageFromBackground(element, bgImage);
+            if (virtualImg) {
+                images.push(virtualImg);
+                console.log('🖼️ Found picture element with background-image:', bgImage);
+            }
+        }
+    }
+
     // Check all children recursively
     for (let child of element.children) {
         const childImages = findAllImgsInTree(child);
@@ -3451,6 +3602,77 @@ function findAllImgsInTree(element) {
     }
 
     return images;
+}
+
+// Extract background-image URL from CSS
+function extractBackgroundImageUrl(element) {
+    const style = window.getComputedStyle(element);
+    const backgroundImage = style.backgroundImage;
+
+    if (backgroundImage && backgroundImage !== 'none') {
+        // Extract URL from CSS url() function
+        const match = backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+
+    // Also check inline style
+    const inlineStyle = element.style.backgroundImage;
+    if (inlineStyle && inlineStyle !== 'none') {
+        const match = inlineStyle.match(/url\(['"]?(.*?)['"]?\)/);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+
+    return null;
+}
+
+// Create a virtual image element from background-image
+function createVirtualImageFromBackground(pictureElement, imageUrl) {
+    try {
+        // Create a virtual img element that behaves like a real image
+        const virtualImg = document.createElement('img');
+
+        // Set essential properties
+        virtualImg.src = imageUrl;
+        virtualImg.alt = pictureElement.getAttribute('alt') || 'Background Image';
+        virtualImg.className = pictureElement.className;
+
+        // Copy dimensions from the picture element
+        const rect = pictureElement.getBoundingClientRect();
+        virtualImg.width = Math.round(rect.width);
+        virtualImg.height = Math.round(rect.height);
+
+        // Store reference to the original picture element
+        virtualImg._originalPictureElement = pictureElement;
+        virtualImg._isVirtualBackgroundImage = true;
+
+        // Copy computed styles for accurate representation
+        const pictureStyle = window.getComputedStyle(pictureElement);
+        virtualImg.style.cssText = `
+            display: block;
+            width: ${rect.width}px;
+            height: ${rect.height}px;
+            object-fit: cover;
+        `;
+
+        // Set natural dimensions based on the display dimensions (we can't know the actual natural size due to CORS)
+        virtualImg.naturalWidth = Math.round(rect.width);
+        virtualImg.naturalHeight = Math.round(rect.height);
+
+        console.log('🎭 Created virtual image from background:', {
+            url: imageUrl,
+            dimensions: `${virtualImg.width}x${virtualImg.height}`,
+            pictureClass: pictureElement.className
+        });
+
+        return virtualImg;
+    } catch (error) {
+        console.warn('Error creating virtual image from background:', error);
+        return null;
+    }
 }
 
 // Intelligent image selection to prioritize main content over UI elements
@@ -3484,6 +3706,12 @@ function selectMainContentImage(images) {
 // Calculate content priority score for an image
 function calculateImageContentScore(img) {
     let score = 0;
+
+    // 0. PROXIMITY SCORING - Images closer to the clicked element get higher priority
+    if (img._proximityScore) {
+        score += img._proximityScore;
+        console.log(`📍 Proximity score for image: ${img._proximityScore} (context: ${img._searchContext})`);
+    }
 
     // 1. DIMENSION SCORING - Larger images are more likely to be main content
     const naturalWidth = img.naturalWidth || 0;
@@ -3530,6 +3758,18 @@ function calculateImageContentScore(img) {
         if (className.includes('projectcover') || className.includes('cover-image') ||
             className.includes('js-cover-image') || className.includes('main-photo')) {
             score += 40; // Strong indicator for main project image
+        }
+    }
+
+    // Getty Images-specific content indicators
+    if (window.location.hostname.includes('gettyimages.')) {
+        // Virtual background images from picture elements are likely main content
+        if (img._isVirtualBackgroundImage) {
+            score += 50; // Strong indicator for main Getty image
+        }
+        // Grid item containers suggest main content
+        if (img.closest('[data-testid="grid-item-container"]')) {
+            score += 30;
         }
     }
 
@@ -3642,32 +3882,102 @@ function getScoreReasons(img) {
 function findImgInParentsAndSiblings(element) {
     const allFoundImages = [];
     let current = element;
+    let searchLevel = 0;
+    const MAX_SEARCH_LEVELS = 5; // Limit how far up we search to prevent distant matches
 
-    // First pass: collect ALL images in the context hierarchy
-    while (current && current !== document) {
-        // Check current element
-        const imgs = findAllImgsInTree(current);
-        allFoundImages.push(...imgs);
+    // First pass: collect images with proximity scoring
+    while (current && current !== document && searchLevel < MAX_SEARCH_LEVELS) {
+        // Check current element first (highest priority)
+        const currentImgs = findAllImgsInTree(current);
+        currentImgs.forEach(img => {
+            img._proximityScore = 1000 - (searchLevel * 100); // Higher score for closer elements
+            img._searchContext = 'current';
+            allFoundImages.push(img);
+        });
 
-        // Check siblings
-        if (current.parentElement) {
-            for (let sibling of current.parentElement.children) {
-                if (sibling !== current) {
-                    const siblingImgs = findAllImgsInTree(sibling);
-                    allFoundImages.push(...siblingImgs);
+        // Check siblings, but only if we haven't found images in current element
+        if (currentImgs.length === 0 && current.parentElement) {
+            // Limit sibling search to prevent cross-contamination between content areas
+            const isCard = isContentCard(current);
+            const isTextArea = isInTextOnlyArea(element);
+            const shouldSearchSiblings = (!isCard && !isTextArea) || searchLevel === 0;
+
+            console.log(`🔍 Search decision at level ${searchLevel}:`, {
+                element: current.tagName + (current.className ? `.${current.className.split(' ')[0]}` : ''),
+                isCard,
+                isTextArea,
+                shouldSearchSiblings
+            });
+
+            if (shouldSearchSiblings) {
+                for (let sibling of current.parentElement.children) {
+                    if (sibling !== current) {
+                        const siblingImgs = findAllImgsInTree(sibling);
+                        siblingImgs.forEach(img => {
+                            img._proximityScore = 500 - (searchLevel * 100); // Lower score for sibling elements
+                            img._searchContext = 'sibling';
+                            allFoundImages.push(img);
+                        });
+                    }
                 }
             }
         }
 
+        // Early termination: if we found images at close proximity, stop searching further
+        if (allFoundImages.length > 0 && searchLevel === 0) {
+            console.log(`🎯 Found ${allFoundImages.length} images at immediate level, stopping search`);
+            break;
+        }
+
         current = current.parentElement;
+        searchLevel++;
     }
 
     if (allFoundImages.length === 0) return null;
     if (allFoundImages.length === 1) return allFoundImages[0];
 
     // Second pass: intelligent prioritization to select the main content image
-    console.log(`🔍 Found ${allFoundImages.length} images, applying intelligent selection...`);
+    console.log(`🔍 Found ${allFoundImages.length} images at ${searchLevel} levels, applying intelligent selection...`);
     return selectMainContentImage(allFoundImages);
+}
+
+// Helper function to detect if an element is a content card that shouldn't search siblings
+function isContentCard(element) {
+    // Detect common content card patterns
+    const cardSelectors = [
+        '.card',
+        '.container__item',
+        '[data-test-id="pin"]',
+        '[data-test-id="card"]',
+        '.post',
+        '.article',
+        '.item',
+        '.entry'
+    ];
+
+    return cardSelectors.some(selector => {
+        return element.matches && element.matches(selector) ||
+            element.closest && element.closest(selector) === element;
+    });
+}
+
+// Helper function to detect if the clicked element is in a text-only content area
+function isInTextOnlyArea(element) {
+    // Look for common text area patterns
+    const textAreaSelectors = [
+        '.container__text',
+        '.container__headline',
+        '.headline',
+        '.title',
+        '.description',
+        '.summary',
+        '.content',
+        '.text'
+    ];
+
+    return textAreaSelectors.some(selector => {
+        return element.closest && element.closest(selector);
+    });
 }
 
 // Store the last right-clicked element
@@ -3750,9 +4060,18 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             // 1. Find the best target container using layout analysis
             let targetElement = img.parentElement;
             let isPictureImage = false;
+            let isVirtualImage = false;
             let useOverlayApproach = false;
             let overlayContainer = null;
             let effectiveWidth, effectiveHeight;
+
+            // Special handling for virtual images (Getty Images background images)
+            if (img._isVirtualBackgroundImage && img._originalPictureElement) {
+                isVirtualImage = true;
+                targetElement = img._originalPictureElement;
+                useOverlayApproach = true;
+                console.log('🎭 Handling virtual background image from Getty Images');
+            }
 
             // Special handling for <picture> elements
             const pictureElement = img.closest('picture');
@@ -3789,15 +4108,37 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 });
             }
 
-            // 2. Analyze layout for all other cases
-            const layoutAnalysis = analyzeLayoutPattern(targetElement, img);
+            // Fallback for cases where targetElement is null/invalid
+            if (!targetElement || !(targetElement instanceof Element)) {
+                console.warn('⚠️ Invalid targetElement, using document.body as fallback:', targetElement);
+                targetElement = document.body;
+                useOverlayApproach = true;
+            }
+
+            // 2. Analyze layout for all other cases (but skip for virtual images to avoid complex analysis)
+            let layoutAnalysis;
+            if (isVirtualImage) {
+                // For virtual images, create a minimal layout analysis
+                layoutAnalysis = {
+                    type: 'virtual-image',
+                    preserveOriginal: true,
+                    reason: 'Virtual image from background CSS',
+                    containerHasPaddingAspectRatio: false,
+                    imageIsAbsolute: false,
+                    parentUsesFlexOrGrid: false,
+                    hasResponsivePattern: false,
+                    isFacebookStyle: false
+                };
+            } else {
+                layoutAnalysis = analyzeLayoutPattern(targetElement, img);
+            }
             // Overlay approach for aspect ratio, flex/grid, Facebook, Pinterest, etc.
             const isAspectRatioContainer = layoutAnalysis.containerHasPaddingAspectRatio;
-            const shouldUseOverlayApproach = isPictureImage || isAspectRatioContainer || layoutAnalysis.isFacebookStyle || layoutAnalysis.parentUsesFlexOrGrid || layoutAnalysis.hasResponsivePattern;
+            const shouldUseOverlayApproach = isPictureImage || isVirtualImage || isAspectRatioContainer || layoutAnalysis.isFacebookStyle || layoutAnalysis.parentUsesFlexOrGrid || layoutAnalysis.hasResponsivePattern;
 
             // For overlay approach, use the padding container if found
-            // BUT: Don't override picture element containers - they should use their own dimensions
-            if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer && !isPictureImage) {
+            // BUT: Don't override picture element containers or virtual images - they should use their own dimensions
+            if (shouldUseOverlayApproach && layoutAnalysis.paddingContainer && !isPictureImage && !isVirtualImage) {
                 targetElement = layoutAnalysis.paddingContainer.element;
             }
 
@@ -3806,8 +4147,8 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 const imgRect = img.getBoundingClientRect();
                 const containerRect = targetElement.getBoundingClientRect();
 
-                // Skip dimension calculation for picture elements - already handled above
-                if (!isPictureImage) {
+                // Skip dimension calculation for picture elements and virtual images - handle separately
+                if (!isPictureImage && !isVirtualImage) {
                     // GENERALIZED: For aspect ratio containers, prefer image dimensions over container when image has explicit size or uses object-fit
                     const hasExplicitDimensions = img.width && img.height;
                     const isCenteredOrFitted = (
@@ -3851,11 +4192,17 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
                     targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
                     targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
-                } else {
+                } else if (isPictureImage) {
                     // For picture elements, use the dimensions already calculated and stored on the picture element
                     effectiveWidth = parseInt(pictureElement.dataset.lifTargetWidth) || imgRect.width;
                     effectiveHeight = parseInt(pictureElement.dataset.lifTargetHeight) || imgRect.height;
                     console.log('📸 Picture element - using pre-calculated dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                } else if (isVirtualImage) {
+                    // For virtual images, use the original picture element's dimensions (not the parent container)
+                    const originalPictureRect = img._originalPictureElement.getBoundingClientRect();
+                    effectiveWidth = originalPictureRect.width > 0 ? originalPictureRect.width : imgRect.width;
+                    effectiveHeight = originalPictureRect.height > 0 ? originalPictureRect.height : imgRect.height;
+                    console.log('🎭 Virtual image - using original picture element dimensions:', effectiveWidth + 'x' + effectiveHeight);
                 }
 
                 overlayContainer = targetElement;
