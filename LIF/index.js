@@ -15,7 +15,7 @@ class lifGenerator {
         this.formData;
         this.ldlForm = document.getElementById("image-generation-form");
         this.inpaintMethod = '';
-        this.endpointUrl = 'https://' + (mode=='dev'?'api.dev.immersity.ai':'api.immersity.ai') + '/api/v1';
+        this.endpointUrl = 'https://' + (mode == 'dev' ? 'api.dev.immersity.ai' : 'api.immersity.ai') + '/api/v1';
         this.imUploadUrl;
         this.imDownloadUrl;
         this.outpaintImUploadUrl;
@@ -135,7 +135,7 @@ class lifGenerator {
             formData.forEach((value, key) => {
                 params[key] = value;
             });
-           
+
             if (params.seed === "") {
                 delete params.seed;
             } else {
@@ -572,7 +572,13 @@ async function showLifInfo(lifInfo) {
 
     console.log(lifInfo);
     const views = lifInfo.views;
-    mylog(`LIF Encoder: ${lifInfo.encoder} -- ${views.length} view${views.length > 1 ? 's' : ''}`);
+    const isOldLif = lifInfo.isOldLif || false;
+
+    if (isOldLif) {
+        mylog(`LIF Encoder: ${lifInfo.encoder} -- ${views.length} view${views.length > 1 ? 's' : ''} -- Conv Offset: ${lifInfo.conv_offset.toFixed(6)}`);
+    } else {
+        mylog(`LIF Encoder: ${lifInfo.encoder} -- ${views.length} view${views.length > 1 ? 's' : ''}`);
+    }
 
     for (const [index, view] of views.entries()) {
         const viewDOM = document.createElement('div');
@@ -580,21 +586,34 @@ async function showLifInfo(lifInfo) {
         const mainImg = document.createElement('img');
         mainImg.className = 'main_img';
         mainImg.src = view.image.url;
-        if (!view.inv_z_map) {
-            const title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | No invZ`;
-            viewDOM.appendChild(Object.assign(document.createElement('h2'), { textContent: title }));
-            viewDOM.appendChild(mainImg);
-            viewDiv.appendChild(viewDOM);
-            continue;
+        const layers = view.layers_top_to_bottom || [];
+
+        let title;
+        if (isOldLif) {
+            // For old LIF files, show conv offset instead of technical details
+            title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | Conv Offset: ${lifInfo.conv_offset.toFixed(6)}`;
+        } else if (!view.inv_z_map) {
+            title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | No invZ`;
+        } else {
+            title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | invZ: ${view.inv_z_map.min.toFixed(4)} - ${view.inv_z_map.max.toFixed(4)} | ${layers.length} layer${layers.length > 1 ? 's' : ''}`;
         }
-        const dispImg = document.createElement('img');
-        dispImg.className = 'main_img';
-        dispImg.src = view.inv_z_map.url;
-        const layers = view.layers_top_to_bottom;
-        const title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | invZ: ${view.inv_z_map.min.toFixed(4)} - ${view.inv_z_map.max.toFixed(4)} | ${layers.length} layer${layers.length > 1 ? 's' : ''}`;
+
         viewDOM.appendChild(Object.assign(document.createElement('h2'), { textContent: title }));
         viewDOM.appendChild(mainImg);
-        viewDOM.appendChild(dispImg);
+
+        if (!isOldLif && view.inv_z_map) {
+            const dispImg = document.createElement('img');
+            dispImg.className = 'main_img';
+            dispImg.src = view.inv_z_map.url;
+            viewDOM.appendChild(dispImg);
+        } else if (isOldLif && view.inv_z_map) {
+            // For old LIF, still show depth map if available
+            const dispImg = document.createElement('img');
+            dispImg.className = 'main_img';
+            dispImg.src = view.inv_z_map.url;
+            viewDOM.appendChild(dispImg);
+        }
+
         viewDiv.appendChild(viewDOM);
 
         for (const [index, layer] of layers.entries()) {
@@ -637,6 +656,200 @@ async function askToGenLDI(file) {
 
 }
 
+// Helper functions for old LIF parsing
+function handleBlob(blob) {
+    return URL.createObjectURL(blob);
+}
+
+async function getImageDimensions(url) {
+    const img = new Image();
+    return new Promise((resolve, reject) => {
+        img.onload = () => {
+            resolve({ width: img.width, height: img.height });
+        };
+        img.onerror = (error) => {
+            reject(new Error('Failed to load image'));
+        };
+        img.src = url;
+    });
+}
+
+async function parseAndShowOldLif(arrayBuffer) {
+    try {
+        const lifMeta = await parseBinary(arrayBuffer);
+        const lifJson = lifMeta.getJsonMeta();
+
+        if (!lifJson.views || lifJson.views.length === 0) {
+            return null;
+        }
+
+        // Create a simplified LIF info structure for old LIF files
+        const oldLifInfo = {
+            encoder: lifJson.encoder || "Unknown (Legacy)",
+            convergence: lifJson.convergence || 0,
+            conv_offset: -(lifJson.convergence || 0), // conv offset is minus convergence
+            isOldLif: true, // flag to identify old LIF for display purposes
+            views: []
+        };
+
+        for (const [index, view] of lifJson.views.entries()) {
+            const viewInfo = {
+                image: { url: null },
+                width_px: 0,
+                height_px: 0,
+                focal_px: 0,
+                position: {
+                    x: index === 0 ? -0.5 : 0.5, // view 0: -0.5, view 1: 0.5
+                    y: 0,
+                    z: 0
+                },
+                frustum_skew: view.camera_data ? view.camera_data.frustum_skew : { x: 0, y: 0 },
+                inv_z_map: null,
+                layers_top_to_bottom: []
+            };
+
+            // Handle image - old LIF format uses direct ID fields
+            let imageBlob = null;
+
+            // Check for old format: albedoId (direct number)
+            if (view.albedoId !== undefined) {
+                if (view.albedoId == -1) {
+                    imageBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
+                } else {
+                    try {
+                        const field = lifMeta.getFieldByType(view.albedoId);
+                        if (field) {
+                            imageBlob = field.toBlob();
+                        }
+                    } catch (e) {
+                        console.warn("Could not get albedo field:", e);
+                    }
+                }
+            }
+            // Check for new format: albedo.blob_id (nested object)
+            else if (view.albedo && view.albedo.blob_id !== undefined) {
+                if (view.albedo.blob_id == -1) {
+                    imageBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
+                } else {
+                    try {
+                        const field = lifMeta.getFieldByType(view.albedo.blob_id);
+                        if (field) {
+                            imageBlob = field.toBlob();
+                        }
+                    } catch (e) {
+                        console.warn("Could not get albedo field:", e);
+                    }
+                }
+            }
+            // Check for other possible image field names
+            else if (view.imageId !== undefined) {
+                if (view.imageId == -1) {
+                    imageBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
+                } else {
+                    try {
+                        const field = lifMeta.getFieldByType(view.imageId);
+                        if (field) {
+                            imageBlob = field.toBlob();
+                        }
+                    } catch (e) {
+                        console.warn("Could not get image field:", e);
+                    }
+                }
+            }
+
+            if (imageBlob) {
+                viewInfo.image.url = handleBlob(imageBlob);
+            }
+
+            // Get image dimensions
+            if (viewInfo.image.url) {
+                try {
+                    const dims = await getImageDimensions(viewInfo.image.url);
+                    viewInfo.width_px = dims.width;
+                    viewInfo.height_px = dims.height;
+                    if (view.camera_data && view.camera_data.focal_ratio_to_width) {
+                        viewInfo.focal_px = view.camera_data.focal_ratio_to_width * dims.width;
+                    }
+                } catch (e) {
+                    console.warn("Could not get image dimensions:", e);
+                }
+            }
+
+            // Handle disparity/depth if available - check different field names and formats
+            let depthBlob = null;
+            let depthMin = 0, depthMax = 1;
+
+            // Check for old format: disparityId (direct number)
+            if (view.disparityId !== undefined) {
+                try {
+                    const field = lifMeta.getFieldByType(view.disparityId);
+                    if (field) {
+                        depthBlob = field.toBlob();
+                        // Look for min/max values in various possible fields
+                        depthMin = view.min_disparity || view.disparityMin || 0;
+                        depthMax = view.max_disparity || view.disparityMax || 1;
+                    }
+                } catch (e) {
+                    console.warn("Could not get disparity field:", e);
+                }
+            }
+            // Check for new format: disparity.blob_id (nested object)
+            else if (view.disparity && view.disparity.blob_id !== undefined) {
+                try {
+                    const field = lifMeta.getFieldByType(view.disparity.blob_id);
+                    if (field) {
+                        depthBlob = field.toBlob();
+                        depthMin = view.disparity.min_disparity || 0;
+                        depthMax = view.disparity.max_disparity || 1;
+                    }
+                } catch (e) {
+                    console.warn("Could not get disparity field:", e);
+                }
+            }
+            // Check for inv_z_dist variants
+            else if (view.inv_z_distId !== undefined) {
+                try {
+                    const field = lifMeta.getFieldByType(view.inv_z_distId);
+                    if (field) {
+                        depthBlob = field.toBlob();
+                        depthMin = view.inv_z_dist_min || view.invZDistMin || 0;
+                        depthMax = view.inv_z_dist_max || view.invZDistMax || 1;
+                    }
+                } catch (e) {
+                    console.warn("Could not get inv_z_dist field:", e);
+                }
+            }
+            else if (view.inv_z_dist && view.inv_z_dist.blob_id !== undefined) {
+                try {
+                    const field = lifMeta.getFieldByType(view.inv_z_dist.blob_id);
+                    if (field) {
+                        depthBlob = field.toBlob();
+                        depthMin = view.inv_z_dist.inv_z_dist_min || 0;
+                        depthMax = view.inv_z_dist.inv_z_dist_max || 1;
+                    }
+                } catch (e) {
+                    console.warn("Could not get inv_z_dist field:", e);
+                }
+            }
+
+            if (depthBlob) {
+                viewInfo.inv_z_map = {
+                    url: handleBlob(depthBlob),
+                    min: depthMin,
+                    max: depthMax
+                };
+            }
+
+            oldLifInfo.views.push(viewInfo);
+        }
+
+        return oldLifInfo;
+    } catch (e) {
+        console.warn("Could not parse old LIF file:", e);
+        return null;
+    }
+}
+
 async function handleFileSelect(event) {
 
     const lifGen = new lifGenerator();
@@ -668,23 +881,51 @@ async function handleFileSelect(event) {
                 addViz(arrayBuffer);
             }
         } catch (e) {
-            console.log(e);
-            const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
-            if (userWantsToCreateLif) {
-
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const lifMeta = await parseBinary(arrayBuffer);
-                    const lifJson = lifMeta.getJsonMeta();
-                    if (lifJson.views && (lifJson.views.length > 1)) lifGen.stLifInput = true;
-                } catch (e) {
-                    console.log("simple image");
-                }
-                lifGen.file = file;
-                await lifGen.go();
-
+            // Suppress expected parsing errors for old LIF formats
+            if (e.message && e.message.includes("blob_id")) {
+                console.log("Modern LIF parsing failed (expected for old LIF formats), trying legacy parser...");
             } else {
-                return;
+                console.log(e);
+            }
+
+            // Try to parse as an old LIF file first
+            const arrayBuffer = await file.arrayBuffer();
+            const oldLifInfo = await parseAndShowOldLif(arrayBuffer);
+
+            if (oldLifInfo) {
+                // Successfully parsed as old LIF - show the views
+                mylog(`Old LIF Format Detected: ${oldLifInfo.encoder} -- ${oldLifInfo.views.length} view${oldLifInfo.views.length > 1 ? 's' : ''}`);
+                showLifInfo(oldLifInfo);
+
+                // Ask user if they want to convert to modern LIF
+                const conversionMessage = oldLifInfo.views.length > 1
+                    ? "This is an old stereo LIF file. Would you like to convert it to modern LIF 5.3 format?"
+                    : "This is an old mono LIF file. Would you like to convert it to modern LIF 5.3 format?";
+
+                const userWantsToConvert = confirm(conversionMessage);
+                if (userWantsToConvert) {
+                    // Set stereo flag if multiple views
+                    if (oldLifInfo.views.length > 1) lifGen.stLifInput = true;
+                    lifGen.file = file;
+                    await lifGen.go();
+                }
+            } else {
+                // Not a LIF file at all - use original fallback logic
+                const userWantsToCreateLif = confirm("Not a LIF file, would you like to create one?");
+                if (userWantsToCreateLif) {
+                    try {
+                        const lifMeta = await parseBinary(arrayBuffer);
+                        const lifJson = lifMeta.getJsonMeta();
+                        if (lifJson.views && (lifJson.views.length > 1)) lifGen.stLifInput = true;
+                    } catch (e) {
+                        console.log("simple image");
+                    }
+                    lifGen.file = file;
+                    await lifGen.go();
+
+                } else {
+                    return;
+                }
             }
         }
     }
