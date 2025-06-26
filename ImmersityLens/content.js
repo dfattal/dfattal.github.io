@@ -1626,12 +1626,21 @@ async function convertTo3D(img, button, options = {}) {
             // Container selection: special handling for picture elements and virtual images
             let lifContainer;
 
-            // Special handling for virtual images (Getty Images background images)
-            if (img._isVirtualBackgroundImage && img._originalPictureElement) {
-                // For virtual images, use the original picture element's parent as the container
-                // This ensures we don't interfere with regular picture elements
-                lifContainer = img._originalPictureElement.parentElement || img._originalPictureElement;
-                console.log('🎭 Virtual image detected - using original picture element parent as container');
+            // Special handling for virtual images (background images from any element)
+            if (img._isVirtualBackgroundImage) {
+                if (img._originalBackgroundElement) {
+                    // For virtual images from spans/divs/etc, use the original background element's parent
+                    lifContainer = img._originalBackgroundElement.parentElement || img._originalBackgroundElement;
+                    console.log('🎭 Virtual background image detected - using original background element parent as container');
+                } else if (img._originalPictureElement) {
+                    // For backward compatibility with Getty Images (picture elements)
+                    lifContainer = img._originalPictureElement.parentElement || img._originalPictureElement;
+                    console.log('🎭 Virtual picture image detected - using original picture element parent as container');
+                } else {
+                    // Fallback if no original element reference
+                    lifContainer = document.body;
+                    console.log('🎭 Virtual image fallback - using document.body as container');
+                }
             } else {
                 const pictureElement = img.closest('picture');
                 if (pictureElement) {
@@ -3575,33 +3584,128 @@ function findImgInTree(element) {
 // Function to recursively find ALL img tags in a tree
 function findAllImgsInTree(element) {
     const images = [];
-    if (!element) return images;
 
-    // Check if current element is an img
-    if (element.tagName === 'IMG') {
-        images.push(element);
-    }
+    // Recursive function to find all images
+    function traverse(node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            // Find regular img elements
+            if (node.tagName === 'IMG') {
+                images.push(node);
+            }
 
-    // GETTY IMAGES FIX: Check for <picture> elements with CSS background-image
-    if (element.tagName === 'PICTURE') {
-        const bgImage = extractBackgroundImageUrl(element);
-        if (bgImage) {
-            // Create a virtual image element to represent the background image
-            const virtualImg = createVirtualImageFromBackground(element, bgImage);
-            if (virtualImg) {
-                images.push(virtualImg);
-                console.log('🖼️ Found picture element with background-image:', bgImage);
+            // NEW: Find elements with background images
+            const backgroundImageUrl = extractBackgroundImageUrl(node);
+            if (backgroundImageUrl) {
+                // Check if this is a suitable background image element
+                if (isSuitableBackgroundImageElement(node, backgroundImageUrl)) {
+                    const virtualImg = createVirtualImageFromBackground(node, backgroundImageUrl);
+                    if (virtualImg) {
+                        console.log('🎨 Found background image element:', {
+                            tagName: node.tagName,
+                            className: node.className,
+                            backgroundUrl: backgroundImageUrl.substring(0, 80) + '...',
+                            dimensions: `${virtualImg.width}x${virtualImg.height}`
+                        });
+                        images.push(virtualImg);
+                    }
+                }
+            }
+
+            // Recurse into children for both img elements and background images
+            for (let child of node.children) {
+                traverse(child);
             }
         }
     }
 
-    // Check all children recursively
-    for (let child of element.children) {
-        const childImages = findAllImgsInTree(child);
-        images.push(...childImages);
+    traverse(element);
+    return images;
+}
+
+// NEW: Helper function to determine if a background image element is suitable for 3D conversion
+function isSuitableBackgroundImageElement(element, backgroundImageUrl) {
+    // Skip if URL is not valid or too short
+    if (!backgroundImageUrl || backgroundImageUrl.length < 10) {
+        return false;
     }
 
-    return images;
+    // Skip data URLs (inline images) as they're usually small icons
+    if (backgroundImageUrl.startsWith('data:')) {
+        return false;
+    }
+
+    // Get element dimensions
+    const rect = element.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+    // Skip if element is too small (likely decorative)
+    if (width < 50 || height < 50) {
+        return false;
+    }
+
+    // Skip if aspect ratio is too extreme (likely UI elements)
+    const aspectRatio = width / height;
+    if (aspectRatio > 5 || aspectRatio < 0.2) {
+        return false;
+    }
+
+    // Look for positive indicators that this is content (not UI)
+    const className = element.className.toLowerCase();
+    const tagName = element.tagName.toLowerCase();
+
+    // Positive indicators for content images
+    const contentIndicators = [
+        'background-image', 'cover', 'hero', 'feature', 'main', 'content',
+        'article', 'photo', 'picture', 'gallery', 'media', 'image', 'tile',
+        'card', 'item', 'slide', 'carousel'
+    ];
+
+    const hasContentIndicator = contentIndicators.some(indicator =>
+        className.includes(indicator)
+    );
+
+    // Negative indicators for UI elements
+    const uiIndicators = [
+        'icon', 'logo', 'avatar', 'button', 'nav', 'menu', 'header',
+        'footer', 'ad', 'banner', 'overlay', 'popup', 'tooltip'
+    ];
+
+    const hasUIIndicator = uiIndicators.some(indicator =>
+        className.includes(indicator)
+    );
+
+    // Allow if we have content indicators and no UI indicators
+    if (hasContentIndicator && !hasUIIndicator) {
+        return true;
+    }
+
+    // For National Geographic and similar content sites, be more permissive
+    if (window.location.hostname.includes('nationalgeographic.com') ||
+        window.location.hostname.includes('natgeo') ||
+        window.location.hostname.includes('discovery.com')) {
+
+        // Look for carousel slides and content tiles
+        if (className.includes('slide') || className.includes('tile') ||
+            className.includes('prism') || className.includes('carousel') ||
+            className.includes('backgroundimage')) {
+            return true;
+        }
+    }
+
+    // General detection for common background image patterns
+    if (className.includes('backgroundimage') ||
+        className.includes('background-image') ||
+        (tagName === 'span' && className.includes('image'))) {
+        // Additional check for reasonable dimensions for span elements
+        if (tagName === 'span' && (width < 100 || height < 100)) {
+            return false;
+        }
+        return true;
+    }
+
+    // Default: allow if dimensions are reasonable and no clear UI indicators
+    return !hasUIIndicator && width >= 200 && height >= 100;
 }
 
 // Extract background-image URL from CSS
@@ -3610,47 +3714,182 @@ function extractBackgroundImageUrl(element) {
     const backgroundImage = style.backgroundImage;
 
     if (backgroundImage && backgroundImage !== 'none') {
-        // Extract URL from CSS url() function
-        const match = backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
-        if (match && match[1]) {
-            return match[1];
-        }
+        const url = parseBackgroundImageUrl(backgroundImage);
+        if (url) return url;
     }
 
     // Also check inline style
     const inlineStyle = element.style.backgroundImage;
     if (inlineStyle && inlineStyle !== 'none') {
-        const match = inlineStyle.match(/url\(['"]?(.*?)['"]?\)/);
-        if (match && match[1]) {
-            return match[1];
-        }
+        const url = parseBackgroundImageUrl(inlineStyle);
+        if (url) return url;
     }
 
     return null;
 }
 
+// Robust URL parsing for background-image CSS property
+function parseBackgroundImageUrl(cssValue) {
+    if (!cssValue || cssValue === 'none') {
+        return null;
+    }
+
+    try {
+        // Handle multiple possible formats:
+        // 1. url("https://example.com/image.jpg")
+        // 2. url('https://example.com/image.jpg')
+        // 3. url(https://example.com/image.jpg)
+        // 4. url(&quot;https://example.com/image.jpg&quot;) - HTML entities
+
+        // First, decode HTML entities if present
+        let decodedValue = cssValue;
+        if (cssValue.includes('&quot;')) {
+            decodedValue = cssValue.replace(/&quot;/g, '"');
+        }
+        if (cssValue.includes('&apos;')) {
+            decodedValue = decodedValue.replace(/&apos;/g, "'");
+        }
+        if (cssValue.includes('&amp;')) {
+            decodedValue = decodedValue.replace(/&amp;/g, "&");
+        }
+
+        // Try different regex patterns in order of specificity
+        const patterns = [
+            // Pattern 1: url("...") or url('...')
+            /url\s*\(\s*["']([^"']*?)["']\s*\)/i,
+            // Pattern 2: url(...) without quotes
+            /url\s*\(\s*([^)]+?)\s*\)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = decodedValue.match(pattern);
+            if (match && match[1]) {
+                let url = match[1].trim();
+
+                // Additional cleanup: remove any remaining HTML entities
+                url = url.replace(/&quot;/g, '"');
+                url = url.replace(/&apos;/g, "'");
+                url = url.replace(/&amp;/g, "&");
+                url = url.replace(/&lt;/g, "<");
+                url = url.replace(/&gt;/g, ">");
+
+                // Validate that we have a reasonable URL
+                if (url.length > 5 && (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:') || url.startsWith('/'))) {
+                    console.log('🔗 Extracted background image URL:', {
+                        original: cssValue.substring(0, 100) + (cssValue.length > 100 ? '...' : ''),
+                        decoded: decodedValue.substring(0, 100) + (decodedValue.length > 100 ? '...' : ''),
+                        extracted: url.substring(0, 100) + (url.length > 100 ? '...' : ''),
+                        pattern: pattern.toString()
+                    });
+                    return url;
+                }
+            }
+        }
+
+        console.warn('🔗 Could not extract URL from background-image:', {
+            original: cssValue.substring(0, 100) + (cssValue.length > 100 ? '...' : ''),
+            decoded: decodedValue.substring(0, 100) + (decodedValue.length > 100 ? '...' : '')
+        });
+
+    } catch (error) {
+        console.warn('Error parsing background-image URL:', error, cssValue);
+    }
+
+    return null;
+}
+
+// Test function for URL parsing (can be called from console for debugging)
+function testBackgroundImageUrlParsing() {
+    const testCases = [
+        // Your specific failing case
+        'background-image: url(&quot;https://i.natgeofe.com/n/c41a772e-9279-4056-b86f-74469d9f65d9/NS123502198_NGSPPOCN_Konini%20Rongo_0E5A9846%20(2)_3x2.jpg?wp=1&amp;w=630&amp;h=420&quot;);',
+
+        // Standard cases
+        'url("https://example.com/image.jpg")',
+        "url('https://example.com/image.jpg')",
+        'url(https://example.com/image.jpg)',
+
+        // Edge cases with parentheses and special characters
+        'url("https://example.com/path/image(1).jpg")',
+        'url("https://example.com/path/image with spaces.jpg")',
+        'url("https://example.com/path/image%20encoded.jpg")',
+
+        // HTML entities
+        'url(&quot;https://example.com/image.jpg&quot;)',
+        'url(&apos;https://example.com/image.jpg&apos;)',
+
+        // Multiple background images (should get the first one)
+        'url("https://example.com/bg1.jpg"), url("https://example.com/bg2.jpg")',
+
+        // Invalid cases
+        'url()',
+        'url("")',
+        'none',
+        'invalid-css'
+    ];
+
+    console.log('🧪 Testing background image URL parsing:');
+
+    testCases.forEach((testCase, index) => {
+        const result = parseBackgroundImageUrl(testCase);
+        console.log(`Test ${index + 1}:`, {
+            input: testCase.substring(0, 80) + (testCase.length > 80 ? '...' : ''),
+            result: result,
+            success: result !== null
+        });
+    });
+
+    // Test the specific failing case
+    const nationalGeoCase = 'background-image: url(&quot;https://i.natgeofe.com/n/c41a772e-9279-4056-b86f-74469d9f65d9/NS123502198_NGSPPOCN_Konini%20Rongo_0E5A9846%20(2)_3x2.jpg?wp=1&amp;w=630&amp;h=420&quot;);';
+    const nationalGeoResult = parseBackgroundImageUrl(nationalGeoCase);
+
+    console.log('🎯 National Geographic specific test:', {
+        input: nationalGeoCase,
+        extracted: nationalGeoResult,
+        expected: 'https://i.natgeofe.com/n/c41a772e-9279-4056-b86f-74469d9f65d9/NS123502198_NGSPPOCN_Konini%20Rongo_0E5A9846%20(2)_3x2.jpg?wp=1&w=630&h=420',
+        success: nationalGeoResult === 'https://i.natgeofe.com/n/c41a772e-9279-4056-b86f-74469d9f65d9/NS123502198_NGSPPOCN_Konini%20Rongo_0E5A9846%20(2)_3x2.jpg?wp=1&w=630&h=420'
+    });
+
+    return {
+        totalTests: testCases.length,
+        successfulTests: testCases.filter(test => parseBackgroundImageUrl(test) !== null).length,
+        nationalGeoFixed: nationalGeoResult === 'https://i.natgeofe.com/n/c41a772e-9279-4056-b86f-74469d9f65d9/NS123502198_NGSPPOCN_Konini%20Rongo_0E5A9846%20(2)_3x2.jpg?wp=1&w=630&h=420'
+    };
+}
+
+// Make test function available globally for console debugging
+window.testBackgroundImageUrlParsing = testBackgroundImageUrlParsing;
+
 // Create a virtual image element from background-image
-function createVirtualImageFromBackground(pictureElement, imageUrl) {
+function createVirtualImageFromBackground(backgroundElement, imageUrl) {
     try {
         // Create a virtual img element that behaves like a real image
         const virtualImg = document.createElement('img');
 
         // Set essential properties
         virtualImg.src = imageUrl;
-        virtualImg.alt = pictureElement.getAttribute('alt') || 'Background Image';
-        virtualImg.className = pictureElement.className;
+        virtualImg.alt = backgroundElement.getAttribute('alt') ||
+            backgroundElement.getAttribute('aria-label') ||
+            'Background Image';
+        virtualImg.className = backgroundElement.className;
 
-        // Copy dimensions from the picture element
-        const rect = pictureElement.getBoundingClientRect();
+        // Copy dimensions from the background element
+        const rect = backgroundElement.getBoundingClientRect();
         virtualImg.width = Math.round(rect.width);
         virtualImg.height = Math.round(rect.height);
 
-        // Store reference to the original picture element
-        virtualImg._originalPictureElement = pictureElement;
+        // Store reference to the original background element (could be picture, span, div, etc.)
+        virtualImg._originalBackgroundElement = backgroundElement;
         virtualImg._isVirtualBackgroundImage = true;
+        virtualImg._backgroundElementTagName = backgroundElement.tagName;
+
+        // For backward compatibility with existing Getty Images code
+        if (backgroundElement.tagName === 'PICTURE') {
+            virtualImg._originalPictureElement = backgroundElement;
+        }
 
         // Copy computed styles for accurate representation
-        const pictureStyle = window.getComputedStyle(pictureElement);
+        const elementStyle = window.getComputedStyle(backgroundElement);
         virtualImg.style.cssText = `
             display: block;
             width: ${rect.width}px;
@@ -3663,9 +3902,10 @@ function createVirtualImageFromBackground(pictureElement, imageUrl) {
         virtualImg.naturalHeight = Math.round(rect.height);
 
         console.log('🎭 Created virtual image from background:', {
-            url: imageUrl,
+            url: imageUrl.substring(0, 80) + '...',
             dimensions: `${virtualImg.width}x${virtualImg.height}`,
-            pictureClass: pictureElement.className
+            tagName: backgroundElement.tagName,
+            elementClass: backgroundElement.className.split(' ')[0] || 'no-class'
         });
 
         return virtualImg;
@@ -3771,6 +4011,27 @@ function calculateImageContentScore(img) {
         if (img.closest('[data-testid="grid-item-container"]')) {
             score += 30;
         }
+    }
+
+    // National Geographic-specific content indicators
+    if (window.location.hostname.includes('nationalgeographic.com') ||
+        window.location.hostname.includes('natgeo')) {
+        // Virtual background images from carousel slides are likely main content
+        if (img._isVirtualBackgroundImage) {
+            score += 40; // Strong indicator for main National Geographic image
+
+            // Extra bonus for carousel slides and prism tiles
+            if (className.includes('carousel') || className.includes('prism') ||
+                className.includes('slide') || className.includes('backgroundimage')) {
+                score += 20;
+            }
+        }
+    }
+
+    // General bonus for virtual background images (they're usually main content)
+    if (img._isVirtualBackgroundImage && !window.location.hostname.includes('gettyimages.') &&
+        !window.location.hostname.includes('nationalgeographic.com')) {
+        score += 30; // General bonus for background images on other sites
     }
 
     // 3. UI/DECORATION PENALTIES - Reduce score for UI elements
@@ -4065,12 +4326,17 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             let overlayContainer = null;
             let effectiveWidth, effectiveHeight;
 
-            // Special handling for virtual images (Getty Images background images)
-            if (img._isVirtualBackgroundImage && img._originalPictureElement) {
+            // Special handling for virtual images (background images from any element)
+            if (img._isVirtualBackgroundImage && img._originalBackgroundElement) {
                 isVirtualImage = true;
-                targetElement = img._originalPictureElement;
+                targetElement = img._originalBackgroundElement;
                 useOverlayApproach = true;
-                console.log('🎭 Handling virtual background image from Getty Images');
+                console.log('🎭 Handling virtual background image from', img._backgroundElementTagName || 'unknown element');
+
+                // For backward compatibility, also check _originalPictureElement
+                if (img._originalPictureElement) {
+                    targetElement = img._originalPictureElement;
+                }
             }
 
             // Special handling for <picture> elements
@@ -4198,11 +4464,19 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     effectiveHeight = parseInt(pictureElement.dataset.lifTargetHeight) || imgRect.height;
                     console.log('📸 Picture element - using pre-calculated dimensions:', effectiveWidth + 'x' + effectiveHeight);
                 } else if (isVirtualImage) {
-                    // For virtual images, use the original picture element's dimensions (not the parent container)
-                    const originalPictureRect = img._originalPictureElement.getBoundingClientRect();
-                    effectiveWidth = originalPictureRect.width > 0 ? originalPictureRect.width : imgRect.width;
-                    effectiveHeight = originalPictureRect.height > 0 ? originalPictureRect.height : imgRect.height;
-                    console.log('🎭 Virtual image - using original picture element dimensions:', effectiveWidth + 'x' + effectiveHeight);
+                    // For virtual images, use the original background element's dimensions (could be picture, span, div, etc.)
+                    const originalElement = img._originalBackgroundElement || img._originalPictureElement;
+                    if (originalElement) {
+                        const originalElementRect = originalElement.getBoundingClientRect();
+                        effectiveWidth = originalElementRect.width > 0 ? originalElementRect.width : imgRect.width;
+                        effectiveHeight = originalElementRect.height > 0 ? originalElementRect.height : imgRect.height;
+                        console.log('🎭 Virtual image - using original background element dimensions:', effectiveWidth + 'x' + effectiveHeight, 'from', img._backgroundElementTagName || 'unknown');
+                    } else {
+                        // Fallback to img rect if no original element reference
+                        effectiveWidth = imgRect.width;
+                        effectiveHeight = imgRect.height;
+                        console.log('🎭 Virtual image - using img rect dimensions (fallback):', effectiveWidth + 'x' + effectiveHeight);
+                    }
                 }
 
                 overlayContainer = targetElement;

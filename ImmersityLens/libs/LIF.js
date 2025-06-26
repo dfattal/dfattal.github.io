@@ -754,17 +754,30 @@ class lifViewer {
         let positioningStyle = 'top: 0; left: 0;';
 
         // Special handling for virtual images - calculate position relative to container
-        if (this.originalImage && this.originalImage._isVirtualBackgroundImage && this.originalImage._originalPictureElement) {
-            const pictureElement = this.originalImage._originalPictureElement;
-            const containerRect = this.container.getBoundingClientRect();
-            const pictureRect = pictureElement.getBoundingClientRect();
+        if (this.originalImage && this.originalImage._isVirtualBackgroundImage) {
+            const originalElement = this.originalImage._originalBackgroundElement || this.originalImage._originalPictureElement;
 
-            // Calculate offset of picture element relative to container
-            const offsetTop = pictureRect.top - containerRect.top;
-            const offsetLeft = pictureRect.left - containerRect.left;
+            if (originalElement) {
+                const containerRect = this.container.getBoundingClientRect();
+                const elementRect = originalElement.getBoundingClientRect();
 
-            positioningStyle = `top: ${offsetTop}px; left: ${offsetLeft}px;`;
-            console.log('🎭 Virtual image: positioning canvas relative to container at offset:', { top: offsetTop, left: offsetLeft });
+                // Calculate offset of original element relative to container
+                let offsetTop = elementRect.top - containerRect.top;
+                let offsetLeft = elementRect.left - containerRect.left;
+
+                // For background images, also calculate cropping/positioning offset
+                if (this.originalImage._originalBackgroundElement) {
+                    const backgroundOffset = this.calculateBackgroundImageOffset(originalElement);
+                    if (backgroundOffset) {
+                        offsetTop += backgroundOffset.top;
+                        offsetLeft += backgroundOffset.left;
+                        console.log('🎨 Applied background positioning offset:', backgroundOffset);
+                    }
+                }
+
+                positioningStyle = `top: ${offsetTop}px; left: ${offsetLeft}px;`;
+                console.log('🎭 Virtual image: positioning canvas relative to container at offset:', { top: offsetTop, left: offsetLeft });
+            }
         }
         // Handle centered image positioning (LinkedIn-style)
         else if (this.centeredImageInfo) {
@@ -813,6 +826,142 @@ class lifViewer {
                 object-fit: none !important;
                 object-position: initial !important;
             `;
+        }
+    }
+
+    /**
+ * Calculate offset and dimensions for background image positioning
+ * Handles background-position, background-size, and aspect ratio cropping
+ */
+    calculateBackgroundImageOffset(backgroundElement) {
+        try {
+            const computedStyle = window.getComputedStyle(backgroundElement);
+            const backgroundPosition = computedStyle.backgroundPosition || 'center center';
+            const backgroundSize = computedStyle.backgroundSize || 'auto';
+
+            // Get element dimensions
+            const elementRect = backgroundElement.getBoundingClientRect();
+            const containerWidth = elementRect.width;
+            const containerHeight = elementRect.height;
+            const containerAspectRatio = containerWidth / containerHeight;
+
+            // Try to get the original image's aspect ratio from the virtual image
+            let imageAspectRatio = null;
+            if (this.originalImage && this.originalImage.naturalWidth && this.originalImage.naturalHeight) {
+                imageAspectRatio = this.originalImage.naturalWidth / this.originalImage.naturalHeight;
+            } else {
+                // Fallback: assume a common image aspect ratio if we can't determine it
+                imageAspectRatio = 4 / 3; // Default assumption
+                console.log('🎨 Using fallback aspect ratio (4:3) for background image calculation');
+            }
+
+            // Calculate how the background image would be displayed
+            let displayWidth, displayHeight, offsetX = 0, offsetY = 0;
+
+            // Handle background-size
+            if (backgroundSize === 'cover' || backgroundSize === 'auto' || !backgroundSize) {
+                // 'cover' or default behavior: image is scaled to cover the entire container
+                // The image may be cropped to maintain aspect ratio
+
+                if (imageAspectRatio > containerAspectRatio) {
+                    // Image is wider than container - image height matches container, width is cropped
+                    displayHeight = containerHeight;
+                    displayWidth = displayHeight * imageAspectRatio;
+                } else {
+                    // Image is taller than container - image width matches container, height is cropped
+                    displayWidth = containerWidth;
+                    displayHeight = displayWidth / imageAspectRatio;
+                }
+            } else if (backgroundSize === 'contain') {
+                // 'contain': entire image is visible, may have letterboxing
+                if (imageAspectRatio > containerAspectRatio) {
+                    displayWidth = containerWidth;
+                    displayHeight = displayWidth / imageAspectRatio;
+                } else {
+                    displayHeight = containerHeight;
+                    displayWidth = displayHeight * imageAspectRatio;
+                }
+            } else {
+                // Explicit size values (px, %, etc.) - not handling these complex cases for now
+                displayWidth = containerWidth;
+                displayHeight = containerHeight;
+            }
+
+            // Calculate the offset of the displayed image within the container
+            const cropOffsetX = (displayWidth - containerWidth) / 2;
+            const cropOffsetY = (displayHeight - containerHeight) / 2;
+
+            // Parse background-position
+            const positionParts = backgroundPosition.trim().split(/\s+/);
+            let xPosition = 'center';
+            let yPosition = 'center';
+
+            if (positionParts.length >= 2) {
+                xPosition = positionParts[0];
+                yPosition = positionParts[1];
+            } else if (positionParts.length === 1) {
+                xPosition = positionParts[0];
+                // If only one value is provided, the second value defaults to 'center'
+                yPosition = 'center';
+            }
+
+            // Handle x-position
+            if (xPosition === 'left' || xPosition === '0%') {
+                offsetX = -cropOffsetX;
+            } else if (xPosition === 'center' || xPosition === '50%') {
+                offsetX = 0; // No offset for center
+            } else if (xPosition === 'right' || xPosition === '100%') {
+                offsetX = cropOffsetX;
+            } else if (xPosition.includes('%')) {
+                const percentage = parseFloat(xPosition);
+                // For percentage values: 0% = left edge, 50% = center, 100% = right edge
+                offsetX = -cropOffsetX + (cropOffsetX * 2 * percentage / 100);
+            } else if (xPosition.includes('px')) {
+                offsetX = parseFloat(xPosition) - cropOffsetX;
+            }
+
+            // Handle y-position
+            if (yPosition === 'top' || yPosition === '0%') {
+                offsetY = -cropOffsetY;
+            } else if (yPosition === 'center' || yPosition === '50%') {
+                offsetY = 0; // No offset for center
+            } else if (yPosition === 'bottom' || yPosition === '100%') {
+                offsetY = cropOffsetY;
+            } else if (yPosition.includes('%')) {
+                const percentage = parseFloat(yPosition);
+                // For percentage values: 0% = top edge, 50% = center, 100% = bottom edge
+                offsetY = -cropOffsetY + (cropOffsetY * 2 * percentage / 100);
+            } else if (yPosition.includes('px')) {
+                offsetY = parseFloat(yPosition) - cropOffsetY;
+            }
+
+            console.log('🎨 Background image layout analysis:', {
+                backgroundPosition,
+                backgroundSize,
+                containerSize: `${containerWidth}x${containerHeight}`,
+                imageAspectRatio,
+                containerAspectRatio,
+                displaySize: `${Math.round(displayWidth)}x${Math.round(displayHeight)}`,
+                cropOffset: { x: Math.round(cropOffsetX), y: Math.round(cropOffsetY) },
+                parsedPosition: { x: xPosition, y: yPosition },
+                calculatedOffset: { top: Math.round(offsetY), left: Math.round(offsetX) }
+            });
+
+            // Only return offset if it's significant (avoid tiny adjustments)
+            if (Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1) {
+                return {
+                    top: Math.round(offsetY),
+                    left: Math.round(offsetX),
+                    // Also store additional info for potential future use
+                    displaySize: { width: Math.round(displayWidth), height: Math.round(displayHeight) },
+                    cropOffset: { x: Math.round(cropOffsetX), y: Math.round(cropOffsetY) }
+                };
+            }
+
+            return null;
+        } catch (error) {
+            console.warn('Error calculating background image offset:', error);
+            return null;
         }
     }
 
@@ -1052,14 +1201,39 @@ class lifViewer {
             height: originalImage.height || originalImage.naturalHeight
         };
 
-        // Special dimension handling for virtual images (Getty Images)
-        if (originalImage._isVirtualBackgroundImage && originalImage._originalPictureElement) {
-            const pictureRect = originalImage._originalPictureElement.getBoundingClientRect();
-            targetDimensions = {
-                width: pictureRect.width,
-                height: pictureRect.height
-            };
-            console.log('🎭 Virtual image dimensions from picture element:', targetDimensions);
+        // Special dimension handling for virtual images (background images from any element)
+        if (originalImage._isVirtualBackgroundImage) {
+            const originalElement = originalImage._originalBackgroundElement || originalImage._originalPictureElement;
+            if (originalElement) {
+                const elementRect = originalElement.getBoundingClientRect();
+
+                // For background images, we need to account for CSS positioning and cropping
+                if (originalImage._originalBackgroundElement) {
+                    // Calculate the actual display size of the background image
+                    const backgroundLayout = lifViewer.calculateBackgroundImageLayout(originalElement, originalImage);
+                    if (backgroundLayout && backgroundLayout.displaySize) {
+                        targetDimensions = {
+                            width: backgroundLayout.displaySize.width,
+                            height: backgroundLayout.displaySize.height
+                        };
+                        console.log('🎨 Virtual background image dimensions from calculated layout:', targetDimensions);
+                    } else {
+                        // Fallback to element size
+                        targetDimensions = {
+                            width: elementRect.width,
+                            height: elementRect.height
+                        };
+                        console.log('🎭 Virtual background image dimensions from element (fallback):', targetDimensions);
+                    }
+                } else {
+                    // For picture elements, use the original approach
+                    targetDimensions = {
+                        width: elementRect.width,
+                        height: elementRect.height
+                    };
+                    console.log('🎭 Virtual picture image dimensions from element:', targetDimensions);
+                }
+            }
         }
 
         let centeredImageInfo = null;
@@ -1180,6 +1354,88 @@ class lifViewer {
             autoplay: options.autoplay !== undefined ? options.autoplay : true,
             mouseOver: options.mouseOver !== undefined ? options.mouseOver : true
         });
+    }
+
+    /**
+     * Calculate background image layout (size and position) for virtual images
+     * Static method that can be called before lifViewer instantiation
+     */
+    static calculateBackgroundImageLayout(backgroundElement, virtualImage) {
+        try {
+            const computedStyle = window.getComputedStyle(backgroundElement);
+            const backgroundPosition = computedStyle.backgroundPosition || 'center center';
+            const backgroundSize = computedStyle.backgroundSize || 'auto';
+
+            // Get element dimensions
+            const elementRect = backgroundElement.getBoundingClientRect();
+            const containerWidth = elementRect.width;
+            const containerHeight = elementRect.height;
+            const containerAspectRatio = containerWidth / containerHeight;
+
+            // Try to get the original image's aspect ratio from the virtual image
+            let imageAspectRatio = null;
+            if (virtualImage && virtualImage.naturalWidth && virtualImage.naturalHeight) {
+                imageAspectRatio = virtualImage.naturalWidth / virtualImage.naturalHeight;
+            } else {
+                // Fallback: assume a common image aspect ratio if we can't determine it
+                imageAspectRatio = 4 / 3; // Default assumption
+                console.log('🎨 Using fallback aspect ratio (4:3) for background layout calculation');
+            }
+
+            // Calculate how the background image would be displayed
+            let displayWidth, displayHeight;
+
+            // Handle background-size
+            if (backgroundSize === 'cover' || backgroundSize === 'auto' || !backgroundSize) {
+                // 'cover' or default behavior: image is scaled to cover the entire container
+                if (imageAspectRatio > containerAspectRatio) {
+                    // Image is wider than container - image height matches container, width extends beyond
+                    displayHeight = containerHeight;
+                    displayWidth = displayHeight * imageAspectRatio;
+                } else {
+                    // Image is taller than container - image width matches container, height extends beyond
+                    displayWidth = containerWidth;
+                    displayHeight = displayWidth / imageAspectRatio;
+                }
+            } else if (backgroundSize === 'contain') {
+                // 'contain': entire image is visible, may have letterboxing
+                if (imageAspectRatio > containerAspectRatio) {
+                    displayWidth = containerWidth;
+                    displayHeight = displayWidth / imageAspectRatio;
+                } else {
+                    displayHeight = containerHeight;
+                    displayWidth = displayHeight * imageAspectRatio;
+                }
+            } else {
+                // Explicit size values (px, %, etc.) - use container size for now
+                displayWidth = containerWidth;
+                displayHeight = containerHeight;
+            }
+
+            console.log('🎨 Background image layout calculation:', {
+                backgroundSize,
+                containerSize: `${containerWidth}x${containerHeight}`,
+                imageAspectRatio,
+                containerAspectRatio,
+                displaySize: `${Math.round(displayWidth)}x${Math.round(displayHeight)}`
+            });
+
+            return {
+                displaySize: {
+                    width: Math.round(displayWidth),
+                    height: Math.round(displayHeight)
+                },
+                containerSize: {
+                    width: containerWidth,
+                    height: containerHeight
+                },
+                imageAspectRatio,
+                containerAspectRatio
+            };
+        } catch (error) {
+            console.warn('Error calculating background image layout:', error);
+            return null;
+        }
     }
 
     /**
@@ -2676,10 +2932,15 @@ class lifViewer {
         if (!this.originalImage) return false;
 
         try {
-            // For virtual images, use the original picture element's bounds
+            // For virtual images, use the original background or picture element's bounds
             let targetElement = this.originalImage;
-            if (this.originalImage._isVirtualBackgroundImage && this.originalImage._originalPictureElement) {
-                targetElement = this.originalImage._originalPictureElement;
+            if (this.originalImage._isVirtualBackgroundImage) {
+                // Priority: background element first, then picture element as fallback
+                if (this.originalImage._originalBackgroundElement) {
+                    targetElement = this.originalImage._originalBackgroundElement;
+                } else if (this.originalImage._originalPictureElement) {
+                    targetElement = this.originalImage._originalPictureElement;
+                }
             }
 
             const imageRect = targetElement.getBoundingClientRect();
@@ -2710,10 +2971,15 @@ class lifViewer {
             // Add a small delay to ensure DOM is fully settled
             setTimeout(() => {
                 // Create a synthetic mouse event check by testing if the image area is under the cursor
-                // For virtual images, use the original picture element's bounds
+                // For virtual images, use the original background or picture element's bounds
                 let targetElement = this.originalImage;
-                if (this.originalImage._isVirtualBackgroundImage && this.originalImage._originalPictureElement) {
-                    targetElement = this.originalImage._originalPictureElement;
+                if (this.originalImage._isVirtualBackgroundImage) {
+                    // Priority: background element first, then picture element as fallback
+                    if (this.originalImage._originalBackgroundElement) {
+                        targetElement = this.originalImage._originalBackgroundElement;
+                    } else if (this.originalImage._originalPictureElement) {
+                        targetElement = this.originalImage._originalPictureElement;
+                    }
                 }
                 const imageRect = targetElement.getBoundingClientRect();
 
