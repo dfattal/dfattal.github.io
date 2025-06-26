@@ -296,8 +296,8 @@ console.log(mode2);
 
 class monoLdiGenerator {
     constructor(file = null, inpainting = 'lama') {
-        this.AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode2;
-        // this.AWS_LAMBDA_URL = 'https://gf6coowgaocqp5nfny5tn6ft4q0nxsvy.lambda-url.us-east-1.on.aws/?mode=' + mode2;
+        // this.AWS_LAMBDA_URL = 'https://dqrluvhhkamlne6cpc6g6waaay0whxpb.lambda-url.us-east-1.on.aws/?mode=' + mode2;
+        this.AWS_LAMBDA_URL = 'https://gf6coowgaocqp5nfny5tn6ft4q0nxsvy.lambda-url.us-east-1.on.aws/?mode=' + mode2;
         this.file = file ? file : null;
         this.width = 0;
         this.height = 0;
