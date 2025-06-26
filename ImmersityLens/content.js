@@ -3434,27 +3434,240 @@ function findImgInTree(element) {
     return null;
 }
 
+// Function to recursively find ALL img tags in a tree
+function findAllImgsInTree(element) {
+    const images = [];
+    if (!element) return images;
+
+    // Check if current element is an img
+    if (element.tagName === 'IMG') {
+        images.push(element);
+    }
+
+    // Check all children recursively
+    for (let child of element.children) {
+        const childImages = findAllImgsInTree(child);
+        images.push(...childImages);
+    }
+
+    return images;
+}
+
+// Intelligent image selection to prioritize main content over UI elements
+function selectMainContentImage(images) {
+    console.log('🎯 Analyzing images for content prioritization:', images.map(img => ({
+        src: img.src?.substring(img.src.lastIndexOf('/') + 1) || 'no-src',
+        alt: img.alt,
+        className: img.className,
+        dimensions: `${img.width || 'auto'}x${img.height || 'auto'}`,
+        naturalDimensions: `${img.naturalWidth || 'unknown'}x${img.naturalHeight || 'unknown'}`
+    })));
+
+    // Apply prioritization scoring system
+    const scoredImages = images.map(img => ({
+        image: img,
+        score: calculateImageContentScore(img)
+    }));
+
+    // Sort by score (highest first) and return the best candidate
+    scoredImages.sort((a, b) => b.score - a.score);
+
+    console.log('📊 Image scores:', scoredImages.map(item => ({
+        src: item.image.src?.substring(item.image.src.lastIndexOf('/') + 1) || 'no-src',
+        score: item.score.toFixed(2),
+        reasons: getScoreReasons(item.image)
+    })));
+
+    return scoredImages[0].image;
+}
+
+// Calculate content priority score for an image
+function calculateImageContentScore(img) {
+    let score = 0;
+
+    // 1. DIMENSION SCORING - Larger images are more likely to be main content
+    const naturalWidth = img.naturalWidth || 0;
+    const naturalHeight = img.naturalHeight || 0;
+    const displayWidth = img.width || img.getBoundingClientRect().width || 0;
+    const displayHeight = img.height || img.getBoundingClientRect().height || 0;
+
+    // Use natural dimensions if available, otherwise display dimensions
+    const effectiveWidth = naturalWidth > 0 ? naturalWidth : displayWidth;
+    const effectiveHeight = naturalHeight > 0 ? naturalHeight : displayHeight;
+    const area = effectiveWidth * effectiveHeight;
+
+    // Dimension bonus (logarithmic scale to avoid extreme values)
+    if (area > 0) {
+        score += Math.log10(area / 10000) * 20; // Base score from size
+    }
+
+    // Bonus for good aspect ratios (typical for content images)
+    if (effectiveWidth > 0 && effectiveHeight > 0) {
+        const aspectRatio = effectiveWidth / effectiveHeight;
+        if (aspectRatio >= 0.5 && aspectRatio <= 3.0) { // Not too narrow or wide
+            score += 15;
+        }
+    }
+
+    // 2. CONTENT INDICATORS - Look for signs this is main content
+    const src = (img.src || '').toLowerCase();
+    const alt = (img.alt || '').toLowerCase();
+    const className = (img.className || '').toLowerCase();
+
+    // Positive indicators (main content)
+    const contentIndicators = [
+        'cover', 'hero', 'feature', 'main', 'content', 'article', 'photo', 'picture',
+        'project', 'gallery', 'media', 'image', 'primary', 'large', 'full'
+    ];
+    contentIndicators.forEach(indicator => {
+        if (className.includes(indicator) || alt.includes(indicator)) {
+            score += 25;
+        }
+    });
+
+    // Behance-specific content indicators
+    if (window.location.hostname.includes('behance.net')) {
+        if (className.includes('projectcover') || className.includes('cover-image') ||
+            className.includes('js-cover-image') || className.includes('main-photo')) {
+            score += 40; // Strong indicator for main project image
+        }
+    }
+
+    // 3. UI/DECORATION PENALTIES - Reduce score for UI elements
+    const uiIndicators = [
+        'icon', 'logo', 'avatar', 'thumb', 'ribbon', 'badge', 'star', 'rating',
+        'button', 'nav', 'menu', 'header', 'footer', 'sidebar', 'ad', 'banner',
+        'sprite', 'decoration', 'ui-', 'social', 'share', 'like', 'comment'
+    ];
+    uiIndicators.forEach(indicator => {
+        if (src.includes(indicator) || alt.includes(indicator) || className.includes(indicator)) {
+            score -= 30;
+        }
+    });
+
+    // Behance-specific UI penalties
+    if (window.location.hostname.includes('behance.net')) {
+        if (className.includes('ribbon') || src.includes('ribbon') ||
+            className.includes('feature-ribbon') || alt.includes('ribbon')) {
+            score -= 50; // Heavy penalty for ribbon images
+        }
+    }
+
+    // 4. CONTEXT SCORING - Analyze DOM context
+    const parent = img.parentElement;
+    const parentClassName = (parent?.className || '').toLowerCase();
+    const parentTagName = (parent?.tagName || '').toLowerCase();
+
+    // Bonus for being in content areas
+    const contentContexts = ['article', 'main', 'content', 'gallery', 'media'];
+    contentContexts.forEach(context => {
+        if (parentClassName.includes(context) || parentTagName === context) {
+            score += 20;
+        }
+    });
+
+    // Penalty for being in overlay/UI areas
+    const uiContexts = ['overlay', 'nav', 'header', 'footer', 'sidebar', 'menu', 'controls'];
+    uiContexts.forEach(context => {
+        if (parentClassName.includes(context)) {
+            score -= 25;
+        }
+    });
+
+    // Behance-specific context analysis
+    if (window.location.hostname.includes('behance.net')) {
+        // Penalty for being in overlay areas
+        if (img.closest('.Cover-overlay-r1A') || img.closest('.Cover-showOnHover-oZ2')) {
+            score -= 40;
+        }
+        // Bonus for being in main content areas
+        if (img.closest('.ProjectCoverNeue-picture-NuE') || img.closest('picture')) {
+            score += 35;
+        }
+    }
+
+    // 5. FILE TYPE/URL SCORING
+    if (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp')) {
+        score += 10; // Standard image formats
+    }
+    if (src.includes('_2x') || src.includes('@2x') || src.includes('_large') || src.includes('_full')) {
+        score += 15; // High-resolution variants
+    }
+
+    // 6. VISIBILITY AND POSITIONING
+    const rect = img.getBoundingClientRect();
+    if (rect.width > 200 && rect.height > 150) {
+        score += 20; // Large display size
+    }
+    if (rect.width < 50 || rect.height < 50) {
+        score -= 20; // Too small, likely UI element
+    }
+
+    return Math.max(0, score); // Ensure non-negative score
+}
+
+// Helper function to get human-readable score reasons for debugging
+function getScoreReasons(img) {
+    const reasons = [];
+    const src = (img.src || '').toLowerCase();
+    const alt = (img.alt || '').toLowerCase();
+    const className = (img.className || '').toLowerCase();
+
+    // Size analysis
+    const naturalWidth = img.naturalWidth || 0;
+    const naturalHeight = img.naturalHeight || 0;
+    if (naturalWidth > 800 || naturalHeight > 600) {
+        reasons.push('large-dimensions');
+    }
+
+    // Content indicators
+    if (className.includes('cover') || className.includes('main')) {
+        reasons.push('content-class');
+    }
+
+    // UI penalties
+    if (className.includes('ribbon') || src.includes('ribbon')) {
+        reasons.push('ribbon-penalty');
+    }
+
+    // Context
+    if (img.closest('.Cover-overlay-r1A')) {
+        reasons.push('overlay-penalty');
+    }
+
+    return reasons.join(', ');
+}
+
 // Function to find image in parent elements and their siblings
 function findImgInParentsAndSiblings(element) {
+    const allFoundImages = [];
     let current = element;
+
+    // First pass: collect ALL images in the context hierarchy
     while (current && current !== document) {
         // Check current element
-        const img = findImgInTree(current);
-        if (img) return img;
+        const imgs = findAllImgsInTree(current);
+        allFoundImages.push(...imgs);
 
         // Check siblings
         if (current.parentElement) {
             for (let sibling of current.parentElement.children) {
                 if (sibling !== current) {
-                    const siblingImg = findImgInTree(sibling);
-                    if (siblingImg) return siblingImg;
+                    const siblingImgs = findAllImgsInTree(sibling);
+                    allFoundImages.push(...siblingImgs);
                 }
             }
         }
 
         current = current.parentElement;
     }
-    return null;
+
+    if (allFoundImages.length === 0) return null;
+    if (allFoundImages.length === 1) return allFoundImages[0];
+
+    // Second pass: intelligent prioritization to select the main content image
+    console.log(`🔍 Found ${allFoundImages.length} images, applying intelligent selection...`);
+    return selectMainContentImage(allFoundImages);
 }
 
 // Store the last right-clicked element
