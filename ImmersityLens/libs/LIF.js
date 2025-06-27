@@ -2388,6 +2388,12 @@ class lifViewer {
                 try {
                     const elementRect = element.getBoundingClientRect();
 
+                    // Validate the bounding rect
+                    if (!elementRect || typeof elementRect.width === 'undefined') {
+                        console.warn('⚠️ Invalid getBoundingClientRect for element in detectTallNavigationElements');
+                        return;
+                    }
+
                     // Check if it's a tall element that might cover part of the image
                     const isTall = elementRect.height > Math.min(200, imageRect.height * 0.5);
                     const isWide = elementRect.width > Math.min(100, imageRect.width * 0.3);
@@ -2400,7 +2406,7 @@ class lifViewer {
                         if (overlapsOrAdjacent) {
                             interferingElements.add(element);
                             console.log(`📏 Tall/Wide navigation: Found interfering element:`, element.tagName, element.className || '[no class]',
-                                `${elementRect.width.toFixed(0)}x${elementRect.height.toFixed(0)}`);
+                                `${(elementRect.width || 0).toFixed(0)}x${(elementRect.height || 0).toFixed(0)}`);
                         }
                     }
                 } catch (error) {
@@ -2416,10 +2422,23 @@ class lifViewer {
      * Check if an element overlaps with the image
      */
     doesElementOverlapImage(elementRect, imageRect) {
-        return !(elementRect.right < imageRect.left ||
-            elementRect.left > imageRect.right ||
-            elementRect.bottom < imageRect.top ||
-            elementRect.top > imageRect.bottom);
+        // Validate rectangles
+        if (!elementRect || !imageRect ||
+            typeof elementRect.left === 'undefined' || typeof elementRect.right === 'undefined' ||
+            typeof imageRect.left === 'undefined' || typeof imageRect.right === 'undefined') {
+            console.warn('⚠️ Invalid rectangles in doesElementOverlapImage');
+            return false;
+        }
+
+        try {
+            return !(elementRect.right < imageRect.left ||
+                elementRect.left > imageRect.right ||
+                elementRect.bottom < imageRect.top ||
+                elementRect.top > imageRect.bottom);
+        } catch (error) {
+            console.warn('⚠️ Error in doesElementOverlapImage:', error);
+            return false;
+        }
     }
 
     /**
@@ -2432,6 +2451,14 @@ class lifViewer {
             const elementRect = element.getBoundingClientRect();
             const imageRect = this.originalImage.getBoundingClientRect();
 
+            // Validate that getBoundingClientRect returned valid rectangles
+            if (!elementRect || !imageRect ||
+                typeof elementRect.left === 'undefined' ||
+                typeof imageRect.left === 'undefined') {
+                console.warn('⚠️ Invalid bounding rectangles for element near image check');
+                return false;
+            }
+
             // Check if element is within threshold distance of image
             const horizontalDistance = Math.max(0,
                 Math.max(elementRect.left - imageRect.right, imageRect.left - elementRect.right));
@@ -2440,6 +2467,7 @@ class lifViewer {
 
             return horizontalDistance <= threshold && verticalDistance <= threshold;
         } catch (error) {
+            console.warn('⚠️ Error in isElementNearImage:', error);
             return false;
         }
     }
@@ -2584,26 +2612,46 @@ class lifViewer {
      * Check if element is positioned near the image (within reasonable proximity)
      */
     isElementNearImage(element, elementRect, imageRect) {
+        // Validate inputs
+        if (!element || !elementRect || !imageRect) {
+            console.warn('⚠️ Invalid parameters for isElementNearImage (3-param version)');
+            return false;
+        }
+
+        // Validate that rectangles have required properties
+        if (typeof elementRect.left === 'undefined' || typeof elementRect.right === 'undefined' ||
+            typeof elementRect.top === 'undefined' || typeof elementRect.bottom === 'undefined' ||
+            typeof imageRect.left === 'undefined' || typeof imageRect.right === 'undefined' ||
+            typeof imageRect.top === 'undefined' || typeof imageRect.bottom === 'undefined') {
+            console.warn('⚠️ Invalid rectangle properties for isElementNearImage');
+            return false;
+        }
+
         // Define "near" as within the image bounds or reasonable proximity
         const proximityThreshold = 100; // pixels
 
-        // Check if element overlaps image area
-        const hasOverlap = !(elementRect.right < imageRect.left ||
-            elementRect.left > imageRect.right ||
-            elementRect.bottom < imageRect.top ||
-            elementRect.top > imageRect.bottom);
+        try {
+            // Check if element overlaps image area
+            const hasOverlap = !(elementRect.right < imageRect.left ||
+                elementRect.left > imageRect.right ||
+                elementRect.bottom < imageRect.top ||
+                elementRect.top > imageRect.bottom);
 
-        if (hasOverlap) return true;
+            if (hasOverlap) return true;
 
-        // Check if element is within proximity threshold
-        const minDistance = Math.min(
-            Math.abs(elementRect.right - imageRect.left),    // Element to left of image
-            Math.abs(elementRect.left - imageRect.right),    // Element to right of image
-            Math.abs(elementRect.bottom - imageRect.top),    // Element above image
-            Math.abs(elementRect.top - imageRect.bottom)     // Element below image
-        );
+            // Check if element is within proximity threshold
+            const minDistance = Math.min(
+                Math.abs(elementRect.right - imageRect.left),    // Element to left of image
+                Math.abs(elementRect.left - imageRect.right),    // Element to right of image
+                Math.abs(elementRect.bottom - imageRect.top),    // Element above image
+                Math.abs(elementRect.top - imageRect.bottom)     // Element below image
+            );
 
-        return minDistance <= proximityThreshold;
+            return minDistance <= proximityThreshold;
+        } catch (error) {
+            console.warn('⚠️ Error in isElementNearImage (3-param version):', error);
+            return false;
+        }
     }
 
     /**
@@ -2665,14 +2713,26 @@ class lifViewer {
      */
     getElementDimensions(element) {
         try {
+            if (!element) {
+                return { width: 0, height: 0, top: 0, left: 0 };
+            }
+
             const rect = element.getBoundingClientRect();
+
+            // Validate that getBoundingClientRect returned a valid object
+            if (!rect || typeof rect.width === 'undefined') {
+                console.warn('⚠️ Invalid getBoundingClientRect result for element:', element);
+                return { width: 0, height: 0, top: 0, left: 0 };
+            }
+
             return {
-                width: Math.round(rect.width),
-                height: Math.round(rect.height),
-                top: Math.round(rect.top),
-                left: Math.round(rect.left)
+                width: Math.round(rect.width || 0),
+                height: Math.round(rect.height || 0),
+                top: Math.round(rect.top || 0),
+                left: Math.round(rect.left || 0)
             };
         } catch (error) {
+            console.warn('⚠️ Error getting element dimensions:', error);
             return { width: 0, height: 0, top: 0, left: 0 };
         }
     }
@@ -2786,35 +2846,50 @@ class lifViewer {
      * Check if element is positioned adjacent to the image (theater mode pattern)
      */
     isElementAdjacentToImage(elementRect, imageRect) {
-        const tolerance = 20; // pixels tolerance for "adjacent"
+        // Validate rectangles
+        if (!elementRect || !imageRect ||
+            typeof elementRect.left === 'undefined' || typeof elementRect.right === 'undefined' ||
+            typeof elementRect.top === 'undefined' || typeof elementRect.bottom === 'undefined' ||
+            typeof imageRect.left === 'undefined' || typeof imageRect.right === 'undefined' ||
+            typeof imageRect.top === 'undefined' || typeof imageRect.bottom === 'undefined') {
+            console.warn('⚠️ Invalid rectangles in isElementAdjacentToImage');
+            return false;
+        }
 
-        // Left side of image
-        const isLeftAdjacent = Math.abs(elementRect.right - imageRect.left) <= tolerance &&
-            elementRect.top <= imageRect.bottom + tolerance &&
-            elementRect.bottom >= imageRect.top - tolerance;
+        try {
+            const tolerance = 20; // pixels tolerance for "adjacent"
 
-        // Right side of image  
-        const isRightAdjacent = Math.abs(elementRect.left - imageRect.right) <= tolerance &&
-            elementRect.top <= imageRect.bottom + tolerance &&
-            elementRect.bottom >= imageRect.top - tolerance;
+            // Left side of image
+            const isLeftAdjacent = Math.abs(elementRect.right - imageRect.left) <= tolerance &&
+                elementRect.top <= imageRect.bottom + tolerance &&
+                elementRect.bottom >= imageRect.top - tolerance;
 
-        // Above image
-        const isTopAdjacent = Math.abs(elementRect.bottom - imageRect.top) <= tolerance &&
-            elementRect.left <= imageRect.right + tolerance &&
-            elementRect.right >= imageRect.left - tolerance;
+            // Right side of image  
+            const isRightAdjacent = Math.abs(elementRect.left - imageRect.right) <= tolerance &&
+                elementRect.top <= imageRect.bottom + tolerance &&
+                elementRect.bottom >= imageRect.top - tolerance;
 
-        // Below image
-        const isBottomAdjacent = Math.abs(elementRect.top - imageRect.bottom) <= tolerance &&
-            elementRect.left <= imageRect.right + tolerance &&
-            elementRect.right >= imageRect.left - tolerance;
+            // Above image
+            const isTopAdjacent = Math.abs(elementRect.bottom - imageRect.top) <= tolerance &&
+                elementRect.left <= imageRect.right + tolerance &&
+                elementRect.right >= imageRect.left - tolerance;
 
-        // Overlapping with image
-        const isOverlapping = !(elementRect.right < imageRect.left ||
-            elementRect.left > imageRect.right ||
-            elementRect.bottom < imageRect.top ||
-            elementRect.top > imageRect.bottom);
+            // Below image
+            const isBottomAdjacent = Math.abs(elementRect.top - imageRect.bottom) <= tolerance &&
+                elementRect.left <= imageRect.right + tolerance &&
+                elementRect.right >= imageRect.left - tolerance;
 
-        return isLeftAdjacent || isRightAdjacent || isTopAdjacent || isBottomAdjacent || isOverlapping;
+            // Overlapping with image
+            const isOverlapping = !(elementRect.right < imageRect.left ||
+                elementRect.left > imageRect.right ||
+                elementRect.bottom < imageRect.top ||
+                elementRect.top > imageRect.bottom);
+
+            return isLeftAdjacent || isRightAdjacent || isTopAdjacent || isBottomAdjacent || isOverlapping;
+        } catch (error) {
+            console.warn('⚠️ Error in isElementAdjacentToImage:', error);
+            return false;
+        }
     }
 
     /**
