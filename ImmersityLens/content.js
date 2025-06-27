@@ -1571,6 +1571,22 @@ async function convertTo3D(img, button, options = {}) {
         button.disabled = true;
         button.dataset.state = 'processing';
 
+        // Windows Flickr Fix: Switch to main-photo image before processing to match Mac behavior
+        const isWindows = navigator.userAgent.includes('Windows');
+        const isFlickr = window.location.hostname.includes('flickr.com');
+        if (isWindows && isFlickr) {
+            const mainPhoto = document.querySelector('img.main-photo');
+            if (mainPhoto && mainPhoto !== img) {
+                console.log('🔄 Windows Flickr: Switching to main-photo before processing:', {
+                    originalImage: img.className,
+                    newImage: mainPhoto.className,
+                    originalSrc: img.src?.substring(0, 50),
+                    newSrc: mainPhoto.src?.substring(0, 50)
+                });
+                img = mainPhoto; // Switch to main-photo like Mac uses
+            }
+        }
+
         // Apply processing effect directly to image - purple glow + darker opacity
         applyProcessingEffect(img);
 

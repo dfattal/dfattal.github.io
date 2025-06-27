@@ -3405,16 +3405,16 @@ class lifViewer {
                 containerTag: this.container.tagName
             });
 
-            // Set dimensions to match the main-photo image like Mac
-            const width = this.originalImage.naturalWidth || this.originalImage.width;
-            const height = this.originalImage.naturalHeight || this.originalImage.height;
+            // Set dimensions to match the main-photo image like Mac (use DISPLAY size, not natural size)
+            const width = this.originalImage.width || this.originalImage.naturalWidth;
+            const height = this.originalImage.height || this.originalImage.naturalHeight;
 
             if (width && height) {
                 this.targetDimensions = {
                     width: Math.round(width),
                     height: Math.round(height)
                 };
-                console.log('🎯 Windows Flickr: Setting dimensions to match main-photo:', this.targetDimensions);
+                console.log('🎯 Windows Flickr: Setting dimensions to match main-photo DISPLAY size:', this.targetDimensions);
             }
         } else if (!document.contains(this.container)) {
             // Normal validation for non-Windows or non-Flickr
@@ -4528,6 +4528,10 @@ class lifViewer {
                     this.canvas.style.width = `${width}px`;
                     this.canvas.style.height = `${height}px`;
 
+                    // CRITICAL: Also set WebGL internal dimensions to match display size
+                    this.canvas.width = width;
+                    this.canvas.height = height;
+
                     // Use the same offset calculation as Mac
                     const nestedOffset = this.calculateNestedContainerOffset();
                     if (nestedOffset) {
@@ -4538,6 +4542,8 @@ class lifViewer {
                             left: this.canvas.style.left,
                             width: this.canvas.style.width,
                             height: this.canvas.style.height,
+                            webglWidth: this.canvas.width,
+                            webglHeight: this.canvas.height,
                             offset: nestedOffset
                         });
                     } else {
@@ -4547,7 +4553,9 @@ class lifViewer {
                             top: this.canvas.style.top,
                             left: this.canvas.style.left,
                             width: this.canvas.style.width,
-                            height: this.canvas.style.height
+                            height: this.canvas.style.height,
+                            webglWidth: this.canvas.width,
+                            webglHeight: this.canvas.height
                         });
                     }
                 }
