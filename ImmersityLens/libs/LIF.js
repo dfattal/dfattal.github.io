@@ -738,6 +738,15 @@ class lifViewer {
         this.canvas.style.display = 'none';
         this.canvas.dataset.lifLayoutMode = this.layoutMode;
 
+        // Windows Debug: Check WebGL context creation
+        console.log('🎮 Windows Debug - WebGL context creation:', {
+            canvasCreated: !!this.canvas,
+            webglContext: !!this.gl,
+            webglError: this.gl ? null : 'WebGL context creation failed',
+            canvasTagName: this.canvas.tagName,
+            userAgent: navigator.userAgent.includes('Windows') ? 'Windows detected' : 'Non-Windows'
+        });
+
         // Inherit CSS classes from the original image for proper styling constraints
         if (this.originalImage && this.originalImage.className) {
             this.canvas.className = this.originalImage.className;
@@ -1014,6 +1023,13 @@ class lifViewer {
         const containerRect = this.container.getBoundingClientRect();
         const imageRect = this.originalImage.getBoundingClientRect();
 
+        // Validate rectangles (Windows Chrome fix)
+        if (!containerRect || !imageRect ||
+            typeof containerRect.top === 'undefined' || typeof imageRect.top === 'undefined') {
+            console.warn('⚠️ Invalid getBoundingClientRect in calculateNestedContainerOffset - using fallback');
+            return null;
+        }
+
         // Calculate the offset of the image relative to the container
         const imageOffsetTop = imageRect.top - containerRect.top;
         const imageOffsetLeft = imageRect.left - containerRect.left;
@@ -1028,6 +1044,16 @@ class lifViewer {
 
             if (nestedContainer) {
                 const nestedRect = nestedContainer.getBoundingClientRect();
+
+                // Validate nested container rectangle (Windows Chrome fix)
+                if (!nestedRect || typeof nestedRect.top === 'undefined') {
+                    console.warn('⚠️ Invalid getBoundingClientRect for nested container - using image offset');
+                    return {
+                        top: imageOffsetTop,
+                        left: imageOffsetLeft
+                    };
+                }
+
                 const nestedOffsetTop = nestedRect.top - containerRect.top;
                 const nestedOffsetLeft = nestedRect.left - containerRect.left;
 
@@ -1555,7 +1581,33 @@ class lifViewer {
         // This prevents the "black frame" issue when mouse is hovering during conversion
         this.checkInitialMousePosition();
 
-        console.log(`Canvas ready with dimensions: ${this.canvas.width}x${this.canvas.height}`);
+        // Windows Debug: Log comprehensive canvas state
+        console.log(`🎬 Canvas ready - comprehensive debug info:`, {
+            canvasDimensions: { width: this.canvas.width, height: this.canvas.height },
+            canvasStyle: {
+                display: this.canvas.style.display,
+                position: this.canvas.style.position,
+                top: this.canvas.style.top,
+                left: this.canvas.style.left,
+                width: this.canvas.style.width,
+                height: this.canvas.style.height,
+                zIndex: this.canvas.style.zIndex
+            },
+            containerInfo: {
+                tagName: this.container.tagName,
+                className: this.container.className,
+                id: this.container.id
+            },
+            originalImageInfo: {
+                src: this.originalImage.src,
+                width: this.originalImage.width,
+                height: this.originalImage.height,
+                className: this.originalImage.className
+            },
+            layoutMode: this.layoutMode,
+            inDOM: document.contains(this.canvas),
+            containerInDOM: document.contains(this.container)
+        });
     }
 
     /**
@@ -3266,7 +3318,25 @@ class lifViewer {
 
         await this.loadImage();
 
+        // Windows Debug: Check container and canvas before DOM insertion
+        console.log('🔗 Windows Debug - Before DOM insertion:', {
+            containerExists: !!this.container,
+            containerInDOM: this.container ? document.contains(this.container) : false,
+            containerTagName: this.container ? this.container.tagName : 'none',
+            canvasExists: !!this.canvas,
+            canvasParent: this.canvas ? this.canvas.parentNode : 'none',
+            canvasDimensions: this.canvas ? { width: this.canvas.width, height: this.canvas.height } : 'none'
+        });
+
         this.container.appendChild(this.canvas);
+
+        // Windows Debug: Check after DOM insertion
+        console.log('🔗 Windows Debug - After DOM insertion:', {
+            canvasInDOM: document.contains(this.canvas),
+            canvasParent: this.canvas.parentNode ? this.canvas.parentNode.tagName : 'none',
+            canvasNextSibling: this.canvas.nextElementSibling ? this.canvas.nextElementSibling.tagName : 'none',
+            canvasPrevSibling: this.canvas.previousElementSibling ? this.canvas.previousElementSibling.tagName : 'none'
+        });
         // Mouse position tracking - for picture elements, also add to container since canvas may be hidden
         const mouseMoveHandler = function (event) {
             const rect = this.canvas.getBoundingClientRect();
@@ -4252,10 +4322,31 @@ class lifViewer {
             // Only show the canvas
             this.canvas.style.display = 'block';
             console.log('🚀 Animation started - display states changed:');
-            console.log('📊 Canvas state:', {
+            console.log('📊 Windows Debug - Full canvas state after showing:', {
                 display: this.canvas.style.display,
                 position: this.canvas.style.position,
-                zIndex: this.canvas.style.zIndex
+                zIndex: this.canvas.style.zIndex,
+                top: this.canvas.style.top,
+                left: this.canvas.style.left,
+                width: this.canvas.style.width,
+                height: this.canvas.style.height,
+                opacity: this.canvas.style.opacity,
+                visibility: this.canvas.style.visibility,
+                transform: this.canvas.style.transform,
+                internalDimensions: { width: this.canvas.width, height: this.canvas.height },
+                boundingRect: this.canvas.getBoundingClientRect ?
+                    (() => {
+                        try {
+                            const rect = this.canvas.getBoundingClientRect();
+                            return rect && typeof rect.width !== 'undefined' ?
+                                { width: rect.width, height: rect.height, top: rect.top, left: rect.left } :
+                                'invalid';
+                        } catch (e) {
+                            return 'error: ' + e.message;
+                        }
+                    })() : 'method not available',
+                isVisible: this.canvas.offsetWidth > 0 && this.canvas.offsetHeight > 0,
+                parentNode: this.canvas.parentNode ? this.canvas.parentNode.tagName : 'no parent'
             });
             // Enhanced architecture handles positioning automatically
             this.startTime = Date.now() / 1000;
