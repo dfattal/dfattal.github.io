@@ -3328,6 +3328,46 @@ class lifViewer {
             canvasDimensions: this.canvas ? { width: this.canvas.width, height: this.canvas.height } : 'none'
         });
 
+        // CRITICAL FIX: Ensure container is in DOM before proceeding
+        if (!document.contains(this.container)) {
+            console.error('❌ Container not in DOM! Attempting to find valid container...');
+
+            // Try to find a valid parent container that IS in the DOM
+            let validContainer = null;
+
+            // Strategy 1: Look for container's closest ancestor that's in the DOM
+            let currentElement = this.container;
+            while (currentElement && currentElement.parentElement) {
+                if (document.contains(currentElement.parentElement)) {
+                    validContainer = currentElement.parentElement;
+                    console.log('✅ Found valid parent container in DOM:', validContainer.tagName, validContainer.className);
+                    break;
+                }
+                currentElement = currentElement.parentElement;
+            }
+
+            // Strategy 2: If no parent found, use original image's parent
+            if (!validContainer && this.originalImage && document.contains(this.originalImage)) {
+                validContainer = this.originalImage.parentElement;
+                console.log('✅ Using original image parent as fallback container:', validContainer.tagName, validContainer.className);
+            }
+
+            // Strategy 3: Last resort - use document.body
+            if (!validContainer) {
+                validContainer = document.body;
+                console.log('⚠️ Using document.body as last resort container');
+            }
+
+            // Replace the invalid container with the valid one
+            if (validContainer && validContainer !== this.container) {
+                console.log('🔄 Replacing invalid container with valid container');
+                this.container = validContainer;
+
+                // Re-run container setup with the new valid container
+                this.setupContainer();
+            }
+        }
+
         this.container.appendChild(this.canvas);
 
         // Windows Debug: Check after DOM insertion

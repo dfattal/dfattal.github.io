@@ -1029,6 +1029,21 @@ function applyProcessingEffect(img) {
             console.log('🎭 Using background element for visual effects:', visualTarget.tagName, visualTarget.className);
         }
 
+        // CRITICAL FIX: Validate visual target is in DOM (Windows Chrome fix)
+        if (!document.contains(visualTarget)) {
+            console.error('❌ Visual target not in DOM! Target:', visualTarget.tagName, visualTarget.className);
+            console.log('🔄 Falling back to original image for processing effects');
+            visualTarget = img; // Fall back to the original image
+
+            // Verify the fallback is in the DOM
+            if (!document.contains(visualTarget)) {
+                console.error('❌ Even fallback visual target (img) not in DOM! Processing effects will not work.');
+                return false; // Can't apply effects if no target is in DOM
+            }
+        }
+
+        console.log('✅ Visual target validated - in DOM:', document.contains(visualTarget));
+
         // Store original styles for restoration (always on the img for consistency)
         img.dataset.lifOriginalOpacity = visualTarget.style.opacity || '';
         img.dataset.lifOriginalFilter = visualTarget.style.filter || '';
@@ -1101,6 +1116,21 @@ function startPulsingAnimation(img) {
             hasBackgroundImage: window.getComputedStyle(shimmerTarget).backgroundImage !== 'none'
         });
     }
+
+    // CRITICAL FIX: Validate shimmer target is in DOM (Windows Chrome fix)
+    if (!document.contains(shimmerTarget)) {
+        console.error('❌ Shimmer target not in DOM! Target:', shimmerTarget.tagName, shimmerTarget.className);
+        console.log('🔄 Falling back to original image for shimmer effect');
+        shimmerTarget = img; // Fall back to the original image
+
+        // Verify the fallback is in the DOM
+        if (!document.contains(shimmerTarget)) {
+            console.error('❌ Even fallback shimmer target (img) not in DOM! Shimmer will not work.');
+            return; // Can't apply shimmer if no target is in DOM
+        }
+    }
+
+    console.log('✅ Shimmer target validated - in DOM:', document.contains(shimmerTarget));
 
     function animate() {
         if (!img.dataset.lifProcessing) {
