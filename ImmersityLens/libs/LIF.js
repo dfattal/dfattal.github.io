@@ -793,18 +793,22 @@ class lifViewer {
             positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
             console.log('🎯 Applying centered image positioning:', positioningStyle);
         } else {
-            // Check for document.body fallback positioning
-            if (this.container === document.body && this.originalImage) {
+            // Check for Windows Flickr special case
+            const isWindows = navigator.userAgent.includes('Windows');
+            const isFlickr = window.location.hostname.includes('flickr.com');
+
+            if (isWindows && isFlickr && this.container === this.originalImage?.parentElement) {
+                // WINDOWS FLICKR: Position canvas directly over image as sibling
+                positioningStyle = `top: 0px; left: 0px;`;
+                console.log('🪟 Windows Flickr: Simple positioning as image sibling:', positioningStyle);
+            } else if (this.container === document.body && this.originalImage) {
+                // Check for document.body fallback positioning
                 const imageRect = this.originalImage.getBoundingClientRect();
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
                 const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
                 positioningStyle = `top: ${imageRect.top + scrollTop}px; left: ${imageRect.left + scrollLeft}px;`;
                 console.log('📍 Applying document.body positioning over image:', positioningStyle);
-            } else if (navigator.userAgent.includes('Windows') && this.container === this.originalImage?.parentElement && this.originalImage) {
-                // WINDOWS FALLBACK: When using image's parent, position canvas directly over image
-                positioningStyle = `top: 0px; left: 0px;`;
-                console.log('📍 Windows fallback: Using image parent container - simple positioning:', positioningStyle);
             } else {
                 // Check for nested positioning containers (Flickr facade pattern, etc.)
                 const nestedOffset = this.calculateNestedContainerOffset();
@@ -3361,7 +3365,31 @@ class lifViewer {
         });
 
         // CRITICAL FIX: Ensure container is in DOM before proceeding
-        if (!document.contains(this.container)) {
+        // WINDOWS CHROME FIX: Skip validation for Flickr on Windows - use container as-is
+        const isWindows = navigator.userAgent.includes('Windows');
+        const isFlickr = window.location.hostname.includes('flickr.com');
+
+        if (isWindows && isFlickr) {
+            // WINDOWS FLICKR: Skip DOM validation, trust the container from content.js
+            console.log('🪟 Windows Flickr: Bypassing DOM validation, using container as-is:', {
+                tagName: this.container.tagName,
+                className: this.container.className,
+                id: this.container.id
+            });
+
+            // Set dimensions to match image for Windows Flickr
+            if (this.originalImage) {
+                const imageRect = this.originalImage.getBoundingClientRect();
+                if (imageRect && typeof imageRect.width !== 'undefined') {
+                    this.targetDimensions = {
+                        width: Math.round(imageRect.width),
+                        height: Math.round(imageRect.height)
+                    };
+                    console.log('🎯 Windows Flickr: Setting dimensions to match image:', this.targetDimensions);
+                }
+            }
+        } else if (!document.contains(this.container)) {
+            // Normal validation for non-Windows or non-Flickr
             console.error('❌ Container not in DOM! Attempting to find valid container...');
             console.log('Invalid container details:', {
                 tagName: this.container.tagName,
@@ -3381,13 +3409,6 @@ class lifViewer {
                 if (theaterContainer && document.contains(theaterContainer)) {
                     validContainer = theaterContainer;
                     console.log('✅ Found Flickr theater container:', validContainer.tagName, validContainer.className);
-                } else {
-                    // WINDOWS FALLBACK: If theater containers don't work, use image parent
-                    const isWindows = navigator.userAgent.includes('Windows');
-                    if (isWindows && this.originalImage && this.originalImage.parentElement && document.contains(this.originalImage.parentElement)) {
-                        validContainer = this.originalImage.parentElement;
-                        console.log('✅ Windows fallback: Using image parent as container:', validContainer.tagName, validContainer.className);
-                    }
                 }
             }
 
@@ -3462,19 +3483,6 @@ class lifViewer {
                     };
 
                     console.log('🎯 Updated target dimensions for body fallback:', this.targetDimensions);
-                }
-
-                // CRITICAL: If we're using the image's parent (Windows fallback), set dimensions to match image
-                const isWindows = navigator.userAgent.includes('Windows');
-                if (isWindows && validContainer === this.originalImage?.parentElement && this.originalImage) {
-                    const imageRect = this.originalImage.getBoundingClientRect();
-                    if (imageRect && typeof imageRect.width !== 'undefined') {
-                        this.targetDimensions = {
-                            width: Math.round(imageRect.width),
-                            height: Math.round(imageRect.height)
-                        };
-                        console.log('🎯 Windows fallback: Using image parent - setting dimensions to match image:', this.targetDimensions);
-                    }
                 }
 
                 // Re-run container setup with the new valid container
@@ -4476,8 +4484,33 @@ class lifViewer {
             // Only show the canvas
             this.canvas.style.display = 'block';
 
-            // CRITICAL FIX: Recalculate positioning for document.body fallback
-            if (this.container === document.body && this.originalImage) {
+            // CRITICAL FIX: Recalculate positioning for special cases
+            const isWindows = navigator.userAgent.includes('Windows');
+            const isFlickr = window.location.hostname.includes('flickr.com');
+
+            if (isWindows && isFlickr && this.container === this.originalImage?.parentElement && this.originalImage) {
+                // WINDOWS FLICKR FIX: Position canvas as image sibling with matching dimensions
+                const imageRect = this.originalImage.getBoundingClientRect();
+                if (imageRect && typeof imageRect.width !== 'undefined') {
+                    this.canvas.style.position = 'absolute';
+                    this.canvas.style.top = '0px';
+                    this.canvas.style.left = '0px';
+                    this.canvas.style.width = `${imageRect.width}px`;
+                    this.canvas.style.height = `${imageRect.height}px`;
+
+                    console.log('🪟 WINDOWS FLICKR: Applied runtime positioning for image sibling:', {
+                        top: this.canvas.style.top,
+                        left: this.canvas.style.left,
+                        width: this.canvas.style.width,
+                        height: this.canvas.style.height,
+                        imageRect: {
+                            width: imageRect.width,
+                            height: imageRect.height
+                        }
+                    });
+                }
+            } else if (this.container === document.body && this.originalImage) {
+                // DOCUMENT.BODY FALLBACK: Position canvas over image with absolute positioning
                 const imageRect = this.originalImage.getBoundingClientRect();
                 if (imageRect && typeof imageRect.width !== 'undefined') {
                     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -4489,7 +4522,7 @@ class lifViewer {
                     this.canvas.style.width = `${imageRect.width}px`;
                     this.canvas.style.height = `${imageRect.height}px`;
 
-                    console.log('📍 FIXED: Applied runtime positioning for document.body fallback:', {
+                    console.log('📍 DOCUMENT.BODY: Applied runtime positioning:', {
                         top: this.canvas.style.top,
                         left: this.canvas.style.left,
                         width: this.canvas.style.width,
@@ -4501,27 +4534,6 @@ class lifViewer {
                             height: imageRect.height
                         },
                         scroll: { top: scrollTop, left: scrollLeft }
-                    });
-                }
-            } else if (navigator.userAgent.includes('Windows') && this.container === this.originalImage?.parentElement && this.originalImage) {
-                // WINDOWS FALLBACK FIX: When using image parent, just match image dimensions and position
-                const imageRect = this.originalImage.getBoundingClientRect();
-                if (imageRect && typeof imageRect.width !== 'undefined') {
-                    this.canvas.style.position = 'absolute';
-                    this.canvas.style.top = '0px';
-                    this.canvas.style.left = '0px';
-                    this.canvas.style.width = `${imageRect.width}px`;
-                    this.canvas.style.height = `${imageRect.height}px`;
-
-                    console.log('📍 WINDOWS FALLBACK: Applied runtime positioning for image parent container:', {
-                        top: this.canvas.style.top,
-                        left: this.canvas.style.left,
-                        width: this.canvas.style.width,
-                        height: this.canvas.style.height,
-                        imageRect: {
-                            width: imageRect.width,
-                            height: imageRect.height
-                        }
                     });
                 }
             }
