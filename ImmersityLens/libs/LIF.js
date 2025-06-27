@@ -3377,15 +3377,43 @@ class lifViewer {
                 id: this.container.id
             });
 
-            // Set dimensions to match image for Windows Flickr
+            // Set dimensions to match UNZOOMED image for Windows Flickr (like Mac)
             if (this.originalImage) {
-                const imageRect = this.originalImage.getBoundingClientRect();
-                if (imageRect && typeof imageRect.width !== 'undefined') {
+                // Try to find the unzoomed image first
+                let targetImage = this.originalImage;
+
+                // Look for the original unzoomed image in Flickr zoom structure
+                const zoomContainer = this.originalImage.closest('.zoom-photo-container');
+                if (zoomContainer) {
+                    const unzoomedImage = zoomContainer.querySelector('img.zoom-small') ||
+                        zoomContainer.querySelector('img.main-photo') ||
+                        zoomContainer.querySelector('img:not(.zoom-large):not(.zoom-xlarge)');
+                    if (unzoomedImage) {
+                        targetImage = unzoomedImage;
+                        console.log('🔍 Windows Flickr: Found unzoomed image:', targetImage.className);
+                    }
+                }
+
+                // Use the natural dimensions instead of getBoundingClientRect for consistency with Mac
+                const width = targetImage.naturalWidth || targetImage.width || this.originalImage.width;
+                const height = targetImage.naturalHeight || targetImage.height || this.originalImage.height;
+
+                if (width && height) {
                     this.targetDimensions = {
-                        width: Math.round(imageRect.width),
-                        height: Math.round(imageRect.height)
+                        width: Math.round(width),
+                        height: Math.round(height)
                     };
-                    console.log('🎯 Windows Flickr: Setting dimensions to match image:', this.targetDimensions);
+                    console.log('🎯 Windows Flickr: Setting dimensions to match unzoomed image (natural):', this.targetDimensions);
+                } else {
+                    // Fallback to getBoundingClientRect
+                    const imageRect = targetImage.getBoundingClientRect();
+                    if (imageRect && typeof imageRect.width !== 'undefined') {
+                        this.targetDimensions = {
+                            width: Math.round(imageRect.width),
+                            height: Math.round(imageRect.height)
+                        };
+                        console.log('🎯 Windows Flickr: Setting dimensions to match image (fallback):', this.targetDimensions);
+                    }
                 }
             }
         } else if (!document.contains(this.container)) {
@@ -4489,25 +4517,57 @@ class lifViewer {
             const isFlickr = window.location.hostname.includes('flickr.com');
 
             if (isWindows && isFlickr && this.container === this.originalImage?.parentElement && this.originalImage) {
-                // WINDOWS FLICKR FIX: Position canvas as image sibling with matching dimensions
-                const imageRect = this.originalImage.getBoundingClientRect();
-                if (imageRect && typeof imageRect.width !== 'undefined') {
+                // WINDOWS FLICKR FIX: Position canvas as image sibling with unzoomed dimensions
+
+                // Find the unzoomed image like Mac does
+                let targetImage = this.originalImage;
+                const zoomContainer = this.originalImage.closest('.zoom-photo-container');
+                if (zoomContainer) {
+                    const unzoomedImage = zoomContainer.querySelector('img.zoom-small') ||
+                        zoomContainer.querySelector('img.main-photo') ||
+                        zoomContainer.querySelector('img:not(.zoom-large):not(.zoom-xlarge)');
+                    if (unzoomedImage) {
+                        targetImage = unzoomedImage;
+                        console.log('🔍 Windows Flickr runtime: Found unzoomed image:', targetImage.className);
+                    }
+                }
+
+                // Use the target dimensions we calculated earlier (unzoomed), not getBoundingClientRect
+                const width = this.targetDimensions?.width || targetImage.naturalWidth || targetImage.width;
+                const height = this.targetDimensions?.height || targetImage.naturalHeight || targetImage.height;
+
+                if (width && height) {
                     this.canvas.style.position = 'absolute';
                     this.canvas.style.top = '0px';
                     this.canvas.style.left = '0px';
-                    this.canvas.style.width = `${imageRect.width}px`;
-                    this.canvas.style.height = `${imageRect.height}px`;
+                    this.canvas.style.width = `${width}px`;
+                    this.canvas.style.height = `${height}px`;
 
-                    console.log('🪟 WINDOWS FLICKR: Applied runtime positioning for image sibling:', {
+                    console.log('🪟 WINDOWS FLICKR: Applied runtime positioning using unzoomed dimensions:', {
                         top: this.canvas.style.top,
                         left: this.canvas.style.left,
                         width: this.canvas.style.width,
                         height: this.canvas.style.height,
-                        imageRect: {
-                            width: imageRect.width,
-                            height: imageRect.height
-                        }
+                        source: 'unzoomed-image-natural-size'
                     });
+                } else {
+                    // Fallback to getBoundingClientRect
+                    const imageRect = targetImage.getBoundingClientRect();
+                    if (imageRect && typeof imageRect.width !== 'undefined') {
+                        this.canvas.style.position = 'absolute';
+                        this.canvas.style.top = '0px';
+                        this.canvas.style.left = '0px';
+                        this.canvas.style.width = `${imageRect.width}px`;
+                        this.canvas.style.height = `${imageRect.height}px`;
+
+                        console.log('🪟 WINDOWS FLICKR: Applied runtime positioning (fallback):', {
+                            top: this.canvas.style.top,
+                            left: this.canvas.style.left,
+                            width: this.canvas.style.width,
+                            height: this.canvas.style.height,
+                            source: 'getBoundingClientRect-fallback'
+                        });
+                    }
                 }
             } else if (this.container === document.body && this.originalImage) {
                 // DOCUMENT.BODY FALLBACK: Position canvas over image with absolute positioning
