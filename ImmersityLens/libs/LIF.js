@@ -801,6 +801,10 @@ class lifViewer {
 
                 positioningStyle = `top: ${imageRect.top + scrollTop}px; left: ${imageRect.left + scrollLeft}px;`;
                 console.log('📍 Applying document.body positioning over image:', positioningStyle);
+            } else if (navigator.userAgent.includes('Windows') && this.container === this.originalImage?.parentElement && this.originalImage) {
+                // WINDOWS FALLBACK: When using image's parent, position canvas directly over image
+                positioningStyle = `top: 0px; left: 0px;`;
+                console.log('📍 Windows fallback: Using image parent container - simple positioning:', positioningStyle);
             } else {
                 // Check for nested positioning containers (Flickr facade pattern, etc.)
                 const nestedOffset = this.calculateNestedContainerOffset();
@@ -3368,14 +3372,22 @@ class lifViewer {
             // Try to find a valid parent container that IS in the DOM
             let validContainer = null;
 
-            // Strategy 1: For Flickr, look for the theater container or facade container
+            // Strategy 1: For Flickr, try theater containers first (Mac works fine with these)
             if (window.location.hostname.includes('flickr.com')) {
+                // Try theater containers first (works on Mac)
                 const theaterContainer = document.querySelector('.height-controller.enable-zoom') ||
                     document.querySelector('.facade-of-protection-neue') ||
                     document.querySelector('[class*="zoom-photo-container"]');
                 if (theaterContainer && document.contains(theaterContainer)) {
                     validContainer = theaterContainer;
                     console.log('✅ Found Flickr theater container:', validContainer.tagName, validContainer.className);
+                } else {
+                    // WINDOWS FALLBACK: If theater containers don't work, use image parent
+                    const isWindows = navigator.userAgent.includes('Windows');
+                    if (isWindows && this.originalImage && this.originalImage.parentElement && document.contains(this.originalImage.parentElement)) {
+                        validContainer = this.originalImage.parentElement;
+                        console.log('✅ Windows fallback: Using image parent as container:', validContainer.tagName, validContainer.className);
+                    }
                 }
             }
 
@@ -3450,6 +3462,19 @@ class lifViewer {
                     };
 
                     console.log('🎯 Updated target dimensions for body fallback:', this.targetDimensions);
+                }
+
+                // CRITICAL: If we're using the image's parent (Windows fallback), set dimensions to match image
+                const isWindows = navigator.userAgent.includes('Windows');
+                if (isWindows && validContainer === this.originalImage?.parentElement && this.originalImage) {
+                    const imageRect = this.originalImage.getBoundingClientRect();
+                    if (imageRect && typeof imageRect.width !== 'undefined') {
+                        this.targetDimensions = {
+                            width: Math.round(imageRect.width),
+                            height: Math.round(imageRect.height)
+                        };
+                        console.log('🎯 Windows fallback: Using image parent - setting dimensions to match image:', this.targetDimensions);
+                    }
                 }
 
                 // Re-run container setup with the new valid container
@@ -4476,6 +4501,27 @@ class lifViewer {
                             height: imageRect.height
                         },
                         scroll: { top: scrollTop, left: scrollLeft }
+                    });
+                }
+            } else if (navigator.userAgent.includes('Windows') && this.container === this.originalImage?.parentElement && this.originalImage) {
+                // WINDOWS FALLBACK FIX: When using image parent, just match image dimensions and position
+                const imageRect = this.originalImage.getBoundingClientRect();
+                if (imageRect && typeof imageRect.width !== 'undefined') {
+                    this.canvas.style.position = 'absolute';
+                    this.canvas.style.top = '0px';
+                    this.canvas.style.left = '0px';
+                    this.canvas.style.width = `${imageRect.width}px`;
+                    this.canvas.style.height = `${imageRect.height}px`;
+
+                    console.log('📍 WINDOWS FALLBACK: Applied runtime positioning for image parent container:', {
+                        top: this.canvas.style.top,
+                        left: this.canvas.style.left,
+                        width: this.canvas.style.width,
+                        height: this.canvas.style.height,
+                        imageRect: {
+                            width: imageRect.width,
+                            height: imageRect.height
+                        }
                     });
                 }
             }
