@@ -2577,11 +2577,18 @@ class lifViewer {
             const elementRect = element.getBoundingClientRect();
             const imageRect = this.originalImage.getBoundingClientRect();
 
+            // Validate that both rectangles are valid
+            if (!elementRect || !imageRect ||
+                typeof elementRect.width === 'undefined' || typeof imageRect.width === 'undefined') {
+                console.warn('⚠️ Invalid getBoundingClientRect in isTheaterModeNavigationElement');
+                return false;
+            }
+
             // Element should be reasonably sized (not tiny icons)
             const hasReasonableSize = elementRect.width >= 20 && elementRect.height >= 20;
 
             // Element should be positioned near or overlapping the image area
-            const isNearImage = this.isElementNearImage(element, elementRect, imageRect);
+            const isNearImage = this.isElementNearImageWithRects(element, elementRect, imageRect);
 
             // Check for navigation-specific class patterns
             const hasNavClasses = element.className && (
@@ -2611,10 +2618,10 @@ class lifViewer {
     /**
      * Check if element is positioned near the image (within reasonable proximity)
      */
-    isElementNearImage(element, elementRect, imageRect) {
+    isElementNearImageWithRects(element, elementRect, imageRect) {
         // Validate inputs
         if (!element || !elementRect || !imageRect) {
-            console.warn('⚠️ Invalid parameters for isElementNearImage (3-param version)');
+            console.warn('⚠️ Invalid parameters for isElementNearImageWithRects');
             return false;
         }
 
@@ -2623,7 +2630,7 @@ class lifViewer {
             typeof elementRect.top === 'undefined' || typeof elementRect.bottom === 'undefined' ||
             typeof imageRect.left === 'undefined' || typeof imageRect.right === 'undefined' ||
             typeof imageRect.top === 'undefined' || typeof imageRect.bottom === 'undefined') {
-            console.warn('⚠️ Invalid rectangle properties for isElementNearImage');
+            console.warn('⚠️ Invalid rectangle properties for isElementNearImageWithRects');
             return false;
         }
 
@@ -2649,7 +2656,7 @@ class lifViewer {
 
             return minDistance <= proximityThreshold;
         } catch (error) {
-            console.warn('⚠️ Error in isElementNearImage (3-param version):', error);
+            console.warn('⚠️ Error in isElementNearImageWithRects:', error);
             return false;
         }
     }
@@ -2675,6 +2682,12 @@ class lifViewer {
                 if (overlays.includes(anchor)) return;
 
                 const anchorRect = anchor.getBoundingClientRect();
+
+                // Validate the anchor rectangle
+                if (!anchorRect || typeof anchorRect.width === 'undefined') {
+                    console.warn('⚠️ Invalid getBoundingClientRect for anchor in detectTallNavigationElements');
+                    return;
+                }
 
                 // Detect "tall navigation" pattern:
                 // 1. Height is significantly larger than width (suggesting vertical navigation bar)
@@ -2748,6 +2761,13 @@ class lifViewer {
             const anchorRect = anchorElement.getBoundingClientRect();
             const imageRect = this.originalImage.getBoundingClientRect();
 
+            // Validate rectangles
+            if (!anchorRect || !imageRect ||
+                typeof anchorRect.width === 'undefined' || typeof imageRect.width === 'undefined') {
+                console.warn('⚠️ Invalid getBoundingClientRect in isAnchorLikelyInterferingWithMouse');
+                return false;
+            }
+
             // Enhanced theater mode navigation detection
             const isTheaterNavigation = this.isTheaterModeNavigationAnchor(anchorElement, anchorRect, imageRect);
             if (isTheaterNavigation) {
@@ -2804,6 +2824,19 @@ class lifViewer {
      * Specific check for theater mode navigation anchors (like Flickr prev/next)
      */
     isTheaterModeNavigationAnchor(anchorElement, anchorRect, imageRect) {
+        // Validate inputs
+        if (!anchorElement || !anchorRect || !imageRect) {
+            console.warn('⚠️ Invalid parameters for isTheaterModeNavigationAnchor');
+            return false;
+        }
+
+        // Validate rectangle properties
+        if (typeof anchorRect.width === 'undefined' || typeof anchorRect.height === 'undefined' ||
+            typeof imageRect.width === 'undefined' || typeof imageRect.height === 'undefined') {
+            console.warn('⚠️ Invalid rectangle properties in isTheaterModeNavigationAnchor');
+            return false;
+        }
+
         try {
             // Theater mode navigation indicators
             const className = anchorElement.className || '';
@@ -2986,6 +3019,13 @@ class lifViewer {
         try {
             const elementRect = element.getBoundingClientRect();
             const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Validate rectangles
+            if (!elementRect || !imageRect ||
+                typeof elementRect.width === 'undefined' || typeof imageRect.width === 'undefined') {
+                console.warn('⚠️ Invalid getBoundingClientRect in doesElementCoverImage');
+                return false;
+            }
 
             // Check if the element overlaps significantly with the image
             const overlapLeft = Math.max(elementRect.left, imageRect.left);
