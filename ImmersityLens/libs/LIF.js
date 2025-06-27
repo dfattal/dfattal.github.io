@@ -793,11 +793,21 @@ class lifViewer {
             positioningStyle = `top: ${this.centeredImageInfo.offsetY}px; left: ${this.centeredImageInfo.offsetX}px;`;
             console.log('🎯 Applying centered image positioning:', positioningStyle);
         } else {
-            // Check for nested positioning containers (Flickr facade pattern, etc.)
-            const nestedOffset = this.calculateNestedContainerOffset();
-            if (nestedOffset) {
-                positioningStyle = `top: ${nestedOffset.top}px; left: ${nestedOffset.left}px;`;
-                console.log('🏗️ Applying nested container positioning:', positioningStyle);
+            // Check for document.body fallback positioning
+            if (this.container === document.body && this.originalImage) {
+                const imageRect = this.originalImage.getBoundingClientRect();
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+                positioningStyle = `top: ${imageRect.top + scrollTop}px; left: ${imageRect.left + scrollLeft}px;`;
+                console.log('📍 Applying document.body positioning over image:', positioningStyle);
+            } else {
+                // Check for nested positioning containers (Flickr facade pattern, etc.)
+                const nestedOffset = this.calculateNestedContainerOffset();
+                if (nestedOffset) {
+                    positioningStyle = `top: ${nestedOffset.top}px; left: ${nestedOffset.left}px;`;
+                    console.log('🏗️ Applying nested container positioning:', positioningStyle);
+                }
             }
         }
 
@@ -2721,7 +2731,20 @@ class lifViewer {
 
         try {
             const imageRect = this.originalImage.getBoundingClientRect();
+
+            // Validate imageRect (Windows Chrome fix)
+            if (!imageRect || typeof imageRect.width === 'undefined') {
+                console.warn('⚠️ Invalid image rect in detectTallNavigationElements');
+                return;
+            }
+
             const containerRect = this.container.getBoundingClientRect();
+
+            // Validate containerRect (Windows Chrome fix)
+            if (!containerRect || typeof containerRect.width === 'undefined') {
+                console.warn('⚠️ Invalid container rect in detectTallNavigationElements');
+                return;
+            }
 
             // Look for anchor elements in the container's parent that are unusually tall
             const parentElement = this.container.parentElement;
@@ -2730,8 +2753,8 @@ class lifViewer {
             const anchorElements = parentElement.querySelectorAll('a');
 
             anchorElements.forEach(anchor => {
-                // Skip if already found
-                if (overlays.includes(anchor)) return;
+                // Skip if already found (handle both Set and Array)
+                if (overlays.has ? overlays.has(anchor) : overlays.includes(anchor)) return;
 
                 const anchorRect = anchor.getBoundingClientRect();
 
@@ -2758,7 +2781,12 @@ class lifViewer {
                 const isPositionedForNavigation = isLeftSide || isRightSide || overlapsHorizontally;
 
                 if (isTall && isNarrowOrWide && coversImageHeight && isPositionedForNavigation) {
-                    overlays.push(anchor);
+                    // Add to collection (handle both Set and Array)
+                    if (overlays.add) {
+                        overlays.add(anchor);
+                    } else {
+                        overlays.push(anchor);
+                    }
                     console.log('🎭 Found tall navigation element:', {
                         className: anchor.className,
                         dimensions: this.getElementDimensions(anchor),
@@ -3331,28 +3359,62 @@ class lifViewer {
         // CRITICAL FIX: Ensure container is in DOM before proceeding
         if (!document.contains(this.container)) {
             console.error('❌ Container not in DOM! Attempting to find valid container...');
+            console.log('Invalid container details:', {
+                tagName: this.container.tagName,
+                className: this.container.className,
+                id: this.container.id
+            });
 
             // Try to find a valid parent container that IS in the DOM
             let validContainer = null;
 
-            // Strategy 1: Look for container's closest ancestor that's in the DOM
-            let currentElement = this.container;
-            while (currentElement && currentElement.parentElement) {
-                if (document.contains(currentElement.parentElement)) {
-                    validContainer = currentElement.parentElement;
-                    console.log('✅ Found valid parent container in DOM:', validContainer.tagName, validContainer.className);
-                    break;
+            // Strategy 1: For Flickr, look for the theater container or facade container
+            if (window.location.hostname.includes('flickr.com')) {
+                const theaterContainer = document.querySelector('.height-controller.enable-zoom') ||
+                    document.querySelector('.facade-of-protection-neue') ||
+                    document.querySelector('[class*="zoom-photo-container"]');
+                if (theaterContainer && document.contains(theaterContainer)) {
+                    validContainer = theaterContainer;
+                    console.log('✅ Found Flickr theater container:', validContainer.tagName, validContainer.className);
                 }
-                currentElement = currentElement.parentElement;
             }
 
-            // Strategy 2: If no parent found, use original image's parent
+            // Strategy 2: Look for container's closest ancestor that's in the DOM
+            if (!validContainer) {
+                let currentElement = this.container;
+                while (currentElement && currentElement.parentElement) {
+                    if (document.contains(currentElement.parentElement)) {
+                        validContainer = currentElement.parentElement;
+                        console.log('✅ Found valid parent container in DOM:', validContainer.tagName, validContainer.className);
+                        break;
+                    }
+                    currentElement = currentElement.parentElement;
+                }
+            }
+
+            // Strategy 3: Use original image's closest positioned parent
             if (!validContainer && this.originalImage && document.contains(this.originalImage)) {
-                validContainer = this.originalImage.parentElement;
-                console.log('✅ Using original image parent as fallback container:', validContainer.tagName, validContainer.className);
+                let imgParent = this.originalImage.parentElement;
+                while (imgParent && imgParent !== document.body) {
+                    if (document.contains(imgParent)) {
+                        const style = window.getComputedStyle(imgParent);
+                        if (style.position !== 'static' || imgParent.offsetWidth > 0) {
+                            validContainer = imgParent;
+                            console.log('✅ Using positioned image ancestor as container:', validContainer.tagName, validContainer.className);
+                            break;
+                        }
+                    }
+                    imgParent = imgParent.parentElement;
+                }
+
+                // Fallback to immediate parent
+                if (!validContainer) {
+                    validContainer = this.originalImage.parentElement;
+                    console.log('✅ Using original image parent as fallback container:', validContainer.tagName, validContainer.className);
+                }
             }
 
-            // Strategy 3: Last resort - use document.body
+            // Strategy 4: Last resort - use document.body
             if (!validContainer) {
                 validContainer = document.body;
                 console.log('⚠️ Using document.body as last resort container');
@@ -3361,7 +3423,34 @@ class lifViewer {
             // Replace the invalid container with the valid one
             if (validContainer && validContainer !== this.container) {
                 console.log('🔄 Replacing invalid container with valid container');
+
+                // CRITICAL: If we're using document.body, we need to position the canvas at the image location
+                const isUsingBodyFallback = validContainer === document.body;
+
                 this.container = validContainer;
+
+                // For document.body fallback, calculate the canvas position to match the image
+                if (isUsingBodyFallback && this.originalImage) {
+                    const imageRect = this.originalImage.getBoundingClientRect();
+                    console.log('📍 Positioning canvas over image for body fallback:', {
+                        imageRect: {
+                            left: imageRect.left,
+                            top: imageRect.top,
+                            width: imageRect.width,
+                            height: imageRect.height
+                        },
+                        scrollY: window.scrollY,
+                        scrollX: window.scrollX
+                    });
+
+                    // Override target dimensions to match the visible image size
+                    this.targetDimensions = {
+                        width: Math.round(imageRect.width),
+                        height: Math.round(imageRect.height)
+                    };
+
+                    console.log('🎯 Updated target dimensions for body fallback:', this.targetDimensions);
+                }
 
                 // Re-run container setup with the new valid container
                 this.setupContainer();
@@ -4361,6 +4450,36 @@ class lifViewer {
             this.running = true;
             // Only show the canvas
             this.canvas.style.display = 'block';
+
+            // CRITICAL FIX: Recalculate positioning for document.body fallback
+            if (this.container === document.body && this.originalImage) {
+                const imageRect = this.originalImage.getBoundingClientRect();
+                if (imageRect && typeof imageRect.width !== 'undefined') {
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+                    this.canvas.style.position = 'absolute';
+                    this.canvas.style.top = `${imageRect.top + scrollTop}px`;
+                    this.canvas.style.left = `${imageRect.left + scrollLeft}px`;
+                    this.canvas.style.width = `${imageRect.width}px`;
+                    this.canvas.style.height = `${imageRect.height}px`;
+
+                    console.log('📍 FIXED: Applied runtime positioning for document.body fallback:', {
+                        top: this.canvas.style.top,
+                        left: this.canvas.style.left,
+                        width: this.canvas.style.width,
+                        height: this.canvas.style.height,
+                        imageRect: {
+                            top: imageRect.top,
+                            left: imageRect.left,
+                            width: imageRect.width,
+                            height: imageRect.height
+                        },
+                        scroll: { top: scrollTop, left: scrollLeft }
+                    });
+                }
+            }
+
             console.log('🚀 Animation started - display states changed:');
             console.log('📊 Windows Debug - Full canvas state after showing:', {
                 display: this.canvas.style.display,
