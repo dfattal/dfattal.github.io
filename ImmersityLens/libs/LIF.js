@@ -798,9 +798,15 @@ class lifViewer {
             const isFlickr = window.location.hostname.includes('flickr.com');
 
             if (isWindows && isFlickr && this.container === this.originalImage?.parentElement) {
-                // WINDOWS FLICKR: Position canvas directly over image as sibling
-                positioningStyle = `top: 0px; left: 0px;`;
-                console.log('🪟 Windows Flickr: Simple positioning as image sibling:', positioningStyle);
+                // WINDOWS FLICKR: Use same positioning logic as Mac (with offset calculation)
+                const nestedOffset = this.calculateNestedContainerOffset();
+                if (nestedOffset) {
+                    positioningStyle = `top: ${nestedOffset.top}px; left: ${nestedOffset.left}px;`;
+                    console.log('🪟 Windows Flickr: Using Mac-like positioning with offset:', positioningStyle);
+                } else {
+                    positioningStyle = `top: 0px; left: 0px;`;
+                    console.log('🪟 Windows Flickr: Fallback positioning:', positioningStyle);
+                }
             } else if (this.container === document.body && this.originalImage) {
                 // Check for document.body fallback positioning
                 const imageRect = this.originalImage.getBoundingClientRect();
@@ -3370,51 +3376,45 @@ class lifViewer {
         const isFlickr = window.location.hostname.includes('flickr.com');
 
         if (isWindows && isFlickr) {
-            // WINDOWS FLICKR: Skip DOM validation, trust the container from content.js
-            console.log('🪟 Windows Flickr: Bypassing DOM validation, using container as-is:', {
-                tagName: this.container.tagName,
-                className: this.container.className,
-                id: this.container.id
+            // WINDOWS FLICKR: Skip DOM validation, but find the CORRECT image/container like Mac
+
+            // CRITICAL: Find the main-photo image (not zoom images) like Mac uses
+            let macLikeImage = this.originalImage;
+            let macLikeContainer = this.container;
+
+            // Look for the main-photo image that Mac would use
+            const mainPhoto = document.querySelector('img.main-photo');
+            if (mainPhoto && mainPhoto !== this.originalImage) {
+                macLikeImage = mainPhoto;
+                macLikeContainer = mainPhoto.parentElement;
+                console.log('🔄 Windows Flickr: Switching to main-photo image like Mac:', {
+                    originalImage: this.originalImage.className,
+                    newImage: macLikeImage.className,
+                    originalContainer: this.container.className,
+                    newContainer: macLikeContainer.className
+                });
+
+                // Update references to match Mac
+                this.originalImage = macLikeImage;
+                this.container = macLikeContainer;
+            }
+
+            console.log('🪟 Windows Flickr: Using Mac-like image/container:', {
+                imageClass: this.originalImage.className,
+                containerClass: this.container.className,
+                containerTag: this.container.tagName
             });
 
-            // Set dimensions to match UNZOOMED image for Windows Flickr (like Mac)
-            if (this.originalImage) {
-                // Try to find the unzoomed image first
-                let targetImage = this.originalImage;
+            // Set dimensions to match the main-photo image like Mac
+            const width = this.originalImage.naturalWidth || this.originalImage.width;
+            const height = this.originalImage.naturalHeight || this.originalImage.height;
 
-                // Look for the original unzoomed image in Flickr zoom structure
-                const zoomContainer = this.originalImage.closest('.zoom-photo-container');
-                if (zoomContainer) {
-                    const unzoomedImage = zoomContainer.querySelector('img.zoom-small') ||
-                        zoomContainer.querySelector('img.main-photo') ||
-                        zoomContainer.querySelector('img:not(.zoom-large):not(.zoom-xlarge)');
-                    if (unzoomedImage) {
-                        targetImage = unzoomedImage;
-                        console.log('🔍 Windows Flickr: Found unzoomed image:', targetImage.className);
-                    }
-                }
-
-                // Use the natural dimensions instead of getBoundingClientRect for consistency with Mac
-                const width = targetImage.naturalWidth || targetImage.width || this.originalImage.width;
-                const height = targetImage.naturalHeight || targetImage.height || this.originalImage.height;
-
-                if (width && height) {
-                    this.targetDimensions = {
-                        width: Math.round(width),
-                        height: Math.round(height)
-                    };
-                    console.log('🎯 Windows Flickr: Setting dimensions to match unzoomed image (natural):', this.targetDimensions);
-                } else {
-                    // Fallback to getBoundingClientRect
-                    const imageRect = targetImage.getBoundingClientRect();
-                    if (imageRect && typeof imageRect.width !== 'undefined') {
-                        this.targetDimensions = {
-                            width: Math.round(imageRect.width),
-                            height: Math.round(imageRect.height)
-                        };
-                        console.log('🎯 Windows Flickr: Setting dimensions to match image (fallback):', this.targetDimensions);
-                    }
-                }
+            if (width && height) {
+                this.targetDimensions = {
+                    width: Math.round(width),
+                    height: Math.round(height)
+                };
+                console.log('🎯 Windows Flickr: Setting dimensions to match main-photo:', this.targetDimensions);
             }
         } else if (!document.contains(this.container)) {
             // Normal validation for non-Windows or non-Flickr
@@ -4517,55 +4517,37 @@ class lifViewer {
             const isFlickr = window.location.hostname.includes('flickr.com');
 
             if (isWindows && isFlickr && this.container === this.originalImage?.parentElement && this.originalImage) {
-                // WINDOWS FLICKR FIX: Position canvas as image sibling with unzoomed dimensions
+                // WINDOWS FLICKR FIX: Use same positioning and sizing as Mac
 
-                // Find the unzoomed image like Mac does
-                let targetImage = this.originalImage;
-                const zoomContainer = this.originalImage.closest('.zoom-photo-container');
-                if (zoomContainer) {
-                    const unzoomedImage = zoomContainer.querySelector('img.zoom-small') ||
-                        zoomContainer.querySelector('img.main-photo') ||
-                        zoomContainer.querySelector('img:not(.zoom-large):not(.zoom-xlarge)');
-                    if (unzoomedImage) {
-                        targetImage = unzoomedImage;
-                        console.log('🔍 Windows Flickr runtime: Found unzoomed image:', targetImage.className);
-                    }
-                }
-
-                // Use the target dimensions we calculated earlier (unzoomed), not getBoundingClientRect
-                const width = this.targetDimensions?.width || targetImage.naturalWidth || targetImage.width;
-                const height = this.targetDimensions?.height || targetImage.naturalHeight || targetImage.height;
+                // Use target dimensions (already calculated to match main-photo)
+                const width = this.targetDimensions?.width || this.originalImage.naturalWidth || this.originalImage.width;
+                const height = this.targetDimensions?.height || this.originalImage.naturalHeight || this.originalImage.height;
 
                 if (width && height) {
                     this.canvas.style.position = 'absolute';
-                    this.canvas.style.top = '0px';
-                    this.canvas.style.left = '0px';
                     this.canvas.style.width = `${width}px`;
                     this.canvas.style.height = `${height}px`;
 
-                    console.log('🪟 WINDOWS FLICKR: Applied runtime positioning using unzoomed dimensions:', {
-                        top: this.canvas.style.top,
-                        left: this.canvas.style.left,
-                        width: this.canvas.style.width,
-                        height: this.canvas.style.height,
-                        source: 'unzoomed-image-natural-size'
-                    });
-                } else {
-                    // Fallback to getBoundingClientRect
-                    const imageRect = targetImage.getBoundingClientRect();
-                    if (imageRect && typeof imageRect.width !== 'undefined') {
-                        this.canvas.style.position = 'absolute';
-                        this.canvas.style.top = '0px';
-                        this.canvas.style.left = '0px';
-                        this.canvas.style.width = `${imageRect.width}px`;
-                        this.canvas.style.height = `${imageRect.height}px`;
-
-                        console.log('🪟 WINDOWS FLICKR: Applied runtime positioning (fallback):', {
+                    // Use the same offset calculation as Mac
+                    const nestedOffset = this.calculateNestedContainerOffset();
+                    if (nestedOffset) {
+                        this.canvas.style.top = `${nestedOffset.top}px`;
+                        this.canvas.style.left = `${nestedOffset.left}px`;
+                        console.log('🪟 WINDOWS FLICKR: Applied Mac-like positioning with offset:', {
                             top: this.canvas.style.top,
                             left: this.canvas.style.left,
                             width: this.canvas.style.width,
                             height: this.canvas.style.height,
-                            source: 'getBoundingClientRect-fallback'
+                            offset: nestedOffset
+                        });
+                    } else {
+                        this.canvas.style.top = '0px';
+                        this.canvas.style.left = '0px';
+                        console.log('🪟 WINDOWS FLICKR: Applied fallback positioning:', {
+                            top: this.canvas.style.top,
+                            left: this.canvas.style.left,
+                            width: this.canvas.style.width,
+                            height: this.canvas.style.height
                         });
                     }
                 }
