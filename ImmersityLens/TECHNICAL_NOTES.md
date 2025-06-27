@@ -838,6 +838,136 @@ isWebGLReady() {
 
 This protection system ensures reliable 3D rendering across all supported platforms and usage patterns, eliminating the black frame issue entirely while maintaining optimal performance.
 
+## RenderOff Animation Restart Issue Fix
+
+### Problem Description
+
+The lifViewer animation would not restart when the mouse re-entered during the `renderOff` transition. Users had to wait for the renderOff to complete before the next mouse enter would start the animation. This issue was particularly noticeable on Windows Chrome in theater modes (Pinterest, Flickr, etc.) where multiple competing event systems were active.
+
+### Root Cause Analysis
+
+The issue was caused by multiple competing event systems running simultaneously and conflicting during `renderOff`:
+
+1. **State Management Issue**: During `renderOff`, `this.running = false` and `this.isRenderingOff = true`, but event handlers only checked `if (!this.running)` without accounting for the `isRenderingOff` state.
+
+2. **Competing Systems**: Multiple event systems were fighting each other:
+   - Carousel interference fallback detecting "container leave" 
+   - Global fallback detecting "mouse leave"
+   - Regular event handlers trying to restart animation
+   - This created rapid start/stop cycles
+
+3. **Platform-Specific Triggers**: The carousel interference system was incorrectly triggering on Pinterest theater mode because Pinterest's DOM structure contained `<li>` elements and `[tabindex]` attributes that matched carousel detection patterns.
+
+### Solution Implementation
+
+#### 1. Enhanced Event Handler Logic
+Updated all three event handler types to allow `startAnimation()` during renderOff transitions:
+
+```javascript
+// Before: Only checked running state
+if (!this.running) return;
+
+// After: Allow restart during renderOff
+if (!this.running || this.isRenderingOff) {
+    this.startAnimation();
+}
+```
+
+#### 2. Comprehensive RenderOff Protection
+Added `if (this.isRenderingOff) return;` protection to all competing systems:
+
+- **Carousel Interference System**: `containerMouseMove` and `containerMouseLeave` skip during renderOff
+- **Global Fallback System**: `globalMouseMoveHandler` skips during renderOff  
+- **StopAnimation Protection**: Added double-check in delayed stop execution to prevent immediate re-stopping
+
+```javascript
+stopAnimation(transitionTime = null) {
+    if (this.disableAnim) return;
+    if (this.isRenderingOff) return; // Prevent interruption during renderOff
+    
+    // ... rest of stop logic
+}
+```
+
+#### 3. Generic Carousel Detection
+Simplified carousel detection to only match actual carousels, removing broad patterns that caused false positives:
+
+```javascript
+// Before: Broad detection including <li>, [tabindex], [role="listitem"]
+const carouselIndicators = container.querySelectorAll('li, [tabindex], [role="listitem"]');
+
+// After: Specific carousel classes only
+const carouselIndicators = container.querySelectorAll('.carousel, .slider, .swiper');
+```
+
+#### 4. Enhanced Debouncing
+Increased debouncing from 50ms to 200ms with event type tracking to prevent rapid same-type events:
+
+```javascript
+const DEBOUNCE_DELAY = 200; // Increased from 50ms
+let lastEventType = null;
+let lastEventTime = 0;
+
+// Prevent rapid same-type events
+if (eventType === lastEventType && (now - lastEventTime) < DEBOUNCE_DELAY) {
+    return;
+}
+```
+
+### Technical Implementation Details
+
+#### RenderOff State Management
+- **State Variables**: `this.running = false`, `this.isRenderingOff = true`
+- **Animation Frames**: Separate tracking with `this.renderOffAnimationFrame`
+- **Position Capture**: `this.renderOffStartPos` stores camera position when mouse leaves
+
+#### Event Handler Priority System
+1. **Unified Event Handlers** - For picture elements with smooth transitions
+2. **Overlay Event Handlers** - For aspect ratio containers  
+3. **Standard Event Handlers** - For basic layouts
+4. **Carousel Interference** - Container-level fallback (now protected)
+5. **Global Fallback** - Document-level listeners (now protected)
+
+#### StartAnimation Enhancement
+```javascript
+async startAnimation() {
+    if (this.disableAnim) return;
+    if (!this.gl.isContextLost()) {
+        if (this.running) return;
+
+        // Cancel any ongoing renderOff animation
+        if (this.isRenderingOff) {
+            this.isRenderingOff = false;
+            cancelAnimationFrame(this.renderOffAnimationFrame);
+            this.renderOffAnimationFrame = null;
+            this.renderOffStartPos = null;
+        }
+
+        this.running = true;
+        // ... rest of start logic
+    }
+}
+```
+
+### Benefits
+
+- **Immediate Responsiveness**: Mouse re-entry during renderOff immediately restarts animation
+- **Cross-Platform Compatibility**: Works on Windows Chrome, Mac Chrome, and all theater modes
+- **Generic Solution**: No platform-specific code required
+- **Performance Optimized**: Enhanced debouncing prevents excessive event firing
+- **Robust State Management**: Proper cleanup of renderOff state prevents memory leaks
+
+### Testing Scenarios
+
+The fix handles multiple challenging scenarios:
+- **Fast Mouse Movements**: Rapid enter/leave cycles during renderOff
+- **Theater Mode Layouts**: Pinterest, Flickr, CNN theater modes with complex DOM structures
+- **Carousel Interference**: False positive carousel detection in theater modes
+- **Multiple Event Systems**: Competing event handlers in complex layouts
+- **Edge Cases**: WebGL context loss, animation frame cleanup, state synchronization
+
+This comprehensive solution ensures smooth animation restart behavior across all supported platforms and usage patterns.
+
 ### CORS Protection
 ```javascript
 function handleCORSProtectedImage(img, targetDimensions) {

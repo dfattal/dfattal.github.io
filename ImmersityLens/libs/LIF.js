@@ -1771,7 +1771,17 @@ class lifViewer {
 
     setupUnifiedEventHandlers() {
         let animationTimeoutId = null;
+        let lastEventTime = 0;
+        let lastEventType = null;
+        const EVENT_DEBOUNCE_MS = 200; // Prevent rapid events within 200ms
+
         const startAnimation = () => {
+            const now = Date.now();
+            if (now - lastEventTime < EVENT_DEBOUNCE_MS && lastEventType === 'start') {
+                return;
+            }
+            lastEventTime = now;
+            lastEventType = 'start';
             // Set this instance as active when user interacts with it
             this.setAsActive();
 
@@ -1779,14 +1789,30 @@ class lifViewer {
                 clearTimeout(animationTimeoutId);
                 animationTimeoutId = null;
             }
-            if (!this.running) {
+            // Enhanced logic for renderOff scenarios: always try to start if animation isn't running or renderOff is active
+            if (!this.running || this.isRenderingOff) {
                 this.startAnimation(); // Use the proper method for smooth transitions
             }
         };
         const stopAnimation = () => {
+            // CRITICAL: Don't stop animation during renderOff transition
+            if (this.isRenderingOff) {
+                return;
+            }
+
+            const now = Date.now();
+            if (now - lastEventTime < EVENT_DEBOUNCE_MS && lastEventType === 'stop') {
+                return;
+            }
+            lastEventTime = now;
+            lastEventType = 'stop';
+
             if (this.running) {
                 animationTimeoutId = setTimeout(() => {
-                    this.stopAnimation(); // Use the proper method for smooth renderOff transition
+                    // Double-check renderOff state before stopping
+                    if (!this.isRenderingOff && this.running) {
+                        this.stopAnimation(); // Use the proper method for smooth renderOff transition
+                    }
                     animationTimeoutId = null;
                 }, 100);
             }
@@ -1815,14 +1841,23 @@ class lifViewer {
                 clearTimeout(animationTimeoutId);
                 animationTimeoutId = null;
             }
-            if (!this.running) {
+            // Enhanced logic for renderOff scenarios: always try to start if animation isn't running or renderOff is active
+            if (!this.running || this.isRenderingOff) {
                 this.startAnimation(); // Use the proper method for smooth transitions
             }
         };
         const stopAnimation = () => {
+            // Don't stop animation during renderOff transition
+            if (this.isRenderingOff) {
+                return;
+            }
+
             if (this.running) {
                 animationTimeoutId = setTimeout(() => {
-                    this.stopAnimation(); // Use the proper method for smooth renderOff transition
+                    // Double-check renderOff state before stopping
+                    if (!this.isRenderingOff && this.running) {
+                        this.stopAnimation(); // Use the proper method for smooth renderOff transition
+                    }
                     animationTimeoutId = null;
                 }, 100);
             }
@@ -1836,16 +1871,15 @@ class lifViewer {
         this.setupOverlayEventPropagation(startAnimation, stopAnimation);
 
         // GENERIC: Add container-level fallback for carousel/interactive element interference
-        const hasCarouselInterference = this.originalImage.closest('li') ||
-            this.originalImage.closest('[class*="carousel"]') ||
+        // Only enable for actual carousels, not theater/lightbox modes
+        const hasCarouselInterference = this.originalImage.closest('[class*="carousel"]') ||
             this.originalImage.closest('[class*="slider"]') ||
-            this.originalImage.closest('[tabindex]') ||
-            this.originalImage.closest('[role="listitem"]');
+            this.originalImage.closest('[class*="swiper"]');
 
         // VIRTUAL BACKGROUND IMAGES: Add direct mouseenter/mouseleave to background element for maximum reliability
         if (this.originalImage._isVirtualBackgroundImage && this.originalImage._originalBackgroundElement) {
             const backgroundElement = this.originalImage._originalBackgroundElement;
-            console.log('🎭 Adding direct mouse events to background element for renderOff reliability:', backgroundElement.tagName);
+
 
             backgroundElement.addEventListener('mouseenter', () => {
                 console.log('🎭 Direct background element mouseenter - starting animation');
@@ -1861,23 +1895,21 @@ class lifViewer {
         if (this.container && hasCarouselInterference) {
             let containerMouseState = false;
             const containerMouseMove = (e) => {
+                // Skip carousel interference during renderOff to prevent conflicts
+                if (this.isRenderingOff) {
+                    return;
+                }
+
                 const nowOverImage = this.isMouseOverImageArea(e);
 
-                // Enhanced logic for renderOff scenarios: always try to start if mouse is over image and animation isn't running
                 if (nowOverImage) {
-                    if (!containerMouseState || this.isRenderingOff || !this.running) {
+                    if (!containerMouseState || !this.running) {
                         containerMouseState = true;
                         startAnimation();
-                        if (this.isRenderingOff) {
-                            console.log('🎠 Carousel interference fallback: mouse re-enter during renderOff - restarting');
-                        } else {
-                            console.log('🎠 Carousel interference fallback: mouse enter');
-                        }
                     }
                 } else if (!nowOverImage && containerMouseState) {
                     containerMouseState = false;
                     stopAnimation();
-                    console.log('🎠 Carousel interference fallback: mouse leave');
                 }
 
                 // CRITICAL: Forward mouse coordinates to lifViewer for 3D effect
@@ -1888,9 +1920,12 @@ class lifViewer {
 
             this.container.addEventListener('mousemove', containerMouseMove, { passive: true });
             this.container.addEventListener('mouseleave', () => {
+                // Skip carousel interference during renderOff to prevent conflicts
+                if (this.isRenderingOff) {
+                    return;
+                }
                 containerMouseState = false;
                 stopAnimation();
-                console.log('🎠 Carousel interference fallback: container leave');
             }, { passive: true });
 
             // Additional mouseenter handler on container for more reliable detection during renderOff
@@ -1922,22 +1957,24 @@ class lifViewer {
                     animationTimeoutId = null;
                 }
 
-                // Use lifViewer's internal state instead of local state
-                if (!this.running) {
-                    console.log('Starting animation (standard)');
+                // Enhanced logic for renderOff scenarios: always try to start if animation isn't running or renderOff is active
+                if (!this.running || this.isRenderingOff) {
                     this.startAnimation();
                 }
             };
 
             const stopAnimation = () => {
+                // Don't stop animation during renderOff transition
+                if (this.isRenderingOff) {
+                    return;
+                }
+
                 // Use lifViewer's internal state instead of local state
                 if (this.running) {
-                    console.log('Stopping animation (standard)');
-
                     // Small delay to prevent rapid toggling
                     animationTimeoutId = setTimeout(() => {
                         // Double-check state before stopping
-                        if (this.running) {
+                        if (!this.isRenderingOff && this.running) {
                             this.stopAnimation();
                         }
                         animationTimeoutId = null;
@@ -2225,23 +2262,24 @@ class lifViewer {
     setupGlobalEventFallback(startAnimation, stopAnimation) {
         if (this._globalEventFallbackSetup) return; // Prevent duplicate setup
 
-        console.log('🌐 Setting up global event fallback...');
-
         let globalMouseOverImage = false;
 
         const globalMouseMoveHandler = (e) => {
             if (!this.originalImage) return;
+
+            // Skip global fallback during renderOff to prevent conflicts
+            if (this.isRenderingOff) {
+                return;
+            }
 
             const nowOverImage = this.isMouseOverImageArea(e);
 
             if (nowOverImage && !globalMouseOverImage) {
                 globalMouseOverImage = true;
                 startAnimation();
-                console.log('🌐 Global fallback: Mouse enter detected');
             } else if (!nowOverImage && globalMouseOverImage) {
                 globalMouseOverImage = false;
                 stopAnimation();
-                console.log('🌐 Global fallback: Mouse leave detected');
             }
 
             // Update mouse position for 3D effect
@@ -4482,14 +4520,6 @@ class lifViewer {
             // Clean up the captured starting position and renderOff state
             this.renderOffStartPos = null;
             this.isRenderingOff = false;
-
-            console.log('🔄 Animation ended - display states changed:');
-            console.log('📊 Canvas state:', {
-                display: this.canvas.style.display,
-                position: this.canvas.style.position,
-                zIndex: this.canvas.style.zIndex
-            });
-            console.log('✅ Animation ended - layout-aware positioning handled by enhanced architecture');
             cancelAnimationFrame(this.renderOffAnimationFrame);
         }
     }
@@ -4501,7 +4531,6 @@ class lifViewer {
 
             // Cancel any ongoing renderOff animation
             if (this.isRenderingOff) {
-                console.log('🔄 Canceling renderOff animation - mouse re-entered during transition');
                 this.isRenderingOff = false;
                 cancelAnimationFrame(this.renderOffAnimationFrame);
                 this.renderOffAnimationFrame = null;

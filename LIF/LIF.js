@@ -1057,7 +1057,7 @@ class lifViewer {
     }
 
     renderOff(transitionTime) {
-        if (this.running) { console.log("abort renderOFF !"); return; }
+        if (this.running) return;
         const elapsedTime = (Date.now() / 1000) - this.startTime;
 
         //const invd = this.focus * this.views[0].layers[0].invZ.min; // set focus point
