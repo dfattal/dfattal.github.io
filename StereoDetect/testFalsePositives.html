@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>False Positive Test for SBS Detector (Normalized Shift)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f9f9f9;
+            padding: 20px;
+        }
+
+        canvas {
+            margin-top: 20px;
+            border: 1px solid #999;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Testing False Positives on 100 Random 2D Picsum Images</h2>
+    <div id="status"></div>
+    <canvas id="histShift" width="600" height="200"></canvas>
+    <canvas id="histCorr" width="600" height="200"></canvas>
+    <canvas id="histSharp" width="600" height="200"></canvas>
+
+    <script>
+        (async () => {
+            const NUM_IMAGES = 100;
+            const IMAGE_WIDTH = 400;
+            const IMAGE_HEIGHT = 300;
+
+            const statusEl = document.getElementById('status');
+
+            let normShiftVals = [];
+            let corrVals = [];
+            let sharpVals = [];
+
+            for (let i = 0; i < NUM_IMAGES; i++) {
+                statusEl.textContent = `Processing image ${i + 1} of ${NUM_IMAGES}...`;
+
+                const imgUrl = `https://picsum.photos/${IMAGE_WIDTH}/${IMAGE_HEIGHT}?random=${Math.random()}`;
+                const img = await loadImage(imgUrl);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+
+                const result = analyzeSBSImage(canvas);
+
+                const halfWidth = Math.floor(img.naturalWidth / 2);
+                const normalizedShift = halfWidth > 0 ? result.bestShift / halfWidth : 0;
+
+                normShiftVals.push(normalizedShift);
+                corrVals.push(result.peakCorrelation);
+                sharpVals.push(result.sharpness);
+
+                if (result.peakCorrelation > 0.5 && Math.abs(normalizedShift) < 0.1) {
+                    // Create a container div
+                    const div = document.createElement('div');
+                    div.style.marginTop = '20px';
+                    div.style.padding = '10px';
+                    div.style.border = '1px solid #ccc';
+                    div.style.background = '#fff';
+
+                    // Image element
+                    const clonedImg = new Image();
+                    clonedImg.src = img.src;
+                    clonedImg.width = 200;
+                    div.appendChild(clonedImg);
+
+                    // Metrics
+                    const p = document.createElement('p');
+                    p.textContent = `Peak Corr: ${result.peakCorrelation.toFixed(4)}, ` +
+                        `Norm Shift: ${normalizedShift.toFixed(3)}, ` +
+                        `Sharpness: ${result.sharpness.toFixed(4)}`;
+                    div.appendChild(p);
+
+                    document.body.appendChild(div);
+                }
+            }
+
+            statusEl.textContent = `DONE. Showing histograms.`;
+
+            plotHistogram('histShift', normShiftVals, -1, 1, 'Normalized Best Shift');
+            plotHistogram('histCorr', corrVals, -1, 1, 'Peak Correlation');
+            plotHistogram('histSharp', sharpVals, 0, 0.5, 'Peak Sharpness');
+
+        })();
+
+        function loadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = url;
+            });
+        }
+
+        function analyzeSBSImage(canvas) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const halfWidth = Math.floor(width / 2);
+
+            const leftImageData = ctx.getImageData(0, 0, halfWidth, height);
+            const rightImageData = ctx.getImageData(halfWidth, 0, halfWidth, height);
+
+            const leftGray = rgbaToGrayscale(leftImageData.data, halfWidth, height);
+            const rightGray = rgbaToGrayscale(rightImageData.data, halfWidth, height);
+
+            return computeCrossCorrelation(leftGray, rightGray, halfWidth, height);
+        }
+
+        function rgbaToGrayscale(rgba, width, height) {
+            const gray = new Float32Array(width * height);
+            for (let i = 0; i < width * height; i++) {
+                const r = rgba[i * 4];
+                const g = rgba[i * 4 + 1];
+                const b = rgba[i * 4 + 2];
+                gray[i] = (r + g + b) / 3;
+            }
+            return gray;
+        }
+
+        function computeCrossCorrelation(leftGray, rightGray, width, height) {
+            const maxShift = Math.floor(width * 0.2); // 20% of width
+            const correlations = [];
+
+            const stepSize = Math.max(1, Math.ceil((2 * maxShift + 1) / 100));
+            for (let shift = -maxShift; shift <= maxShift; shift += stepSize) {
+                let sumLeft = 0;
+                let sumRight = 0;
+                let sumLeftSq = 0;
+                let sumRightSq = 0;
+                let sumProduct = 0;
+                let count = 0;
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const xr = x + shift;
+                        if (xr < 0 || xr >= width) continue;
+
+                        const leftVal = leftGray[y * width + x];
+                        const rightVal = rightGray[y * width + xr];
+
+                        sumLeft += leftVal;
+                        sumRight += rightVal;
+                        sumLeftSq += leftVal * leftVal;
+                        sumRightSq += rightVal * rightVal;
+                        sumProduct += leftVal * rightVal;
+                        count++;
+                    }
+                }
+
+                if (count === 0) {
+                    correlations.push({ shift, correlation: 0 });
+                    continue;
+                }
+
+                const meanLeft = sumLeft / count;
+                const meanRight = sumRight / count;
+                const numerator = sumProduct - count * meanLeft * meanRight;
+                const denomLeft = sumLeftSq - count * meanLeft * meanLeft;
+                const denomRight = sumRightSq - count * meanRight * meanRight;
+                const denom = Math.sqrt(denomLeft * denomRight);
+                const corr = denom > 0 ? numerator / denom : 0;
+
+                correlations.push({ shift, correlation: corr });
+            }
+
+            let best = { shift: 0, correlation: -Infinity };
+            for (const c of correlations) {
+                if (c.correlation > best.correlation) {
+                    best = c;
+                }
+            }
+
+            const peakIdx = correlations.findIndex(c => c.shift === best.shift);
+            const prev = correlations[peakIdx - 1]?.correlation ?? 0;
+            const next = correlations[peakIdx + 1]?.correlation ?? 0;
+            const sideAvg = (prev + next) / 2;
+            const sharpness = best.correlation - sideAvg;
+
+            return {
+                bestShift: best.shift,
+                peakCorrelation: best.correlation,
+                sharpness,
+                correlations
+            };
+        }
+
+        function plotHistogram(canvasId, data, min, max, label) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            const numBins = 40;
+            const binSize = (max - min) / numBins;
+            const bins = new Array(numBins).fill(0);
+            for (let val of data) {
+                const idx = Math.floor((val - min) / binSize);
+                if (idx >= 0 && idx < numBins) {
+                    bins[idx]++;
+                }
+            }
+
+            const maxCount = Math.max(...bins);
+
+            // margins for labels
+            const marginLeft = 50;
+            const marginBottom = 30;
+            const plotWidth = w - marginLeft - 10;
+            const plotHeight = h - marginBottom - 10;
+
+            // axes
+            ctx.strokeStyle = "#333";
+            ctx.beginPath();
+            ctx.moveTo(marginLeft, 10);
+            ctx.lineTo(marginLeft, h - marginBottom);
+            ctx.lineTo(w - 10, h - marginBottom);
+            ctx.stroke();
+
+            // bars
+            for (let i = 0; i < bins.length; i++) {
+                const barHeight = (bins[i] / maxCount) * plotHeight;
+                const x = marginLeft + (i / bins.length) * plotWidth;
+                const barWidth = plotWidth / bins.length;
+                ctx.fillStyle = "#00796b";
+                ctx.fillRect(x, (h - marginBottom) - barHeight, barWidth, barHeight);
+            }
+
+            // x-axis labels
+            ctx.fillStyle = "#333";
+            ctx.font = "12px sans-serif";
+            ctx.textAlign = "center";
+
+            const numTicks = 5;
+            for (let i = 0; i <= numTicks; i++) {
+                const val = min + (i / numTicks) * (max - min);
+                const x = marginLeft + (i / numTicks) * plotWidth;
+                ctx.fillText(val.toFixed(2), x, h - marginBottom + 15);
+                // draw tick
+                ctx.beginPath();
+                ctx.moveTo(x, h - marginBottom);
+                ctx.lineTo(x, h - marginBottom - 5);
+                ctx.stroke();
+            }
+
+            // y-axis labels
+            ctx.textAlign = "right";
+            const yTicks = 5;
+            for (let i = 0; i <= yTicks; i++) {
+                const count = Math.round((i / yTicks) * maxCount);
+                const y = (h - marginBottom) - (i / yTicks) * plotHeight;
+                ctx.fillText(count.toString(), marginLeft - 5, y + 4);
+                ctx.beginPath();
+                ctx.moveTo(marginLeft, y);
+                ctx.lineTo(marginLeft + 5, y);
+                ctx.stroke();
+            }
+
+            // Title
+            ctx.textAlign = "left";
+            ctx.fillStyle = "#333";
+            ctx.font = "14px sans-serif";
+            ctx.fillText(label, 10, 20);
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SBS Image Cross-Correlation Analyzer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 30px;
+      background: #f9f9f9;
+      color: #333;
+    }
+    #dropzone {
+      border: 2px dashed #666;
+      padding: 30px;
+      text-align: center;
+      background: #fff;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    #dropzone.hover {
+      background: #e0f7fa;
+    }
+    canvas {
+      border: 1px solid #999;
+      margin-top: 10px;
+      max-width: 100%;
+    }
+    #results {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>SBS Image Cross-Correlation Analyzer</h2>
+
+<div id="dropzone">Drag & Drop SBS Image Here</div>
+
+<canvas id="imageCanvas" style="display:none;"></canvas>
+
+<div id="results"></div>
+
+<canvas id="plotCanvas" width="800" height="200"></canvas>
+
+<div style="margin-top: 20px;">
+  <a href="testFalsePositives.html" class="button" style="
+    display: inline-block;
+    padding: 10px 20px;
+    background: #00796b;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: 500;">
+    Test False Positives
+  </a>
+</div>
+
+
+<script>
+  // --- Drag and drop logic ---
+  const dropzone = document.getElementById('dropzone');
+  const imageCanvas = document.getElementById('imageCanvas');
+  const plotCanvas = document.getElementById('plotCanvas');
+  const plotCtx = plotCanvas.getContext('2d');
+  const resultsDiv = document.getElementById('results');
+
+  dropzone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropzone.classList.add('hover');
+  });
+  dropzone.addEventListener('dragleave', e => {
+    dropzone.classList.remove('hover');
+  });
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('hover');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const img = new Image();
+      img.onload = () => {
+        analyzeSBSImage(img);
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // --- Core analysis logic ---
+  function analyzeSBSImage(imgEl) {
+    const ctx = imageCanvas.getContext('2d');
+    imageCanvas.width = imgEl.naturalWidth;
+    imageCanvas.height = imgEl.naturalHeight;
+    ctx.drawImage(imgEl, 0, 0);
+
+    const { width, height } = imageCanvas;
+    const halfWidth = Math.floor(width / 2);
+    
+    const leftImageData = ctx.getImageData(0, 0, halfWidth, height);
+    const rightImageData = ctx.getImageData(halfWidth, 0, halfWidth, height);
+
+    const leftGray = rgbaToGrayscale(leftImageData.data, halfWidth, height);
+    const rightGray = rgbaToGrayscale(rightImageData.data, halfWidth, height);
+
+    const result = computeCrossCorrelation(leftGray, rightGray, halfWidth, height);
+
+    showResults(result);
+    plotCorrelation(result.correlations);
+  }
+
+  function rgbaToGrayscale(rgba, width, height) {
+    const gray = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const r = rgba[i * 4];
+      const g = rgba[i * 4 + 1];
+      const b = rgba[i * 4 + 2];
+      gray[i] = (r + g + b) / 3;
+    }
+    return gray;
+  }
+
+  function computeCrossCorrelation(leftGray, rightGray, width, height) {
+    const maxShift = Math.floor(width * 0.2); // 20% of width
+    const correlations = [];
+    
+    const stepSize = Math.max(1, Math.ceil((2 * maxShift + 1) / 100));
+    for (let shift = -maxShift; shift <= maxShift; shift += stepSize) {
+      let sumLeft = 0;
+      let sumRight = 0;
+      let sumLeftSq = 0;
+      let sumRightSq = 0;
+      let sumProduct = 0;
+      let count = 0;
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const xr = x + shift;
+          if (xr < 0 || xr >= width) continue;
+
+          const leftVal = leftGray[y * width + x];
+          const rightVal = rightGray[y * width + xr];
+
+          sumLeft += leftVal;
+          sumRight += rightVal;
+          sumLeftSq += leftVal * leftVal;
+          sumRightSq += rightVal * rightVal;
+          sumProduct += leftVal * rightVal;
+          count++;
+        }
+      }
+
+      if (count === 0) {
+        correlations.push({ shift, correlation: 0 });
+        continue;
+      }
+
+      const meanLeft = sumLeft / count;
+      const meanRight = sumRight / count;
+      const numerator = sumProduct - count * meanLeft * meanRight;
+      const denomLeft = sumLeftSq - count * meanLeft * meanLeft;
+      const denomRight = sumRightSq - count * meanRight * meanRight;
+      const denom = Math.sqrt(denomLeft * denomRight);
+      const corr = denom > 0 ? numerator / denom : 0;
+
+      correlations.push({ shift, correlation: corr });
+    }
+
+    // Find peak
+    let best = { shift: 0, correlation: -Infinity };
+    for (const c of correlations) {
+      if (c.correlation > best.correlation) {
+        best = c;
+      }
+    }
+    
+    const peakIdx = correlations.findIndex(c => c.shift === best.shift);
+    const prev = correlations[peakIdx - 1]?.correlation ?? 0;
+    const next = correlations[peakIdx + 1]?.correlation ?? 0;
+    const sideAvg = (prev + next) / 2;
+    const sharpness = best.correlation - sideAvg;
+
+    return {
+      bestShift: best.shift,
+      bestShiftPercent: 100*best.shift / width,
+      peakCorrelation: best.correlation,
+      sharpness,
+      correlations
+    };
+  }
+
+  function showResults(result) {
+    resultsDiv.innerHTML = `
+      <h3>Cross-Correlation Result:</h3>
+      <p><strong>Best Shift:</strong> ${result.bestShift} pixels (${result.bestShiftPercent.toFixed(3)}% relative to half width)</p>
+      <p><strong>Peak Correlation:</strong> ${result.peakCorrelation.toFixed(4)}</p>
+      <p><strong>Peak Sharpness:</strong> ${result.sharpness.toFixed(4)}</p>
+    `;
+  }
+
+  function plotCorrelation(correlations) {
+    plotCtx.clearRect(0, 0, plotCanvas.width, plotCanvas.height);
+
+    const shifts = correlations.map(c => c.shift);
+    const values = correlations.map(c => c.correlation);
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const range = maxVal - minVal || 1;
+
+    // Add margins for labels
+    const marginLeft = 50;
+    const marginBottom = 30;
+    const plotWidth = plotCanvas.width - marginLeft - 10;
+    const plotHeight = plotCanvas.height - marginBottom - 10;
+
+    // Draw axes
+    plotCtx.strokeStyle = '#888';
+    plotCtx.beginPath();
+    plotCtx.moveTo(marginLeft, 10);
+    plotCtx.lineTo(marginLeft, plotCanvas.height - marginBottom);
+    plotCtx.lineTo(plotCanvas.width - 10, plotCanvas.height - marginBottom);
+    plotCtx.stroke();
+
+    // Plot correlation curve
+    plotCtx.beginPath();
+    correlations.forEach((c, i) => {
+      const x = marginLeft + (i / (correlations.length - 1)) * plotWidth;
+      const y = (plotCanvas.height - marginBottom) - ((c.correlation - minVal) / range) * plotHeight;
+      if (i === 0) plotCtx.moveTo(x, y);
+      else plotCtx.lineTo(x, y);
+    });
+    plotCtx.strokeStyle = '#00796b';
+    plotCtx.lineWidth = 2;
+    plotCtx.stroke();
+
+    // Draw axis labels
+    plotCtx.fillStyle = '#333';
+    plotCtx.font = '12px sans-serif';
+    plotCtx.textAlign = 'center';
+
+    // X-axis labels (shifts)
+    const numXTicks = 5;
+    const minShift = Math.min(...shifts);
+    const maxShift = Math.max(...shifts);
+    for (let i = 0; i <= numXTicks; i++) {
+      const shift = minShift + (i / numXTicks) * (maxShift - minShift);
+      const x = marginLeft + (i / numXTicks) * plotWidth;
+      plotCtx.fillText(Math.round(shift), x, plotCanvas.height - marginBottom + 15);
+      // Draw tick
+      plotCtx.beginPath();
+      plotCtx.moveTo(x, plotCanvas.height - marginBottom);
+      plotCtx.lineTo(x, plotCanvas.height - marginBottom + 5);
+      plotCtx.stroke();
+    }
+
+    // Y-axis labels (correlation values)
+    plotCtx.textAlign = 'right';
+    const numYTicks = 5;
+    for (let i = 0; i <= numYTicks; i++) {
+      const val = minVal + (i / numYTicks) * (maxVal - minVal);
+      const y = (plotCanvas.height - marginBottom) - (i / numYTicks) * plotHeight;
+      plotCtx.fillText(val.toFixed(2), marginLeft - 5, y + 4);
+      // Draw tick
+      plotCtx.beginPath();
+      plotCtx.moveTo(marginLeft - 5, y);
+      plotCtx.lineTo(marginLeft, y);
+      plotCtx.stroke();
+    }
+
+    // Annotate best peak
+    const best = correlations.reduce((p, c) => c.correlation > p.correlation ? c : p, { correlation: -Infinity });
+    const bestIdx = correlations.findIndex(c => c.shift === best.shift);
+    const x = marginLeft + (bestIdx / (correlations.length - 1)) * plotWidth;
+    const y = (plotCanvas.height - marginBottom) - ((best.correlation - minVal) / range) * plotHeight;
+
+    plotCtx.fillStyle = 'red';
+    plotCtx.beginPath();
+    plotCtx.arc(x, y, 5, 0, 2 * Math.PI);
+    plotCtx.fill();
+
+    // Add axis titles
+    plotCtx.textAlign = 'center';
+    plotCtx.fillStyle = '#333';
+    plotCtx.font = '14px sans-serif';
+    plotCtx.fillText('Pixel Shift', plotCanvas.width / 2, plotCanvas.height - 5);
+    
+    plotCtx.save();
+    plotCtx.translate(15, plotCanvas.height / 2);
+    plotCtx.rotate(-Math.PI / 2);
+    plotCtx.fillText('Correlation', 0, 0);
+    plotCtx.restore();
+  }
+</script>
+
+</body>
+</html>
