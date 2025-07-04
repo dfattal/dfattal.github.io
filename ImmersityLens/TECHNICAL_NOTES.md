@@ -525,6 +525,131 @@ const LAYOUT_CONFIGS = {
 };
 ```
 
+### Facebook Canvas Zoom Fix
+
+Fixed issue where Facebook images appeared too zoomed in when the image didn't fill the parent container completely.
+
+**Problem:** Facebook images are detected as `aspectRatio` layout mode due to padding-based aspect ratio containers. When the image dimensions (e.g., 720x960) don't match the container target dimensions (e.g., 413x550), the canvas was being sized to the full image dimensions but displayed in a smaller container, causing a zoomed-in appearance.
+
+**Root Cause Analysis:**
+1. Canvas inherited CSS classes from the original image
+2. `syncCanvasWithLIFResult()` was falling back to original image's rendered size instead of target dimensions
+3. CSS classes overrode explicit width/height settings even with `!important`
+4. Facebook containers have `data-lif-target-*` attributes that weren't being properly prioritized
+
+**Comprehensive Solution:**
+
+#### 1. Enhanced Target Dimension Detection
+```javascript
+// Check for data-lif-target-* attributes on container
+if (container.dataset.lifTargetWidth && container.dataset.lifTargetHeight) {
+    const targetWidth = parseInt(container.dataset.lifTargetWidth);
+    const targetHeight = parseInt(container.dataset.lifTargetHeight);
+    
+    if (targetWidth > 0 && targetHeight > 0) {
+        targetDimensions = {
+            width: targetWidth,
+            height: targetHeight
+        };
+        console.log('📏 Using container target dimensions from data attributes:', targetDimensions);
+    }
+}
+```
+
+#### 2. Fixed Canvas Sync Logic
+```javascript
+// Complex layouts: ALWAYS prioritize target dimensions for Facebook and similar sites
+if (targetDimensions && targetDimensions.width > 0 && targetDimensions.height > 0) {
+    // Use the target dimensions for BOTH internal canvas size AND display size
+    this.canvas.width = targetDimensions.width;
+    this.canvas.height = targetDimensions.height;
+    
+    // Check if we're dealing with Facebook-style layout with data-lif-target attributes
+    const hasTargetAttributes = this.container.dataset.lifTargetWidth || this.container.dataset.lifTargetHeight;
+    
+    if (hasTargetAttributes) {
+        // Force explicit sizing for Facebook to override inherited CSS classes
+        this.canvas.style.width = `${targetDimensions.width}px !important`;
+        this.canvas.style.height = `${targetDimensions.height}px !important`;
+        console.log(`✅ Facebook target dimensions with forced sizing: ${this.canvas.width}x${this.canvas.height}`);
+    }
+}
+```
+
+#### 3. Facebook-Specific CSS Override Protection
+```javascript
+// Check if this is a Facebook-style container with data-lif-target attributes
+const hasTargetAttributes = this.container.dataset.lifTargetWidth || this.container.dataset.lifTargetHeight;
+
+if (hasTargetAttributes) {
+    // Force target dimensions for Facebook-style layouts with extra !important
+    this.canvas.style.cssText = `
+        width: ${dimensions.width}px !important;
+        height: ${dimensions.height}px !important;
+        max-width: none !important;
+        max-height: none !important;
+        position: absolute !important;
+        /* ... other styles ... */
+    `;
+    console.log('🎨 Facebook-style canvas with forced target dimensions:', dimensions);
+}
+```
+
+**Key Changes:**
+- `analyzeLayoutPattern()`: Re-enabled Facebook-specific detection with enhanced class pattern matching
+- `content.js`: Added Facebook-specific dimension calculation to ALWAYS use container dimensions instead of image dimensions
+- `createForLayout()`: Enhanced to detect and use `data-lif-target-*` attributes with protection against override by centered/fitted image detection
+- `syncCanvasWithLIFResult()`: Modified to ALWAYS prioritize target dimensions over original image rendered size for Facebook containers
+- `setupLayoutSpecificStyling()`: Added Facebook-specific detection and forced sizing logic
+
+**Root Cause:** Facebook images were being detected as "centered/fitted" and getting image dimensions (`567x677`) instead of container dimensions (`461x550`) in both the content script and LIF.js object-fit detection logic.
+**Final Fix:** Enhanced object-fit detection logic in LIF.js to preserve Facebook target dimensions:
+
+```javascript
+} else if (hasFacebookTargetDimensions) {
+    // CRITICAL FIX: For Facebook images, ensure we keep aspectRatio mode but DON'T override targetDimensions
+    // The targetDimensions should already be set from data-lif-target-* attributes above
+    layoutMode = 'aspectRatio';
+    console.log('🎯 Object-fit detected but preserving Facebook target dimensions:', targetDimensions);
+}
+```
+
+This ensures that even when Facebook images have `object-fit: cover`, the target dimensions from `data-lif-target-*` attributes are preserved and not overridden by image natural dimensions.
+
+**Root Cause of Persistence:** The centered/fitted image detection logic was running after Facebook target dimensions were set and overriding them with image natural dimensions (1080x1350 instead of 440x550).
+
+**Result:** Canvas is now properly sized to match the actual display area (440x550), not the image's natural size (1080x1350), eliminating the zoom issue on Facebook and other similar platforms. The fix is robust against CSS class inheritance and dimension override conflicts.
+
+#### Final Fix (December 2024)
+The issue persisted even after all the above fixes because the object-fit detection logic in `createForLayout()` was still overriding Facebook target dimensions. The final fix involved:
+
+1. **Declaring `hasFacebookTargetDimensions` variable early** in the function scope to track when target dimensions are set from `data-lif-target-*` attributes
+2. **Removing redundant checks** that were re-evaluating the same condition multiple times  
+3. **Ensuring `layoutMode = 'aspectRatio'`** is set when Facebook target dimensions are preserved
+4. **Preventing dimension override** throughout all object-fit detection logic paths
+
+The key insight was that the `hasFacebookTargetDimensions` variable needed to be declared once at the top level and reused throughout the function, rather than being re-evaluated in each conditional block. This ensures that when Facebook images are detected and target dimensions are set from `data-lif-target-*` attributes, no subsequent logic can override those dimensions.
+
+#### Flickr Theater Mode Fix (December 2024)
+After fixing Facebook, a new issue emerged in Flickr theater mode where the canvas height was larger than the image height, causing mouse detection to fail. The problem was:
+
+- **Context menu dimensions:** 409x598 (container size)
+- **Image dimensions:** 409x498 (100px shorter)
+- **Canvas positioning:** Canvas was positioned correctly but extended 100px below the image
+- **Mouse detection failure:** `isMouseOverImageArea()` was checking the wrong area
+
+**Solution:** Added Flickr theater mode detection in `createForLayout()` that:
+1. Checks if context menu dimensions are significantly larger than image dimensions (>50px difference)
+2. In overlay mode, adjusts canvas height to match the original image height
+3. Preserves width from context menu but uses image height to prevent canvas overflow
+
+**Technical Details:**
+- Added check: `if (options.height > imageHeight + 50)` to detect theater mode layouts
+- Adjusted target dimensions: `{width: options.width, height: imageHeight}`
+- This ensures canvas matches image bounds exactly, fixing mouse event detection
+
+**Result:** Flickr theater mode now works correctly with proper mouse detection and canvas positioning.
+
 ### Configurable Parameters
 
 The lifViewer includes several configurable parameters for customizing user experience:

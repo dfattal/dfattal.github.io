@@ -1956,7 +1956,7 @@ function analyzeLayoutPattern(element, img) {
     //     // ... rest of Facebook logic
     // }
 
-    // GENERALIZED: Detect complex positioned layouts by analyzing CSS properties
+    // ENHANCED: Detect Facebook and similar complex positioned layouts
     const elementStyle = window.getComputedStyle(element);
     const hasComplexPositioning = (
         elementStyle.position === 'absolute' ||
@@ -1965,16 +1965,30 @@ function analyzeLayoutPattern(element, img) {
         (elementStyle.zIndex && parseInt(elementStyle.zIndex) > 100)
     );
 
-    if (hasComplexPositioning && element.classList.length > 5) {
+    // Facebook-specific detection
+    const isFacebookImage = img.src && img.src.includes('fbcdn.net');
+    const hasFacebookClasses = img.classList && (
+        img.className.includes('x168nmei') ||
+        img.className.includes('x13lgxp2') ||
+        img.className.includes('x5pf9jr') ||
+        img.className.includes('x15mokao') ||
+        img.className.includes('x1ga7v0g')
+    );
+
+    if (isFacebookImage || hasFacebookClasses || (hasComplexPositioning && element.classList.length > 5)) {
         analysis.isFacebookStyle = true; // Keep the same flag for compatibility
-        analysis.type = 'complex-positioned-layout';
+        analysis.type = isFacebookImage || hasFacebookClasses ? 'facebook-layout' : 'complex-positioned-layout';
         analysis.preserveOriginal = true;
-        analysis.reason = 'Complex positioning detected - using overlay approach';
-        console.log('Complex positioned layout detected:', {
+        analysis.reason = isFacebookImage || hasFacebookClasses ? 'Facebook-style layout detected' : 'Complex positioning detected - using overlay approach';
+        console.log('Facebook/complex positioned layout detected:', {
+            isFacebookImage,
+            hasFacebookClasses,
+            hasComplexPositioning,
             position: elementStyle.position,
             transform: elementStyle.transform,
             zIndex: elementStyle.zIndex,
-            classCount: element.classList.length
+            classCount: element.classList.length,
+            imgClasses: img.className
         });
     }
 
@@ -4529,8 +4543,31 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     const computedStyle = window.getComputedStyle(img);
                     const hasObjectFit = computedStyle.objectFit && computedStyle.objectFit !== 'fill' && computedStyle.objectFit !== 'none';
 
-                    if ((hasExplicitDimensions && isCenteredOrFitted) || hasObjectFit) {
-                        // For centered/fitted images, use the image's actual rendered size
+                    // CRITICAL FIX: For Facebook images, ALWAYS use container dimensions to prevent zoom issues
+                    const isFacebookImage = img.src && img.src.includes('fbcdn.net');
+                    const hasFacebookClasses = img.classList && (
+                        img.className.includes('x168nmei') ||
+                        img.className.includes('x13lgxp2') ||
+                        img.className.includes('x5pf9jr') ||
+                        img.className.includes('x15mokao') ||
+                        img.className.includes('x1ga7v0g')
+                    );
+
+                    if (isFacebookImage || hasFacebookClasses) {
+                        // Facebook images: ALWAYS use container dimensions, never image dimensions
+                        effectiveWidth = containerRect.width > 0 ? containerRect.width : imgRect.width;
+                        effectiveHeight = containerRect.height > 0 ? containerRect.height : imgRect.height;
+
+                        console.log('📘 Facebook image detected - using container dimensions to prevent zoom:', Math.round(effectiveWidth) + 'x' + Math.round(effectiveHeight), {
+                            isFacebookImage,
+                            hasFacebookClasses,
+                            containerSize: Math.round(containerRect.width) + 'x' + Math.round(containerRect.height),
+                            imageSize: Math.round(imgRect.width) + 'x' + Math.round(imgRect.height),
+                            imageClasses: img.className,
+                            targetElement: targetElement.tagName + '.' + targetElement.className
+                        });
+                    } else if ((hasExplicitDimensions && isCenteredOrFitted) || hasObjectFit) {
+                        // For other centered/fitted images, use the image's actual rendered size
                         // Since the canvas will inherit the same CSS classes, it should get the same constraints
                         effectiveWidth = imgRect.width;
                         effectiveHeight = imgRect.height;
@@ -4552,6 +4589,13 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
                     targetElement.dataset.lifTargetWidth = Math.round(effectiveWidth);
                     targetElement.dataset.lifTargetHeight = Math.round(effectiveHeight);
+
+                    console.log('🎯 Set data-lif-target attributes on container:', {
+                        element: targetElement.tagName + '.' + targetElement.className,
+                        width: targetElement.dataset.lifTargetWidth,
+                        height: targetElement.dataset.lifTargetHeight,
+                        effectiveDimensions: Math.round(effectiveWidth) + 'x' + Math.round(effectiveHeight)
+                    });
                 } else if (isPictureImage) {
                     // For picture elements, use the dimensions already calculated and stored on the picture element
                     effectiveWidth = parseInt(pictureElement.dataset.lifTargetWidth) || imgRect.width;

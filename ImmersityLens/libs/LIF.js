@@ -829,20 +829,67 @@ class lifViewer {
         const hasInheritedClasses = this.canvas.className && this.canvas.className.trim().length > 0;
 
         if (hasInheritedClasses) {
-            // Let inherited CSS classes handle width/height, only set positioning and display properties
-            this.canvas.style.cssText = `
-                max-width: none !important;
-                max-height: none !important;
-                position: absolute !important;
-                ${positioningStyle}
-                z-index: ${this.canvasZIndex} !important;
-                display: none !important;
-                pointer-events: auto !important;
-                cursor: pointer !important;
-                object-fit: none !important;
-                object-position: initial !important;
-            `;
-            console.log('🎨 Canvas has inherited classes - letting CSS handle sizing');
+            // CRITICAL FIX: For Facebook and other sites with target dimensions, force explicit sizing
+            // even when canvas has inherited CSS classes to prevent zoom issues
+            const hasTargetDimensions = this.targetDimensions &&
+                this.targetDimensions.width > 0 &&
+                this.targetDimensions.height > 0;
+
+            if (hasTargetDimensions) {
+                // Check if this is a Facebook-style container with data-lif-target attributes
+                const hasTargetAttributes = this.container.dataset.lifTargetWidth || this.container.dataset.lifTargetHeight;
+
+                if (hasTargetAttributes) {
+                    // Force target dimensions for Facebook-style layouts with extra !important
+                    this.canvas.style.cssText = `
+                        width: ${dimensions.width}px !important;
+                        height: ${dimensions.height}px !important;
+                        max-width: none !important;
+                        max-height: none !important;
+                        position: absolute !important;
+                        ${positioningStyle}
+                        z-index: ${this.canvasZIndex} !important;
+                        display: none !important;
+                        pointer-events: auto !important;
+                        cursor: pointer !important;
+                        object-fit: none !important;
+                        object-position: initial !important;
+                    `;
+                    console.log('🎨 Facebook-style canvas with forced target dimensions:', dimensions);
+                } else {
+                    // For other sites with target dimensions, use regular approach
+                    this.canvas.style.cssText = `
+                        width: ${dimensions.width}px !important;
+                        height: ${dimensions.height}px !important;
+                        max-width: none !important;
+                        max-height: none !important;
+                        position: absolute !important;
+                        ${positioningStyle}
+                        z-index: ${this.canvasZIndex} !important;
+                        display: none !important;
+                        pointer-events: auto !important;
+                        cursor: pointer !important;
+                        object-fit: none !important;
+                        object-position: initial !important;
+                    `;
+                    console.log('🎨 Canvas has inherited classes but forcing target dimensions for zoom fix:', dimensions);
+                }
+            } else {
+                // Let inherited CSS classes handle width/height, only set positioning and display properties
+                this.canvas.style.cssText = `
+                    max-width: none !important;
+                    max-height: none !important;
+                    position: absolute !important;
+                    ${positioningStyle}
+                    z-index: ${this.canvasZIndex} !important;
+                    display: none !important;
+                    pointer-events: auto !important;
+                    cursor: pointer !important;
+                    object-fit: none !important;
+                    object-position: initial !important;
+                `;
+                console.log('🎨 Canvas has inherited classes - letting CSS handle sizing');
+            }
         } else {
             // No inherited classes, use explicit dimensions
             this.canvas.style.cssText = `
@@ -1251,6 +1298,45 @@ class lifViewer {
             height: originalImage.height || originalImage.naturalHeight
         };
 
+        // CRITICAL FIX: Check for dimensions passed from context menu handler
+        let hasContextMenuDimensions = false;
+        if (options.width && options.height && options.width > 0 && options.height > 0) {
+            targetDimensions = {
+                width: options.width,
+                height: options.height
+            };
+            hasContextMenuDimensions = true;
+            console.log('📐 Using dimensions from context menu options:', targetDimensions);
+        }
+
+        // CRITICAL FIX: Check for data-lif-target-* attributes on container
+        // These are set for Facebook images and other aspect ratio containers
+        let hasFacebookTargetDimensions = false;
+
+        console.log('🔍 Checking container for data-lif-target attributes:', {
+            containerTag: container.tagName,
+            containerClass: container.className,
+            hasTargetWidth: !!container.dataset.lifTargetWidth,
+            hasTargetHeight: !!container.dataset.lifTargetHeight,
+            targetWidth: container.dataset.lifTargetWidth,
+            targetHeight: container.dataset.lifTargetHeight,
+            allDatasets: Object.keys(container.dataset)
+        });
+
+        if (container.dataset.lifTargetWidth && container.dataset.lifTargetHeight) {
+            const targetWidth = parseInt(container.dataset.lifTargetWidth);
+            const targetHeight = parseInt(container.dataset.lifTargetHeight);
+
+            if (targetWidth > 0 && targetHeight > 0) {
+                targetDimensions = {
+                    width: targetWidth,
+                    height: targetHeight
+                };
+                hasFacebookTargetDimensions = true;
+                console.log('📏 Using container target dimensions from data attributes:', targetDimensions);
+            }
+        }
+
         // Special dimension handling for virtual images (background images from any element)
         if (originalImage._isVirtualBackgroundImage) {
             const originalElement = originalImage._originalBackgroundElement || originalImage._originalPictureElement;
@@ -1326,19 +1412,26 @@ class lifViewer {
 
         if (isCenteredOrFitted && layoutAnalysis?.containerHasPaddingAspectRatio && layoutMode !== 'overlay') {
             // Use image dimensions for fitted images in aspect ratio containers
-            // BUT: Don't override virtual image overlay mode
-            if (originalImage.width && originalImage.height) {
+            // BUT: Don't override virtual image overlay mode, Facebook target dimensions, or context menu dimensions
+            if (originalImage.width && originalImage.height && !hasFacebookTargetDimensions && !hasContextMenuDimensions) {
                 targetDimensions = {
                     width: originalImage.width,
                     height: originalImage.height
                 };
                 layoutMode = 'aspectRatio';
                 console.log('🎯 Centered/fitted image in aspect ratio container - using image dimensions');
+            } else if (hasFacebookTargetDimensions || hasContextMenuDimensions) {
+                layoutMode = 'aspectRatio';
+                console.log('🎯 Preserving target dimensions over centered/fitted detection:', {
+                    hasFacebookTargetDimensions,
+                    hasContextMenuDimensions,
+                    targetDimensions
+                });
             }
         } else if (hasObjectFit || (isCenteredOrFitted && (originalImage.naturalWidth || originalImage.width))) {
             // Use aspectRatio mode for any object-fit image or centered/fitted image with dimensions
-            // BUT: Don't override picture element layout mode or virtual image overlay mode - they have their own dimension handling
-            if (layoutMode !== 'picture' && layoutMode !== 'overlay') {
+            // BUT: Don't override picture element layout mode, virtual image overlay mode, Facebook target dimensions, or context menu dimensions
+            if (layoutMode !== 'picture' && layoutMode !== 'overlay' && !hasFacebookTargetDimensions && !hasContextMenuDimensions) {
                 const hasExplicitDimensions = originalImage.width && originalImage.height;
 
                 if (hasExplicitDimensions && isCenteredOrFitted) {
@@ -1366,6 +1459,14 @@ class lifViewer {
                     targetDimensions,
                     priorityUsed: hasExplicitDimensions && isCenteredOrFitted ? 'HTML attributes' : 'Natural dimensions'
                 });
+            } else if (hasFacebookTargetDimensions || hasContextMenuDimensions) {
+                // CRITICAL FIX: For Facebook images or context menu dimensions, ensure we keep aspectRatio mode but DON'T override targetDimensions
+                layoutMode = 'aspectRatio';
+                console.log('🎯 Object-fit detected but preserving target dimensions:', {
+                    hasFacebookTargetDimensions,
+                    hasContextMenuDimensions,
+                    targetDimensions
+                });
             } else {
                 console.log('🎯 Object-fit detected but preserving picture layout mode for proper dimension handling');
             }
@@ -1389,6 +1490,27 @@ class lifViewer {
                     targetDimensions.height = imgRect.height;
                     console.log('Applied dimension correction for picture element');
                 }
+            }
+        }
+
+        // FLICKR THEATER MODE FIX: If context menu dimensions are larger than image dimensions,
+        // and we're in overlay mode, use the original image dimensions to prevent canvas overflow
+        if (hasContextMenuDimensions && layoutMode === 'overlay' && originalImage.width && originalImage.height) {
+            const imageWidth = originalImage.width;
+            const imageHeight = originalImage.height;
+
+            // Check if context menu dimensions are significantly larger than image dimensions
+            if (options.height > imageHeight + 50) {
+                console.log('🎭 Flickr theater mode detected - adjusting canvas height to match image:', {
+                    contextMenuDimensions: options.width + 'x' + options.height,
+                    imageDimensions: imageWidth + 'x' + imageHeight,
+                    adjustedDimensions: options.width + 'x' + imageHeight
+                });
+
+                targetDimensions = {
+                    width: options.width,
+                    height: imageHeight
+                };
             }
         }
 
@@ -1664,31 +1786,56 @@ class lifViewer {
 
                         console.log(`✅ Standard layout sync - Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                     } else {
-                        // Complex layouts: For images with inherited CSS classes, use the original image's rendered size
-                        // This ensures canvas attributes match what the user actually sees
-                        const originalImageRect = this.originalImage.getBoundingClientRect();
-                        const useRenderedSize = originalImageRect.width > 0 && originalImageRect.height > 0;
+                        // Complex layouts: ALWAYS prioritize target dimensions for Facebook and similar sites
+                        // This prevents zoom issues when target dimensions are explicitly set
+                        if (targetDimensions && targetDimensions.width > 0 && targetDimensions.height > 0) {
+                            // CRITICAL FIX: For Facebook and other aspect ratio containers with explicit target dimensions,
+                            // use the target dimensions for BOTH internal canvas size AND display size
+                            this.canvas.width = targetDimensions.width;
+                            this.canvas.height = targetDimensions.height;
 
-                        if (useRenderedSize) {
-                            // Use the original image's actual rendered size for both internal and display
-                            this.canvas.width = Math.round(originalImageRect.width);
-                            this.canvas.height = Math.round(originalImageRect.height);
-                            // Remove explicit style dimensions to let CSS classes handle sizing
-                            this.canvas.style.width = '';
-                            this.canvas.style.height = '';
-                            console.log(`✅ Complex layout sync - Using original image rendered size: ${this.canvas.width}x${this.canvas.height} (CSS classes will handle display sizing)`);
-                        } else {
-                            // Fallback to previous behavior if rendered size is not available
-                            this.canvas.width = lifWidth;
-                            this.canvas.height = lifHeight;
-                            if (targetDimensions) {
+                            // CRITICAL: For Facebook, we need to force explicit sizing even with inherited classes
+                            // because the CSS classes are sizing the canvas to the wrong dimensions
+                            const hasInheritedClasses = this.canvas.className && this.canvas.className.trim().length > 0;
+
+                            // Check if we're dealing with Facebook-style layout with data-lif-target attributes
+                            const hasTargetAttributes = this.container.dataset.lifTargetWidth || this.container.dataset.lifTargetHeight;
+
+                            if (hasTargetAttributes) {
+                                // Force explicit sizing for Facebook to override inherited CSS classes
+                                this.canvas.style.width = `${targetDimensions.width}px !important`;
+                                this.canvas.style.height = `${targetDimensions.height}px !important`;
+                                console.log(`✅ Complex layout sync - Facebook target dimensions with forced sizing: ${this.canvas.width}x${this.canvas.height}`);
+                            } else if (hasInheritedClasses) {
+                                // For other sites, let CSS handle sizing
+                                this.canvas.style.width = '';
+                                this.canvas.style.height = '';
+                                console.log(`✅ Complex layout sync - Using target dimensions with CSS classes: ${this.canvas.width}x${this.canvas.height} (CSS will handle display sizing)`);
+                            } else {
                                 this.canvas.style.width = `${targetDimensions.width}px`;
                                 this.canvas.style.height = `${targetDimensions.height}px`;
+                                console.log(`✅ Complex layout sync - Using target dimensions with explicit sizing: ${this.canvas.width}x${this.canvas.height}`);
+                            }
+                        } else {
+                            // Fallback: Use the original image's actual rendered size
+                            const originalImageRect = this.originalImage.getBoundingClientRect();
+                            const useRenderedSize = originalImageRect.width > 0 && originalImageRect.height > 0;
+
+                            if (useRenderedSize) {
+                                this.canvas.width = Math.round(originalImageRect.width);
+                                this.canvas.height = Math.round(originalImageRect.height);
+                                // Remove explicit style dimensions to let CSS classes handle sizing
+                                this.canvas.style.width = '';
+                                this.canvas.style.height = '';
+                                console.log(`✅ Complex layout sync - Using original image rendered size: ${this.canvas.width}x${this.canvas.height} (CSS classes will handle display sizing)`);
                             } else {
+                                // Final fallback to LIF dimensions
+                                this.canvas.width = lifWidth;
+                                this.canvas.height = lifHeight;
                                 this.canvas.style.width = `${lifWidth}px`;
                                 this.canvas.style.height = `${lifHeight}px`;
+                                console.log(`✅ Complex layout sync - Final fallback: Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                             }
-                            console.log(`✅ Complex layout sync - Fallback: Internal: ${this.canvas.width}x${this.canvas.height}, Display: ${this.canvas.style.width}x${this.canvas.style.height}`);
                         }
                     }
 
