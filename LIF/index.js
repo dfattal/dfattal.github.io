@@ -574,6 +574,9 @@ async function showLifInfo(lifInfo) {
     const views = lifInfo.views;
     const isOldLif = lifInfo.isOldLif || false;
 
+    // Extract inverse convergence distance if available
+    const invd = lifInfo.stereo_render_data?.inv_convergence_distance;
+
     if (isOldLif) {
         mylog(`LIF Encoder: ${lifInfo.encoder} -- ${views.length} view${views.length > 1 ? 's' : ''} -- Conv Offset: ${lifInfo.conv_offset.toFixed(6)}`);
     } else {
@@ -594,8 +597,16 @@ async function showLifInfo(lifInfo) {
             title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | Conv Offset: ${lifInfo.conv_offset.toFixed(6)}`;
         } else if (!view.inv_z_map) {
             title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | No invZ`;
+            if (invd !== undefined) {
+                title += ` | invd: ${invd === null ? 'null' : invd.toFixed(6)}`;
+            }
+            title += ` | ${layers.length} layer${layers.length > 1 ? 's' : ''}`;
         } else {
-            title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | invZ: ${view.inv_z_map.min.toFixed(4)} - ${view.inv_z_map.max.toFixed(4)} | ${layers.length} layer${layers.length > 1 ? 's' : ''}`;
+            title = `View ${index} | ${view.width_px} x ${view.height_px} | f: ${view.focal_px.toFixed(0)} | x: ${view.position.x} | sk.x: ${view.frustum_skew.x.toFixed(4)} | invZ: ${view.inv_z_map.min.toFixed(4)} - ${view.inv_z_map.max.toFixed(4)}`;
+            if (invd !== undefined) {
+                title += ` | invd: ${invd === null ? 'null' : invd.toFixed(4)}`;
+            }
+            title += ` | ${layers.length} layer${layers.length > 1 ? 's' : ''}`;
         }
 
         viewDOM.appendChild(Object.assign(document.createElement('h2'), { textContent: title }));
