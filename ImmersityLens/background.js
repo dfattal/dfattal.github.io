@@ -106,31 +106,7 @@ console.warn('🆔 EXTENSION ID:', chrome.runtime.id);
 checkLocalAvailable();
 
 // Function to run cloud conversion (existing monoLdiGenerator flow)
-async function runCloudConversion(dataUrl) {
-    // Convert data URL to file
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-    const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
 
-    // Import the monoLdiGenerator dynamically since it's in content script context
-    // We'll need to inject this into a content script for cloud processing
-    return new Promise((resolve, reject) => {
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, {
-                action: 'runCloudConversion',
-                imageData: dataUrl
-            }, response => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else if (response && response.error) {
-                    reject(new Error(response.error));
-                } else {
-                    resolve(response);
-                }
-            });
-        });
-    });
-}
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -230,16 +206,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     }
                 );
             } else {
-                // Use cloud API (existing flow)
-                runCloudConversion(message.dataUrl)
-                    .then(result => {
-                        console.log('Cloud conversion successful');
-                        sendResponse({ lif: result.lifDownloadUrl || result.lif, source: 'cloud' });
-                    })
-                    .catch(error => {
-                        console.error('Cloud conversion failed:', error);
-                        sendResponse({ error: 'Cloud conversion failed: ' + error.message });
-                    });
+                // Use cloud API - signal content script to handle directly
+                console.log('Cloud conversion mode - delegating to content script');
+                sendResponse({ useCloudInContent: true, dataUrl: message.dataUrl });
             }
         });
         return true; // async response

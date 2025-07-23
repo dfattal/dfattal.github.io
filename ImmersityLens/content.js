@@ -1660,21 +1660,48 @@ async function convertTo3D(img, button, options = {}) {
         chrome.runtime.sendMessage({
             type: 'convertImage',
             dataUrl: dataUrl
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error('Conversion request failed:', chrome.runtime.lastError);
-                throw new Error('Failed to send conversion request: ' + chrome.runtime.lastError.message);
+        }, async (response) => {
+            try {
+                if (chrome.runtime.lastError) {
+                    console.error('Conversion request failed:', chrome.runtime.lastError);
+                    throw new Error('Failed to send conversion request: ' + chrome.runtime.lastError.message);
+                }
+
+                if (response.error) {
+                    console.error('Conversion failed:', response.error);
+                    throw new Error(response.error);
+                }
+
+                // Check if background script wants us to handle cloud conversion directly
+                if (response.useCloudInContent) {
+                    console.log('🌐 Handling cloud conversion in content script...');
+
+                    // Convert data URL back to file for cloud processing
+                    const response_fetch = await fetch(response.dataUrl);
+                    const blob = await response_fetch.blob();
+                    const cloudFile = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+
+                    // Use the original cloud conversion flow
+                    const lifGen = new monoLdiGenerator(cloudFile, 'lama');
+
+                    lifGen.afterLoad = function () {
+                        console.log('✅ Cloud conversion completed successfully');
+                        handleConversionSuccess(this.lifDownloadUrl, img, button, options);
+                    };
+
+                    // Start cloud conversion
+                    await lifGen.init();
+
+                } else {
+                    // Handle local conversion response
+                    console.log('Conversion completed via', response.source);
+                    handleConversionSuccess(response.lif, img, button, options);
+                }
+
+            } catch (error) {
+                console.error('Conversion processing error:', error);
+                throw error;
             }
-
-            if (response.error) {
-                console.error('Conversion failed:', response.error);
-                throw new Error(response.error);
-            }
-
-            console.log('Conversion completed via', response.source);
-
-            // Handle the response (similar to lifGen.afterLoad)
-            handleConversionSuccess(response.lif, img, button, options);
         });
 
         // Helper function to handle successful conversion (replaces lifGen.afterLoad logic)
@@ -3471,34 +3498,7 @@ function setupMessageListener() {
             // This old VR handler is disabled - VR is now handled by the newer system
             // that uses pre-loaded VR files and the simple startVR() approach
             console.log('Old VR handler called - redirecting to newer system');
-        } else if (request.action === 'runCloudConversion') {
-            // Handle cloud conversion request from background script
-            try {
-                console.log('Running cloud conversion for background script...');
 
-                // Convert data URL back to file
-                const response = await fetch(request.imageData);
-                const blob = await response.blob();
-                const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
-
-                // Create LIF generator (original cloud flow)
-                const lifGen = new monoLdiGenerator(file, 'lama');
-
-                // Set up completion handler
-                lifGen.afterLoad = function () {
-                    console.log('Cloud conversion completed successfully');
-                    sendResponse({ lifDownloadUrl: this.lifDownloadUrl });
-                };
-
-                // Start the conversion process
-                await lifGen.init();
-
-            } catch (error) {
-                console.error('Cloud conversion failed:', error);
-                sendResponse({ error: error.message });
-            }
-
-            return true; // async response
         }
     };
 
