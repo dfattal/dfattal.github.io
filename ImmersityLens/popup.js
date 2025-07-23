@@ -2,14 +2,85 @@ document.addEventListener('DOMContentLoaded', function () {
     const xrStatusDiv = document.getElementById('xrStatus');
     const xrStatusContainer = document.getElementById('xrStatusContainer');
     const animationSelect = document.getElementById('animationSelect');
+    const modeCloudRadio = document.getElementById('mode-cloud');
+    const modeLocalRadio = document.getElementById('mode-local');
     const ANIMATION_STORAGE_KEY = 'lifAnimationIndex';
+    const CONVERSION_MODE_KEY = 'conversionMode';
 
     // Auto-close functionality
     let autoCloseTimeout = null;
     const AUTO_CLOSE_DELAY = 4000; // 4 seconds
     const FADE_DURATION = 400; // 0.4 seconds
 
+    // Function to check local availability and enable/disable local option
+    function checkLocalAvailability() {
+        console.log('🔍 Popup: Checking local availability...');
 
+        chrome.runtime.sendMessage({ type: 'getLocalAvailable' }, response => {
+            console.log('📨 Popup: Received response from background:', response);
+
+            if (chrome.runtime.lastError) {
+                console.log('❌ Popup: Error communicating with background script:', chrome.runtime.lastError.message);
+                modeLocalRadio.disabled = true;
+                return;
+            }
+
+            if (response && response.localAvailable === true) {
+                console.log('✅ Popup: Local conversion available - enabling local option');
+                modeLocalRadio.disabled = false;
+                modeLocalRadio.parentElement.style.opacity = '1';
+            } else {
+                console.log('❌ Popup: Local conversion not available - disabling local option');
+                console.log('   Response localAvailable value:', response ? response.localAvailable : 'no response');
+                modeLocalRadio.disabled = true;
+                modeLocalRadio.parentElement.style.opacity = '0.5';
+
+                // If local was selected but is not available, switch to cloud
+                if (modeLocalRadio.checked) {
+                    console.log('🔄 Popup: Switching from local to cloud mode');
+                    modeCloudRadio.checked = true;
+                    chrome.storage.sync.set({ [CONVERSION_MODE_KEY]: 'cloud' });
+                }
+            }
+        });
+    }
+
+    // Function to load saved conversion mode
+    function loadConversionMode() {
+        console.log('🔍 Popup: Loading saved conversion mode...');
+        chrome.storage.sync.get([CONVERSION_MODE_KEY], result => {
+            const mode = result[CONVERSION_MODE_KEY] || 'cloud';
+            console.log('📦 Popup: Loaded conversion mode from storage:', mode);
+            console.log('   Raw storage result:', result);
+
+            if (mode === 'local') {
+                modeLocalRadio.checked = true;
+                modeCloudRadio.checked = false;
+                console.log('✅ Popup: Set radio to local mode');
+            } else {
+                modeCloudRadio.checked = true;
+                modeLocalRadio.checked = false;
+                console.log('✅ Popup: Set radio to cloud mode');
+            }
+        });
+    }
+
+    // Function to save conversion mode when changed
+    function setupConversionModeHandlers() {
+        console.log('🔧 Popup: Setting up conversion mode change handlers...');
+        [modeCloudRadio, modeLocalRadio].forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    const mode = radio.value;
+                    console.log('🔄 Popup: User changed conversion mode to:', mode);
+                    chrome.storage.sync.set({ [CONVERSION_MODE_KEY]: mode }, () => {
+                        console.log('💾 Popup: Saved new conversion mode:', mode);
+                    });
+                }
+            });
+        });
+        console.log('✅ Popup: Conversion mode handlers set up successfully');
+    }
 
     // Function to update XR status UI
     function updateXRStatus(isSupported, reason) {
@@ -333,4 +404,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
+
+    // Check local availability and load conversion mode on startup
+    console.log('🚀 Popup: Starting up - initializing conversion mode UI...');
+    console.warn('🔔 POPUP SCRIPT LOADED - You should see this in the popup console!');
+    console.log('   Initial radio button states:');
+    console.log('   - Cloud radio disabled:', modeCloudRadio.disabled);
+    console.log('   - Local radio disabled:', modeLocalRadio.disabled);
+    console.log('   - Cloud radio checked:', modeCloudRadio.checked);
+    console.log('   - Local radio checked:', modeLocalRadio.checked);
+
+    checkLocalAvailability();
+    loadConversionMode();
+    setupConversionModeHandlers();
 }); 

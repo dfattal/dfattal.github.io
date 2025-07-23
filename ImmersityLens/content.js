@@ -1552,6 +1552,16 @@ async function imageToFile(img) {
     });
 }
 
+// Helper function to convert file to data URL
+async function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 // Function to handle the 2D to 3D conversion
 // 🔮 CORE CONVERSION SYSTEM - Handles 2D→3D processing using enhanced lifViewer
 async function convertTo3D(img, button, options = {}) {
@@ -1643,18 +1653,39 @@ async function convertTo3D(img, button, options = {}) {
         // Log successful file conversion
         console.log(`Image successfully converted to file: ${file.size} bytes`);
 
-        // Create LIF generator
-        const lifGen = new monoLdiGenerator(file, 'lama');
+        // Convert file to data URL for background script processing
+        const dataUrl = await fileToDataUrl(file);
 
-        // Set up completion handler
-        lifGen.afterLoad = function () {
+        // Send conversion request to background script (handles local/cloud routing)
+        chrome.runtime.sendMessage({
+            type: 'convertImage',
+            dataUrl: dataUrl
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('Conversion request failed:', chrome.runtime.lastError);
+                throw new Error('Failed to send conversion request: ' + chrome.runtime.lastError.message);
+            }
+
+            if (response.error) {
+                console.error('Conversion failed:', response.error);
+                throw new Error(response.error);
+            }
+
+            console.log('Conversion completed via', response.source);
+
+            // Handle the response (similar to lifGen.afterLoad)
+            handleConversionSuccess(response.lif, img, button, options);
+        });
+
+        // Helper function to handle successful conversion (replaces lifGen.afterLoad logic)
+        function handleConversionSuccess(lifDownloadUrl, img, button, options) {
             console.log('3D conversion completed successfully');
 
             // Store the LIF download URL immediately - if the viewer can be created, the URL is valid
-            if (this.lifDownloadUrl && img.src) {
-                imageLIFMap.set(img.src, this.lifDownloadUrl);
+            if (lifDownloadUrl && img.src) {
+                imageLIFMap.set(img.src, lifDownloadUrl);
                 console.log('LIF file stored for image:', img.src);
-                console.log('LIF download URL:', this.lifDownloadUrl);
+                console.log('LIF download URL:', lifDownloadUrl);
 
                 // Proactively update context menu to "Download LIF" state
                 chrome.runtime.sendMessage({
@@ -1676,8 +1707,8 @@ async function convertTo3D(img, button, options = {}) {
                 }
             } else {
                 console.warn('Cannot store LIF file - missing lifDownloadUrl or img.src:', {
-                    hasLifDownloadUrl: !!this.lifDownloadUrl,
-                    lifDownloadUrl: this.lifDownloadUrl,
+                    hasLifDownloadUrl: !!lifDownloadUrl,
+                    lifDownloadUrl: lifDownloadUrl,
                     hasImgSrc: !!img.src
                 });
             }
@@ -1752,7 +1783,7 @@ async function convertTo3D(img, button, options = {}) {
             }
 
             const viewer = lifViewer.createForLayout(
-                this.lifDownloadUrl,
+                lifDownloadUrl,
                 lifContainer,
                 img,
                 finalLayoutAnalysis,
@@ -1768,9 +1799,6 @@ async function convertTo3D(img, button, options = {}) {
 
             // Store viewer reference on button for later use
             button.lifViewer = viewer;
-
-            // Store reference to lifGen for accessing lifDownloadUrl later
-            const lifGenRef = this;
 
             // Enhanced afterLoad - much simpler since lifViewer handles layout-specific setup
             const originalAfterLoad = viewer.afterLoad;
@@ -1796,16 +1824,8 @@ async function convertTo3D(img, button, options = {}) {
                 console.log(`Enhanced LIF viewer initialized with layout mode: ${this.layoutMode}`);
                 console.log('All layout-specific setup handled automatically by lifViewer');
                 console.log('LIF file ready for download via context menu');
-
-
-
-
             };
-
-        };
-
-        // Start the conversion process
-        await lifGen.init();
+        }
 
     } catch (error) {
         console.error('Error converting image to 3D:', error);
@@ -3451,6 +3471,34 @@ function setupMessageListener() {
             // This old VR handler is disabled - VR is now handled by the newer system
             // that uses pre-loaded VR files and the simple startVR() approach
             console.log('Old VR handler called - redirecting to newer system');
+        } else if (request.action === 'runCloudConversion') {
+            // Handle cloud conversion request from background script
+            try {
+                console.log('Running cloud conversion for background script...');
+
+                // Convert data URL back to file
+                const response = await fetch(request.imageData);
+                const blob = await response.blob();
+                const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+
+                // Create LIF generator (original cloud flow)
+                const lifGen = new monoLdiGenerator(file, 'lama');
+
+                // Set up completion handler
+                lifGen.afterLoad = function () {
+                    console.log('Cloud conversion completed successfully');
+                    sendResponse({ lifDownloadUrl: this.lifDownloadUrl });
+                };
+
+                // Start the conversion process
+                await lifGen.init();
+
+            } catch (error) {
+                console.error('Cloud conversion failed:', error);
+                sendResponse({ error: error.message });
+            }
+
+            return true; // async response
         }
     };
 

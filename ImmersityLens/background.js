@@ -28,7 +28,109 @@ chrome.runtime.onInstalled.addListener(() => {
         contexts: ["all"],
         visible: false
     });
+
+    // Check local host availability on installation
+    console.log('🚀 Extension installed - checking local availability...');
+    checkLocalAvailable();
 });
+
+// Function to check if local native messaging host is available
+async function checkLocalAvailable() {
+    console.log('🔍 Starting local host availability check...');
+
+    return new Promise(resolve => {
+        console.log('📤 Sending ping message to com.leia.lif_converter...');
+
+        const startTime = Date.now();
+
+        chrome.runtime.sendNativeMessage(
+            'com.leia.lif_converter',
+            { type: 'ping' },
+            response => {
+                clearTimeout(timeoutId); // Clear timeout since we got a response
+                const duration = Date.now() - startTime;
+                console.log(`⏱️ Native message response received after ${duration}ms`);
+
+                if (chrome.runtime.lastError) {
+                    console.log('❌ Local host not available - Chrome runtime error:');
+                    console.log('   Error message:', chrome.runtime.lastError.message);
+                    console.log('   This usually means the native messaging host is not installed or not running');
+                    chrome.storage.local.set({ localAvailable: false }, () => {
+                        console.log('💾 Stored localAvailable: false');
+                    });
+                    resolve(false);
+                } else if (response && response.pong) {
+                    console.log('✅ Local host availability check: SUCCESS');
+                    console.log('   Response type: Pong received');
+                    console.log('   Host is running and responding correctly');
+                    chrome.storage.local.set({ localAvailable: true }, () => {
+                        console.log('💾 Stored localAvailable: true');
+                    });
+                    resolve(true);
+                } else if (response && response.error) {
+                    console.log('⚠️ Local host returned error to ping:');
+                    console.log('   Error:', response.error);
+                    console.log('   Host is running but may have issues');
+                    chrome.storage.local.set({ localAvailable: true }, () => {
+                        console.log('💾 Stored localAvailable: true (host responded, but with error)');
+                    });
+                    resolve(true);
+                } else {
+                    console.log('❓ Local host returned unexpected response to ping:');
+                    console.log('   Response:', response);
+                    console.log('   Response type:', typeof response);
+                    console.log('   Response keys:', response ? Object.keys(response) : 'null');
+                    chrome.storage.local.set({ localAvailable: false }, () => {
+                        console.log('💾 Stored localAvailable: false (unexpected response)');
+                    });
+                    resolve(false);
+                }
+            }
+        );
+
+        // Add timeout to fail availability check if no response
+        const timeoutId = setTimeout(() => {
+            console.log('⏰ Native message timeout: No response after 5 seconds');
+            chrome.storage.local.set({ localAvailable: false }, () => {
+                console.log('💾 Stored localAvailable: false (timeout)');
+            });
+            resolve(false);
+        }, 5000);
+    });
+}
+
+// Check local availability on startup
+console.log('🚀 Background script starting - checking local availability...');
+console.warn('🔔 BACKGROUND SCRIPT LOADED - You should see this in the background page console!');
+console.warn('🆔 EXTENSION ID:', chrome.runtime.id);
+checkLocalAvailable();
+
+// Function to run cloud conversion (existing monoLdiGenerator flow)
+async function runCloudConversion(dataUrl) {
+    // Convert data URL to file
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+
+    // Import the monoLdiGenerator dynamically since it's in content script context
+    // We'll need to inject this into a content script for cloud processing
+    return new Promise((resolve, reject) => {
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'runCloudConversion',
+                imageData: dataUrl
+            }, response => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (response && response.error) {
+                    reject(new Error(response.error));
+                } else {
+                    resolve(response);
+                }
+            });
+        });
+    });
+}
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -63,7 +165,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     }
 });
 
-// Handle messages from content script to update context menu
+// Handle messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "updateContextMenu") {
         console.log('Background: Updating context menu, hasLIF:', message.hasLIF);
@@ -87,5 +189,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.log('Background: Updated menu to show convert option');
             sendResponse({ success: true, menuType: "convertTo3D" });
         }
+    } else if (message.type === 'getLocalAvailable') {
+        // Handle popup request for local availability
+        console.log('📨 Background: Received getLocalAvailable request from popup');
+
+        chrome.storage.local.get('localAvailable', data => {
+            const available = !!data.localAvailable;
+            console.log('📤 Background: Responding with localAvailable:', available);
+            console.log('   Raw storage data:', data);
+            sendResponse({ localAvailable: available });
+        });
+        return true; // async response
+    } else if (message.type === 'convertImage') {
+        // Handle image conversion request with local/cloud routing
+        console.log('Background: Received conversion request');
+
+        chrome.storage.sync.get('conversionMode', data => {
+            const mode = data.conversionMode || 'cloud';
+            console.log('Background: Using conversion mode:', mode);
+
+            if (mode === 'local') {
+                // Use local native messaging - host.js expects { image: dataUrl }
+                chrome.runtime.sendNativeMessage(
+                    'com.leia.lif_converter',
+                    { image: message.dataUrl },
+                    response => {
+                        if (chrome.runtime.lastError) {
+                            console.error('Local conversion failed:', chrome.runtime.lastError);
+                            sendResponse({ error: 'Local conversion failed: ' + chrome.runtime.lastError.message });
+                        } else if (response && response.error) {
+                            console.error('Local conversion error:', response.error);
+                            sendResponse({ error: response.error });
+                        } else if (response && response.lif) {
+                            console.log('Local conversion successful');
+                            sendResponse({ lif: response.lif, source: 'local' });
+                        } else {
+                            console.error('Local conversion returned unexpected response:', response);
+                            sendResponse({ error: 'Local conversion failed: unexpected response format' });
+                        }
+                    }
+                );
+            } else {
+                // Use cloud API (existing flow)
+                runCloudConversion(message.dataUrl)
+                    .then(result => {
+                        console.log('Cloud conversion successful');
+                        sendResponse({ lif: result.lifDownloadUrl || result.lif, source: 'cloud' });
+                    })
+                    .catch(error => {
+                        console.error('Cloud conversion failed:', error);
+                        sendResponse({ error: 'Cloud conversion failed: ' + error.message });
+                    });
+            }
+        });
+        return true; // async response
     }
 }); 

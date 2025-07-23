@@ -160,6 +160,30 @@
             border-color: #667eea;
         }
 
+        .mode-selection {
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+        }
+
+        .mode-selection input[type="radio"] {
+            margin: 0;
+            margin-right: 4px;
+        }
+
+        .mode-selection label {
+            font-size: 12px;
+            color: #495057;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .mode-selection input[type="radio"]:disabled+label {
+            color: #adb5bd;
+            cursor: not-allowed;
+        }
+
         .features-section {
             background: #f8f9fa;
             border-radius: 6px;
@@ -326,6 +350,15 @@
 
         <div class="controls-section">
             <div class="control-group">
+                <label class="animation-label">Conversion Mode:</label>
+                <div class="mode-selection">
+                    <input type="radio" name="conversionMode" value="cloud" id="mode-cloud" checked>
+                    <label for="mode-cloud">Cloud</label>
+                    <input type="radio" name="conversionMode" value="local" id="mode-local" disabled>
+                    <label for="mode-local">Local</label>
+                </div>
+            </div>
+            <div class="control-group">
                 <label class="animation-label">Animation Style:</label>
                 <select id="animationSelect" class="animation-select">
                     <option value="">Loading animations...</option>
@@ -357,7 +390,7 @@
         <div class="powered-by">
             Powered by<br>
             <strong>Immersity AI</strong>
-            <div class="version">v4.1.16</div>
+            <div class="version">v4.1.17</div>
         </div>
     </div>
 

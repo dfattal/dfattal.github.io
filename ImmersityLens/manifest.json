@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "IAI-Lens",
-      "version": "4.1.16",
+      "version": "4.1.17",
   "description": "Convert 2D images to immersive 3D LIF files with MP4 video generation and VR viewing using Immersity AI",
   "permissions": [
     "activeTab",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://api.immersity.ai/*",
