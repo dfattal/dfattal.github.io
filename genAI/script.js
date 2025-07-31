@@ -156,7 +156,7 @@ async function generateImage(mode) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer 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',  // Updated API key
+                'Authorization': 'Bearer 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',  // Updated API key
                 'Content-Type': 'application/json',
                 "x-use-cache": "false"
             },
