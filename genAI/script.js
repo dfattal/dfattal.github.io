@@ -138,12 +138,78 @@ function cancelLongPress() {
     clearTimeout(longPressTimer);
 }
 
+// Function to get API token (no prompting)
+function getApiToken() {
+    return localStorage.getItem('hf_token');
+}
+
+// Function to save token from input field
+function saveToken() {
+    const tokenInput = document.getElementById('token-input');
+    const token = tokenInput.value.trim();
+
+    if (token) {
+        localStorage.setItem('hf_token', token);
+        tokenInput.value = '';
+        updateTokenStatus();
+        alert('Token saved successfully!');
+    } else {
+        alert('Please enter a valid token.');
+    }
+}
+
+// Function to clear stored token
+function clearToken() {
+    localStorage.removeItem('hf_token');
+    document.getElementById('token-input').value = '';
+    updateTokenStatus();
+    alert('Token cleared successfully.');
+}
+
+// Function to show token input section
+function showTokenInput() {
+    const tokenInfoDiv = document.getElementById('token-info');
+    const tokenHintDiv = document.getElementById('token-hint');
+
+    tokenInfoDiv.style.display = 'block';
+    tokenHintDiv.style.display = 'none';
+
+    // Focus on the token input field
+    document.getElementById('token-input').focus();
+}
+
+// Function to update token status display and visibility
+function updateTokenStatus() {
+    const tokenInfoDiv = document.getElementById('token-info');
+    const tokenHintDiv = document.getElementById('token-hint');
+    const statusDiv = document.getElementById('token-status');
+    const token = localStorage.getItem('hf_token');
+
+    if (token) {
+        // Hide the token section and show the hint when token is saved
+        tokenInfoDiv.style.display = 'none';
+        tokenHintDiv.style.display = 'block';
+    } else {
+        // Show the token section and hide the hint when no token is saved
+        tokenInfoDiv.style.display = 'block';
+        tokenHintDiv.style.display = 'none';
+        statusDiv.innerHTML = '<span style="color: orange;">⚠ No token saved</span>';
+        statusDiv.style.display = 'block';
+    }
+}
+
 // In the generateImage function, manage download option accordingly
 async function generateImage(mode) {
     const prompt = document.getElementById('message-content').value;
 
     if (!prompt.trim()) {
         alert("Please enter a prompt to generate an image.");
+        return;
+    }
+
+    const token = getApiToken();
+    if (!token) {
+        alert("Please enter your Hugging Face API token first using the input field above.");
         return;
     }
 
@@ -156,7 +222,7 @@ async function generateImage(mode) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer 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',  // Updated API key
+                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
                 "x-use-cache": "false"
             },
@@ -167,6 +233,16 @@ async function generateImage(mode) {
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                // Invalid token, clear it and show token input again
+                localStorage.removeItem('hf_token');
+                updateTokenStatus();
+                // Clear the loading spinner
+                imDiv.innerHTML = '';
+                imDiv.classList.remove('glowing');
+                alert('Authentication failed - your token may be invalid or expired. Please enter a new token.');
+                return;
+            }
             throw new Error(`API error: ${response.status}`);
         }
 
@@ -196,19 +272,34 @@ async function generateImage(mode) {
 
     } catch (error) {
         console.error('Error generating image:', error);
+        // Clear any loading state
+        imDiv.innerHTML = '';
+        imDiv.classList.remove('glowing');
         alert('Error generating image. Please try again.');
     }
 }
 
-// Add event listener for the Enter key
-document.getElementById('message-content').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-        event.preventDefault(); // Prevent default form submission behavior
-        generateImage(); // Trigger image generation
-    }
-});
+// Initialize everything when DOM is loaded
+document.addEventListener('DOMContentLoaded', function () {
+    // Initialize token status display
+    updateTokenStatus();
 
-document.addEventListener("DOMContentLoaded", function () {
+    // Add event listener for the Enter key in prompt textarea
+    document.getElementById('message-content').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Prevent default form submission behavior
+            generateImage(); // Trigger image generation
+        }
+    });
+
+    // Add event listener for the Enter key in token input
+    document.getElementById('token-input').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveToken();
+        }
+    });
+
     // List of prompts with brackets
     const prompts = [
         "A [beautiful young] woman with [long, wavy brunette hair] rests her head on her clasped hands, she is looking in the camera. She is dressed in [a purple top] and wears [a delicate bracelet on her left wrist]. Her expression is [gentle and thoughtful], enhanced by [natural makeup and a hint of purple lipstick]. The background is [a dim and blurred office space], drawing attention to [her face and hands].",

@@ -16,6 +16,79 @@ body {
     font-family: Arial, sans-serif;
 }
 
+/* Token info section */
+.token-info {
+    width: 100%;
+    background-color: #e8f4f8;
+    border: 1px solid #bee5eb;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.token-info p {
+    margin: 0 0 10px 0;
+    color: #0c5460;
+}
+
+.token-info a {
+    color: #007BFF;
+    text-decoration: none;
+}
+
+.token-info a:hover {
+    text-decoration: underline;
+}
+
+.token-input-section {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.token-input-section input {
+    flex: 1;
+    min-width: 200px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.token-input-section button {
+    padding: 8px 15px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.token-status {
+    margin-top: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    display: none;
+}
+
+.token-hint {
+    text-align: center;
+    margin-bottom: 15px;
+    padding: 5px;
+}
+
+.token-hint a {
+    color: #666;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.token-hint a:hover {
+    color: #007BFF;
+    text-decoration: underline;
+}
+
 /* Textarea for the user prompt */
 textarea {
     width: 100%;
