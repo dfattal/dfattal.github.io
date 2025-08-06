@@ -178,56 +178,157 @@ async function mainLoop() {
 
       log(`Starting lif_converter: ${lifConverterPath}`);
 
-            // Wait for the conversion to complete before continuing
+      // Wait for the conversion to complete before continuing
       await new Promise((resolve) => {
         const proc = spawn(lifConverterPath, ['--input', inP, '--output', outP]);
+        let stdout = '';
         let stderr = '';
+        let resolved = false;
+        let conversionStarted = false;
+        let lastProgressUpdate = Date.now();
 
-        proc.stderr.on('data', (data) => {
-          stderr += data.toString();
+        // Track conversion progress phases
+        let currentPhase = 'starting';
+        const phases = {
+          'starting': 'Starting conversion...',
+          'loading': 'Loading models...',
+          'disparity': 'Estimating depth...',
+          'ldi': 'Generating LDI layers...',
+          'saving': 'Saving LIF file...',
+          'completed': 'Conversion completed!'
+        };
+
+        const handleCompletion = (success, errorMsg = null) => {
+          if (resolved) return;
+          resolved = true;
+
+          if (success) {
+            try {
+              if (!fs.existsSync(outP)) {
+                log(`ERROR: Output file not created: ${outP}`);
+                sendMsg({ error: 'Output file not created' });
+              } else {
+                const stats = fs.statSync(outP);
+                if (stats.size === 0) {
+                  log(`ERROR: Output file is empty: ${outP}`);
+                  sendMsg({ error: 'Output file is empty' });
+                } else {
+                  const lif64 = fs.readFileSync(outP).toString('base64');
+                  log(`✅ Conversion successful! Output size: ${lif64.length} base64 characters`);
+                  sendMsg({ lif: `data:image/jpeg;base64,${lif64}` });
+                }
+              }
+            } catch (error) {
+              log(`ERROR reading output file: ${error.message}`);
+              sendMsg({ error: `Failed to read output: ${error.message}` });
+            }
+          } else {
+            log(`❌ Conversion failed: ${errorMsg}`);
+            sendMsg({ error: errorMsg || 'Conversion failed' });
+          }
+
+          // Cleanup files
+          setTimeout(() => {
+            try { fs.unlinkSync(inP); } catch (e) { log(`Warning: Could not delete ${inP}`); }
+            try { fs.unlinkSync(outP); } catch (e) { log(`Warning: Could not delete ${outP}`); }
+          }, 100);
+
+          resolve();
+        };
+
+        // Parse stdout for progress information
+        proc.stdout.on('data', (data) => {
+          const output = data.toString();
+          stdout += output;
+
+          // Check for key progress indicators
+          if (output.includes('Starting LIF conversion')) {
+            conversionStarted = true;
+            currentPhase = 'starting';
+            log(`🚀 ${phases[currentPhase]}`);
+          } else if (output.includes('Loading engine:') || output.includes('Compile model')) {
+            currentPhase = 'loading';
+            log(`📚 ${phases[currentPhase]}`);
+          } else if (output.includes('Estimating disparity map') || output.includes('Populating disparity')) {
+            currentPhase = 'disparity';
+            log(`🧠 ${phases[currentPhase]}`);
+          } else if (output.includes('Starting LDI generation') || output.includes('Generated') && output.includes('layers')) {
+            currentPhase = 'ldi';
+            log(`🏗️ ${phases[currentPhase]}`);
+          } else if (output.includes('Saving LDI LIF file')) {
+            currentPhase = 'saving';
+            log(`💾 ${phases[currentPhase]}`);
+          } else if (output.includes('LIF conversion completed successfully')) {
+            currentPhase = 'completed';
+            log(`🎉 ${phases[currentPhase]}`);
+            handleCompletion(true);
+            return;
+          }
+
+          // Update progress periodically (every 5 seconds max)
+          const now = Date.now();
+          if (now - lastProgressUpdate > 5000) {
+            log(`⏳ Conversion in progress: ${phases[currentPhase]}`);
+            lastProgressUpdate = now;
+          }
         });
 
-        proc.on('close', code => {
-          log(`lif_converter exited with code: ${code}`);
-          if (stderr) {
-            log(`lif_converter stderr: ${stderr}`);
-          }
+        proc.stderr.on('data', (data) => {
+          const output = data.toString();
+          stderr += output;
 
-          // Check if output file exists
-          try {
-            if (!fs.existsSync(outP)) {
-              log(`ERROR: Output file not created: ${outP}`);
-              sendMsg({ error: 'Output file not created' });
+          // Log important stderr messages
+          if (output.includes('error') || output.includes('Error') || output.includes('ERROR')) {
+            log(`⚠️ Converter stderr: ${output.trim()}`);
+          }
+        });
+
+        proc.on('close', (code) => {
+          if (resolved) return;
+
+          log(`lif_converter process exited with code: ${code}`);
+
+          if (code === 0) {
+            // Success exit - check if we missed the completion message
+            if (stdout.includes('LIF conversion completed successfully') || fs.existsSync(outP)) {
+              handleCompletion(true);
             } else {
-              const stats = fs.statSync(outP);
-              if (stats.size === 0) {
-                log(`ERROR: Output file is empty: ${outP}`);
-                sendMsg({ error: 'Output file is empty' });
-              } else {
-                const lif64 = fs.readFileSync(outP).toString('base64');
-                log(`✅ Conversion successful, exit code: ${code}, output size: ${lif64.length} base64 characters`);
-                sendMsg({ lif: `data:image/jpeg;base64,${lif64}` });
-              }
+              handleCompletion(false, 'Process completed but no success message found');
             }
-          } catch (error) {
-            log(`ERROR reading output file: ${error.message}`);
-            sendMsg({ error: `Failed to read output: ${error.message}` });
+          } else {
+            // Error exit
+            const errorMsg = stderr || `Process exited with code ${code}`;
+            handleCompletion(false, errorMsg);
           }
-
-          // Cleanup
-          try { fs.unlinkSync(inP); } catch (e) { log(`Warning: Could not delete ${inP}`); }
-          try { fs.unlinkSync(outP); } catch (e) { log(`Warning: Could not delete ${outP}`); }
-
-          resolve(); // Signal completion so we can continue to next message
         });
 
         proc.on('error', (error) => {
-          log(`ERROR spawning lif_converter: ${error.message}`);
-          sendMsg({ error: `Failed to start converter: ${error.message}` });
-          // Cleanup
-          try { fs.unlinkSync(inP); } catch (e) { }
-          resolve(); // Continue even on error
+          if (!resolved) {
+            log(`ERROR spawning lif_converter: ${error.message}`);
+            handleCompletion(false, `Failed to start converter: ${error.message}`);
+          }
         });
+
+        // Fallback timeout (should rarely be needed now)
+        const fallbackTimeout = setTimeout(() => {
+          if (!resolved && conversionStarted) {
+            log(`⏰ Conversion taking longer than expected, checking for output file...`);
+            if (fs.existsSync(outP)) {
+              const stats = fs.statSync(outP);
+              if (stats.size > 0) {
+                log(`📁 Found output file despite timeout, assuming success`);
+                handleCompletion(true);
+              }
+            }
+          }
+        }, 60000); // 60 second fallback
+
+        // Clear fallback timeout when resolved
+        const originalResolve = resolve;
+        resolve = () => {
+          clearTimeout(fallbackTimeout);
+          originalResolve();
+        };
       });
 
       log('Conversion completed, ready for next message');

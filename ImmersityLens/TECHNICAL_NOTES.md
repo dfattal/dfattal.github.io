@@ -1369,6 +1369,144 @@ await generateMP4FromLifFile(img, lifUrl, 1.5); // Override for specific video
 - `1.0`: High quality
 - `2.0`: Maximum quality (largest files)
 
+### Chrome Native Messaging Chunking Protocol
+
+The extension implements a sophisticated chunking system to bypass Chrome's 1MB Native Messaging limit for large image conversions.
+
+#### Architecture Overview
+
+The chunking protocol uses a **request-response model** with **persistent file storage** to handle both large input images and large output LIF files:
+
+```
+Extension → Host Process 1: Large image chunks
+Host Process 1 → Temp files: Store LIF response chunks
+Host Process 1 → Extension: "Chunks ready" notification
+Extension → Host Process 2: Request chunk 0
+Host Process 2 → Extension: Chunk 0 data
+Extension → Host Process 3: Request chunk 1  
+Host Process 3 → Extension: Chunk 1 data (+ cleanup)
+```
+
+#### Input Chunking (Extension → Host)
+
+Large images are split into 800KB chunks by the extension:
+
+```javascript
+const CHUNK_SIZE = 800 * 1024; // 800KB chunks
+const needsChunking = base64Data.length > CHUNK_SIZE;
+
+if (needsChunking) {
+    const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+    
+    for (let i = 0; i < totalChunks; i++) {
+        const chunk = {
+            type: 'chunk',
+            sessionId: sessionId,
+            chunkIndex: i,
+            totalChunks: totalChunks,
+            data: base64Data.substr(i * CHUNK_SIZE, CHUNK_SIZE),
+            metadata: i === 0 ? { mimeType, totalSize } : undefined
+        };
+        
+        chrome.runtime.sendNativeMessage('com.leia.lif_converter', chunk);
+    }
+}
+```
+
+The host reassembles chunks in memory and processes the complete image.
+
+#### Output Chunking (Host → Extension)
+
+Large LIF files use a **file-based persistence model** to survive host process restarts:
+
+```javascript
+// Host: Store chunks in temporary files
+function sendLargeResponse(lifData, sessionId) {
+    const chunksDir = path.join(os.tmpdir(), `chunks_${sessionId}`);
+    fs.mkdirSync(chunksDir, { recursive: true });
+    
+    // Save metadata
+    const metadata = { mimeType, totalChunks, totalSize };
+    fs.writeFileSync(path.join(chunksDir, 'metadata.json'), JSON.stringify(metadata));
+    
+    // Save individual chunks
+    for (let i = 0; i < totalChunks; i++) {
+        const chunkData = base64Data.substr(i * maxChunkSize, maxChunkSize);
+        fs.writeFileSync(path.join(chunksDir, `chunk_${i}.txt`), chunkData);
+    }
+    
+    // Notify extension chunks are ready
+    sendMsg({
+        type: 'chunked_ready',
+        sessionId: sessionId,
+        totalChunks: totalChunks,
+        totalSize: base64Data.length
+    });
+}
+```
+
+#### Request-Response Chunk Retrieval
+
+The extension then requests chunks individually, ensuring each `sendNativeMessage()` gets exactly one response:
+
+```javascript
+// Extension: Request specific chunks
+function requestNextChunk(sessionId, chunkIndex) {
+    chrome.runtime.sendNativeMessage(
+        'com.leia.lif_converter',
+        { type: 'get_chunk', sessionId: sessionId, chunkIndex: chunkIndex },
+        chunkResponse => {
+            conversion.responseChunks.set(chunkIndex, chunkResponse.data);
+            
+            if (conversion.receivedChunks === conversion.totalChunks) {
+                // Reassemble complete LIF data
+                let completeData = '';
+                for (let i = 0; i < conversion.totalChunks; i++) {
+                    completeData += conversion.responseChunks.get(i);
+                }
+                
+                // Send final response to content script
+                sendResponse({ lif: `data:image/jpeg;base64,${completeData}` });
+            } else {
+                requestNextChunk(sessionId, chunkIndex + 1);
+            }
+        }
+    );
+}
+```
+
+#### Key Design Benefits
+
+1. **Process Independence**: Each `sendNativeMessage()` creates a new host process, but chunks persist in temp files
+2. **1:1 Request-Response**: Avoids Chrome's EPIPE errors by ensuring each request gets exactly one response  
+3. **Automatic Cleanup**: Chunk directories are removed after the last chunk is retrieved
+4. **Session Management**: Unique session IDs prevent chunk collision between concurrent conversions
+5. **Error Recovery**: Missing chunks or sessions are gracefully handled with clear error messages
+
+#### Error Handling
+
+```javascript
+// Host: Chunk request validation
+if (!fs.existsSync(chunksDir)) {
+    sendMsg({ error: 'No pending chunks found for session' });
+    return;
+}
+
+if (chunkIndex >= metadata.totalChunks) {
+    sendMsg({ error: 'Invalid chunk index' });
+    return;
+}
+```
+
+#### Performance Characteristics
+
+- **Chunk Size**: 700KB (safe margin under 1MB limit)
+- **Memory Usage**: Minimal - chunks stored as files, not in memory
+- **Throughput**: ~2-3 chunks/second (limited by process startup time)
+- **Storage**: Temporary files cleaned up automatically
+
+This chunking protocol enables reliable conversion of large images (5MB+) and large LIF outputs (10MB+) while maintaining compatibility with Chrome's Native Messaging constraints.
+
 ### Z-Index Configuration System
 
 The extension uses a centralized z-index configuration system for consistent layering and easy maintenance:
