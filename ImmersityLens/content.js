@@ -4093,8 +4093,30 @@ function selectMainContentImage(images) {
     console.log('📊 Image scores:', scoredImages.map(item => ({
         src: item.image.src?.substring(item.image.src.lastIndexOf('/') + 1) || 'no-src',
         score: item.score.toFixed(2),
+        dimensions: `${item.image.naturalWidth || 'unknown'}x${item.image.naturalHeight || 'unknown'}`,
+        className: item.image.className,
         reasons: getScoreReasons(item.image)
     })));
+
+    // Special debug for Behance to help identify ribbon vs main image issues
+    if (window.location.hostname.includes('behance.net')) {
+        console.log('🎨 Behance-specific image analysis:', scoredImages.map(item => ({
+            src: item.image.src?.substring(item.image.src.lastIndexOf('/') + 1) || 'no-src',
+            score: item.score.toFixed(2),
+            isRibbon: item.image.className.includes('ribbon') ||
+                item.image.src.includes('ribbon') ||
+                item.image.className.includes('rf-ribbon') ||
+                item.image.src.includes('/ribbons/'),
+            isMainImage: item.image.className.includes('js-cover-image') ||
+                item.image.className.includes('ProjectCoverNeue'),
+            isInOverlay: !!(item.image.closest('.Cover-showOnHover') ||
+                item.image.closest('.Cover-overlay') ||
+                item.image.closest('.Feature-ribbon')),
+            dimensions: `${item.image.naturalWidth || 'unknown'}x${item.image.naturalHeight || 'unknown'}`,
+            proximityScore: item.image._proximityScore || 0,
+            searchContext: item.image._searchContext || 'unknown'
+        })));
+    }
 
     return scoredImages[0].image;
 }
@@ -4152,8 +4174,15 @@ function calculateImageContentScore(img) {
     // Behance-specific content indicators
     if (window.location.hostname.includes('behance.net')) {
         if (className.includes('projectcover') || className.includes('cover-image') ||
-            className.includes('js-cover-image') || className.includes('main-photo')) {
-            score += 40; // Strong indicator for main project image
+            className.includes('js-cover-image') || className.includes('main-photo') ||
+            className.includes('projectcoverneue-image') ||
+            className.includes('projectcoverneue-picture')) {
+            score += 50; // Strong indicator for main project image
+        }
+
+        // Extra bonus for being inside a picture element (main content pattern)
+        if (img.closest('picture') && img.closest('picture').className.includes('ProjectCoverNeue')) {
+            score += 30; // Additional bonus for being in main picture container
         }
     }
 
@@ -4204,9 +4233,34 @@ function calculateImageContentScore(img) {
 
     // Behance-specific UI penalties
     if (window.location.hostname.includes('behance.net')) {
-        if (className.includes('ribbon') || src.includes('ribbon') ||
-            className.includes('feature-ribbon') || alt.includes('ribbon')) {
-            score -= 50; // Heavy penalty for ribbon images
+        // Enhanced ribbon detection for all Behance ribbon patterns
+        const isBehanceRibbon = className.includes('ribbon') ||
+            src.includes('ribbon') ||
+            className.includes('feature-ribbon') ||
+            alt.includes('ribbon') ||
+            // Grid view ribbon patterns
+            className.includes('rf-ribbon') ||
+            className.includes('Feature-ribbon') ||
+            className.includes('ribbonImage') ||
+            src.includes('/ribbons/') ||
+            // Parent element patterns
+            (parent && (parent.className.includes('ribbon') ||
+                parent.className.includes('Feature-ribbon')));
+
+        if (isBehanceRibbon) {
+            score -= 80; // Very heavy penalty for all ribbon patterns
+        }
+
+        // Additional penalty for very small images (likely UI elements)
+        if (effectiveWidth > 0 && effectiveHeight > 0 &&
+            effectiveWidth < 50 && effectiveHeight < 50) {
+            score -= 40; // Penalty for tiny images (ribbons are usually small)
+        }
+
+        // Extra penalty for images in hover overlays (these are definitely UI elements)
+        if (img.closest('.Cover-showOnHover') || img.closest('.Cover-overlay') ||
+            img.closest('.Feature-ribbon') || img.closest('.rf-ribbon')) {
+            score -= 60; // Heavy penalty for overlay/hover UI elements
         }
     }
 
@@ -4341,9 +4395,19 @@ function findImgInParentsAndSiblings(element) {
         }
 
         // Early termination: if we found images at close proximity, stop searching further
+        // BUT: Special case for Behance - don't stop if we're in a hover overlay area
         if (allFoundImages.length > 0 && searchLevel === 0) {
-            console.log(`🎯 Found ${allFoundImages.length} images at immediate level, stopping search`);
-            break;
+            const isInBehanceOverlay = window.location.hostname.includes('behance.net') &&
+                (current.closest('.Cover-showOnHover') ||
+                    current.closest('.Cover-overlay') ||
+                    current.closest('.Feature-ribbon'));
+
+            if (!isInBehanceOverlay) {
+                console.log(`🎯 Found ${allFoundImages.length} images at immediate level, stopping search`);
+                break;
+            } else {
+                console.log(`🎨 Behance overlay detected - continuing search for main image despite finding ${allFoundImages.length} images at immediate level`);
+            }
         }
 
         current = current.parentElement;
@@ -4355,6 +4419,54 @@ function findImgInParentsAndSiblings(element) {
 
     // Second pass: intelligent prioritization to select the main content image
     console.log(`🔍 Found ${allFoundImages.length} images at ${searchLevel} levels, applying intelligent selection...`);
+
+    // Special Behance override: If we have both ribbon and main images, force main image selection
+    if (window.location.hostname.includes('behance.net') && allFoundImages.length > 1) {
+        console.log('🎨 Behance override check - all found images:', allFoundImages.map(img => ({
+            src: img.src?.substring(img.src.lastIndexOf('/') + 1) || 'no-src',
+            className: img.className,
+            isMainByClass: img.className.includes('js-cover-image') || img.className.includes('ProjectCoverNeue-image'),
+            isRibbon: img.className.includes('ribbon') || img.src.includes('ribbon')
+        })));
+
+        // First try: Look for explicit main image classes
+        let mainImage = allFoundImages.find(img =>
+            img.className.includes('js-cover-image') ||
+            img.className.includes('ProjectCoverNeue-image')
+        );
+
+        // Second try: Look for any image that's NOT a ribbon and is reasonably sized
+        if (!mainImage) {
+            mainImage = allFoundImages.find(img =>
+                !img.className.includes('ribbon') &&
+                !img.src.includes('ribbon') &&
+                !img.src.includes('/ribbons/') &&
+                (img.naturalWidth || img.width || 0) > 100 && // Must be reasonably sized
+                (img.naturalHeight || img.height || 0) > 100
+            );
+        }
+
+        // Third try: Look for the largest image
+        if (!mainImage && allFoundImages.length > 0) {
+            mainImage = allFoundImages.reduce((largest, current) => {
+                const currentSize = (current.naturalWidth || current.width || 0) * (current.naturalHeight || current.height || 0);
+                const largestSize = (largest.naturalWidth || largest.width || 0) * (largest.naturalHeight || largest.height || 0);
+                return currentSize > largestSize ? current : largest;
+            });
+        }
+
+        if (mainImage) {
+            console.log('🎨 Behance override: Forcing main image selection despite scoring:', {
+                mainImageSrc: mainImage.src?.substring(mainImage.src.lastIndexOf('/') + 1) || 'no-src',
+                mainImageClass: mainImage.className,
+                totalImagesFound: allFoundImages.length,
+                overrideMethod: mainImage.className.includes('js-cover-image') ? 'class-match' :
+                    !mainImage.src.includes('ribbon') ? 'non-ribbon' : 'largest-image'
+            });
+            return mainImage;
+        }
+    }
+
     return selectMainContentImage(allFoundImages);
 }
 
@@ -4405,8 +4517,52 @@ document.addEventListener('contextmenu', function (e) {
     // Store the clicked element
     lastRightClickedElement = e.target;
 
+    // Debug logging for Behance
+    if (window.location.hostname.includes('behance.net')) {
+        console.log('🎨 Behance right-click context:', {
+            clickedElement: e.target.tagName,
+            clickedClass: e.target.className,
+            clickedSrc: e.target.src || 'no-src',
+            isRibbon: e.target.className.includes('ribbon') || (e.target.src && e.target.src.includes('ribbon')),
+            inOverlay: !!(e.target.closest('.Cover-showOnHover') || e.target.closest('.Cover-overlay')),
+            parentStructure: e.target.parentElement ? e.target.parentElement.tagName + '.' + e.target.parentElement.className : 'none'
+        });
+    }
+
     // Find image in the clicked element's tree
-    const img = findImgInParentsAndSiblings(e.target);
+    let img = findImgInParentsAndSiblings(e.target);
+
+    // AGGRESSIVE BEHANCE FIX: If a ribbon was selected, try to find the main image
+    if (img && window.location.hostname.includes('behance.net')) {
+        const isRibbonSelected = img.className.includes('ribbon') || img.src.includes('ribbon');
+        if (isRibbonSelected) {
+            console.log('🎨 AGGRESSIVE BEHANCE FIX: Ribbon detected, searching for main image instead');
+
+            // Find the project container that contains the clicked ribbon
+            const projectContainer = e.target.closest('.ProjectCoverNeue-cover-X3S') ||
+                e.target.closest('.Cover-cover-gDM') ||
+                e.target.closest('[class*="ProjectCover"]');
+
+            let mainImage = null;
+            if (projectContainer) {
+                // Look for main image within the same project container
+                mainImage = projectContainer.querySelector('.js-cover-image') ||
+                    projectContainer.querySelector('.ProjectCoverNeue-image-TFB') ||
+                    projectContainer.querySelector('picture img');
+            }
+
+            if (mainImage) {
+                console.log('🎨 AGGRESSIVE BEHANCE FIX: Replaced ribbon with main image in same container:', {
+                    oldImage: img.src?.substring(img.src.lastIndexOf('/') + 1) || 'no-src',
+                    newImage: mainImage.src?.substring(mainImage.src.lastIndexOf('/') + 1) || 'no-src',
+                    containerClass: projectContainer?.className || 'no-container'
+                });
+                img = mainImage;
+            } else {
+                console.warn('🎨 AGGRESSIVE BEHANCE FIX: Could not find main image in same container');
+            }
+        }
+    }
 
     if (img) {
         lastContextMenuImage = img;
@@ -4437,6 +4593,20 @@ document.addEventListener('contextmenu', function (e) {
             parentStructure: img.parentElement ? img.parentElement.tagName : 'none',
             path: getElementPath(img)
         });
+
+        // Extra Behance debug info
+        if (window.location.hostname.includes('behance.net')) {
+            console.log('🎨 Behance selected image details:', {
+                selectedSrc: img.src?.substring(img.src.lastIndexOf('/') + 1) || 'no-src',
+                selectedClass: img.className,
+                isRibbonSelected: img.className.includes('ribbon') || img.src.includes('ribbon'),
+                isMainImageSelected: img.className.includes('js-cover-image') || img.className.includes('ProjectCoverNeue'),
+                inPictureElement: !!img.closest('picture'),
+                pictureClass: img.closest('picture')?.className || 'no-picture',
+                proximityScore: img._proximityScore || 'no-score',
+                searchContext: img._searchContext || 'no-context'
+            });
+        }
 
         // Update context menu based on whether this image has a LIF file
         const hasLIF = imageLIFMap.has(img.src);

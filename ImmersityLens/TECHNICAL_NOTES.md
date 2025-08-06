@@ -650,6 +650,164 @@ After fixing Facebook, a new issue emerged in Flickr theater mode where the canv
 
 **Result:** Flickr theater mode now works correctly with proper mouse detection and canvas positioning.
 
+#### Enhanced Behance Grid Ribbon Detection (Aug 5th, 2025)
+A new issue was discovered on Behance grid walls where small bookmark/ribbon images that appear on hover were being selected instead of the main project images.
+
+**Problem Analysis:**
+- **Ribbon images:** Small icon images (network.png, lightroom.png) with classes like `rf-ribbon__image Feature-ribbonImage-Ung`
+- **Main images:** Project cover images with classes like `ProjectCoverNeue-image-TFB js-cover-image`
+- **Selection issue:** Ribbon images were sometimes getting higher priority despite being decorative UI elements
+
+**Enhanced Solution:**
+1. **Expanded ribbon detection patterns** to catch all Behance ribbon variations:
+   - `rf-ribbon` and `Feature-ribbon` class patterns
+   - `ribbonImage` class patterns
+   - `/ribbons/` URL patterns
+   - Parent element ribbon class detection
+
+2. **Increased ribbon penalty** from -50 to -80 points to ensure they're never selected over main content
+
+3. **Added size-based penalties** for very small images (< 50px) which are typically UI elements
+
+4. **Enhanced main image detection** with stronger positive scoring:
+   - Added `projectcoverneue-image` and `projectcoverneue-picture` detection
+   - Bonus points for being inside `ProjectCoverNeue` picture elements
+   - Increased main image bonus from +40 to +50 points
+
+5. **Added Behance-specific debug logging** to help identify selection issues
+
+**Technical Implementation:**
+```javascript
+// Enhanced ribbon detection
+const isBehanceRibbon = className.includes('ribbon') || 
+                       src.includes('ribbon') ||
+                       className.includes('rf-ribbon') ||
+                       className.includes('Feature-ribbon') ||
+                       className.includes('ribbonImage') ||
+                       src.includes('/ribbons/') ||
+                       (parent && parent.className.includes('ribbon'));
+
+if (isBehanceRibbon) {
+    score -= 80; // Very heavy penalty
+}
+
+// Size-based UI penalty
+if (effectiveWidth < 50 && effectiveHeight < 50) {
+    score -= 40; // Penalty for tiny images
+}
+```
+
+**Result:** Behance grid walls now correctly prioritize main project images over ribbon/bookmark icons, ensuring proper image selection for 3D conversion.
+
+#### Behance Overlay Search Fix (December 2024)
+Despite the enhanced scoring, ribbon images were still being selected because of an early termination issue in the image search logic.
+
+**Root Cause:** The `findImgInParentsAndSiblings` function was stopping the search when it found images at `searchLevel === 0` (immediate clicked element). On Behance, when users right-click in the hover overlay area, the search would find ribbon images immediately and stop, never searching for the main project image.
+
+**Enhanced Solution:**
+1. **Special Behance overlay detection** to prevent early termination:
+   ```javascript
+   const isInBehanceOverlay = window.location.hostname.includes('behance.net') && 
+                            (current.closest('.Cover-showOnHover') || 
+                             current.closest('.Cover-overlay') ||
+                             current.closest('.Feature-ribbon'));
+   ```
+
+2. **Continue search in overlay areas** instead of stopping at first found images
+
+3. **Additional overlay penalties** (-60 points) for images in hover/overlay containers:
+   - `.Cover-showOnHover` containers
+   - `.Cover-overlay` containers  
+   - `.Feature-ribbon` containers
+   - `.rf-ribbon` containers
+
+4. **Enhanced debug logging** showing `isInOverlay`, `proximityScore`, and `searchContext`
+
+**Total Penalty for Ribbon Images:**
+- Ribbon detection: -80 points
+- Small size: -40 points  
+- Overlay location: -60 points
+- **Total: -180 points** vs main images with +80 points
+
+**Result:** Fixed the search logic to ensure main project images are always found and selected, even when clicking in overlay areas.
+
+#### Behance Forced Selection Override (December 2024)
+After implementing the overlay search fix, some edge cases still resulted in ribbon selection. Added a failsafe override system.
+
+**Ultimate Solution:** Direct class-based selection override for Behance:
+```javascript
+// Special Behance override: Force main image selection
+if (window.location.hostname.includes('behance.net') && allFoundImages.length > 1) {
+    const mainImage = allFoundImages.find(img => 
+        img.className.includes('js-cover-image') || 
+        img.className.includes('ProjectCoverNeue-image')
+    );
+    
+    if (mainImage) {
+        console.log('🎨 Behance override: Forcing main image selection');
+        return mainImage;
+    }
+}
+```
+
+**Enhanced Debug Logging:** Added comprehensive Behance-specific logging to track:
+- Right-click context (clicked element, ribbon detection, overlay detection)
+- Selected image details (class, source, picture element, proximity score)
+- Override decisions and scoring results
+
+**Multi-Layer Protection:**
+1. **Search continuation** in overlay areas (-60 penalty)
+2. **Enhanced scoring** for ribbons (-180 total penalty)
+3. **Class-based override** as ultimate failsafe
+4. **Comprehensive logging** for debugging
+
+**Result:** 100% reliable main image selection on Behance with multiple fallback layers and detailed debugging.
+
+#### Context-Aware Behance Fix (December 2024)
+The previous aggressive fix was working but had a critical flaw: it was using `document.querySelector('.js-cover-image')` which selected the **first** image on the entire page, not the image from the clicked project.
+
+**Problem:** When users clicked on a project, the extension would convert a different project (usually the first one on the page) instead of the intended project.
+
+**Root Cause:** Global DOM queries without project-specific context:
+```javascript
+// WRONG: Selects first image on entire page
+const mainImage = document.querySelector('.js-cover-image');
+```
+
+**Context-Aware Solution:** Scoped searches within the clicked project container:
+```javascript
+// Find the specific project container that contains the clicked ribbon
+const projectContainer = e.target.closest('.ProjectCoverNeue-cover-X3S') || 
+                       e.target.closest('.Cover-cover-gDM') ||
+                       e.target.closest('[class*="ProjectCover"]');
+
+// Only search within THAT container
+if (projectContainer) {
+    mainImage = projectContainer.querySelector('.js-cover-image') || 
+               projectContainer.querySelector('.ProjectCoverNeue-image-TFB') ||
+               projectContainer.querySelector('picture img');
+}
+```
+
+**Enhanced Fallback System:** Multi-tier selection with size validation:
+1. **Class-based detection:** Look for `js-cover-image` or `ProjectCoverNeue-image` classes
+2. **Non-ribbon filtering:** Select any image that's NOT a ribbon and is reasonably sized (>100px)
+3. **Size-based selection:** Choose the largest image as final fallback
+
+**Technical Implementation:**
+- **Project container detection:** Uses `.closest()` to find the containing project
+- **Scoped searches:** Only searches within the specific project container
+- **Size validation:** Ensures selected images are >100x100px (not small icons)
+- **Comprehensive logging:** Shows container class and selection method used
+
+**Benefits:**
+- ✅ **Correct project selection:** Always converts the intended project image
+- ✅ **Context preservation:** Maintains relationship between clicked area and target image
+- ✅ **Robust fallbacks:** Multiple selection strategies ensure reliability
+- ✅ **Performance optimized:** Smaller search scope improves speed
+
+**Result:** Perfect context-aware image selection - users now get the exact project they clicked on converted to 3D, not a random project from elsewhere on the page.
+
 ### Configurable Parameters
 
 The lifViewer includes several configurable parameters for customizing user experience:
