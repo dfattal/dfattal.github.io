@@ -13,19 +13,6 @@
 
 <body>
     <div class="container">
-        <div id="token-info" class="token-info">
-            <p><small>🔐 You need a <a href="https://huggingface.co/settings/tokens" target="_blank">Hugging Face API
-                        token</a> to use this app (free).</small></p>
-            <div class="token-input-section">
-                <input type="password" id="token-input" placeholder="Enter your Hugging Face token here..." />
-                <button onclick="saveToken()">Save Token</button>
-                <button onclick="clearToken()" style="margin-left: 10px;">Clear</button>
-            </div>
-            <div id="token-status" class="token-status"></div>
-        </div>
-        <div id="token-hint" class="token-hint" style="display: none;">
-            <small><a href="#" onclick="showTokenInput()">🔐 Manage API Token</a></small>
-        </div>
         <textarea id="message-content" placeholder="Enter your prompt here..."></textarea>
         <div class="button-container">
             <button onclick="generateImage('schnell')">Generate Fast</button>

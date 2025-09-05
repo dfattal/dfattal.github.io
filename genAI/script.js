@@ -1,4 +1,6 @@
 imDiv = document.getElementById('image-preview');
+// Backend proxy endpoint hosted on Vercel
+const API_URL = 'https://vercel-apis-pi.vercel.app/api/generate';
 let lifGen = null; // Declare lifGen globally to be accessible by other functions
 
 // Get the full URL
@@ -138,66 +140,6 @@ function cancelLongPress() {
     clearTimeout(longPressTimer);
 }
 
-// Function to get API token (no prompting)
-function getApiToken() {
-    return localStorage.getItem('hf_token');
-}
-
-// Function to save token from input field
-function saveToken() {
-    const tokenInput = document.getElementById('token-input');
-    const token = tokenInput.value.trim();
-
-    if (token) {
-        localStorage.setItem('hf_token', token);
-        tokenInput.value = '';
-        updateTokenStatus();
-        alert('Token saved successfully!');
-    } else {
-        alert('Please enter a valid token.');
-    }
-}
-
-// Function to clear stored token
-function clearToken() {
-    localStorage.removeItem('hf_token');
-    document.getElementById('token-input').value = '';
-    updateTokenStatus();
-    alert('Token cleared successfully.');
-}
-
-// Function to show token input section
-function showTokenInput() {
-    const tokenInfoDiv = document.getElementById('token-info');
-    const tokenHintDiv = document.getElementById('token-hint');
-
-    tokenInfoDiv.style.display = 'block';
-    tokenHintDiv.style.display = 'none';
-
-    // Focus on the token input field
-    document.getElementById('token-input').focus();
-}
-
-// Function to update token status display and visibility
-function updateTokenStatus() {
-    const tokenInfoDiv = document.getElementById('token-info');
-    const tokenHintDiv = document.getElementById('token-hint');
-    const statusDiv = document.getElementById('token-status');
-    const token = localStorage.getItem('hf_token');
-
-    if (token) {
-        // Hide the token section and show the hint when token is saved
-        tokenInfoDiv.style.display = 'none';
-        tokenHintDiv.style.display = 'block';
-    } else {
-        // Show the token section and hide the hint when no token is saved
-        tokenInfoDiv.style.display = 'block';
-        tokenHintDiv.style.display = 'none';
-        statusDiv.innerHTML = '<span style="color: orange;">⚠ No token saved</span>';
-        statusDiv.style.display = 'block';
-    }
-}
-
 // In the generateImage function, manage download option accordingly
 async function generateImage(mode) {
     const prompt = document.getElementById('message-content').value;
@@ -207,25 +149,14 @@ async function generateImage(mode) {
         return;
     }
 
-    const token = getApiToken();
-    if (!token) {
-        alert("Please enter your Hugging Face API token first using the input field above.");
-        return;
-    }
-
     showLoadingSpinner(); // Show loading spinner while waiting for image generation
     disableDownloadOption(); // Disable right-click download during generation
 
-    const endpoint = `https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-${mode}`; // -dev
-
+    // Call your Vercel proxy (no token on the client!)
     try {
-        const response = await fetch(endpoint, {
+        const response = await fetch(API_URL + `?mode=${encodeURIComponent(mode)}`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                "x-use-cache": "false"
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 inputs: prompt,
                 parameters: { seed: Math.floor(Math.random() * 1000000) }
@@ -233,17 +164,12 @@ async function generateImage(mode) {
         });
 
         if (!response.ok) {
-            if (response.status === 401) {
-                // Invalid token, clear it and show token input again
-                localStorage.removeItem('hf_token');
-                updateTokenStatus();
-                // Clear the loading spinner
-                imDiv.innerHTML = '';
-                imDiv.classList.remove('glowing');
-                alert('Authentication failed - your token may be invalid or expired. Please enter a new token.');
-                return;
-            }
-            throw new Error(`API error: ${response.status}`);
+            // Clear loading state before surfacing the error
+            imDiv.innerHTML = '';
+            imDiv.classList.remove('glowing');
+            const text = await response.text();
+            alert(`Proxy error (${response.status}): ${text}`);
+            return;
         }
 
         const blob = await response.blob();
@@ -281,22 +207,11 @@ async function generateImage(mode) {
 
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
-    // Initialize token status display
-    updateTokenStatus();
-
     // Add event listener for the Enter key in prompt textarea
     document.getElementById('message-content').addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
             event.preventDefault(); // Prevent default form submission behavior
             generateImage(); // Trigger image generation
-        }
-    });
-
-    // Add event listener for the Enter key in token input
-    document.getElementById('token-input').addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            saveToken();
         }
     });
 
