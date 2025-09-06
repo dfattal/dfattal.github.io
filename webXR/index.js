@@ -60,6 +60,94 @@ function isVisionProUA() {
     return /visionos|applevision|apple vision/.test(ua);
 }
 
+// ---- Pre-session XR debug panel (DOM overlay) ----
+const xrDebugState = {
+    enabled: false,
+    el: null,
+    lastCheck: 0,
+};
+
+function wantXRDebug() {
+    const qp = new URLSearchParams(location.search);
+    return isVisionProUA() || qp.get('xrdebug') === '1';
+}
+
+function createPreXRDebugPanel() {
+    if (xrDebugState.el) return xrDebugState.el;
+    const el = document.createElement('div');
+    Object.assign(el.style, {
+        position: 'fixed', top: '8px', left: '8px', zIndex: 99999,
+        padding: '8px 10px', maxWidth: 'min(80vw, 800px)',
+        background: 'rgba(0,0,0,0.7)', color: '#0f0', font: '12px monospace',
+        border: '1px solid rgba(0,255,128,0.4)', borderRadius: '6px',
+        lineHeight: '1.45', whiteSpace: 'pre-wrap'
+    });
+    el.id = 'xr-pre-debug';
+
+    const header = document.createElement('div');
+    header.textContent = 'WebXR Preflight (before Enter VR)';
+    header.style.font = '600 13px monospace';
+    header.style.marginBottom = '6px';
+
+    const body = document.createElement('div');
+    body.id = 'xr-pre-body';
+
+    const row = document.createElement('div');
+    row.style.marginTop = '8px';
+
+    const btn = document.createElement('button');
+    btn.textContent = 'RE-CHECK';
+    Object.assign(btn.style, {
+        font: '12px monospace', padding: '4px 8px',
+        background: 'transparent', color: '#0f0', border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer'
+    });
+    btn.addEventListener('click', () => updatePreXRDebugPanel(true));
+
+    row.appendChild(btn);
+
+    el.appendChild(header);
+    el.appendChild(body);
+    el.appendChild(row);
+
+    document.body.appendChild(el);
+    xrDebugState.el = el;
+    xrDebugState.enabled = true;
+    return el;
+}
+
+async function updatePreXRDebugPanel(force = false) {
+    if (!xrDebugState.enabled) return;
+    const now = performance.now();
+    if (!force && now - xrDebugState.lastCheck < 500) return; // throttle
+    xrDebugState.lastCheck = now;
+
+    const body = document.getElementById('xr-pre-body');
+    if (!body) return;
+
+    const ua = navigator.userAgent || '';
+    const hasXR = !!navigator.xr;
+    let supVR = false, supAR = false;
+    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch(_) {}
+    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch(_) {}
+
+    // WebGL & asset readiness hints
+    const hasWebGL = !!document.createElement('canvas').getContext('webgl');
+    const viewsHint = Array.isArray(views) ? views.length : 0;
+
+    const lines = [
+        `Vision Pro detected: ${isVisionProUA()}`,
+        `navigator.xr present: ${hasXR}`,
+        `isSessionSupported('immersive-vr'): ${supVR}`,
+        `isSessionSupported('immersive-ar'): ${supAR}`,
+        `WebGL available: ${hasWebGL}`,
+        `LIF views loaded: ${viewsHint}`,
+        `UA: ${ua}`,
+        `Checked: ${new Date().toLocaleTimeString()}`
+    ];
+
+    body.textContent = lines.join('\n');
+}
+
 let xrDiag = {
     enabled: false,
     sprite: null,
@@ -211,6 +299,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('mousemove', onDocumentMouseMove);
     window.addEventListener('resize', onWindowResize);
 
+    // Pre-session XR debug panel (shows before Enter VR)
+    if (wantXRDebug()) {
+        createPreXRDebugPanel();
+        updatePreXRDebugPanel(true);
+    }
+
     const filePicker = document.getElementById('filePicker');
     filePicker.addEventListener('change', async (event) => {
         const file = event.target.files[0];
@@ -314,6 +408,14 @@ async function init() {
     // Override background to semi-transparent black
     vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
 
+    // XR Debug panel: hook VR button to re-check on click
+    if (xrDebugState.enabled && vrButton) {
+        vrButton.addEventListener('click', () => {
+            // Re-run capability checks at the moment of pressing Enter VR
+            updatePreXRDebugPanel(true);
+        });
+    }
+
     // Add XR session start/end event listeners
     renderer.xr.addEventListener('sessionstart', () => {
         isVRActive = true;
@@ -336,6 +438,8 @@ async function init() {
             const b = createXRDiagnosticsBillboard();
             scene.add(b);
         }
+        // Hide preflight panel once we enter XR; it served its purpose
+        if (xrDebugState.el) { xrDebugState.el.style.display = 'none'; }
     });
 
     renderer.xr.addEventListener('sessionend', () => {
@@ -348,6 +452,9 @@ async function init() {
         // XR Diagnostics cleanup (if any)
         if (xrDiag.sprite) { scene.remove(xrDiag.sprite); xrDiag.sprite.material.map?.dispose?.(); xrDiag.sprite.material.dispose(); xrDiag.sprite = null; }
         xrDiag.enabled = false;
+
+        // Re-show the preflight panel so you can immediately re-check
+        if (xrDebugState.el) { xrDebugState.el.style.display = 'block'; updatePreXRDebugPanel(true); }
 
         // Reload the page when exiting VR
         window.location.reload();
