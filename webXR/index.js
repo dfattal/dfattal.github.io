@@ -321,6 +321,13 @@ async function paintXRDiagnostics(session, xrCam) {
     const plScale = pL ? `(${pL.scale.x.toFixed(3)}, ${pL.scale.y.toFixed(3)}, ${pL.scale.z.toFixed(3)})` : '-';
     const plQuat = pL ? `(${pL.quaternion.x.toFixed(3)}, ${pL.quaternion.y.toFixed(3)}, ${pL.quaternion.z.toFixed(3)}, ${pL.quaternion.w.toFixed(3)})` : '-';
 
+    // DISTANCE and convergence plane debug info
+    const distanceInfo = `DISTANCE: ${DISTANCE.toFixed(3)}`;
+    const focusInfo = `focus: ${focus}`;
+    const invZInfo = views && views[0] ? `inv_z_map.min: ${views[0].inv_z_map.min.toFixed(6)}` : 'inv_z_map: -';
+    const convergenceInfo = convergencePlane ? `convPlane: (${convergencePlane.position.x.toFixed(3)}, ${convergencePlane.position.y.toFixed(3)}, ${convergencePlane.position.z.toFixed(3)})` : 'convPlane: -';
+    const is3DInfo = `is3D: ${is3D}`;
+
     // Draw panel
     ctx.clearRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -337,11 +344,16 @@ async function paintXRDiagnostics(session, xrCam) {
         `session.mode: ${mode}`,
         `renderer.xr.isPresenting: ${isPresenting}`,
         `ArrayCamera: ${isArray}  cameras: ${camCount}`,
-        `FOV: ${fovText}`, `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})  R:${pr} (vis:${prv} op:${pro} layerMask:${rm})`,
+        `FOV: ${fovText}`,
+        `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})  R:${pr} (vis:${prv} op:${pro} layerMask:${rm})`,
         `leftPlane pos: ${plPos}`,
         `leftPlane scale: ${plScale}`,
         `leftPlane quat: ${plQuat}`,
-        `tex: L:${tl}  R:${tr}`, `debug: forceShowPlanes: ${forceShowPlanes}`
+        `${distanceInfo}  ${focusInfo}  ${is3DInfo}`,
+        `${invZInfo}`,
+        `${convergenceInfo}`,
+        `tex: L:${tl}  R:${tr}`,
+        `debug: forceShowPlanes: ${forceShowPlanes}`
     ];
     let y = 84;
     for (const s of lines) { ctx.fillText(s, 24, y); y += 32; }
@@ -937,9 +949,13 @@ function locateConvergencePlane(leftCam, rightCam) {
         DISTANCE = .063 / views[0].inv_z_map.min / focus; // focus 0.01
         const width = viewportScale * DISTANCE / views[0].focal_px * views[0].width_px;
         const height = viewportScale * DISTANCE / views[0].focal_px * views[0].height_px;
+        console.log("VR mode DISTANCE calculation:", DISTANCE, "focus:", focus, "inv_z_map.min:", views[0].inv_z_map.min);
+        console.log("centerCam position:", centerCam, "leftQuat:", leftQuat);
         // Position in local space, then transform back to world space
         const localPos = new THREE.Vector3(0, 0, -DISTANCE);
+        console.log("localPos before transform:", localPos);
         const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
+        console.log("worldPos after transform:", worldPos);
 
         // Remove roll from quaternion by extracting yaw and pitch only
         const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
