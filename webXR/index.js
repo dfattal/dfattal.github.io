@@ -67,6 +67,30 @@ const xrDebugState = {
     lastCheck: 0,
 };
 
+// Tiny badge to toggle the preflight panel if detection/params miss
+let xrPreBadge = null;
+function createXRPreflightBadge() {
+    if (xrPreBadge) return xrPreBadge;
+    const b = document.createElement('div');
+    b.textContent = 'XR?';
+    Object.assign(b.style, {
+        position: 'fixed', top: '8px', left: '8px', zIndex: 99998,
+        padding: '4px 6px', background: 'rgba(0,0,0,0.5)', color: '#0f0',
+        font: '11px monospace', border: '1px solid rgba(0,255,128,0.4)', borderRadius: '4px',
+        cursor: 'pointer', userSelect: 'none'
+    });
+    b.title = 'Click to show WebXR Preflight panel';
+    b.addEventListener('click', () => {
+        if (!xrDebugState.enabled) createPreXRDebugPanel();
+        updatePreXRDebugPanel(true);
+        // Hide badge when panel is shown to avoid overlap
+        b.style.display = 'none';
+    });
+    document.body.appendChild(b);
+    xrPreBadge = b;
+    return b;
+}
+
 function wantXRDebug() {
     const qp = new URLSearchParams(location.search);
     return isVisionProUA() || qp.get('xrdebug') === '1';
@@ -74,42 +98,50 @@ function wantXRDebug() {
 
 function createPreXRDebugPanel() {
     if (xrDebugState.el) return xrDebugState.el;
-    const el = document.createElement('div');
-    Object.assign(el.style, {
-        position: 'fixed', top: '8px', left: '8px', zIndex: 99999,
-        padding: '8px 10px', maxWidth: 'min(80vw, 800px)',
-        background: 'rgba(0,0,0,0.7)', color: '#0f0', font: '12px monospace',
-        border: '1px solid rgba(0,255,128,0.4)', borderRadius: '6px',
-        lineHeight: '1.45', whiteSpace: 'pre-wrap'
-    });
-    el.id = 'xr-pre-debug';
+    // Defensive: try/catch in case DOM is not ready
+    let el;
+    try {
+        el = document.createElement('div');
+        Object.assign(el.style, {
+            position: 'fixed', top: '8px', left: '8px', zIndex: 99999,
+            padding: '8px 10px', maxWidth: 'min(80vw, 800px)',
+            background: 'rgba(0,0,0,0.7)', color: '#0f0', font: '12px monospace',
+            border: '1px solid rgba(0,255,128,0.4)', borderRadius: '6px',
+            lineHeight: '1.45', whiteSpace: 'pre-wrap'
+        });
+        el.id = 'xr-pre-debug';
 
-    const header = document.createElement('div');
-    header.textContent = 'WebXR Preflight (before Enter VR)';
-    header.style.font = '600 13px monospace';
-    header.style.marginBottom = '6px';
+        const header = document.createElement('div');
+        header.textContent = 'WebXR Preflight (before Enter VR)';
+        header.style.font = '600 13px monospace';
+        header.style.marginBottom = '6px';
 
-    const body = document.createElement('div');
-    body.id = 'xr-pre-body';
+        const body = document.createElement('div');
+        body.id = 'xr-pre-body';
 
-    const row = document.createElement('div');
-    row.style.marginTop = '8px';
+        const row = document.createElement('div');
+        row.style.marginTop = '8px';
 
-    const btn = document.createElement('button');
-    btn.textContent = 'RE-CHECK';
-    Object.assign(btn.style, {
-        font: '12px monospace', padding: '4px 8px',
-        background: 'transparent', color: '#0f0', border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer'
-    });
-    btn.addEventListener('click', () => updatePreXRDebugPanel(true));
+        const btn = document.createElement('button');
+        btn.textContent = 'RE-CHECK';
+        Object.assign(btn.style, {
+            font: '12px monospace', padding: '4px 8px',
+            background: 'transparent', color: '#0f0', border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer'
+        });
+        btn.addEventListener('click', () => updatePreXRDebugPanel(true));
 
-    row.appendChild(btn);
+        row.appendChild(btn);
 
-    el.appendChild(header);
-    el.appendChild(body);
-    el.appendChild(row);
+        el.appendChild(header);
+        el.appendChild(body);
+        el.appendChild(row);
 
-    document.body.appendChild(el);
+        document.body.appendChild(el);
+    } catch (err) {
+        console.error('Failed to create XR preflight panel:', err);
+        return null;
+    }
+    if (xrPreBadge) xrPreBadge.style.display = 'none';
     xrDebugState.el = el;
     xrDebugState.enabled = true;
     return el;
@@ -137,6 +169,7 @@ async function updatePreXRDebugPanel(force = false) {
     const lines = [
         `Vision Pro detected: ${isVisionProUA()}`,
         `navigator.xr present: ${hasXR}`,
+        hasXR ? '' : '(Hint: Safari → Settings → Advanced → WebXR Experimental Features)',
         `isSessionSupported('immersive-vr'): ${supVR}`,
         `isSessionSupported('immersive-ar'): ${supAR}`,
         `WebGL available: ${hasWebGL}`,
@@ -145,7 +178,8 @@ async function updatePreXRDebugPanel(force = false) {
         `Checked: ${new Date().toLocaleTimeString()}`
     ];
 
-    body.textContent = lines.join('\n');
+    // Remove empty string lines for cleaner display
+    body.textContent = lines.filter(Boolean).join('\n');
 }
 
 let xrDiag = {
@@ -298,6 +332,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add mouse event listeners
     document.addEventListener('mousemove', onDocumentMouseMove);
     window.addEventListener('resize', onWindowResize);
+
+    // Always provide a tiny badge to open the preflight panel
+    createXRPreflightBadge();
 
     // Pre-session XR debug panel (shows before Enter VR)
     if (wantXRDebug()) {
@@ -455,6 +492,8 @@ async function init() {
 
         // Re-show the preflight panel so you can immediately re-check
         if (xrDebugState.el) { xrDebugState.el.style.display = 'block'; updatePreXRDebugPanel(true); }
+        // Re-show the badge if the panel is hidden/removed
+        if (xrPreBadge) xrPreBadge.style.display = 'block';
 
         // Reload the page when exiting VR
         window.location.reload();
@@ -1424,3 +1463,13 @@ function updateHUD(leftCam, rightCam) {
 
     hudTexture.needsUpdate = true;
 }
+// Optional: keyboard toggle for preflight panel ('d' key)
+window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'd') {
+        if (!xrDebugState.enabled) createPreXRDebugPanel();
+        const el = xrDebugState.el; if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (!showing) updatePreXRDebugPanel(true);
+    }
+});
