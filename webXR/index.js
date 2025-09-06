@@ -155,6 +155,21 @@ function createPreXRDebugPanel() {
 
         const row = document.createElement('div');
         row.style.marginTop = '8px';
+        row.style.display = 'flex';
+        row.style.gap = '8px';
+
+        // Add hard refresh button
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = 'HARD REFRESH';
+        Object.assign(refreshBtn.style, {
+            font: '12px monospace', padding: '4px 8px',
+            background: 'transparent', color: '#0f0',
+            border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer'
+        });
+        refreshBtn.addEventListener('click', () => {
+            window.location.reload(true); // Hard refresh
+        });
+        row.appendChild(refreshBtn);
 
         let collapsed = false;
         function setCollapsed(v) {
