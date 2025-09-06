@@ -349,9 +349,9 @@ async function paintXRDiagnostics(session, xrCam) {
 
     // Draw panel
     ctx.clearRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillStyle = 'rgba(0,0,0,0)'; // Zero opacity - invisible
     ctx.fillRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
-    ctx.fillStyle = '#00ff7f';
+    ctx.fillStyle = 'rgba(0,255,127,0)'; // Zero opacity text - invisible
     ctx.font = '28px monospace';
     ctx.fillText('WebXR Diagnostics (Vision Pro)', 24, 44);
     ctx.font = '22px monospace';
