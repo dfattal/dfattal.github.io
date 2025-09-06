@@ -1246,6 +1246,29 @@ function animate() {
             // Update HUD text
             updateHUD(leftCam, rightCam);
 
+            // Handle fade-in animation synchronized with WebXR frame timing
+            const currentTime = performance.now();
+            const fadeDuration = 1000; // 1 second fade-in
+
+            // Initialize fade start time when planes become visible
+            if (planeLeft.visible && planeLeft.userData.fadeStartTime === null) {
+                planeLeft.userData.fadeStartTime = currentTime + 200; // 200ms delay
+                planeRight.userData.fadeStartTime = currentTime + 200;
+            }
+
+            // Update opacity during fade-in
+            if (planeLeft.userData.fadeStartTime !== null && currentTime >= planeLeft.userData.fadeStartTime) {
+                const elapsed = currentTime - planeLeft.userData.fadeStartTime;
+                const progress = Math.min(elapsed / fadeDuration, 1.0);
+
+                if (planeLeft.material && planeLeft.material.uniforms) {
+                    planeLeft.material.uniforms.uOpacity.value = progress;
+                }
+                if (planeRight.material && planeRight.material.uniforms) {
+                    planeRight.material.uniforms.uOpacity.value = progress;
+                }
+            }
+
             // Calculate camera positions in convergence plane's local coordinate system
             const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
             localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
@@ -1347,7 +1370,7 @@ function createPlanesVR() {
         // Define uniforms: pass in the dynamic texture.
         uniforms: {
             uTexture: { value: texL },
-            uOpacity: { value: isVisionProUA() ? 1.0 : 0.0 } // Start with full opacity on Vision Pro, transparent elsewhere
+            uOpacity: { value: 0.0 } // Start with transparent for all devices
         },
         // Vertex shader: passes through positions and UVs.
         vertexShader: /* glsl */`
@@ -1373,7 +1396,7 @@ function createPlanesVR() {
         // Define uniforms: pass in the dynamic texture.
         uniforms: {
             uTexture: { value: texR },
-            uOpacity: { value: isVisionProUA() ? 1.0 : 0.0 } // Start with full opacity on Vision Pro, transparent elsewhere
+            uOpacity: { value: 0.0 } // Start with transparent for all devices
         },
         // Vertex shader: passes through positions and UVs.
         vertexShader: /* glsl */`
@@ -1409,30 +1432,9 @@ function createPlanesVR() {
     planeRight.visible = false;
     scene.add(planeRight);
 
-    // Start fade-in animation (skip for Vision Pro)
-    if (!isVisionProUA()) {
-        setTimeout(() => {
-            // Animate opacity from 0 to 1 over 1 second
-            const startTime = performance.now();
-            const duration = 1000; // 1 second in ms
-
-            function fadeIn() {
-                const currentTime = performance.now();
-                const elapsed = currentTime - startTime;
-                const progress = Math.min(elapsed / duration, 1.0);
-
-                // Update opacity uniform
-                matLeft.uniforms.uOpacity.value = progress;
-                matRight.uniforms.uOpacity.value = progress;
-
-                if (progress < 1.0) {
-                    requestAnimationFrame(fadeIn);
-                }
-            }
-
-            fadeIn();
-        }, 200); // Small delay before starting fade
-    }
+    // Store materials for fade-in animation in render loop
+    planeLeft.userData.fadeStartTime = null;
+    planeRight.userData.fadeStartTime = null;
 }
 
 /**
