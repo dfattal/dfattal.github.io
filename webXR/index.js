@@ -1293,31 +1293,52 @@ function animate() {
 
             // Capture the initial head positions once (in local coordinates)
             if (initialY === undefined) {
-                initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
-                initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
-                IPD = localLeftCamPos.distanceTo(localRightCamPos); // 0.063
-                console.log("initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
-                console.log("convergencePlane position:", convergencePlane.position);
+                const candidateInitialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+                const candidateInitialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+                const candidateIPD = localLeftCamPos.distanceTo(localRightCamPos);
 
+                // Vision Pro: Only set initial values if they seem reasonable (not zero/too small)
+                if (isVisionProUA()) {
+                    if (Math.abs(candidateInitialY) > 0.01) {
+                        initialY = candidateInitialY;
+                        initialZ = candidateInitialZ;
+                        IPD = candidateIPD;
+                        console.log("Vision Pro - Initial values set - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+                        console.log("convergencePlane position:", convergencePlane.position);
+                    } else {
+                        console.log("Vision Pro - Waiting for proper camera positioning - candidateY:", candidateInitialY, "candidateIPD:", candidateIPD);
+                    }
+                } else {
+                    // Other devices: use original behavior
+                    initialY = candidateInitialY;
+                    initialZ = candidateInitialZ;
+                    IPD = candidateIPD;
+                    console.log("Initial values set - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+                    console.log("convergencePlane position:", convergencePlane.position);
+                }
             }
-            // Render the scene using local coordinates
-            rL.renderCam.pos.x = localLeftCamPos.x / IPD;
-            rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
-            rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
-            rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-            rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
-            rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0) / viewportScale;
-            rL.drawScene(uTime % glowPulsePeriod);
-            texL.needsUpdate = true;
 
-            rR.renderCam.pos.x = localRightCamPos.x / IPD;
-            rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
-            rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
-            rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-            rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
-            rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0) / viewportScale;
-            rR.drawScene(uTime % glowPulsePeriod);
-            texR.needsUpdate = true;
+            // Only render if we have valid initial values
+            if (initialY !== undefined && initialZ !== undefined && IPD !== undefined) {
+                // Render the scene using local coordinates
+                rL.renderCam.pos.x = localLeftCamPos.x / IPD;
+                rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
+                rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0) / viewportScale;
+                rL.drawScene(uTime % glowPulsePeriod);
+                texL.needsUpdate = true;
+
+                rR.renderCam.pos.x = localRightCamPos.x / IPD;
+                rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
+                rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0) / viewportScale;
+                rR.drawScene(uTime % glowPulsePeriod);
+                texR.needsUpdate = true;
+            }
 
             // Hide non-VR canvas
             canvas.style.display = 'none';
