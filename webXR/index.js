@@ -40,7 +40,7 @@ let container, canvas, gl, nonVRRenderer = null;
 let mouseX = 0, mouseY = 0;
 let windowHalfX, windowHalfY;
 let isVRActive = false;
-let is3D = 1;
+let is3D = isVisionProUA() ? 0 : 1; // Force VR mode for Vision Pro
 let focus = 0.01;
 let viewportScale = 1.2;
 const MAX_TEX_SIZE_VR = 1920;
@@ -742,7 +742,7 @@ function setCanvasDimensions(leftCam, rightCam) {
         return false;
     }
 
-    if (is3D > 0.5) { // 3D display
+    if (is3D > 0.5 && !isVisionProUA()) { // 3D display (but not Vision Pro)
         // Size canvas to match convergence plane aspect ratio, scaled to fit within viewport
         if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
             convergencePlane.width > 0 && convergencePlane.height > 0) {
