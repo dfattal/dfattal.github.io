@@ -56,8 +56,25 @@ const tmpQuat = new THREE.Quaternion();
 
 // ---- Vision Pro detection & XR diagnostics (non-invasive) ----
 function isVisionProUA() {
-    const ua = (navigator.userAgent || '').toLowerCase();
-    return /visionos|applevision|apple vision/.test(ua);
+    const qp = new URLSearchParams(location.search);
+    if (qp.get('forcevision') === '1') return true; // manual override
+
+    const ua = (navigator.userAgent || '');
+    const uaLow = ua.toLowerCase();
+    const vendor = (navigator.vendor || '').toLowerCase();
+    const platform = (navigator.platform || '').toLowerCase();
+    const uaDataPlat = (navigator.userAgentData && navigator.userAgentData.platform)
+        ? navigator.userAgentData.platform.toLowerCase()
+        : '';
+
+    const hasVisionTokens = /visionos|applevision|apple vision/.test(uaLow) || /vision/.test(uaDataPlat);
+    const isApple = vendor.includes('apple');
+    const isNotIOS = !/iphone|ipad|ipod/.test(uaLow);
+    const macLike = platform.includes('mac');
+    const hasXR = 'xr' in navigator; // WebXR present
+
+    // Heuristic: Apple + WebXR + not iPhone/iPad, running on Mac-like platform OR explicit Vision tokens
+    return hasVisionTokens || (isApple && hasXR && isNotIOS && macLike);
 }
 
 // ---- Pre-session XR debug panel (DOM overlay) ----
@@ -93,7 +110,7 @@ function createXRPreflightBadge() {
 
 function wantXRDebug() {
     const qp = new URLSearchParams(location.search);
-    return isVisionProUA() || qp.get('xrdebug') === '1';
+    return isVisionProUA() || qp.get('xrdebug') === '1' || ('xr' in navigator);
 }
 
 function createPreXRDebugPanel() {
@@ -166,14 +183,33 @@ async function updatePreXRDebugPanel(force = false) {
     const hasWebGL = !!document.createElement('canvas').getContext('webgl');
     const viewsHint = Array.isArray(views) ? views.length : 0;
 
+    // --- Add Vision Pro detection signals for diagnostics ---
+    const vendor = (navigator.vendor || '').toLowerCase();
+    const platform = (navigator.platform || '').toLowerCase();
+    const uaDataPlat = (navigator.userAgentData && navigator.userAgentData.platform)
+        ? navigator.userAgentData.platform
+        : '';
+    const hasVisionTokens = /visionos|applevision|apple vision/.test(ua.toLowerCase()) || /vision/i.test(uaDataPlat);
+    const isApple = vendor.includes('apple');
+    const isNotIOS = !/iphone|ipad|ipod/i.test(ua);
+    const macLike = /mac/i.test(platform);
+
     const lines = [
-        `Vision Pro detected: ${isVisionProUA()}`,
+        `Vision Pro detected (heuristic): ${isVisionProUA()}`,
         `navigator.xr present: ${hasXR}`,
         hasXR ? '' : '(Hint: Safari → Settings → Advanced → WebXR Experimental Features)',
         `isSessionSupported('immersive-vr'): ${supVR}`,
         `isSessionSupported('immersive-ar'): ${supAR}`,
         `WebGL available: ${hasWebGL}`,
         `LIF views loaded: ${viewsHint}`,
+        `— Detection signals —`,
+        `vendor: ${navigator.vendor || ''}`,
+        `platform: ${navigator.platform || ''}`,
+        `uaData.platform: ${uaDataPlat || ''}`,
+        `hasVisionTokens: ${hasVisionTokens}`,
+        `isApple: ${isApple}`,
+        `isNotIOS: ${isNotIOS}`,
+        `macLike: ${macLike}`,
         `UA: ${ua}`,
         `Checked: ${new Date().toLocaleTimeString()}`
     ];
