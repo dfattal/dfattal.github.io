@@ -54,6 +54,86 @@ const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 
+// ---- Vision Pro detection & XR diagnostics (non-invasive) ----
+function isVisionProUA() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    return /visionos|applevision|apple vision/.test(ua);
+}
+
+let xrDiag = {
+    enabled: false,
+    sprite: null,
+    canvas: null,
+    ctx: null,
+    tex: null,
+    lastPaint: 0
+};
+
+function createXRDiagnosticsBillboard() {
+    if (xrDiag.sprite) return xrDiag.sprite;
+    xrDiag.canvas = document.createElement('canvas');
+    xrDiag.canvas.width = 1024; xrDiag.canvas.height = 512;
+    xrDiag.ctx = xrDiag.canvas.getContext('2d');
+    xrDiag.tex = new THREE.CanvasTexture(xrDiag.canvas);
+    const mat = new THREE.SpriteMaterial({ map: xrDiag.tex, depthTest: false, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.2, 0.6, 1); // meters in world
+    sprite.position.set(0, 1.4, -1.6); // in front of viewer
+    xrDiag.sprite = sprite;
+    return sprite;
+}
+
+async function paintXRDiagnostics(session, xrCam) {
+    if (!xrDiag.ctx) return;
+    const ctx = xrDiag.ctx;
+    const now = performance.now();
+    if (now - xrDiag.lastPaint < 150) return; // throttle ~6fps
+    xrDiag.lastPaint = now;
+
+    // Capability checks
+    const hasXR = !!navigator.xr;
+    let supVR = false, supAR = false;
+    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch(e) {}
+    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch(e) {}
+
+    const isPresenting = !!renderer?.xr?.isPresenting;
+    const mode = session?.mode || '-';
+    const isArray = !!(xrCam && xrCam.isArrayCamera);
+    const camCount = isArray ? (xrCam.cameras?.length || 0) : (xrCam ? 1 : 0);
+
+    // FOV sample (left cam or mono cam)
+    let fovText = '-';
+    try {
+        const cam = isArray ? xrCam.cameras[0] : xrCam;
+        if (cam && cam.projectionMatrix) {
+            const f = computeFovTanAngles(cam);
+            fovText = `tanU:${f.tanUp.toFixed(3)} tanD:${f.tanDown.toFixed(3)} tanL:${f.tanLeft.toFixed(3)} tanR:${f.tanRight.toFixed(3)}`;
+        }
+    } catch(_) {}
+
+    // Draw panel
+    ctx.clearRect(0,0, xrDiag.canvas.width, xrDiag.canvas.height);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(0,0, xrDiag.canvas.width, xrDiag.canvas.height);
+    ctx.fillStyle = '#00ff7f';
+    ctx.font = '28px monospace';
+    ctx.fillText('WebXR Diagnostics (Vision Pro)', 24, 44);
+    ctx.font = '22px monospace';
+    const lines = [
+        `UA: ${navigator.userAgent}`,
+        `navigator.xr: ${hasXR}`,
+        `isSessionSupported(vr): ${supVR}`,
+        `isSessionSupported(ar): ${supAR}`,
+        `session.mode: ${mode}`,
+        `renderer.xr.isPresenting: ${isPresenting}`,
+        `ArrayCamera: ${isArray}  cameras: ${camCount}`,
+        `FOV: ${fovText}`
+    ];
+    let y = 84;
+    for (const s of lines) { ctx.fillText(s, 24, y); y += 32; }
+    xrDiag.tex.needsUpdate = true;
+}
+
 // Shared HUD globals (for both eyes)
 let hudCanvas, hudCtx, hudTexture;
 // initial position of the center eyes
@@ -249,6 +329,13 @@ async function init() {
         }
 
         setupVRControllers();
+
+        // If on Vision Pro, show a front-of-viewer diagnostics sprite
+        if (isVisionProUA()) {
+            xrDiag.enabled = true;
+            const b = createXRDiagnosticsBillboard();
+            scene.add(b);
+        }
     });
 
     renderer.xr.addEventListener('sessionend', () => {
@@ -257,6 +344,10 @@ async function init() {
         isVRActive = false;
         canvas.style.display = 'block'; // Show non-VR canvas when exiting VR
         resizeCanvasToContainer(); // Make sure canvas is properly sized
+
+        // XR Diagnostics cleanup (if any)
+        if (xrDiag.sprite) { scene.remove(xrDiag.sprite); xrDiag.sprite.material.map?.dispose?.(); xrDiag.sprite.material.dispose(); xrDiag.sprite = null; }
+        xrDiag.enabled = false;
 
         // Reload the page when exiting VR
         window.location.reload();
@@ -747,6 +838,24 @@ function animate() {
 
         // Get XR camera first so it's available for all subsequent code
         const xrCam = renderer.xr.getCamera(camera);
+
+        const hasStereo = xrCam?.isArrayCamera && xrCam.cameras.length === 2;
+        if (xrDiag.enabled) {
+            // Keep billboard in front of head each frame
+            if (xrDiag.sprite && xrCam) {
+                // Position relative to the active (mono or left) camera
+                const camObj = hasStereo ? xrCam.cameras[0] : xrCam;
+                if (camObj) {
+                    camObj.getWorldPosition(tmpPos);
+                    camObj.getWorldQuaternion(tmpQuat);
+                    xrDiag.sprite.position.copy(tmpPos);
+                    xrDiag.sprite.quaternion.copy(tmpQuat);
+                    xrDiag.sprite.translateZ(-1.6);
+                    xrDiag.sprite.translateY(0.2);
+                }
+            }
+            paintXRDiagnostics(renderer.xr.getSession?.(), xrCam);
+        }
 
         // Check X button state if in VR mode
         if (isVRActive) {
