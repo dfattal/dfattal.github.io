@@ -316,6 +316,11 @@ async function paintXRDiagnostics(session, xrCam) {
     const lm = pL?.layers?.mask ?? '-';
     const rm = pR?.layers?.mask ?? '-';
 
+    // Left plane position and scale info
+    const plPos = pL ? `(${pL.position.x.toFixed(3)}, ${pL.position.y.toFixed(3)}, ${pL.position.z.toFixed(3)})` : '-';
+    const plScale = pL ? `(${pL.scale.x.toFixed(3)}, ${pL.scale.y.toFixed(3)}, ${pL.scale.z.toFixed(3)})` : '-';
+    const plQuat = pL ? `(${pL.quaternion.x.toFixed(3)}, ${pL.quaternion.y.toFixed(3)}, ${pL.quaternion.z.toFixed(3)}, ${pL.quaternion.w.toFixed(3)})` : '-';
+
     // Draw panel
     ctx.clearRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -333,6 +338,9 @@ async function paintXRDiagnostics(session, xrCam) {
         `renderer.xr.isPresenting: ${isPresenting}`,
         `ArrayCamera: ${isArray}  cameras: ${camCount}`,
         `FOV: ${fovText}`, `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})  R:${pr} (vis:${prv} op:${pro} layerMask:${rm})`,
+        `leftPlane pos: ${plPos}`,
+        `leftPlane scale: ${plScale}`,
+        `leftPlane quat: ${plQuat}`,
         `tex: L:${tl}  R:${tr}`, `debug: forceShowPlanes: ${forceShowPlanes}`
     ];
     let y = 84;
@@ -1323,7 +1331,7 @@ function createPlanesVR() {
         // Define uniforms: pass in the dynamic texture.
         uniforms: {
             uTexture: { value: texL },
-            uOpacity: { value: 0.0 } // Start with transparent
+            uOpacity: { value: isVisionProUA() ? 1.0 : 0.0 } // Start with full opacity on Vision Pro, transparent elsewhere
         },
         // Vertex shader: passes through positions and UVs.
         vertexShader: /* glsl */`
@@ -1349,7 +1357,7 @@ function createPlanesVR() {
         // Define uniforms: pass in the dynamic texture.
         uniforms: {
             uTexture: { value: texR },
-            uOpacity: { value: 0.0 } // Start with transparent
+            uOpacity: { value: isVisionProUA() ? 1.0 : 0.0 } // Start with full opacity on Vision Pro, transparent elsewhere
         },
         // Vertex shader: passes through positions and UVs.
         vertexShader: /* glsl */`
@@ -1385,28 +1393,30 @@ function createPlanesVR() {
     planeRight.visible = false;
     scene.add(planeRight);
 
-    // Start fade-in animation
-    setTimeout(() => {
-        // Animate opacity from 0 to 1 over 1 second
-        const startTime = performance.now();
-        const duration = 1000; // 1 second in ms
+    // Start fade-in animation (skip for Vision Pro)
+    if (!isVisionProUA()) {
+        setTimeout(() => {
+            // Animate opacity from 0 to 1 over 1 second
+            const startTime = performance.now();
+            const duration = 1000; // 1 second in ms
 
-        function fadeIn() {
-            const currentTime = performance.now();
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1.0);
+            function fadeIn() {
+                const currentTime = performance.now();
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1.0);
 
-            // Update opacity uniform
-            matLeft.uniforms.uOpacity.value = progress;
-            matRight.uniforms.uOpacity.value = progress;
+                // Update opacity uniform
+                matLeft.uniforms.uOpacity.value = progress;
+                matRight.uniforms.uOpacity.value = progress;
 
-            if (progress < 1.0) {
-                requestAnimationFrame(fadeIn);
+                if (progress < 1.0) {
+                    requestAnimationFrame(fadeIn);
+                }
             }
-        }
 
-        fadeIn();
-    }, 200); // Small delay before starting fade
+            fadeIn();
+        }, 200); // Small delay before starting fade
+    }
 }
 
 /**
