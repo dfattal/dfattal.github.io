@@ -343,6 +343,10 @@ async function paintXRDiagnostics(session, xrCam) {
     const convergenceInfo = convergencePlane ? `convPlane: (${convergencePlane.position.x.toFixed(3)}, ${convergencePlane.position.y.toFixed(3)}, ${convergencePlane.position.z.toFixed(3)})` : 'convPlane: -';
     const is3DInfo = `is3D: ${is3D}`;
 
+    // Real-time camera position values (from render loop)
+    const renderCamInfo = rL ? `rL.renderCam: (${rL.renderCam.pos.x.toFixed(3)}, ${rL.renderCam.pos.y.toFixed(3)}, ${rL.renderCam.pos.z.toFixed(3)})` : 'rL.renderCam: -';
+    const initialPosInfo = typeof initialY !== 'undefined' && typeof initialZ !== 'undefined' ? `initial: Y:${initialY.toFixed(3)} Z:${initialZ.toFixed(3)} IPD:${IPD ? IPD.toFixed(3) : '-'}` : 'initial: -';
+
     // Draw panel
     ctx.clearRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -352,23 +356,19 @@ async function paintXRDiagnostics(session, xrCam) {
     ctx.fillText('WebXR Diagnostics (Vision Pro)', 24, 44);
     ctx.font = '22px monospace';
     const lines = [
-        `UA: ${navigator.userAgent}`,
-        `navigator.xr: ${hasXR}`,
-        `isSessionSupported(vr): ${supVR}`,
-        `isSessionSupported(ar): ${supAR}`,
-        `session.mode: ${mode}`,
         `renderer.xr.isPresenting: ${isPresenting}`,
         `ArrayCamera: ${isArray}  cameras: ${camCount}`,
         `FOV: ${fovText}`,
-        `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})  R:${pr} (vis:${prv} op:${pro} layerMask:${rm})`,
+        `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})`,
         `leftPlane pos: ${plPos}`,
         `leftPlane scale: ${plScale}`,
         `leftPlane quat: ${plQuat}`,
         `${distanceInfo}  ${focusInfo}  ${is3DInfo}`,
         `${invZInfo}`,
         `${convergenceInfo}`,
-        `tex: L:${tl}  R:${tr}`,
-        `debug: forceShowPlanes: ${forceShowPlanes}`
+        `${renderCamInfo}`,
+        `${initialPosInfo}`,
+        `tex: L:${tl}  R:${tr}`
     ];
     let y = 84;
     for (const s of lines) { ctx.fillText(s, 24, y); y += 32; }
