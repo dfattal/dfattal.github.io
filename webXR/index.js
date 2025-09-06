@@ -164,7 +164,7 @@ function createPreXRDebugPanel() {
             caret.textContent = collapsed ? '▸' : '▾';
         }
         caret.addEventListener('click', () => setCollapsed(!collapsed));
-        setCollapsed(false); // default expanded
+        setCollapsed(true); // default collapsed
 
         // const forceBtn = document.createElement('button');
         // forceBtn.textContent = 'FORCE SHOW PLANES';
