@@ -941,7 +941,7 @@ function locateConvergencePlane(leftCam, rightCam) {
         "denomX:", denomX,
         "denomY:", denomY);
 
-    if (Math.abs(denomX) < 0.0001 || isMirror) {
+    if (Math.abs(denomX) < 0.0001 || isMirror || isVisionProUA()) {
         console.warn("RENDERING for VR");
         is3D = 0;
         console.log("viewportScale:", viewportScale);
