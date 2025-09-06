@@ -54,6 +54,8 @@ const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
 const tmpPos = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 
+let forceShowPlanes = false; // debug: show planes even if convergence calc fails
+
 // ---- Vision Pro detection & XR diagnostics (non-invasive) ----
 function isVisionProUA() {
     const qp = new URLSearchParams(location.search);
@@ -128,10 +130,25 @@ function createPreXRDebugPanel() {
         });
         el.id = 'xr-pre-debug';
 
+        // Header with caret
         const header = document.createElement('div');
-        header.textContent = 'WebXR Preflight (before Enter VR)';
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.gap = '8px';
         header.style.font = '600 13px monospace';
         header.style.marginBottom = '6px';
+
+        const caret = document.createElement('button');
+        caret.textContent = '▾';
+        Object.assign(caret.style, {
+            font: '12px monospace', width: '22px', height: '22px',
+            lineHeight: '22px', textAlign: 'center', padding: 0,
+            background: 'transparent', color: '#0f0', border: '1px solid #0f0',
+            borderRadius: '4px', cursor: 'pointer'
+        });
+
+        const title = document.createElement('div');
+        title.textContent = 'WebXR Preflight (before Enter VR)';
 
         const body = document.createElement('div');
         body.id = 'xr-pre-body';
@@ -139,16 +156,32 @@ function createPreXRDebugPanel() {
         const row = document.createElement('div');
         row.style.marginTop = '8px';
 
-        const btn = document.createElement('button');
-        btn.textContent = 'RE-CHECK';
-        Object.assign(btn.style, {
-            font: '12px monospace', padding: '4px 8px',
-            background: 'transparent', color: '#0f0', border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer'
-        });
-        btn.addEventListener('click', () => updatePreXRDebugPanel(true));
+        let collapsed = false;
+        function setCollapsed(v) {
+            collapsed = v;
+            body.style.display = collapsed ? 'none' : 'block';
+            row.style.display = collapsed ? 'none' : 'flex';
+            caret.textContent = collapsed ? '▸' : '▾';
+        }
+        caret.addEventListener('click', () => setCollapsed(!collapsed));
+        setCollapsed(false); // default expanded
 
-        row.appendChild(btn);
+        // const forceBtn = document.createElement('button');
+        // forceBtn.textContent = 'FORCE SHOW PLANES';
+        // Object.assign(forceBtn.style, {
+        //     font: '12px monospace', padding: '4px 8px',
+        //     background: 'transparent', color: '#0f0',
+        //     border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer',
+        //     marginLeft: '8px'
+        // });
+        // forceBtn.addEventListener('click', () => {
+        //     forceShowPlanes = !forceShowPlanes;
+        //     console.log('[XR DEBUG] forceShowPlanes =', forceShowPlanes);
+        // });
+        // row.appendChild(forceBtn);
 
+        header.appendChild(caret);
+        header.appendChild(title);
         el.appendChild(header);
         el.appendChild(body);
         el.appendChild(row);
@@ -176,8 +209,8 @@ async function updatePreXRDebugPanel(force = false) {
     const ua = navigator.userAgent || '';
     const hasXR = !!navigator.xr;
     let supVR = false, supAR = false;
-    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch(_) {}
-    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch(_) {}
+    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch (_) { }
+    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch (_) { }
 
     // WebGL & asset readiness hints
     const hasWebGL = !!document.createElement('canvas').getContext('webgl');
@@ -251,8 +284,8 @@ async function paintXRDiagnostics(session, xrCam) {
     // Capability checks
     const hasXR = !!navigator.xr;
     let supVR = false, supAR = false;
-    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch(e) {}
-    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch(e) {}
+    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) { }
+    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch (e) { }
 
     const isPresenting = !!renderer?.xr?.isPresenting;
     const mode = session?.mode || '-';
@@ -267,12 +300,26 @@ async function paintXRDiagnostics(session, xrCam) {
             const f = computeFovTanAngles(cam);
             fovText = `tanU:${f.tanUp.toFixed(3)} tanD:${f.tanDown.toFixed(3)} tanL:${f.tanLeft.toFixed(3)} tanR:${f.tanRight.toFixed(3)}`;
         }
-    } catch(_) {}
+    } catch (_) { }
+
+    const pL = planeLeft, pR = planeRight;
+    const pl = !!pL, pr = !!pR;
+    const plv = pl && pL.visible; const prv = pr && pR.visible;
+    const plo = pl && pL.material && pL.material.uniforms && pL.material.uniforms.uOpacity
+        ? Number(pL.material.uniforms.uOpacity.value).toFixed(2) : '-';
+    const pro = pr && pR.material && pR.material.uniforms && pR.material.uniforms.uOpacity
+        ? Number(pR.material.uniforms.uOpacity.value).toFixed(2) : '-';
+    const tl = texL?.image?.width ? `${texL.image.width}x${texL.image.height}`
+        : (rL?.gl?.canvas ? `${rL.gl.canvas.width}x${rL.gl.canvas.height}` : '-');
+    const tr = texR?.image?.width ? `${texR.image.width}x${texR.image.height}`
+        : (rR?.gl?.canvas ? `${rR.gl.canvas.width}x${rR.gl.canvas.height}` : '-');
+    const lm = pL?.layers?.mask ?? '-';
+    const rm = pR?.layers?.mask ?? '-';
 
     // Draw panel
-    ctx.clearRect(0,0, xrDiag.canvas.width, xrDiag.canvas.height);
+    ctx.clearRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0,0, xrDiag.canvas.width, xrDiag.canvas.height);
+    ctx.fillRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
     ctx.fillStyle = '#00ff7f';
     ctx.font = '28px monospace';
     ctx.fillText('WebXR Diagnostics (Vision Pro)', 24, 44);
@@ -285,7 +332,8 @@ async function paintXRDiagnostics(session, xrCam) {
         `session.mode: ${mode}`,
         `renderer.xr.isPresenting: ${isPresenting}`,
         `ArrayCamera: ${isArray}  cameras: ${camCount}`,
-        `FOV: ${fovText}`
+        `FOV: ${fovText}`, `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})  R:${pr} (vis:${prv} op:${pro} layerMask:${rm})`,
+        `tex: L:${tl}  R:${tr}`, `debug: forceShowPlanes: ${forceShowPlanes}`
     ];
     let y = 84;
     for (const s of lines) { ctx.fillText(s, 24, y); y += 32; }
