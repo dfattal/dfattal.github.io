@@ -89,7 +89,7 @@ function init() {
     video = document.getElementById('video');
 
     // Load default video
-    loadVideoSource('indiana_relative_g04_b3_tc07_inf_2x1.mp4');
+    loadVideoSource('default_2x1.mp4');
 
     // Setup controllers
     setupControllers();
