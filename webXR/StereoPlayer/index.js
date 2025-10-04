@@ -92,6 +92,7 @@ function togglePlayPause() {
 
 function toggleHUD() {
     hudVisible = !hudVisible;
+    console.log(`HUD toggled: ${hudVisible ? 'ON' : 'OFF'}`);
 }
 
 function onWindowResize() {
@@ -217,38 +218,46 @@ function handleControllerInput() {
                 setTimeout(() => source.userData.recentLog = false, 500);
             }
 
-            if (axes.length >= 2) {
-                const stickY = axes[1]; // Thumbstick Y-axis (-1 = up/forward, +1 = down/back)
+            if (axes.length >= 4) {
+                const stickY = axes[3]; // Thumbstick Y-axis (-1 = up/forward, +1 = down/back)
 
-                // Left controller stick controls distance via diopters
+                // Left controller stick controls distance via diopters (incremental)
                 if (isLeft && Math.abs(stickY) > 0.1) {
-                    // Map stick to diopter range [0.01, 1.0] - forward (negative Y) = closer
-                    diopters = 0.505 - stickY * 0.495; // center at 0.505, range 0.01 to 1.0
+                    // Add/subtract to diopters - forward (negative Y) = increase diopters (closer)
+                    const diopterDelta = -stickY * 0.01; // adjust sensitivity here
+                    diopters += diopterDelta;
                     diopters = Math.max(0.01, Math.min(1.0, diopters));
                     screenDistance = 1.0 / diopters;
-                    console.log(`Left stick Y: ${stickY.toFixed(2)}, Distance: ${screenDistance.toFixed(1)}m`);
+                    if (Math.abs(diopterDelta) > 0.001) {
+                        console.log(`Distance: ${screenDistance.toFixed(1)}m (diopters: ${diopters.toFixed(3)})`);
+                    }
                 }
 
-                // Right controller stick controls focal in log2 space
+                // Right controller stick controls focal in log2 space (incremental)
                 if (isRight && Math.abs(stickY) > 0.1) {
-                    // Map to log2(focal) range [-1, 1], which is focal [0.5, 2]
-                    const log2Focal = stickY; // forward (negative) = zoom in (larger focal)
+                    // Add/subtract to log2(focal) - forward (negative) = increase focal (zoom in)
+                    let log2Focal = Math.log2(focal);
+                    const focalDelta = -stickY * 0.02; // adjust sensitivity here
+                    log2Focal += focalDelta;
+                    log2Focal = Math.max(-1, Math.min(1, log2Focal)); // clamp log2 range
                     focal = Math.pow(2, log2Focal);
-                    focal = Math.max(0.5, Math.min(2.0, focal));
-                    console.log(`Right stick Y: ${stickY.toFixed(2)}, Focal: ${focal.toFixed(2)}`);
+                    if (Math.abs(focalDelta) > 0.001) {
+                        console.log(`Focal: ${focal.toFixed(2)} (${(focal * 36).toFixed(0)}mm, log2: ${log2Focal.toFixed(2)})`);
+                    }
                 }
             }
 
-            // Handle button presses for play/pause (A/X button is typically buttons[4])
-            if (buttons.length > 4 && buttons[4].pressed) {
+            // Handle trigger for play/pause (buttons[0])
+            if (buttons.length > 0 && buttons[0].pressed) {
                 // Debounce button press
                 if (!source.userData) source.userData = {};
-                if (!source.userData.buttonPressed) {
+                if (!source.userData.triggerPressed) {
                     togglePlayPause();
-                    source.userData.buttonPressed = true;
+                    console.log('Play/Pause toggled');
+                    source.userData.triggerPressed = true;
                 }
             } else {
-                if (source.userData) source.userData.buttonPressed = false;
+                if (source.userData) source.userData.triggerPressed = false;
             }
 
             // Handle squeeze/grip for HUD toggle (typically buttons[1])
@@ -378,7 +387,8 @@ function updateHUD() {
 
     hudCtx.font = '16px monospace';
     hudCtx.fillStyle = '#aaa';
-    hudCtx.fillText('L-stick: distance | R-stick: focal', 20, 235);
+    hudCtx.fillText('L-stick: distance | R-stick: focal', 20, 225);
+    hudCtx.fillText('Trigger: play/pause | Grip: toggle HUD', 20, 245);
 
     hudTexture.needsUpdate = true;
 }
