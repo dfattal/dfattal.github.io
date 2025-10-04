@@ -302,12 +302,25 @@ function updateStereoPlanes(leftCam, rightCam) {
     // reconv = focal * ipd / screenDistance
     const reconv = focal * ipd / screenDistance;
 
-    // Update UV offsets for reconvergence
-    // Left texture: base offset 0, shift by -reconv/2
-    planeLeft.material.map.offset.set(-reconv / 2, 0);
+    // Since each eye's image is 0.5 width in texture coords (due to SBS),
+    // and reconv is relative to individual eye image width,
+    // we need to scale by 0.5 when applying to texture offset
+    const reconvScale = 0.5; // individual eye width in texture coordinates
 
-    // Right texture: base offset 0.5 (for SBS split), shift by +reconv/2
-    planeRight.material.map.offset.set(0.5 + reconv / 2, 0);
+    // Update UV offsets for reconvergence
+    // Left texture: base offset 0, shift by -reconv/2 * scale
+    const leftShift = -(reconv / 2) * reconvScale;
+    planeLeft.material.map.offset.set(leftShift, 0);
+
+    // Right texture: base offset 0.5 (for SBS split), shift by +reconv/2 * scale
+    const rightShift = (reconv / 2) * reconvScale;
+    planeRight.material.map.offset.set(0.5 + rightShift, 0);
+
+    // Debug log reconvergence (only when it changes significantly)
+    if (Math.abs(reconv - (planeLeft.userData.lastReconv || 0)) > 0.001) {
+        console.log(`Reconv: ${(reconv*100).toFixed(2)}% of eye width, texture shift: ±${((reconv/2)*reconvScale*100).toFixed(3)}% of SBS`);
+        planeLeft.userData.lastReconv = reconv;
+    }
 
     // Position both planes at the same world position (they overlap)
     planeLeft.position.copy(screenPosition);
