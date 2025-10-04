@@ -34,10 +34,10 @@ let controller0, controller1;
 let uiContainer, videoInfo, dropZone, fileInput;
 let infoDimensions, infoFps, infoStatus;
 
-// Frame rate tracking
-let frameCount = 0;
-let lastFpsUpdate = 0;
-let currentFps = 0;
+// Video frame rate tracking
+let videoFps = 0;
+let videoFrameCount = 0;
+let videoFpsStartTime = 0;
 
 // Screen positioning - simple world space coordinates
 const screenPosition = new THREE.Vector3(0, 1.6, -100); // will update z based on screenDistance
@@ -160,6 +160,9 @@ function loadVideoSource(src) {
         infoStatus.textContent = 'Ready';
         videoInfo.classList.add('visible');
 
+        // Start measuring video frame rate
+        measureVideoFrameRate();
+
         // Create anaglyph plane for non-VR viewing
         createAnaglyphPlane();
 
@@ -174,6 +177,41 @@ function loadVideoSource(src) {
             }, { once: true });
         });
     }, { once: true });
+}
+
+function measureVideoFrameRate() {
+    if (!video || !('requestVideoFrameCallback' in video)) {
+        console.warn('requestVideoFrameCallback not supported, cannot measure video FPS');
+        infoFps.textContent = 'N/A';
+        return;
+    }
+
+    videoFrameCount = 0;
+    videoFpsStartTime = 0;
+
+    const updateVideoFps = (now, metadata) => {
+        if (videoFpsStartTime === 0) {
+            videoFpsStartTime = now;
+        }
+
+        videoFrameCount++;
+        const elapsed = now - videoFpsStartTime;
+
+        // Update FPS every second
+        if (elapsed >= 1000) {
+            videoFps = Math.round((videoFrameCount * 1000) / elapsed);
+            if (infoFps) {
+                infoFps.textContent = `${videoFps} fps`;
+            }
+            videoFrameCount = 0;
+            videoFpsStartTime = now;
+        }
+
+        // Continue measuring
+        video.requestVideoFrameCallback(updateVideoFps);
+    };
+
+    video.requestVideoFrameCallback(updateVideoFps);
 }
 
 function createAnaglyphPlane() {
@@ -322,24 +360,17 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Recreate anaglyph plane with new aspect ratio if not in VR
+    if (!isInVRMode && anaglyphPlane && videoTexture) {
+        createAnaglyphPlane();
+    }
 }
 
 function animate() {
     renderer.setAnimationLoop(() => {
-        const now = performance.now();
         const xrCam = renderer.xr.getCamera(camera);
         const isInVR = renderer.xr.isPresenting;
-
-        // Track FPS
-        frameCount++;
-        if (now - lastFpsUpdate >= 1000) {
-            currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
-            frameCount = 0;
-            lastFpsUpdate = now;
-            if (infoFps) {
-                infoFps.textContent = `${currentFps} fps`;
-            }
-        }
 
         if (isInVR && videoTexture && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
             // VR MODE
