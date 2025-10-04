@@ -6,6 +6,10 @@ let planeLeft = null, planeRight = null;
 let videoTexture = null;
 let video = null;
 
+// Non-VR resources
+let anaglyphPlane = null;
+let isInVRMode = false;
+
 // Screen parameters
 let screenDistance = 100; // meters (default)
 let focal = 1.0; // focal length as fraction of image width (default = 36mm equiv)
@@ -26,6 +30,15 @@ let hudVisible = true;
 // Controllers
 let controller0, controller1;
 
+// UI elements
+let uiContainer, videoInfo, dropZone, fileInput;
+let infoDimensions, infoFps, infoStatus;
+
+// Frame rate tracking
+let frameCount = 0;
+let lastFpsUpdate = 0;
+let currentFps = 0;
+
 // Screen positioning - simple world space coordinates
 const screenPosition = new THREE.Vector3(0, 1.6, -100); // will update z based on screenDistance
 const screenQuaternion = new THREE.Quaternion(); // identity (facing -Z)
@@ -41,6 +54,7 @@ function init() {
     scene = new THREE.Scene();
 
     camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
+    camera.position.set(0, 1.6, 0);
     scene.add(camera);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -50,21 +64,32 @@ function init() {
     renderer.toneMapping = THREE.NoToneMapping;
 
     document.body.appendChild(renderer.domElement);
+
+    // Create VR button
     const vrButton = VRButton.createButton(renderer);
     document.body.appendChild(vrButton);
 
+    // Listen for VR session start/end
+    renderer.xr.addEventListener('sessionstart', onVRSessionStart);
+    renderer.xr.addEventListener('sessionend', onVRSessionEnd);
+
+    // Get UI elements
+    uiContainer = document.getElementById('ui-container');
+    videoInfo = document.getElementById('video-info');
+    dropZone = document.getElementById('drop-zone');
+    fileInput = document.getElementById('file-input');
+    infoDimensions = document.getElementById('info-dimensions');
+    infoFps = document.getElementById('info-fps');
+    infoStatus = document.getElementById('info-status');
+
+    // Setup file handling
+    setupFileHandling();
+
     // Setup video
     video = document.getElementById('video');
-    video.src = 'indiana_relative_g04_b3_tc07_inf_2x1.mp4'; // SBS video source
-    video.load();
 
-    // Try to autoplay (may require user interaction on some browsers)
-    video.play().catch(err => {
-        console.warn('Autoplay prevented, waiting for user interaction:', err);
-    });
-
-    videoTexture = new THREE.VideoTexture(video);
-    videoTexture.encoding = THREE.sRGBEncoding;
+    // Load default video
+    loadVideoSource('indiana_relative_g04_b3_tc07_inf_2x1.mp4');
 
     // Setup controllers
     setupControllers();
@@ -79,6 +104,204 @@ function setupControllers() {
     scene.add(controller1);
 
     // Controller input is handled via gamepad state in handleControllerInput()
+}
+
+function setupFileHandling() {
+    // Click to browse
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // File input change
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const url = URL.createObjectURL(file);
+            loadVideoSource(url);
+        }
+    });
+
+    // Drag and drop
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('video/')) {
+            const url = URL.createObjectURL(file);
+            loadVideoSource(url);
+        }
+    });
+}
+
+function loadVideoSource(src) {
+    video.src = src;
+    video.load();
+
+    // Update status
+    infoStatus.textContent = 'Loading...';
+
+    video.addEventListener('loadedmetadata', () => {
+        videoTexture = new THREE.VideoTexture(video);
+        videoTexture.encoding = THREE.sRGBEncoding;
+
+        // Update info display
+        const videoWidth = video.videoWidth;
+        const videoHeight = video.videoHeight;
+        const leftViewWidth = videoWidth / 2;
+
+        infoDimensions.textContent = `${leftViewWidth} × ${videoHeight}`;
+        infoStatus.textContent = 'Ready';
+        videoInfo.classList.add('visible');
+
+        // Create anaglyph plane for non-VR viewing
+        createAnaglyphPlane();
+
+        // Try to autoplay
+        video.play().catch(err => {
+            console.warn('Autoplay prevented:', err);
+            infoStatus.textContent = 'Click to play';
+            // Add click to play
+            document.addEventListener('click', () => {
+                video.play();
+                infoStatus.textContent = 'Playing';
+            }, { once: true });
+        });
+    }, { once: true });
+}
+
+function createAnaglyphPlane() {
+    // Remove existing plane if any
+    if (anaglyphPlane) {
+        scene.remove(anaglyphPlane);
+        anaglyphPlane.geometry.dispose();
+        anaglyphPlane.material.dispose();
+    }
+
+    if (!video || !video.videoWidth) {
+        console.warn('Cannot create anaglyph plane: video not ready');
+        return;
+    }
+
+    // Calculate aspect ratio of individual view (half of SBS)
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    const viewAspect = (videoWidth / 2) / videoHeight;
+
+    // Calculate plane dimensions to fit in view while maintaining aspect ratio
+    const viewDistance = 10;
+    const vFOV = THREE.MathUtils.degToRad(camera.fov);
+    const viewHeight = 2 * Math.tan(vFOV / 2) * viewDistance;
+    const viewWidth = viewHeight * camera.aspect;
+
+    // Fit plane to view
+    let planeHeight = viewHeight * 0.8; // Use 80% of view height
+    let planeWidth = planeHeight * viewAspect;
+
+    // Check if width exceeds view
+    if (planeWidth > viewWidth * 0.9) {
+        planeWidth = viewWidth * 0.9;
+        planeHeight = planeWidth / viewAspect;
+    }
+
+    // Custom shader to render SBS as anaglyph (red = left, cyan = right)
+    const anaglyphMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            tDiffuse: { value: videoTexture }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D tDiffuse;
+            varying vec2 vUv;
+
+            void main() {
+                // Sample left half (0.0 to 0.5) for red channel
+                vec2 leftUv = vec2(vUv.x * 0.5, vUv.y);
+                vec4 leftColor = texture2D(tDiffuse, leftUv);
+
+                // Sample right half (0.5 to 1.0) for cyan channels
+                vec2 rightUv = vec2(0.5 + vUv.x * 0.5, vUv.y);
+                vec4 rightColor = texture2D(tDiffuse, rightUv);
+
+                // Combine: red from left, green+blue from right (cyan)
+                gl_FragColor = vec4(leftColor.r, rightColor.g, rightColor.b, 1.0);
+            }
+        `
+    });
+
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    anaglyphPlane = new THREE.Mesh(geometry, anaglyphMaterial);
+    anaglyphPlane.position.set(0, 1.6, -viewDistance);
+    scene.add(anaglyphPlane);
+
+    console.log(`Anaglyph plane created: ${planeWidth.toFixed(2)} × ${planeHeight.toFixed(2)} (aspect: ${viewAspect.toFixed(2)})`);
+}
+
+function onVRSessionStart() {
+    console.log('VR session started');
+    isInVRMode = true;
+
+    // Hide UI
+    uiContainer.classList.add('hidden');
+
+    // Enable sound for VR
+    if (video) {
+        video.muted = false;
+        console.log('VR audio enabled');
+    }
+
+    // Dispose of anaglyph resources
+    if (anaglyphPlane) {
+        scene.remove(anaglyphPlane);
+        // Don't dispose geometry/material yet, might reuse
+    }
+}
+
+function onVRSessionEnd() {
+    console.log('VR session ended');
+    isInVRMode = false;
+
+    // Show UI
+    uiContainer.classList.remove('hidden');
+
+    // Mute sound for non-VR
+    if (video) {
+        video.muted = true;
+        console.log('Non-VR audio muted');
+    }
+
+    // Recreate anaglyph plane
+    if (videoTexture) {
+        createAnaglyphPlane();
+    }
+
+    // Dispose VR planes
+    if (planeLeft) {
+        scene.remove(planeLeft);
+        planeLeft.geometry.dispose();
+        planeLeft.material.map.dispose();
+        planeLeft.material.dispose();
+        planeLeft = null;
+    }
+    if (planeRight) {
+        scene.remove(planeRight);
+        planeRight.geometry.dispose();
+        planeRight.material.map.dispose();
+        planeRight.material.dispose();
+        planeRight = null;
+    }
 }
 
 function togglePlayPause() {
@@ -103,14 +326,29 @@ function onWindowResize() {
 
 function animate() {
     renderer.setAnimationLoop(() => {
+        const now = performance.now();
         const xrCam = renderer.xr.getCamera(camera);
         const isInVR = renderer.xr.isPresenting;
+
+        // Track FPS
+        frameCount++;
+        if (now - lastFpsUpdate >= 1000) {
+            currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
+            frameCount = 0;
+            lastFpsUpdate = now;
+            if (infoFps) {
+                infoFps.textContent = `${currentFps} fps`;
+            }
+        }
 
         if (isInVR && videoTexture && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
             // VR MODE
             if (!planeLeft || !planeRight) {
                 createPlanesVR();
             }
+
+            // Hide anaglyph plane
+            if (anaglyphPlane) anaglyphPlane.visible = false;
 
             const leftCam = xrCam.cameras[0];
             const rightCam = xrCam.cameras[1];
@@ -134,13 +372,18 @@ function animate() {
             planeLeft.visible = true;
             planeRight.visible = true;
 
+            // Render normally in VR
+            renderer.render(scene, camera);
+
         } else {
-            // Not in VR - hide planes
+            // NON-VR MODE - show anaglyph plane
             if (planeLeft) planeLeft.visible = false;
             if (planeRight) planeRight.visible = false;
-        }
+            if (anaglyphPlane) anaglyphPlane.visible = true;
 
-        renderer.render(scene, camera);
+            // Render normally (anaglyph shader handles the stereo combination)
+            renderer.render(scene, camera);
+        }
     });
 }
 
@@ -223,8 +466,8 @@ function handleControllerInput() {
 
                 // Left controller stick controls distance via diopters (incremental)
                 if (isLeft && Math.abs(stickY) > 0.1) {
-                    // Add/subtract to diopters - forward (negative Y) = increase diopters (closer)
-                    const diopterDelta = -stickY * 0.01; // adjust sensitivity here
+                    // Add/subtract to diopters - forward (negative Y) = decrease diopters (farther)
+                    const diopterDelta = stickY * 0.01; // adjust sensitivity here (inverted)
                     diopters += diopterDelta;
                     diopters = Math.max(0.01, Math.min(1.0, diopters));
                     screenDistance = 1.0 / diopters;
@@ -269,6 +512,18 @@ function handleControllerInput() {
                 }
             } else {
                 if (source.userData) source.userData.squeezePressed = false;
+            }
+
+            // Handle X button (buttons[4]) to exit VR session
+            if (buttons.length > 4 && buttons[4].pressed) {
+                if (!source.userData) source.userData = {};
+                if (!source.userData.xButtonPressed) {
+                    console.log('X button pressed - exiting VR');
+                    renderer.xr.getSession().end();
+                    source.userData.xButtonPressed = true;
+                }
+            } else {
+                if (source.userData) source.userData.xButtonPressed = false;
             }
         }
     }
@@ -401,7 +656,7 @@ function updateHUD() {
     hudCtx.font = '16px monospace';
     hudCtx.fillStyle = '#aaa';
     hudCtx.fillText('L-stick: distance | R-stick: focal', 20, 225);
-    hudCtx.fillText('Trigger: play/pause | Grip: toggle HUD', 20, 245);
+    hudCtx.fillText('Trigger: play/pause | Grip: HUD | X: exit', 20, 245);
 
     hudTexture.needsUpdate = true;
 }
