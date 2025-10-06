@@ -440,7 +440,7 @@ function createPlanesVR() {
 
             void main() {
                 // Sample left half (0.0 to 0.5) with convergence shift
-                vec2 uv = vec2(vUv.x * 0.5 + uConvergenceShift, vUv.y);
+                vec2 uv = vec2(min(0.5, vUv.x * 0.5 + uConvergenceShift), vUv.y);
                 gl_FragColor = texture2D(uTexture, uv);
             }
         `
@@ -466,7 +466,7 @@ function createPlanesVR() {
 
             void main() {
                 // Sample right half (0.5 to 1.0) with convergence shift
-                vec2 uv = vec2(0.5 + vUv.x * 0.5 + uConvergenceShift, vUv.y);
+                vec2 uv = vec2(max(0.5, 0.5 + vUv.x * 0.5 + uConvergenceShift), vUv.y);
                 gl_FragColor = texture2D(uTexture, uv);
             }
         `
@@ -636,11 +636,11 @@ function updateStereoPlanes(leftCam, rightCam) {
 
     // Update shader uniforms for convergence
     // Left eye: shift left (negative)
-    const leftShift = -(reconv / 2) * reconvScale;
+    const leftShift = (reconv / 2) * reconvScale;
     planeLeft.material.uniforms.uConvergenceShift.value = leftShift;
 
     // Right eye: shift right (positive)
-    const rightShift = (reconv / 2) * reconvScale;
+    const rightShift = -(reconv / 2) * reconvScale;
     planeRight.material.uniforms.uConvergenceShift.value = rightShift;
 
     // Debug log reconvergence (only when it changes significantly)
