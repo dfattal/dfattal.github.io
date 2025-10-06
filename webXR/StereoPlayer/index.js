@@ -636,11 +636,11 @@ function updateStereoPlanes(leftCam, rightCam) {
 
     // Update shader uniforms for convergence
     // Left eye: shift left (negative)
-    const leftShift = (reconv / 2) * reconvScale;
+    const leftShift = -(reconv / 2) * reconvScale;
     planeLeft.material.uniforms.uConvergenceShift.value = leftShift;
 
     // Right eye: shift right (positive)
-    const rightShift = -(reconv / 2) * reconvScale;
+    const rightShift = (reconv / 2) * reconvScale;
     planeRight.material.uniforms.uConvergenceShift.value = rightShift;
 
     // Debug log reconvergence (only when it changes significantly)
