@@ -41,12 +41,21 @@ A WebXR application for viewing RGBD videos (RGB color on the left, depth/dispar
 4. **Enter VR Mode**: Click "Enter VR" and put on your headset.
 
 ### VR Controls
-- **Left Controller Thumbstick (Fwd/Back)**: Adjust screen distance.
-- **Right Controller Thumbstick (Fwd/Back)**: Adjust focal length.
-- **(TBD)**: A controller input will be assigned to adjust the `invZmin` (depth effect).
-- **Trigger**: Play/pause video.
-- **Grip/Squeeze**: Toggle HUD on/off.
-- **X Button**: Exit VR session.
+
+#### Left Controller
+- **Thumbstick Up/Down**: Adjust depth effect (invZmin)
+- **Trigger**: Increase screen distance (hold to continue moving farther)
+- **Grip**: Decrease edge feathering (hold to make edges sharper)
+- **X Button**: Exit VR session
+
+#### Right Controller
+- **Thumbstick Up/Down**: Adjust focal length (zoom)
+- **Trigger**: Decrease screen distance (hold to continue moving closer)
+- **Grip**: Increase edge feathering (hold to make edges softer)
+- **A Button**: Play/pause video
+- **B Button**: Toggle HUD on/off
+
+**Note**: Thumbstick left/right is intentionally disabled to avoid interference with up/down movements.
 
 ### Understanding the Settings
 
