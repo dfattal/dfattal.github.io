@@ -23,6 +23,9 @@ const IPD_MIN = 0.035;
 const IPD_MAX = 0.085;
 const IPD_DEFAULT = 0.063;
 
+// Initial Y position
+let initialY = null; // Will be set from XR camera when first available
+
 // HUD
 let hudCanvas, hudCtx, hudTexture;
 let hudVisible = true;
@@ -40,12 +43,8 @@ let videoFrameCount = 0;
 let videoFpsStartTime = 0;
 
 // Screen positioning - simple world space coordinates
-const screenPosition = new THREE.Vector3(0, 1.6, -100); // will update z based on screenDistance
+const screenPosition = new THREE.Vector3(0, 1.6, -100); // will update y from initialY and z based on screenDistance
 const screenQuaternion = new THREE.Quaternion(); // identity (facing -Z)
-
-// Temp vectors
-const tmpPos = new THREE.Vector3();
-const tmpQuat = new THREE.Quaternion();
 
 init();
 animate();
@@ -329,14 +328,12 @@ function onVRSessionEnd() {
     if (planeLeft) {
         scene.remove(planeLeft);
         planeLeft.geometry.dispose();
-        planeLeft.material.map.dispose();
         planeLeft.material.dispose();
         planeLeft = null;
     }
     if (planeRight) {
         scene.remove(planeRight);
         planeRight.geometry.dispose();
-        planeRight.material.map.dispose();
         planeRight.material.dispose();
         planeRight = null;
     }
@@ -421,19 +418,59 @@ function animate() {
 function createPlanesVR() {
     console.log('Creating VR stereo planes...');
 
-    // Clone textures for left and right
-    const texLeft = videoTexture.clone();
-    texLeft.encoding = THREE.sRGBEncoding;
-    texLeft.repeat.set(0.5, 1);
-
-    const texRight = videoTexture.clone();
-    texRight.encoding = THREE.sRGBEncoding;
-    texRight.repeat.set(0.5, 1);
-
-    const matLeft = new THREE.MeshBasicMaterial({ map: texLeft });
-    const matRight = new THREE.MeshBasicMaterial({ map: texRight });
-
     const planeGeom = new THREE.PlaneGeometry(1, 1);
+
+    // Left eye shader - samples left half of SBS texture with convergence shift
+    const matLeft = new THREE.ShaderMaterial({
+        uniforms: {
+            uTexture: { value: videoTexture },
+            uConvergenceShift: { value: 0.0 }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D uTexture;
+            uniform float uConvergenceShift;
+            varying vec2 vUv;
+
+            void main() {
+                // Sample left half (0.0 to 0.5) with convergence shift
+                vec2 uv = vec2(vUv.x * 0.5 + uConvergenceShift, vUv.y);
+                gl_FragColor = texture2D(uTexture, uv);
+            }
+        `
+    });
+
+    // Right eye shader - samples right half of SBS texture with convergence shift
+    const matRight = new THREE.ShaderMaterial({
+        uniforms: {
+            uTexture: { value: videoTexture },
+            uConvergenceShift: { value: 0.0 }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D uTexture;
+            uniform float uConvergenceShift;
+            varying vec2 vUv;
+
+            void main() {
+                // Sample right half (0.5 to 1.0) with convergence shift
+                vec2 uv = vec2(0.5 + vUv.x * 0.5 + uConvergenceShift, vUv.y);
+                gl_FragColor = texture2D(uTexture, uv);
+            }
+        `
+    });
 
     planeLeft = new THREE.Mesh(planeGeom, matLeft);
     planeLeft.layers.set(1); // left eye only
@@ -521,33 +558,30 @@ function handleControllerInput() {
                 }
             }
 
-            // Handle trigger for play/pause (buttons[0])
-            if (buttons.length > 0 && buttons[0].pressed) {
-                // Debounce button press
-                if (!source.userData) source.userData = {};
-                if (!source.userData.triggerPressed) {
+            // A button (buttons[4]) on right controller for play/pause
+            if (buttons.length > 4 && buttons[4].pressed && isRight) {
+                if (!source.userData.aButtonPressed) {
                     togglePlayPause();
                     console.log('Play/Pause toggled');
-                    source.userData.triggerPressed = true;
+                    source.userData.aButtonPressed = true;
                 }
             } else {
-                if (source.userData) source.userData.triggerPressed = false;
+                if (source.userData) source.userData.aButtonPressed = false;
             }
 
-            // Handle squeeze/grip for HUD toggle (typically buttons[1])
-            if (buttons.length > 1 && buttons[1].pressed) {
-                if (!source.userData) source.userData = {};
-                if (!source.userData.squeezePressed) {
+            // B button (buttons[5]) on right controller for HUD toggle
+            if (buttons.length > 5 && buttons[5].pressed && isRight) {
+                if (!source.userData.bButtonPressed) {
                     toggleHUD();
-                    source.userData.squeezePressed = true;
+                    console.log('HUD toggled');
+                    source.userData.bButtonPressed = true;
                 }
             } else {
-                if (source.userData) source.userData.squeezePressed = false;
+                if (source.userData) source.userData.bButtonPressed = false;
             }
 
-            // Handle X button (buttons[4]) to exit VR session
-            if (buttons.length > 4 && buttons[4].pressed) {
-                if (!source.userData) source.userData = {};
+            // X button (buttons[4]) on left controller to exit VR session
+            if (buttons.length > 4 && buttons[4].pressed && isLeft) {
                 if (!source.userData.xButtonPressed) {
                     console.log('X button pressed - exiting VR');
                     renderer.xr.getSession().end();
@@ -562,6 +596,13 @@ function handleControllerInput() {
 
 function updateStereoPlanes(leftCam, rightCam) {
     if (!planeLeft || !planeRight || !videoTexture.image) return;
+
+    // Initialize initialY from XR camera when first available
+    if (initialY === null) {
+        initialY = (leftCam.position.y + rightCam.position.y) / 2;
+        screenPosition.y = initialY;
+        console.log('Initial Y position set to:', initialY);
+    }
 
     // Get video dimensions
     const videoWidth = videoTexture.image.videoWidth || videoTexture.image.width;
@@ -593,14 +634,14 @@ function updateStereoPlanes(leftCam, rightCam) {
     // we need to scale by 0.5 when applying to texture offset
     const reconvScale = 0.5; // individual eye width in texture coordinates
 
-    // Update UV offsets for reconvergence
-    // Left texture: base offset 0, shift by -reconv/2 * scale
+    // Update shader uniforms for convergence
+    // Left eye: shift left (negative)
     const leftShift = -(reconv / 2) * reconvScale;
-    planeLeft.material.map.offset.set(leftShift, 0);
+    planeLeft.material.uniforms.uConvergenceShift.value = leftShift;
 
-    // Right texture: base offset 0.5 (for SBS split), shift by +reconv/2 * scale
+    // Right eye: shift right (positive)
     const rightShift = (reconv / 2) * reconvScale;
-    planeRight.material.map.offset.set(0.5 + rightShift, 0);
+    planeRight.material.uniforms.uConvergenceShift.value = rightShift;
 
     // Debug log reconvergence (only when it changes significantly)
     if (Math.abs(reconv - (planeLeft.userData.lastReconv || 0)) > 0.001) {
@@ -687,7 +728,7 @@ function updateHUD() {
     hudCtx.font = '16px monospace';
     hudCtx.fillStyle = '#aaa';
     hudCtx.fillText('L-stick: distance | R-stick: focal', 20, 225);
-    hudCtx.fillText('Trigger: play/pause | Grip: HUD | X: exit', 20, 245);
+    hudCtx.fillText('R: A=play B=HUD | L: X=exit', 20, 245);
 
     hudTexture.needsUpdate = true;
 }
