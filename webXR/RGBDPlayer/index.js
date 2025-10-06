@@ -182,7 +182,7 @@ void main(void) {
 
         vec4 result = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[0] / iRes[0].x, f1[0] / iRes[0].y)) * SKR1, C1, uRGBD, uRGBD, invZmin[0], invZmax[0], iRes[0], 1.0, invZ, confidence);
 
-        // Blend with the background
+        // Blend with the background (result.rgb is NOT premultiplied)
         result.rgb = background.rgb * background.a * (1.0 - result.a) + result.rgb * result.a;
         result.a = background.a + result.a * (1.0 - background.a);
 
@@ -337,6 +337,9 @@ function measureVideoFrameRate() {
 
 function createViewSynthesisMaterial() {
     viewSynthesisMaterial = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.NormalBlending,
         uniforms: {
             uRGBD: { value: videoTexture }, // Single texture containing both RGB and depth
             invZmin: { value: [invZmin, 0, 0, 0] },
@@ -520,13 +523,11 @@ function createPlanesVR() {
     const planeGeom = new THREE.PlaneGeometry(1, 1);
 
     const matLeft = viewSynthesisMaterial.clone();
-    matLeft.transparent = true;
     planeLeft = new THREE.Mesh(planeGeom, matLeft);
     planeLeft.layers.set(1);
     scene.add(planeLeft);
 
     const matRight = viewSynthesisMaterial.clone();
-    matRight.transparent = true;
     planeRight = new THREE.Mesh(planeGeom, matRight);
     planeRight.layers.set(2);
     scene.add(planeRight);
