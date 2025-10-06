@@ -25,6 +25,9 @@ const IPD_MIN = 0.035;
 const IPD_MAX = 0.085;
 const IPD_DEFAULT = 0.063;
 
+// Initial Y position
+let initialY = null; // Will be set from XR camera when first available
+
 // HUD
 let hudCanvas, hudCtx, hudTexture;
 let hudVisible = true;
@@ -525,20 +528,26 @@ function updateStereoPlanes() {
     if (!planeLeft || !planeRight || !videoTexture.image) return;
     updateIPD();
 
+    const xrCam = renderer.xr.getCamera(camera);
+    const leftCam = xrCam.cameras[0];
+    const rightCam = xrCam.cameras[1];
+
+    // Initialize initialY from XR camera when first available
+    if (initialY === null) {
+        initialY = (leftCam.position.y + rightCam.position.y) / 2;
+        console.log('Initial Y position set to:', initialY);
+    }
+
     const halfWidth = video.videoWidth / 2;
     const aspect = halfWidth / video.videoHeight;
     const screenWidth = viewportScale*screenDistance / focal;
     const screenHeight = screenWidth / aspect;
 
-    const position = new THREE.Vector3(0, 1.6, -screenDistance);
+    const position = new THREE.Vector3(0, initialY, -screenDistance);
     planeLeft.position.copy(position);
     planeRight.position.copy(position);
     planeLeft.scale.set(screenWidth, screenHeight, 1);
     planeRight.scale.set(screenWidth, screenHeight, 1);
-
-    const xrCam = renderer.xr.getCamera(camera);
-    const leftCam = xrCam.cameras[0];
-    const rightCam = xrCam.cameras[1];
 
     // oRes should be the screen dimensions in VR space (same as plane scale)
     const oRes = new THREE.Vector2(screenWidth, screenHeight);
@@ -556,7 +565,7 @@ function updateStereoPlanes() {
 
     // Left eye
     const invd_left = ipd / screenDistance;
-    const facePosLeft = new THREE.Vector3(leftCam.position.x / ipd, (leftCam.position.y-1.6) / ipd, -leftCam.position.z / ipd);
+    const facePosLeft = new THREE.Vector3(leftCam.position.x / ipd, (leftCam.position.y - initialY) / ipd, -leftCam.position.z / ipd);
     const sk2_left = new THREE.Vector2(-facePosLeft.x * invd_left / (1.0 - facePosLeft.z * invd_left), -facePosLeft.y * invd_left / (1.0 - facePosLeft.z * invd_left));
     const f2_left = screenDistance * (1.0 - facePosLeft.z * invd_left)/viewportScale;
 
@@ -568,7 +577,7 @@ function updateStereoPlanes() {
 
     // Right eye
     const invd_right = ipd / screenDistance;
-    const facePosRight = new THREE.Vector3(rightCam.position.x / ipd, (rightCam.position.y-1.6) / ipd, -rightCam.position.z / ipd);
+    const facePosRight = new THREE.Vector3(rightCam.position.x / ipd, (rightCam.position.y - initialY) / ipd, -rightCam.position.z / ipd);
     const sk2_right = new THREE.Vector2(-facePosRight.x * invd_right / (1.0 - facePosRight.z * invd_right), -facePosRight.y * invd_right / (1.0 - facePosRight.z * invd_right));
     const f2_right = screenDistance * (1.0 - facePosRight.z * invd_right)/viewportScale;
 
