@@ -23,6 +23,7 @@ uniform vec2 oRes; // viewport resolution in px
 uniform float feathering; // Feathering factor for smooth transitions at the edges
 
 uniform vec4 background; // background color
+uniform bool uTransparentGradients; // Flag to make high gradient regions transparent
 
 #define texture texture2D
 
@@ -91,6 +92,9 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
     invZ += dinvZ;
     invZ2 = 0.0;
     float disp = 0.0;
+    float oldDisp = 0.0;
+    float gradDisp = 0.0;
+    float gradThr = 0.02 * (invZmin - invZmax) * 140.0 / numsteps_float;
     mat3 P = FSKR1 * inverse(FSKR2);
     vec3 C = FSKR1 * (C2 - C1);
     mat2 Pxyxy = mat2(P[0].xy, P[1].xy);
@@ -104,8 +108,12 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         invZ -= dinvZ;
         s1 -= ds1;
         disp = readDisp(iChannelDisp, s1 + .5, invZmin, invZmax, iRes);
+        gradDisp = disp - oldDisp;
+        oldDisp = disp;
         invZ2 = invZ * (dot(Pzxy, s2) + Pzz) / (1.0 - C.z * invZ);
         if((disp > invZ) && (invZ2 > 0.0)) {
+            if(abs(gradDisp) > gradThr)
+                confidence = 0.0;
             invZ += dinvZ;
             s1 += ds1;
             dinvZ /= 2.0;
@@ -113,8 +121,11 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         }
     }
     if((abs(s1.x) < 0.5) && (abs(s1.y) < 0.5) && (invZ2 > 0.0) && (invZ > invZminT)) {
-        confidence = taper(s1 + .5);
-        return vec4(readColor(iChannelCol, s1 + .5), taper(s1 + .5));
+        float finalConfidence = taper(s1 + .5);
+        if(uTransparentGradients && confidence == 0.0) {
+            finalConfidence = 0.0; // Make high gradient regions transparent
+        }
+        return vec4(readColor(iChannelCol, s1 + .5), finalConfidence);
     } else {
         invZ2 = 0.0;
         confidence = 0.0;

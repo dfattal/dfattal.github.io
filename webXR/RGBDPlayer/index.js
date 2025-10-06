@@ -17,6 +17,7 @@ let diopters = 0.1; // 1/screenDistance
 let invZmin = 0.05; // Depth effect control
 let feathering = 0.05; // Edge feathering for smooth transitions
 let viewportScale = 1.2; // extra scale for the viewport to avoid clipping
+let transparentGradients = false; // Flag to make high gradient regions transparent
 
 // IPD tracking
 let ipd = 0.063; // default 63mm
@@ -223,6 +224,7 @@ function createViewSynthesisMaterial() {
             background: { value: new THREE.Vector4(0, 0, 0, 0) },
             iResOriginal: { value: new THREE.Vector2() },
             uTime: { value: 0 },
+            uTransparentGradients: { value: transparentGradients },
         },
         vertexShader: `
             varying vec2 v_texcoord;
@@ -504,6 +506,17 @@ function handleControllerInput() {
             } else {
                 if (source.userData) source.userData.xButtonPressed = false;
             }
+
+            // Y button (buttons[5]) on left controller to toggle transparent gradients
+            if (buttons.length > 5 && buttons[5].pressed && source.handedness === 'left') {
+                if (!source.userData.yButtonPressed) {
+                    transparentGradients = !transparentGradients;
+                    console.log('Transparent gradients:', transparentGradients);
+                    source.userData.yButtonPressed = true;
+                }
+            } else {
+                if (source.userData) source.userData.yButtonPressed = false;
+            }
         }
     }
 }
@@ -537,7 +550,8 @@ function updateStereoPlanes() {
         'iRes': { value: [new THREE.Vector2(halfWidth, video.videoHeight), new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] },
         'oRes': { value: oRes },
         'iResOriginal': { value: oRes.clone() }, // Same as oRes (screen dimensions)
-        'feathering': { value: feathering }
+        'feathering': { value: feathering },
+        'uTransparentGradients': { value: transparentGradients }
     };
 
     // Left eye
@@ -604,8 +618,9 @@ function updateHUD() {
     hudCtx.fillText(`IPD: ${(ipd * 1000).toFixed(1)}mm`, 20, 140);
     hudCtx.fillText(`invZmin: ${invZmin.toFixed(3)}`, 20, 170);
     hudCtx.fillText(`Feathering: ${feathering.toFixed(3)}`, 20, 200);
+    hudCtx.fillText(`Transparent Gradients: ${transparentGradients ? 'ON' : 'OFF'}`, 20, 230);
     const status = video && !video.paused ? 'Playing' : 'Paused';
-    hudCtx.fillText(`Status: ${status}`, 20, 230);
+    hudCtx.fillText(`Status: ${status}`, 320, 230);
     hudCtx.font = '16px monospace';
     hudCtx.fillStyle = '#aaa';
     hudCtx.fillText('L-stick: invZmin | R-stick: focal', 20, 255);
