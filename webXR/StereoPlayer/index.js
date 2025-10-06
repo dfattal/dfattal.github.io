@@ -580,8 +580,8 @@ function updateStereoPlanes(leftCam, rightCam) {
     const halfAspect = videoWidth / (2 * videoHeight);
 
     // Calculate screen width from focal and distance
-    // screenWidth = focal * screenDistance (where focal is fraction of width)
-    const screenWidth = focal * screenDistance;
+    // screenWidth = screenDistance / focal (where focal is fraction of width)
+    const screenWidth = screenDistance / focal;
     const screenHeight = screenWidth / halfAspect;
 
     // Calculate reconvergence shift
