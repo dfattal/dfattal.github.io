@@ -424,7 +424,8 @@ function createPlanesVR() {
     const matLeft = new THREE.ShaderMaterial({
         uniforms: {
             uTexture: { value: videoTexture },
-            uConvergenceShift: { value: 0.0 }
+            uConvergenceShiftX: { value: 0.0 },
+            uConvergenceShiftY: { value: 0.0 }
         },
         vertexShader: `
             varying vec2 vUv;
@@ -435,12 +436,13 @@ function createPlanesVR() {
         `,
         fragmentShader: `
             uniform sampler2D uTexture;
-            uniform float uConvergenceShift;
+            uniform float uConvergenceShiftX;
+            uniform float uConvergenceShiftY;
             varying vec2 vUv;
 
             void main() {
                 // Sample left half (0.0 to 0.5) with convergence shift
-                vec2 uv = vec2(min(0.5, vUv.x * 0.5 + uConvergenceShift), vUv.y);
+                vec2 uv = vec2(min(0.5, vUv.x * 0.5 + uConvergenceShiftX), vUv.y + uConvergenceShiftY);
                 gl_FragColor = texture2D(uTexture, uv);
             }
         `
@@ -450,7 +452,8 @@ function createPlanesVR() {
     const matRight = new THREE.ShaderMaterial({
         uniforms: {
             uTexture: { value: videoTexture },
-            uConvergenceShift: { value: 0.0 }
+            uConvergenceShiftX: { value: 0.0 },
+            uConvergenceShiftY: { value: 0.0 }
         },
         vertexShader: `
             varying vec2 vUv;
@@ -461,12 +464,13 @@ function createPlanesVR() {
         `,
         fragmentShader: `
             uniform sampler2D uTexture;
-            uniform float uConvergenceShift;
+            uniform float uConvergenceShiftX;
+            uniform float uConvergenceShiftY;
             varying vec2 vUv;
 
             void main() {
                 // Sample right half (0.5 to 1.0) with convergence shift
-                vec2 uv = vec2(max(0.5, 0.5 + vUv.x * 0.5 + uConvergenceShift), vUv.y);
+                vec2 uv = vec2(max(0.5, 0.5 + vUv.x * 0.5 + uConvergenceShiftX), vUv.y + uConvergenceShiftY);
                 gl_FragColor = texture2D(uTexture, uv);
             }
         `
@@ -625,28 +629,37 @@ function updateStereoPlanes(leftCam, rightCam) {
     const screenWidth = screenDistance / focal;
     const screenHeight = screenWidth / halfAspect;
 
-    // Calculate reconvergence shift
-    // reconv = focal * ipd / screenDistance
-    const reconv = focal * ipd / screenDistance;
-
     // Since each eye's image is 0.5 width in texture coords (due to SBS),
     // and reconv is relative to individual eye image width,
     // we need to scale by 0.5 when applying to texture offset
     const reconvScale = 0.5; // individual eye width in texture coordinates
 
+    // Calculate reconvergence shift
+    // reconv = focal * ipd / screenDistance
+    const reconvLeftX = focal * (leftCam.position.x - ipd/2) / screenDistance * reconvScale;
+    const reconvRightX = focal * (rightCam.position.x + ipd/2) / screenDistance * reconvScale;
+    const reconvLeftY = focal * (leftCam.position.y - initialY) / screenDistance;
+    const reconvRightY = focal * (rightCam.position.y - initialY) / screenDistance;
+    
+
+    
+
     // Update shader uniforms for convergence
     // Left eye: shift left (negative)
-    const leftShift = -(reconv / 2) * reconvScale;
-    planeLeft.material.uniforms.uConvergenceShift.value = leftShift;
+    planeLeft.material.uniforms.uConvergenceShiftX.value = reconvLeftX;
+    planeLeft.material.uniforms.uConvergenceShiftY.value = reconvLeftY;
 
     // Right eye: shift right (positive)
-    const rightShift = (reconv / 2) * reconvScale;
-    planeRight.material.uniforms.uConvergenceShift.value = rightShift;
+    planeRight.material.uniforms.uConvergenceShiftX.value = reconvRightX;
+    planeRight.material.uniforms.uConvergenceShiftY.value = reconvRightY;
 
     // Debug log reconvergence (only when it changes significantly)
-    if (Math.abs(reconv - (planeLeft.userData.lastReconv || 0)) > 0.001) {
-        console.log(`Reconv: ${(reconv*100).toFixed(2)}% of eye width, texture shift: ±${((reconv/2)*reconvScale*100).toFixed(3)}% of SBS`);
-        planeLeft.userData.lastReconv = reconv;
+    if (Math.abs(reconvLeftX - (planeLeft.userData.lastReconvX || 0)) > 0.001 || Math.abs(reconvLeftY - (planeLeft.userData.lastReconvY || 0)) > 0.001 || Math.abs(reconvRightX - (planeRight.userData.lastReconvX || 0)) > 0.001 || Math.abs(reconvRightY - (planeRight.userData.lastReconvY || 0)) > 0.001) {
+        console.log(`Reconv: ${(reconvLeftX*100).toFixed(2)}% of eye width, texture shift: ±${((reconvLeftX/2)*reconvScale*100).toFixed(3)}% of SBS`);
+        planeLeft.userData.lastReconvX = reconvLeftX;
+        planeLeft.userData.lastReconvY = reconvLeftY;
+        planeRight.userData.lastReconvX = reconvRightX;
+        planeRight.userData.lastReconvY = reconvRightY;
     }
 
     // Position both planes at the same world position (they overlap)
