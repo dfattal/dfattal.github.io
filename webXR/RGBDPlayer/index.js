@@ -53,9 +53,9 @@ let handInputState = {
     right: {
         isPinching: false,
         pinchStartTime: 0,
-        lastTapTime: 0,
-        tapCount: 0,
-        dragStartPosition: null
+        dragStartPosition: null,
+        lastThumbsUpState: false,
+        lastThumbsDownState: false
     }
 };
 
@@ -152,6 +152,66 @@ function getPinchDistance(hand) {
     if (!thumbTip || !indexTip) return null;
 
     return thumbTip.distanceTo(indexTip);
+}
+
+function isThumbsUp(hand) {
+    const wrist = getJointPosition(hand, 'wrist');
+    const thumbTip = getJointPosition(hand, 'thumb-tip');
+
+    if (!wrist || !thumbTip) return false;
+
+    const otherTips = [
+        'index-finger-tip',
+        'middle-finger-tip',
+        'ring-finger-tip',
+        'pinky-finger-tip'
+    ];
+
+    // Check thumb distance from wrist
+    const thumbDistance = thumbTip.distanceTo(wrist);
+
+    // Check if other fingers are curled (close to wrist)
+    let curledFingers = 0;
+    for (const tipName of otherTips) {
+        const tip = getJointPosition(hand, tipName);
+        if (!tip) continue;
+
+        const dist = tip.distanceTo(wrist);
+        if (dist < 0.06) curledFingers++; // consider "curled" if close to wrist
+    }
+
+    // Thumb extended upward (tip above wrist) and at least 3 fingers curled
+    return (thumbDistance > 0.08 && thumbTip.y > wrist.y && curledFingers >= 3);
+}
+
+function isThumbsDown(hand) {
+    const wrist = getJointPosition(hand, 'wrist');
+    const thumbTip = getJointPosition(hand, 'thumb-tip');
+
+    if (!wrist || !thumbTip) return false;
+
+    const otherTips = [
+        'index-finger-tip',
+        'middle-finger-tip',
+        'ring-finger-tip',
+        'pinky-finger-tip'
+    ];
+
+    // Check thumb distance from wrist
+    const thumbDistance = thumbTip.distanceTo(wrist);
+
+    // Check if other fingers are curled (close to wrist)
+    let curledFingers = 0;
+    for (const tipName of otherTips) {
+        const tip = getJointPosition(hand, tipName);
+        if (!tip) continue;
+
+        const dist = tip.distanceTo(wrist);
+        if (dist < 0.06) curledFingers++; // consider "curled" if close to wrist
+    }
+
+    // Thumb extended downward (tip below wrist) and at least 3 fingers curled
+    return (thumbDistance > 0.08 && thumbTip.y < wrist.y && curledFingers >= 3);
 }
 
 function setupFileHandling() {
@@ -653,7 +713,7 @@ function handleHandInput() {
                 }
             }
 
-            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, SINGLE TAP FOR PLAY/PAUSE, DOUBLE TAP FOR TRANSPARENT GRADIENTS ===
+            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE, THUMBS UP/DOWN FOR TRANSPARENT GRADIENTS ===
             if (handedness === 'right') {
                 const distance = getPinchDistance(hand);
                 if (distance === null) continue;
@@ -661,6 +721,7 @@ function handleHandInput() {
                 const indexTip = getJointPosition(hand, 'index-finger-tip');
                 if (!indexTip) continue;
 
+                // Check for pinch gestures
                 if (distance < PINCH_DISTANCE_THRESHOLD) {
                     if (!state.isPinching) {
                         // Pinch start
@@ -687,26 +748,11 @@ function handleHandInput() {
                     if (state.isPinching) {
                         // Pinch end
                         const pinchDuration = performance.now() - state.pinchStartTime;
-                        const now = performance.now();
 
                         if (pinchDuration < TAP_DURATION_MAX) {
-                            // It's a tap - check if it's a double tap
-                            const timeSinceLastTap = now - state.lastTapTime;
-
-                            if (timeSinceLastTap < DOUBLE_TAP_WINDOW) {
-                                // Double tap detected - toggle transparent gradients
-                                state.tapCount++;
-                                transparentGradients = !transparentGradients;
-                                console.log(`Right double pinch-tap - transparent gradients: ${transparentGradients}`);
-                                state.tapCount = 0; // Reset
-                            } else {
-                                // First tap - toggle play/pause
-                                state.tapCount = 1;
-                                togglePlayPause();
-                                console.log('Right pinch tap - play/pause toggled');
-                            }
-
-                            state.lastTapTime = now;
+                            // Quick tap - toggle play/pause
+                            togglePlayPause();
+                            console.log('Right pinch tap - play/pause toggled');
                         } else {
                             console.log('Right pinch drag end');
                         }
@@ -715,6 +761,22 @@ function handleHandInput() {
                         state.dragStartPosition = null;
                     }
                 }
+
+                // Check for thumbs up (deactivate transparent gradients)
+                const thumbsUp = isThumbsUp(hand);
+                if (thumbsUp && !state.lastThumbsUpState) {
+                    transparentGradients = false;
+                    console.log('Right thumbs up - transparent gradients OFF');
+                }
+                state.lastThumbsUpState = thumbsUp;
+
+                // Check for thumbs down (activate transparent gradients)
+                const thumbsDown = isThumbsDown(hand);
+                if (thumbsDown && !state.lastThumbsDownState) {
+                    transparentGradients = true;
+                    console.log('Right thumbs down - transparent gradients ON');
+                }
+                state.lastThumbsDownState = thumbsDown;
             }
         }
     }
