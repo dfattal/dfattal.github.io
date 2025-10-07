@@ -636,10 +636,10 @@ function updateStereoPlanes(leftCam, rightCam) {
 
     // Calculate reconvergence shift
     // reconv = focal * ipd / screenDistance
-    const reconvLeftX = focal * (leftCam.position.x - ipd/2) / screenDistance * reconvScale;
-    const reconvRightX = focal * (rightCam.position.x + ipd/2) / screenDistance * reconvScale;
-    const reconvLeftY = focal * (leftCam.position.y - initialY) / screenDistance;
-    const reconvRightY = focal * (rightCam.position.y - initialY) / screenDistance;
+    const reconvLeftX = -focal * (leftCam.position.x - ipd/2) / screenDistance * reconvScale;
+    const reconvRightX = -focal * (rightCam.position.x + ipd/2) / screenDistance * reconvScale;
+    const reconvLeftY = -focal * (leftCam.position.y - initialY) / screenDistance;
+    const reconvRightY = -focal * (rightCam.position.y - initialY) / screenDistance;
     
 
     
