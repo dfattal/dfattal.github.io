@@ -27,6 +27,7 @@ const IPD_DEFAULT = 0.063;
 
 // Initial Y position
 let initialY = null; // Will be set from XR camera when first available
+const INITIAL_Y_MIN_THRESHOLD = 0.1; // Minimum valid initialY in meters
 
 // HUD
 let hudCanvas, hudCtx, hudTexture;
@@ -709,10 +710,17 @@ function updateStereoPlanes() {
     const leftCam = xrCam.cameras[0];
     const rightCam = xrCam.cameras[1];
 
-    // Initialize initialY from XR camera when first available
+    // Initialize initialY from XR camera when first available and valid
     if (initialY === null) {
-        initialY = (leftCam.position.y + rightCam.position.y) / 2;
-        console.log('Initial Y position set to:', initialY);
+        const candidateY = (leftCam.position.y + rightCam.position.y) / 2;
+
+        // Only accept if above threshold (retry until we get valid reading)
+        if (candidateY > INITIAL_Y_MIN_THRESHOLD) {
+            initialY = candidateY;
+            console.log('Initial Y position set to:', initialY.toFixed(3), 'm');
+        } else {
+            console.log('InitialY candidate', candidateY.toFixed(3), 'm too low, retrying...');
+        }
     }
 
     const halfWidth = video.videoWidth / 2;
@@ -814,13 +822,17 @@ function updateHUD() {
     hudCtx.fillText(`IPD: ${(ipd * 1000).toFixed(1)}mm`, 20, 140);
     hudCtx.fillText(`invZmin: ${invZmin.toFixed(3)}`, 20, 170);
     hudCtx.fillText(`Feathering: ${feathering.toFixed(3)}`, 20, 200);
-    hudCtx.fillText(`Transparent Gradients: ${transparentGradients ? 'ON' : 'OFF'}`, 20, 230);
+
+    const initialYText = initialY !== null ? `${initialY.toFixed(3)}m` : 'pending...';
+    hudCtx.fillText(`InitialY: ${initialYText}`, 20, 230);
+
+    hudCtx.fillText(`Transparent Gradients: ${transparentGradients ? 'ON' : 'OFF'}`, 20, 260);
     const status = video && !video.paused ? 'Playing' : 'Paused';
-    hudCtx.fillText(`Status: ${status}`, 320, 230);
+    hudCtx.fillText(`Status: ${status}`, 320, 260);
     hudCtx.font = '16px monospace';
     hudCtx.fillStyle = '#aaa';
-    hudCtx.fillText('L-stick: invZmin | R-stick: focal', 20, 255);
-    hudCtx.fillText('Triggers: distance | Grips: feathering', 20, 275);
-    hudCtx.fillText('R: A=play B=HUD | L: X=exit', 20, 295);
+    hudCtx.fillText('L-stick: invZmin | R-stick: focal', 20, 285);
+    hudCtx.fillText('Triggers: distance | Grips: feathering', 20, 305);
+    hudCtx.fillText('R: A=play B=HUD | L: X=exit', 20, 325);
     hudTexture.needsUpdate = true;
 }

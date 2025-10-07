@@ -29,6 +29,7 @@ const IPD_DEFAULT = 0.063;
 
 // Initial Y position
 let initialY = null; // Will be set from XR camera when first available
+const INITIAL_Y_MIN_THRESHOLD = 0.1; // Minimum valid initialY in meters
 
 // HUD
 let hudCanvas, hudCtx, hudTexture;
@@ -822,11 +823,18 @@ function handleHandInput() {
 function updateStereoPlanes(leftCam, rightCam) {
     if (!planeLeft || !planeRight || !videoTexture.image) return;
 
-    // Initialize initialY from XR camera when first available
+    // Initialize initialY from XR camera when first available and valid
     if (initialY === null) {
-        initialY = (leftCam.position.y + rightCam.position.y) / 2;
-        screenPosition.y = initialY;
-        console.log('Initial Y position set to:', initialY);
+        const candidateY = (leftCam.position.y + rightCam.position.y) / 2;
+
+        // Only accept if above threshold (retry until we get valid reading)
+        if (candidateY > INITIAL_Y_MIN_THRESHOLD) {
+            initialY = candidateY;
+            screenPosition.y = initialY;
+            console.log('Initial Y position set to:', initialY.toFixed(3), 'm');
+        } else {
+            console.log('InitialY candidate', candidateY.toFixed(3), 'm too low, retrying...');
+        }
     }
 
     // Get video dimensions
@@ -964,13 +972,16 @@ function updateHUD() {
     hudCtx.fillText(`IPD: ${(ipd * 1000).toFixed(1)}mm`, 20, 140);
     hudCtx.fillText(`Reconv: ${((focal * ipd / screenDistance) * 1000).toFixed(1)}mm`, 20, 170);
 
+    const initialYText = initialY !== null ? `${initialY.toFixed(3)}m` : 'pending...';
+    hudCtx.fillText(`InitialY: ${initialYText}`, 20, 200);
+
     const status = video && !video.paused ? 'Playing' : 'Paused';
-    hudCtx.fillText(`Status: ${status}`, 20, 200);
+    hudCtx.fillText(`Status: ${status}`, 20, 230);
 
     hudCtx.font = '16px monospace';
     hudCtx.fillStyle = '#aaa';
-    hudCtx.fillText('L-stick: distance | R-stick: focal', 20, 225);
-    hudCtx.fillText('R: A=play B=HUD | L: X=exit', 20, 245);
+    hudCtx.fillText('L-stick: distance | R-stick: focal', 20, 255);
+    hudCtx.fillText('R: A=play B=HUD | L: X=exit', 20, 275);
 
     hudTexture.needsUpdate = true;
 }
