@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 
 let scene, camera, renderer;
 let planeLeft = null, planeRight = null;
@@ -9,6 +10,10 @@ let video = null;
 // Non-VR resources
 let anaglyphPlane = null;
 let isInVRMode = false;
+
+// Environment map
+let envMap = null;
+let showBackground = false;
 
 // Screen parameters
 let screenDistance = 100; // meters (default)
@@ -27,7 +32,8 @@ const IPD_DEFAULT = 0.063;
 let initialY = null; // Will be set from XR camera when first available
 
 // HUD
-let hudCanvas, hudCtx, hudTexture, hudOverlay;
+let hudCanvas, hudCtx, hudTexture;
+let hudOverlayLeft, hudOverlayRight;
 let hudVisible = false;
 
 // Controllers
@@ -93,6 +99,9 @@ function init() {
     // Setup controllers
     setupControllers();
 
+    // Load environment map
+    loadEnvironmentMap();
+
     window.addEventListener('resize', onWindowResize);
 }
 
@@ -103,6 +112,22 @@ function setupControllers() {
     scene.add(controller1);
 
     // Controller input is handled via gamepad state in handleControllerInput()
+}
+
+function loadEnvironmentMap() {
+    const exrLoader = new EXRLoader();
+    exrLoader.load(
+        'kloppenheim_02_puresky_4k.exr',
+        (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            envMap = texture;
+            console.log('Environment map loaded');
+        },
+        undefined,
+        (error) => {
+            console.error('Error loading environment map:', error);
+        }
+    );
 }
 
 function setupFileHandling() {
@@ -304,6 +329,9 @@ function onVRSessionStart() {
         scene.remove(anaglyphPlane);
         // Don't dispose geometry/material yet, might reuse
     }
+
+    // Don't set background by default - user will toggle with Y button
+    updateBackground();
 }
 
 function onVRSessionEnd() {
@@ -318,6 +346,9 @@ function onVRSessionEnd() {
         video.muted = true;
         console.log('Non-VR audio muted');
     }
+
+    // Remove environment background
+    scene.background = null;
 
     // Recreate anaglyph plane
     if (videoTexture) {
@@ -350,10 +381,23 @@ function togglePlayPause() {
 
 function toggleHUD() {
     hudVisible = !hudVisible;
-    if (hudOverlay) {
-        hudOverlay.visible = hudVisible;
-    }
+    if (hudOverlayLeft) hudOverlayLeft.visible = hudVisible;
+    if (hudOverlayRight) hudOverlayRight.visible = hudVisible;
     console.log(`HUD toggled: ${hudVisible ? 'ON' : 'OFF'}`);
+}
+
+function toggleBackground() {
+    showBackground = !showBackground;
+    updateBackground();
+    console.log(`Background toggled: ${showBackground ? 'ON' : 'OFF'}`);
+}
+
+function updateBackground() {
+    if (isInVRMode && showBackground && envMap) {
+        scene.background = envMap;
+    } else {
+        scene.background = null;
+    }
 }
 
 function onWindowResize() {
@@ -599,6 +643,17 @@ function handleControllerInput() {
             } else {
                 if (source.userData) source.userData.xButtonPressed = false;
             }
+
+            // Y button (buttons[5]) on left controller to toggle background
+            if (buttons.length > 5 && buttons[5].pressed && isLeft) {
+                if (!source.userData.yButtonPressed) {
+                    toggleBackground();
+                    console.log('Background toggled');
+                    source.userData.yButtonPressed = true;
+                }
+            } else {
+                if (source.userData) source.userData.yButtonPressed = false;
+            }
         }
     }
 }
@@ -697,7 +752,7 @@ function createHUDOverlay(plane) {
         transparent: true
     });
     const hudGeom = new THREE.PlaneGeometry(1, 1);
-    hudOverlay = new THREE.Mesh(hudGeom, hudMat);
+    const hudOverlay = new THREE.Mesh(hudGeom, hudMat);
 
     // Position HUD in top-left corner of plane
     // HUD will be 1/4 of screen width, half that height
@@ -710,6 +765,13 @@ function createHUDOverlay(plane) {
 
     // Match parent plane's layer
     hudOverlay.layers.mask = plane.layers.mask;
+
+    // Store references to both overlays
+    if (plane.layers.mask === planeLeft.layers.mask) {
+        hudOverlayLeft = hudOverlay;
+    } else {
+        hudOverlayRight = hudOverlay;
+    }
 
     plane.add(hudOverlay);
     plane.userData.hudOverlay = hudOverlay;
