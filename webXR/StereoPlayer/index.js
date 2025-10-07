@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 
 let scene, camera, renderer;
 let planeLeft = null, planeRight = null;
@@ -11,9 +10,9 @@ let video = null;
 let anaglyphPlane = null;
 let isInVRMode = false;
 
-// Environment map
-let envMap = null;
+// Background
 let showBackground = false;
+let gradientBackground = null;
 
 // Screen parameters
 let screenDistance = 100; // meters (default)
@@ -99,8 +98,8 @@ function init() {
     // Setup controllers
     setupControllers();
 
-    // Load environment map
-    loadEnvironmentMap();
+    // Create gradient background
+    createGradientBackground();
 
     window.addEventListener('resize', onWindowResize);
 }
@@ -114,20 +113,31 @@ function setupControllers() {
     // Controller input is handled via gamepad state in handleControllerInput()
 }
 
-function loadEnvironmentMap() {
-    const exrLoader = new EXRLoader();
-    exrLoader.load(
-        'kloppenheim_02_puresky_4k.exr',
-        (texture) => {
-            texture.mapping = THREE.EquirectangularReflectionMapping;
-            envMap = texture;
-            console.log('Environment map loaded');
-        },
-        undefined,
-        (error) => {
-            console.error('Error loading environment map:', error);
-        }
-    );
+function createGradientBackground() {
+    // Create a sphere with a gradient shader
+    const geometry = new THREE.SphereGeometry(500, 32, 32);
+    const material = new THREE.ShaderMaterial({
+        vertexShader: `
+            varying vec3 vPosition;
+            void main() {
+                vPosition = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            varying vec3 vPosition;
+            void main() {
+                // Vertical gradient from center (black) to top/bottom (dark grey)
+                float gradient = abs(vPosition.y / 500.0); // Normalize to 0-1
+                vec3 color = mix(vec3(0.0), vec3(0.15), gradient); // Black to dark grey
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `,
+        side: THREE.BackSide
+    });
+    gradientBackground = new THREE.Mesh(geometry, material);
+    gradientBackground.visible = false;
+    scene.add(gradientBackground);
 }
 
 function setupFileHandling() {
@@ -347,8 +357,8 @@ function onVRSessionEnd() {
         console.log('Non-VR audio muted');
     }
 
-    // Remove environment background
-    scene.background = null;
+    // Hide gradient background
+    updateBackground();
 
     // Recreate anaglyph plane
     if (videoTexture) {
@@ -393,10 +403,8 @@ function toggleBackground() {
 }
 
 function updateBackground() {
-    if (isInVRMode && showBackground && envMap) {
-        scene.background = envMap;
-    } else {
-        scene.background = null;
+    if (gradientBackground) {
+        gradientBackground.visible = isInVRMode && showBackground;
     }
 }
 
