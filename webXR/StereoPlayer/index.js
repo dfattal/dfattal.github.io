@@ -434,6 +434,7 @@ function createPlanesVR() {
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
+        transparent: true,
         fragmentShader: `
             uniform sampler2D uTexture;
             uniform float uConvergenceShiftX;
@@ -462,6 +463,7 @@ function createPlanesVR() {
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
+        transparent: true,
         fragmentShader: `
             uniform sampler2D uTexture;
             uniform float uConvergenceShiftX;
