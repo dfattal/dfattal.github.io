@@ -590,7 +590,7 @@ function handleHandInput() {
 
             const state = handInputState[handedness];
 
-            // === LEFT HAND: PINCH+DRAG FOR SCREEN DISTANCE, DOUBLE TAP TO EXIT VR ===
+            // === LEFT HAND: PINCH+DRAG FOR INVZMIN, DOUBLE TAP TO EXIT VR ===
             if (handedness === 'left') {
                 const distance = getPinchDistance(hand);
                 if (distance === null) continue;
@@ -610,13 +610,12 @@ function handleHandInput() {
                         const dx = indexTip.x - state.dragStartPosition.x;
 
                         if (Math.abs(dx) > 0.003) {
-                            // Right = farther (decrease diopters), left = closer (increase diopters)
-                            const diopterDelta = -dx * 1.5;
-                            diopters += diopterDelta;
-                            diopters = Math.max(0.01, Math.min(1.0, diopters));
-                            screenDistance = 1.0 / diopters;
+                            // Right = increase depth effect, left = decrease depth effect
+                            const invZminDelta = dx * 0.1;
+                            invZmin += invZminDelta;
+                            invZmin = Math.max(0.01, Math.min(0.1, invZmin));
                             state.dragStartPosition.x = indexTip.x;
-                            console.log(`Distance: ${screenDistance.toFixed(1)}m`);
+                            console.log(`invZmin: ${invZmin.toFixed(3)}`);
                         }
                     }
                 } else {
