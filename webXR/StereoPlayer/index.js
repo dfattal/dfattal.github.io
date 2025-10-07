@@ -27,8 +27,8 @@ const IPD_DEFAULT = 0.063;
 let initialY = null; // Will be set from XR camera when first available
 
 // HUD
-let hudCanvas, hudCtx, hudTexture;
-let hudVisible = true;
+let hudCanvas, hudCtx, hudTexture, hudOverlay;
+let hudVisible = false;
 
 // Controllers
 let controller0, controller1;
@@ -350,6 +350,9 @@ function togglePlayPause() {
 
 function toggleHUD() {
     hudVisible = !hudVisible;
+    if (hudOverlay) {
+        hudOverlay.visible = hudVisible;
+    }
     console.log(`HUD toggled: ${hudVisible ? 'ON' : 'OFF'}`);
 }
 
@@ -694,7 +697,7 @@ function createHUDOverlay(plane) {
         transparent: true
     });
     const hudGeom = new THREE.PlaneGeometry(1, 1);
-    const hudOverlay = new THREE.Mesh(hudGeom, hudMat);
+    hudOverlay = new THREE.Mesh(hudGeom, hudMat);
 
     // Position HUD in top-left corner of plane
     // HUD will be 1/4 of screen width, half that height
@@ -703,6 +706,7 @@ function createHUDOverlay(plane) {
 
     hudOverlay.position.set(-0.5 + hudScale / 2, 0.5 - hudScale / (2 * hudAspect), 0.01);
     hudOverlay.scale.set(hudScale, hudScale / hudAspect, 1);
+    hudOverlay.visible = hudVisible;
 
     // Match parent plane's layer
     hudOverlay.layers.mask = plane.layers.mask;
