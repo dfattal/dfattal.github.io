@@ -767,7 +767,7 @@ function createHUDOverlay(plane) {
     const hudScale = 0.25;
     const hudAspect = 2; // width/height ratio
 
-    hudOverlay.position.set(-0.5 + hudScale / 2, 0.5 - hudScale / (2 * hudAspect), 0.01);
+    hudOverlay.position.set(-0.5 + hudScale / 2, 0.5 - hudScale / (2 * hudAspect), 0.05);
     hudOverlay.scale.set(hudScale, hudScale / hudAspect, 1);
     hudOverlay.visible = hudVisible;
 
