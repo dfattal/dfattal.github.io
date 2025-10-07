@@ -53,10 +53,13 @@ let handInputState = {
     right: {
         isPinching: false,
         pinchStartTime: 0,
-        dragStartPosition: null,
-        lastThumbsUpState: false,
-        lastThumbsDownState: false
-    }
+        dragStartPosition: null
+    },
+    // Clap detection state
+    lastClapDistance: null,
+    lastClapTime: 0,
+    CLAP_DISTANCE_THRESHOLD: 0.05, // meters
+    CLAP_COOLDOWN: 500 // milliseconds
 };
 
 // UI elements
@@ -154,64 +157,38 @@ function getPinchDistance(hand) {
     return thumbTip.distanceTo(indexTip);
 }
 
-function isThumbsUp(hand) {
-    const wrist = getJointPosition(hand, 'wrist');
-    const thumbTip = getJointPosition(hand, 'thumb-tip');
+function detectClap(inputSources, now = performance.now()) {
+    let leftHand = null, rightHand = null;
 
-    if (!wrist || !thumbTip) return false;
-
-    const otherTips = [
-        'index-finger-tip',
-        'middle-finger-tip',
-        'ring-finger-tip',
-        'pinky-finger-tip'
-    ];
-
-    // Check thumb distance from wrist
-    const thumbDistance = thumbTip.distanceTo(wrist);
-
-    // Check if other fingers are curled (close to wrist)
-    let curledFingers = 0;
-    for (const tipName of otherTips) {
-        const tip = getJointPosition(hand, tipName);
-        if (!tip) continue;
-
-        const dist = tip.distanceTo(wrist);
-        if (dist < 0.06) curledFingers++; // consider "curled" if close to wrist
+    for (const source of inputSources) {
+        if (!source.hand) continue;
+        if (source.handedness === 'left') leftHand = source.hand;
+        if (source.handedness === 'right') rightHand = source.hand;
     }
 
-    // Thumb extended upward (tip above wrist) and at least 3 fingers curled
-    return (thumbDistance > 0.08 && thumbTip.y > wrist.y && curledFingers >= 3);
-}
+    if (!leftHand || !rightHand) return false;
 
-function isThumbsDown(hand) {
-    const wrist = getJointPosition(hand, 'wrist');
-    const thumbTip = getJointPosition(hand, 'thumb-tip');
+    const leftWrist = getJointPosition(leftHand, 'wrist');
+    const rightWrist = getJointPosition(rightHand, 'wrist');
 
-    if (!wrist || !thumbTip) return false;
+    if (!leftWrist || !rightWrist) return false;
 
-    const otherTips = [
-        'index-finger-tip',
-        'middle-finger-tip',
-        'ring-finger-tip',
-        'pinky-finger-tip'
-    ];
+    const currentDistance = leftWrist.distanceTo(rightWrist);
 
-    // Check thumb distance from wrist
-    const thumbDistance = thumbTip.distanceTo(wrist);
+    // Check for clap: hands were far apart and now close together
+    if (handInputState.lastClapDistance !== null &&
+        currentDistance < handInputState.CLAP_DISTANCE_THRESHOLD &&
+        handInputState.lastClapDistance > handInputState.CLAP_DISTANCE_THRESHOLD * 2 &&
+        now - handInputState.lastClapTime > handInputState.CLAP_COOLDOWN) {
 
-    // Check if other fingers are curled (close to wrist)
-    let curledFingers = 0;
-    for (const tipName of otherTips) {
-        const tip = getJointPosition(hand, tipName);
-        if (!tip) continue;
-
-        const dist = tip.distanceTo(wrist);
-        if (dist < 0.06) curledFingers++; // consider "curled" if close to wrist
+        console.log('👏 Hand clap detected!');
+        handInputState.lastClapTime = now;
+        handInputState.lastClapDistance = currentDistance;
+        return true;
     }
 
-    // Thumb extended downward (tip below wrist) and at least 3 fingers curled
-    return (thumbDistance > 0.08 && thumbTip.y < wrist.y && curledFingers >= 3);
+    handInputState.lastClapDistance = currentDistance;
+    return false;
 }
 
 function setupFileHandling() {
@@ -643,6 +620,12 @@ function handleHandInput() {
     const session = renderer.xr.getSession();
     if (!session) return;
 
+    // Check for clap gesture first (uses both hands)
+    if (detectClap(session.inputSources)) {
+        transparentGradients = !transparentGradients;
+        console.log(`Clap detected - transparent gradients: ${transparentGradients}`);
+    }
+
     for (const source of session.inputSources) {
         if (source.hand) {
             const hand = source.hand;
@@ -713,7 +696,7 @@ function handleHandInput() {
                 }
             }
 
-            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE, THUMBS UP/DOWN FOR TRANSPARENT GRADIENTS ===
+            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE ===
             if (handedness === 'right') {
                 const distance = getPinchDistance(hand);
                 if (distance === null) continue;
@@ -721,7 +704,6 @@ function handleHandInput() {
                 const indexTip = getJointPosition(hand, 'index-finger-tip');
                 if (!indexTip) continue;
 
-                // Check for pinch gestures
                 if (distance < PINCH_DISTANCE_THRESHOLD) {
                     if (!state.isPinching) {
                         // Pinch start
@@ -761,22 +743,6 @@ function handleHandInput() {
                         state.dragStartPosition = null;
                     }
                 }
-
-                // Check for thumbs up (deactivate transparent gradients)
-                const thumbsUp = isThumbsUp(hand);
-                if (thumbsUp && !state.lastThumbsUpState) {
-                    transparentGradients = false;
-                    console.log('Right thumbs up - transparent gradients OFF');
-                }
-                state.lastThumbsUpState = thumbsUp;
-
-                // Check for thumbs down (activate transparent gradients)
-                const thumbsDown = isThumbsDown(hand);
-                if (thumbsDown && !state.lastThumbsDownState) {
-                    transparentGradients = true;
-                    console.log('Right thumbs down - transparent gradients ON');
-                }
-                state.lastThumbsDownState = thumbsDown;
             }
         }
     }
