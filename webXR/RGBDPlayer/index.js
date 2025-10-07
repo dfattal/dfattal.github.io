@@ -30,6 +30,7 @@ let initialY = null; // Will be set from XR camera when first available
 
 // HUD
 let hudCanvas, hudCtx, hudTexture;
+let hudOverlayLeft, hudOverlayRight;
 let hudVisible = true;
 
 // Controllers
@@ -337,6 +338,9 @@ function togglePlayPause() {
 
 function toggleHUD() {
     hudVisible = !hudVisible;
+    if (hudOverlayLeft) hudOverlayLeft.visible = hudVisible;
+    if (hudOverlayRight) hudOverlayRight.visible = hudVisible;
+    console.log(`HUD toggled: ${hudVisible ? 'ON' : 'OFF'}`);
 }
 
 function onWindowResize() {
@@ -602,10 +606,20 @@ function createHUDOverlay(plane) {
     const hudOverlay = new THREE.Mesh(hudGeom, hudMat);
     const hudScale = 0.25;
     const hudAspect = 2;
-    hudOverlay.position.set(-0.5 + hudScale / 2, 0.5 - hudScale / (2 * hudAspect), 0.01);
+    hudOverlay.position.set(-0.5 + hudScale / 2, 0.5 - hudScale / (2 * hudAspect), 0.05);
     hudOverlay.scale.set(hudScale, hudScale / hudAspect, 1);
+    hudOverlay.visible = hudVisible;
     hudOverlay.layers.mask = plane.layers.mask;
+
+    // Store references to both overlays
+    if (plane.layers.mask === (1 << 1)) {
+        hudOverlayLeft = hudOverlay;
+    } else {
+        hudOverlayRight = hudOverlay;
+    }
+
     plane.add(hudOverlay);
+    plane.userData.hudOverlay = hudOverlay;
 }
 
 function updateHUD() {
