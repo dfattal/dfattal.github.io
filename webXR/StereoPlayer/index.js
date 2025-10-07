@@ -491,7 +491,7 @@ function createPlanesVR() {
             void main() {
                 // Sample left half (0.0 to 0.5) with convergence shift
                 vec2 uv = vec2(vUv.x * 0.5 + uConvergenceShiftX, vUv.y + uConvergenceShiftY);
-                gl_FragColor = uv.x < 0.5 ? texture2D(uTexture, uv) : vec4(0.0, 0.0, 0.0, 0.0);
+                gl_FragColor = uv.x < 0.5 && uv.x > 0.0 && uv.y < 1.0 && uv.y > 0.0 ? texture2D(uTexture, uv) : vec4(0.0, 0.0, 0.0, 0.0);
             }
         `
     });
@@ -520,7 +520,7 @@ function createPlanesVR() {
             void main() {
                 // Sample right half (0.5 to 1.0) with convergence shift
                 vec2 uv = vec2(0.5 + vUv.x * 0.5 + uConvergenceShiftX, vUv.y + uConvergenceShiftY);
-                gl_FragColor = uv.x > 0.5 ? texture2D(uTexture, uv) : vec4(0.0, 0.0, 0.0, 0.0);
+                gl_FragColor = uv.x > 0.5 && uv.x < 1.0 && uv.y < 1.0 && uv.y > 0.0 ? texture2D(uTexture, uv) : vec4(0.0, 0.0, 0.0, 0.0);
             }
         `
     });
