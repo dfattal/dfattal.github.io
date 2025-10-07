@@ -137,14 +137,26 @@ function getJointPosition(hand, jointName) {
     return new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
 }
 
-function detectPinch(hand, threshold = 0.04) {
+function detectPinch(hand, threshold = 0.025) {
     const thumbTip = getJointPosition(hand, 'thumb-tip');
     const indexTip = getJointPosition(hand, 'index-finger-tip');
+    const thumbProximal = getJointPosition(hand, 'thumb-phalanx-proximal');
+    const indexProximal = getJointPosition(hand, 'index-finger-phalanx-proximal');
 
-    if (!thumbTip || !indexTip) return false;
+    if (!thumbTip || !indexTip || !thumbProximal || !indexProximal) return false;
 
-    const distance = thumbTip.distanceTo(indexTip);
-    return distance < threshold;
+    // Distance between thumb and index tips
+    const tipDistance = thumbTip.distanceTo(indexTip);
+
+    // Distance between thumb and index proximal joints (base of fingers)
+    const baseDistance = thumbProximal.distanceTo(indexProximal);
+
+    // For a true pinch:
+    // 1. Tips must be very close (< 25mm)
+    // 2. Tips must be significantly closer than the base joints
+    const isPinching = tipDistance < threshold && tipDistance < baseDistance * 0.3;
+
+    return isPinching;
 }
 
 
@@ -719,9 +731,14 @@ function handleHandInput() {
             if (handedness === 'left') {
                 const isPinching = detectPinch(hand);
 
+                // Debug: log pinch state changes
+                if (isPinching !== state.lastPinchState) {
+                    console.log(`Left hand pinch: ${isPinching}`);
+                }
+
                 // Trigger on pinch start
                 if (isPinching && !state.lastPinchState) {
-                    console.log('Left pinch - exiting VR');
+                    console.log('Left pinch detected - exiting VR');
                     session.end();
                 }
 
@@ -733,16 +750,21 @@ function handleHandInput() {
                 const isPinching = detectPinch(hand);
                 const indexTip = getJointPosition(hand, 'index-finger-tip');
 
+                // Debug: log pinch state changes
+                if (isPinching !== state.lastPinchState) {
+                    console.log(`Right hand pinch: ${isPinching}`);
+                }
+
                 if (isPinching && indexTip) {
                     if (!state.lastPinchState) {
                         // Start of pinch - record initial X position
                         state.lastPinchX = indexTip.x;
                         state.pinchStartTime = Date.now();
-                        console.log('Right pinch started');
+                        console.log('Right pinch started - hold and drag left/right for focal');
                     } else if (state.lastPinchX !== null) {
                         // During pinch - adjust focal based on X (horizontal) movement
                         const deltaX = indexTip.x - state.lastPinchX;
-                        if (Math.abs(deltaX) > 0.001) {
+                        if (Math.abs(deltaX) > 0.003) { // Increased threshold to avoid tiny movements
                             // Right = zoom in (increase focal), left = zoom out (decrease focal)
                             let log2Focal = Math.log2(focal);
                             const focalDelta = deltaX * 2.0; // sensitivity adjustment
