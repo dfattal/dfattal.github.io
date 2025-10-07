@@ -36,6 +36,25 @@ let hudVisible = true;
 // Controllers
 let controller0, controller1;
 
+// Hand tracking state
+const PINCH_DISTANCE_THRESHOLD = 0.015; // 15mm - fingers must be touching
+const TAP_DURATION_MAX = 300; // milliseconds
+const DOUBLE_TAP_WINDOW = 500; // milliseconds between taps for double-tap
+
+let handInputState = {
+    left: {
+        isPinching: false,
+        pinchStartTime: 0,
+        lastTapTime: 0,
+        tapCount: 0
+    },
+    right: {
+        isPinching: false,
+        pinchStartTime: 0,
+        dragStartPosition: null
+    }
+};
+
 // UI elements
 let uiContainer, videoInfo, dropZone, fileInput;
 let infoDimensions, infoFps, infoStatus;
@@ -74,7 +93,9 @@ function init() {
 
     document.body.appendChild(renderer.domElement);
 
-    const vrButton = VRButton.createButton(renderer);
+    const vrButton = VRButton.createButton(renderer, {
+        optionalFeatures: ['hand-tracking']
+    });
     document.body.appendChild(vrButton);
 
     renderer.xr.addEventListener('sessionstart', onVRSessionStart);
@@ -102,6 +123,31 @@ function setupControllers() {
     controller0 = renderer.xr.getController(0);
     controller1 = renderer.xr.getController(1);
     scene.add(controller0, controller1);
+}
+
+// ========== Hand Gesture Detection Utilities ==========
+
+function getJointPosition(hand, jointName) {
+    const jointSpace = hand.get(jointName);
+    if (!jointSpace) return null;
+
+    const frame = renderer.xr.getFrame();
+    const referenceSpace = renderer.xr.getReferenceSpace();
+    if (!frame || !referenceSpace) return null;
+
+    const pose = frame.getJointPose(jointSpace, referenceSpace);
+    if (!pose) return null;
+
+    return new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+}
+
+function getPinchDistance(hand) {
+    const thumbTip = getJointPosition(hand, 'thumb-tip');
+    const indexTip = getJointPosition(hand, 'index-finger-tip');
+
+    if (!thumbTip || !indexTip) return null;
+
+    return thumbTip.distanceTo(indexTip);
 }
 
 function setupFileHandling() {
@@ -370,6 +416,7 @@ function animate() {
             const rightCam = xrCam.cameras[1];
 
             handleControllerInput();
+            handleHandInput();
             updateStereoPlanes();
             updateHUD();
 
@@ -523,6 +570,111 @@ function handleControllerInput() {
                 }
             } else {
                 if (source.userData) source.userData.yButtonPressed = false;
+            }
+        }
+    }
+}
+
+function handleHandInput() {
+    const session = renderer.xr.getSession();
+    if (!session) return;
+
+    for (const source of session.inputSources) {
+        if (source.hand) {
+            const hand = source.hand;
+            const handedness = source.handedness; // 'left' or 'right'
+
+            if (handedness !== 'left' && handedness !== 'right') continue;
+
+            const state = handInputState[handedness];
+
+            // === LEFT HAND: DOUBLE PINCH-TAP TO EXIT VR ===
+            if (handedness === 'left') {
+                const distance = getPinchDistance(hand);
+                if (distance === null) continue;
+
+                if (distance < PINCH_DISTANCE_THRESHOLD) {
+                    if (!state.isPinching) {
+                        // Pinch start
+                        state.isPinching = true;
+                        state.pinchStartTime = performance.now();
+                        console.log('Left pinch start');
+                    }
+                } else {
+                    if (state.isPinching) {
+                        // Pinch end - check for tap
+                        const pinchDuration = performance.now() - state.pinchStartTime;
+                        const now = performance.now();
+
+                        if (pinchDuration < TAP_DURATION_MAX) {
+                            // It's a tap - check if it's a double tap
+                            const timeSinceLastTap = now - state.lastTapTime;
+
+                            if (timeSinceLastTap < DOUBLE_TAP_WINDOW) {
+                                // Double tap detected!
+                                state.tapCount++;
+                                console.log(`Left double pinch-tap detected - exiting VR`);
+                                session.end();
+                                state.tapCount = 0; // Reset
+                            } else {
+                                // First tap (or tap after timeout)
+                                state.tapCount = 1;
+                                console.log('Left pinch tap 1/2');
+                            }
+
+                            state.lastTapTime = now;
+                        }
+
+                        state.isPinching = false;
+                    }
+                }
+            }
+
+            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE ===
+            if (handedness === 'right') {
+                const distance = getPinchDistance(hand);
+                if (distance === null) continue;
+
+                const indexTip = getJointPosition(hand, 'index-finger-tip');
+                if (!indexTip) continue;
+
+                if (distance < PINCH_DISTANCE_THRESHOLD) {
+                    if (!state.isPinching) {
+                        // Pinch start
+                        state.isPinching = true;
+                        state.pinchStartTime = performance.now();
+                        state.dragStartPosition = { x: indexTip.x, y: indexTip.y, z: indexTip.z };
+                        console.log('Right pinch start');
+                    } else {
+                        // Pinch sustain - dragging
+                        const dx = indexTip.x - state.dragStartPosition.x;
+
+                        if (Math.abs(dx) > 0.003) {
+                            // Right = zoom in (increase focal), left = zoom out (decrease focal)
+                            let log2Focal = Math.log2(focal);
+                            const focalDelta = dx * 2.0;
+                            log2Focal += focalDelta;
+                            log2Focal = Math.max(-1, Math.min(1, log2Focal));
+                            focal = Math.pow(2, log2Focal);
+                            state.dragStartPosition.x = indexTip.x;
+                            console.log(`Focal: ${focal.toFixed(2)} (${(focal * 36).toFixed(0)}mm)`);
+                        }
+                    }
+                } else {
+                    if (state.isPinching) {
+                        // Pinch end
+                        const pinchDuration = performance.now() - state.pinchStartTime;
+                        if (pinchDuration < TAP_DURATION_MAX) {
+                            // Quick tap - toggle play/pause
+                            console.log(`Right pinch tap detected (${pinchDuration.toFixed(0)}ms)`);
+                            togglePlayPause();
+                        } else {
+                            console.log('Right pinch drag end');
+                        }
+                        state.isPinching = false;
+                        state.dragStartPosition = null;
+                    }
+                }
             }
         }
     }
