@@ -46,7 +46,8 @@ let handInputState = {
         isPinching: false,
         pinchStartTime: 0,
         lastTapTime: 0,
-        tapCount: 0
+        tapCount: 0,
+        dragStartPosition: null
     },
     right: {
         isPinching: false,
@@ -588,17 +589,34 @@ function handleHandInput() {
 
             const state = handInputState[handedness];
 
-            // === LEFT HAND: DOUBLE PINCH-TAP TO EXIT VR ===
+            // === LEFT HAND: PINCH+DRAG FOR SCREEN DISTANCE, DOUBLE TAP TO EXIT VR ===
             if (handedness === 'left') {
                 const distance = getPinchDistance(hand);
                 if (distance === null) continue;
+
+                const indexTip = getJointPosition(hand, 'index-finger-tip');
+                if (!indexTip) continue;
 
                 if (distance < PINCH_DISTANCE_THRESHOLD) {
                     if (!state.isPinching) {
                         // Pinch start
                         state.isPinching = true;
                         state.pinchStartTime = performance.now();
+                        state.dragStartPosition = { x: indexTip.x, y: indexTip.y, z: indexTip.z };
                         console.log('Left pinch start');
+                    } else {
+                        // Pinch sustain - dragging
+                        const dx = indexTip.x - state.dragStartPosition.x;
+
+                        if (Math.abs(dx) > 0.003) {
+                            // Right = farther (decrease diopters), left = closer (increase diopters)
+                            const diopterDelta = -dx * 1.5;
+                            diopters += diopterDelta;
+                            diopters = Math.max(0.01, Math.min(1.0, diopters));
+                            screenDistance = 1.0 / diopters;
+                            state.dragStartPosition.x = indexTip.x;
+                            console.log(`Distance: ${screenDistance.toFixed(1)}m`);
+                        }
                     }
                 } else {
                     if (state.isPinching) {
@@ -623,9 +641,12 @@ function handleHandInput() {
                             }
 
                             state.lastTapTime = now;
+                        } else {
+                            console.log('Left pinch drag end');
                         }
 
                         state.isPinching = false;
+                        state.dragStartPosition = null;
                     }
                 }
             }
