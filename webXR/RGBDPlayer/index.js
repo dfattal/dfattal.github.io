@@ -11,9 +11,9 @@ let rgbPlane = null;
 let isInVRMode = false;
 
 // Screen parameters
-let screenDistance = 10; // meters (default)
+let screenDistance = 100; // meters (default)
 let focal = 1.0; // focal length as fraction of image width (default = 36mm equiv)
-let diopters = 0.1; // 1/screenDistance
+let diopters = 0.01; // 1/screenDistance
 let invZmin = 0.05; // Depth effect control
 let feathering = 0.05; // Edge feathering for smooth transitions
 let viewportScale = 1.2; // extra scale for the viewport to avoid clipping
