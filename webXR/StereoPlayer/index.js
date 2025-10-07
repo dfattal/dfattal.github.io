@@ -39,9 +39,22 @@ let hudVisible = false;
 let controller0, controller1;
 
 // Hand tracking state
+const PINCH_DISTANCE_THRESHOLD = 0.015; // 15mm - fingers must be touching
+const TAP_DURATION_MAX = 300; // milliseconds
+const DOUBLE_TAP_WINDOW = 500; // milliseconds between taps for double-tap
+
 let handInputState = {
-    left: { lastPinchState: false },
-    right: { lastPinchState: false, lastPinchX: null }
+    left: {
+        isPinching: false,
+        pinchStartTime: 0,
+        lastTapTime: 0,
+        tapCount: 0
+    },
+    right: {
+        isPinching: false,
+        pinchStartTime: 0,
+        dragStartPosition: null
+    }
 };
 
 // UI elements
@@ -137,26 +150,13 @@ function getJointPosition(hand, jointName) {
     return new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
 }
 
-function detectPinch(hand, threshold = 0.025) {
+function getPinchDistance(hand) {
     const thumbTip = getJointPosition(hand, 'thumb-tip');
     const indexTip = getJointPosition(hand, 'index-finger-tip');
-    const thumbProximal = getJointPosition(hand, 'thumb-phalanx-proximal');
-    const indexProximal = getJointPosition(hand, 'index-finger-phalanx-proximal');
 
-    if (!thumbTip || !indexTip || !thumbProximal || !indexProximal) return false;
+    if (!thumbTip || !indexTip) return null;
 
-    // Distance between thumb and index tips
-    const tipDistance = thumbTip.distanceTo(indexTip);
-
-    // Distance between thumb and index proximal joints (base of fingers)
-    const baseDistance = thumbProximal.distanceTo(indexProximal);
-
-    // For a true pinch:
-    // 1. Tips must be very close (< 25mm)
-    // 2. Tips must be significantly closer than the base joints
-    const isPinching = tipDistance < threshold && tipDistance < baseDistance * 0.3;
-
-    return isPinching;
+    return thumbTip.distanceTo(indexTip);
 }
 
 
@@ -727,69 +727,93 @@ function handleHandInput() {
 
             const state = handInputState[handedness];
 
-            // === LEFT HAND: PINCH TO EXIT VR ===
+            // === LEFT HAND: DOUBLE PINCH-TAP TO EXIT VR ===
             if (handedness === 'left') {
-                const isPinching = detectPinch(hand);
+                const distance = getPinchDistance(hand);
+                if (distance === null) continue;
 
-                // Debug: log pinch state changes
-                if (isPinching !== state.lastPinchState) {
-                    console.log(`Left hand pinch: ${isPinching}`);
+                if (distance < PINCH_DISTANCE_THRESHOLD) {
+                    if (!state.isPinching) {
+                        // Pinch start
+                        state.isPinching = true;
+                        state.pinchStartTime = performance.now();
+                        console.log('Left pinch start');
+                    }
+                } else {
+                    if (state.isPinching) {
+                        // Pinch end - check for tap
+                        const pinchDuration = performance.now() - state.pinchStartTime;
+                        const now = performance.now();
+
+                        if (pinchDuration < TAP_DURATION_MAX) {
+                            // It's a tap - check if it's a double tap
+                            const timeSinceLastTap = now - state.lastTapTime;
+
+                            if (timeSinceLastTap < DOUBLE_TAP_WINDOW) {
+                                // Double tap detected!
+                                state.tapCount++;
+                                console.log(`Left double pinch-tap detected - exiting VR`);
+                                session.end();
+                                state.tapCount = 0; // Reset
+                            } else {
+                                // First tap (or tap after timeout)
+                                state.tapCount = 1;
+                                console.log('Left pinch tap 1/2');
+                            }
+
+                            state.lastTapTime = now;
+                        }
+
+                        state.isPinching = false;
+                    }
                 }
-
-                // Trigger on pinch start
-                if (isPinching && !state.lastPinchState) {
-                    console.log('Left pinch detected - exiting VR');
-                    session.end();
-                }
-
-                state.lastPinchState = isPinching;
             }
 
-            // === RIGHT HAND: PINCH + DRAG FOR FOCAL, QUICK PINCH FOR PLAY/PAUSE ===
+            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE ===
             if (handedness === 'right') {
-                const isPinching = detectPinch(hand);
+                const distance = getPinchDistance(hand);
+                if (distance === null) continue;
+
                 const indexTip = getJointPosition(hand, 'index-finger-tip');
+                if (!indexTip) continue;
 
-                // Debug: log pinch state changes
-                if (isPinching !== state.lastPinchState) {
-                    console.log(`Right hand pinch: ${isPinching}`);
-                }
+                if (distance < PINCH_DISTANCE_THRESHOLD) {
+                    if (!state.isPinching) {
+                        // Pinch start
+                        state.isPinching = true;
+                        state.pinchStartTime = performance.now();
+                        state.dragStartPosition = { x: indexTip.x, y: indexTip.y, z: indexTip.z };
+                        console.log('Right pinch start');
+                    } else {
+                        // Pinch sustain - dragging
+                        const dx = indexTip.x - state.dragStartPosition.x;
 
-                if (isPinching && indexTip) {
-                    if (!state.lastPinchState) {
-                        // Start of pinch - record initial X position
-                        state.lastPinchX = indexTip.x;
-                        state.pinchStartTime = Date.now();
-                        console.log('Right pinch started - hold and drag left/right for focal');
-                    } else if (state.lastPinchX !== null) {
-                        // During pinch - adjust focal based on X (horizontal) movement
-                        const deltaX = indexTip.x - state.lastPinchX;
-                        if (Math.abs(deltaX) > 0.003) { // Increased threshold to avoid tiny movements
+                        if (Math.abs(dx) > 0.003) {
                             // Right = zoom in (increase focal), left = zoom out (decrease focal)
                             let log2Focal = Math.log2(focal);
-                            const focalDelta = deltaX * 2.0; // sensitivity adjustment
+                            const focalDelta = dx * 2.0;
                             log2Focal += focalDelta;
                             log2Focal = Math.max(-1, Math.min(1, log2Focal));
                             focal = Math.pow(2, log2Focal);
-                            state.lastPinchX = indexTip.x;
-                            console.log(`Focal: ${focal.toFixed(2)} (${(focal * 36).toFixed(0)}mm) (hand control)`);
+                            state.dragStartPosition.x = indexTip.x;
+                            console.log(`Focal: ${focal.toFixed(2)} (${(focal * 36).toFixed(0)}mm)`);
                         }
                     }
                 } else {
-                    // Pinch released
-                    if (state.lastPinchState) {
-                        // Check if it was a quick pinch (< 300ms) without much movement
-                        const pinchDuration = Date.now() - state.pinchStartTime;
-                        if (pinchDuration < 300) {
+                    if (state.isPinching) {
+                        // Pinch end
+                        const pinchDuration = performance.now() - state.pinchStartTime;
+                        if (pinchDuration < TAP_DURATION_MAX) {
+                            // Quick tap - toggle play/pause
+                            console.log(`Right pinch tap detected (${pinchDuration.toFixed(0)}ms)`);
                             togglePlayPause();
-                            console.log('Play/Pause toggled (quick pinch)');
                         } else {
-                            console.log('Right pinch released');
+                            console.log('Right pinch drag end');
                         }
+                        state.isPinching = false;
+                        state.dragStartPosition = null;
                     }
-                    state.lastPinchX = null;
                 }
-                state.lastPinchState = isPinching;
             }
         }
     }
