@@ -194,6 +194,13 @@ function loadVideoSource(src) {
         infoStatus.textContent = 'Ready';
         videoInfo.classList.add('visible');
 
+        // Resize renderer to match video resolution for optimal anaglyph performance
+        if (!isInVRMode) {
+            const size = calculateAnaglyphCanvasSize();
+            renderer.setSize(size.width, size.height);
+            console.log(`Anaglyph canvas sized to ${size.width}×${size.height} (video view: ${leftViewWidth}×${videoHeight})`);
+        }
+
         // Start measuring video frame rate
         measureVideoFrameRate();
 
@@ -408,10 +415,52 @@ function updateBackground() {
     }
 }
 
+function calculateAnaglyphCanvasSize() {
+    if (!video || !video.videoWidth || !video.videoHeight) {
+        // No video loaded, use full window size
+        return { width: window.innerWidth, height: window.innerHeight };
+    }
+
+    // Get individual view resolution (half of SBS)
+    const videoViewWidth = video.videoWidth / 2;
+    const videoViewHeight = video.videoHeight;
+    const videoAspect = videoViewWidth / videoViewHeight;
+    const windowAspect = window.innerWidth / window.innerHeight;
+
+    let canvasWidth, canvasHeight;
+
+    if (windowAspect > videoAspect) {
+        // Window is wider than video - limit by height
+        canvasHeight = Math.min(window.innerHeight, videoViewHeight);
+        canvasWidth = canvasHeight * videoAspect;
+    } else {
+        // Window is taller than video - limit by width
+        canvasWidth = Math.min(window.innerWidth, videoViewWidth);
+        canvasHeight = canvasWidth / videoAspect;
+    }
+
+    // Never exceed video view resolution
+    canvasWidth = Math.min(canvasWidth, videoViewWidth);
+    canvasHeight = Math.min(canvasHeight, videoViewHeight);
+
+    return {
+        width: Math.round(canvasWidth),
+        height: Math.round(canvasHeight)
+    };
+}
+
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // In anaglyph mode, limit canvas size to video resolution
+    if (!isInVRMode) {
+        const size = calculateAnaglyphCanvasSize();
+        renderer.setSize(size.width, size.height);
+    } else {
+        // In VR mode, use full window size
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 
     // Recreate anaglyph plane with new aspect ratio if not in VR
     if (!isInVRMode && anaglyphPlane && videoTexture) {
