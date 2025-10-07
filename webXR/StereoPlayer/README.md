@@ -19,10 +19,12 @@ A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with d
 - **Adjustable Screen Distance**: 1m to 100m range (controlled via diopters for linear feel)
 - **Adjustable Focal Length**: 0.5x to 2x range (18mm to 72mm equivalent in 35mm format)
   - Default: 1.0 (36mm equivalent)
-- **IPD Validation**: Automatic detection with 40-80mm range validation
+- **IPD Validation**: Automatic detection with 35-85mm range validation
 - **Spatial Audio**: Video sound enabled in VR mode
 - **Real-time HUD**: Displays current settings and controls (toggleable)
-- **VR Controller Support**: Full gamepad integration for all controls
+- **Dual Input Support**:
+  - VR Controller Support: Full gamepad integration
+  - Hand Tracking: Natural gesture controls (Apple Vision Pro, Meta Quest Pro, etc.)
 
 ## Requirements
 
@@ -65,22 +67,46 @@ A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with d
 
 ### VR Controls
 
-#### Left Controller
+The application supports both gamepad controllers and hand tracking. Use whichever input method you prefer!
+
+#### Gamepad Controller Controls
+
+**Left Controller:**
 - **Thumbstick Forward/Back**: Adjust screen distance
   - Forward = screen moves farther away
   - Back = screen moves closer
   - Range: 1m to 100m
+- **X Button**: Exit VR session
+- **Y Button**: Toggle background gradient
 
-#### Right Controller
+**Right Controller:**
 - **Thumbstick Forward/Back**: Adjust focal length
   - Forward = zoom in (increase focal length)
   - Back = zoom out (decrease focal length)
   - Range: 0.5x to 2x (18mm to 72mm equivalent)
+- **A Button**: Play/pause video
+- **B Button**: Toggle HUD on/off
 
-#### Both Controllers
-- **Trigger**: Play/pause video
-- **Grip/Squeeze**: Toggle HUD on/off
-- **X Button**: Exit VR session
+#### Hand Tracking Controls
+
+**Left Hand:**
+- **Pinch + Drag Vertically**: Adjust screen distance
+  - Drag up/forward = screen moves farther away
+  - Drag down/back = screen moves closer
+- **Thumbs Up**: Toggle background gradient
+- **Palm Open (hold 1.5s)**: Exit VR session
+
+**Right Hand:**
+- **Pinch + Drag Vertically**: Adjust focal length
+  - Drag up = zoom in (increase focal length)
+  - Drag down = zoom out (decrease focal length)
+- **Point Gesture** (index finger extended): Play/pause video
+- **Thumbs Up**: Toggle HUD on/off
+
+**Hand Tracking Notes:**
+- Hand tracking is automatically enabled on supported devices (Apple Vision Pro, Meta Quest Pro, Quest 3, etc.)
+- Both controller and hand input work simultaneously - use whichever is most comfortable
+- Hand gestures are detected using WebXR Hand Input API
 
 ### Understanding the Settings
 
@@ -103,7 +129,7 @@ A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with d
 
 #### IPD (Interpupillary Distance)
 - Automatically measured from VR camera positions
-- Valid range: 40mm to 80mm
+- Valid range: 35mm to 85mm
 - Falls back to 63mm if measurement is outside range
 
 ## Technical Details
@@ -121,8 +147,9 @@ StereoPlayer/
 
 #### Key Technologies
 - **THREE.js**: 3D rendering engine
-- **WebXR**: VR/AR device access
-- **Custom Shaders**: Anaglyph rendering and stereo separation
+- **WebXR Device API**: VR/AR device access
+- **WebXR Hand Input API**: Hand tracking and gesture detection
+- **Custom Shaders**: Anaglyph rendering and stereo separation with reconvergence
 
 ### Rendering Pipeline
 
@@ -178,12 +205,19 @@ When HUD is enabled in VR mode, the following information is displayed:
 ### Stereo Looks Wrong in VR
 - **Check Video Format**: Must be full-width SBS (not half-width)
 - **Reconvergence**: Videos should be non-reconverged (parallel view)
-- **IPD Issues**: Check console for IPD warnings (should be 40-80mm)
+- **IPD Issues**: Check console for IPD warnings (should be 35-85mm)
 
-### Controllers Not Working
-- **Check Connection**: Ensure controllers are paired and tracking
-- **Browser Support**: Verify browser supports WebXR gamepad API
-- **Console Logs**: Check for controller detection messages
+### Controllers/Hand Tracking Not Working
+- **Controllers**:
+  - Check connection: Ensure controllers are paired and tracking
+  - Browser support: Verify browser supports WebXR gamepad API
+  - Console logs: Check for controller detection messages
+- **Hand Tracking**:
+  - Device support: Verify your headset supports hand tracking (Vision Pro, Quest Pro, Quest 3)
+  - Enable hand tracking: Check headset settings to ensure hand tracking is enabled
+  - Lighting: Ensure adequate lighting for hand detection
+  - Console logs: Check for hand tracking initialization messages
+  - Fallback: Use gamepad controllers if hand tracking is unavailable
 
 ### Performance Issues
 - **Video Resolution**: Lower resolution videos perform better
@@ -225,11 +259,17 @@ This project is part of the dfattal.github.io repository.
 
 - **THREE.js**: https://threejs.org/
 - **WebXR Device API**: https://www.w3.org/TR/webxr/
+- **WebXR Hand Input**: https://immersive-web.github.io/webxr-hand-input/
 
 ## Version History
 
+- **v1.1**: Added hand tracking support with natural gesture controls
+  - WebXR Hand Input API integration
+  - Dual input support (gamepad + hands)
+  - Gesture detection for all controls
+  - Background gradient toggle
 - **v1.0**: Initial release with full VR and anaglyph support
-- Features: SBS playback, reconvergence, dynamic controls, file upload
+  - SBS playback, reconvergence, dynamic controls, file upload
 
 ---
 
