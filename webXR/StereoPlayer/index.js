@@ -40,8 +40,8 @@ let controller0, controller1;
 
 // Hand tracking state
 let handInputState = {
-    left: { lastPinchState: false, lastThumbsUpState: false, lastPalmOpenState: false, palmOpenStartTime: 0, lastPinchY: null },
-    right: { lastPinchState: false, lastPointState: false, lastThumbsUpState: false, lastPinchY: null }
+    left: { lastPinchState: false },
+    right: { lastPinchState: false, lastPinchX: null }
 };
 
 // UI elements
@@ -147,76 +147,6 @@ function detectPinch(hand, threshold = 0.04) {
     return distance < threshold;
 }
 
-function detectPointGesture(hand) {
-    const indexTip = getJointPosition(hand, 'index-finger-tip');
-    const indexBase = getJointPosition(hand, 'index-finger-metacarpal');
-    const middleTip = getJointPosition(hand, 'middle-finger-tip');
-    const middleBase = getJointPosition(hand, 'middle-finger-metacarpal');
-    const ringTip = getJointPosition(hand, 'ring-finger-tip');
-    const pinkyTip = getJointPosition(hand, 'pinky-finger-tip');
-    const wrist = getJointPosition(hand, 'wrist');
-
-    if (!indexTip || !indexBase || !middleTip || !middleBase || !ringTip || !pinkyTip || !wrist) return false;
-
-    // Index finger extended (tip far from base)
-    const indexExtended = indexTip.distanceTo(wrist) > indexBase.distanceTo(wrist) * 1.5;
-
-    // Other fingers curled (tips close to base)
-    const middleCurled = middleTip.distanceTo(wrist) < middleBase.distanceTo(wrist) * 1.3;
-    const ringCurled = ringTip.distanceTo(wrist) < wrist.distanceTo(ringTip) * 0.8;
-    const pinkyCurled = pinkyTip.distanceTo(wrist) < wrist.distanceTo(pinkyTip) * 0.8;
-
-    return indexExtended && middleCurled && ringCurled && pinkyCurled;
-}
-
-function detectThumbsUp(hand) {
-    const thumbTip = getJointPosition(hand, 'thumb-tip');
-    const thumbBase = getJointPosition(hand, 'thumb-metacarpal');
-    const indexTip = getJointPosition(hand, 'index-finger-tip');
-    const middleTip = getJointPosition(hand, 'middle-finger-tip');
-    const ringTip = getJointPosition(hand, 'ring-finger-tip');
-    const pinkyTip = getJointPosition(hand, 'pinky-finger-tip');
-    const wrist = getJointPosition(hand, 'wrist');
-
-    if (!thumbTip || !thumbBase || !indexTip || !middleTip || !ringTip || !pinkyTip || !wrist) return false;
-
-    // Thumb extended upward (tip higher than base)
-    const thumbExtendedUp = thumbTip.y > thumbBase.y + 0.03;
-
-    // Other fingers curled
-    const indexCurled = indexTip.distanceTo(wrist) < wrist.distanceTo(thumbBase) * 1.2;
-    const middleCurled = middleTip.distanceTo(wrist) < wrist.distanceTo(thumbBase) * 1.2;
-    const ringCurled = ringTip.distanceTo(wrist) < wrist.distanceTo(thumbBase) * 1.2;
-    const pinkyCurled = pinkyTip.distanceTo(wrist) < wrist.distanceTo(thumbBase) * 1.2;
-
-    return thumbExtendedUp && indexCurled && middleCurled && ringCurled && pinkyCurled;
-}
-
-function detectPalmOpen(hand) {
-    const wrist = getJointPosition(hand, 'wrist');
-    const thumbTip = getJointPosition(hand, 'thumb-tip');
-    const indexTip = getJointPosition(hand, 'index-finger-tip');
-    const middleTip = getJointPosition(hand, 'middle-finger-tip');
-    const ringTip = getJointPosition(hand, 'ring-finger-tip');
-    const pinkyTip = getJointPosition(hand, 'pinky-finger-tip');
-    const middleBase = getJointPosition(hand, 'middle-finger-metacarpal');
-
-    if (!wrist || !thumbTip || !indexTip || !middleTip || !ringTip || !pinkyTip || !middleBase) return false;
-
-    // All fingertips far from wrist (extended)
-    const avgFingerLength = wrist.distanceTo(middleBase) * 2;
-    const thumbExtended = thumbTip.distanceTo(wrist) > avgFingerLength * 0.8;
-    const indexExtended = indexTip.distanceTo(wrist) > avgFingerLength * 0.9;
-    const middleExtended = middleTip.distanceTo(wrist) > avgFingerLength * 0.9;
-    const ringExtended = ringTip.distanceTo(wrist) > avgFingerLength * 0.85;
-    const pinkyExtended = pinkyTip.distanceTo(wrist) > avgFingerLength * 0.75;
-
-    // Palm facing toward user (middleBase Z should be negative relative to wrist in view space)
-    // Simplified: check if middle finger base is in front of wrist
-    const palmFacingUser = middleBase.z > wrist.z - 0.02;
-
-    return thumbExtended && indexExtended && middleExtended && ringExtended && pinkyExtended && palmFacingUser;
-}
 
 function createGradientBackground() {
     // Create a sphere with a gradient shader
@@ -785,114 +715,59 @@ function handleHandInput() {
 
             const state = handInputState[handedness];
 
-            // === LEFT HAND GESTURES ===
+            // === LEFT HAND: PINCH TO EXIT VR ===
             if (handedness === 'left') {
-                // Left hand pinch + drag for distance control
                 const isPinching = detectPinch(hand);
-                const indexTip = getJointPosition(hand, 'index-finger-tip');
 
-                if (isPinching && indexTip) {
-                    if (!state.lastPinchState) {
-                        // Start of pinch - record initial position
-                        state.lastPinchY = indexTip.y;
-                        console.log('Left pinch started - distance control active');
-                    } else if (state.lastPinchY !== null) {
-                        // During pinch - adjust distance based on Y movement
-                        const deltaY = indexTip.y - state.lastPinchY;
-                        if (Math.abs(deltaY) > 0.001) {
-                            // Forward/up = farther (decrease diopters), back/down = closer (increase diopters)
-                            const diopterDelta = -deltaY * 2; // sensitivity adjustment
-                            diopters += diopterDelta;
-                            diopters = Math.max(0.01, Math.min(1.0, diopters));
-                            screenDistance = 1.0 / diopters;
-                            state.lastPinchY = indexTip.y;
-                            console.log(`Distance: ${screenDistance.toFixed(1)}m (hand control)`);
-                        }
-                    }
-                } else {
-                    if (state.lastPinchState) {
-                        console.log('Left pinch released');
-                    }
-                    state.lastPinchY = null;
+                // Trigger on pinch start
+                if (isPinching && !state.lastPinchState) {
+                    console.log('Left pinch - exiting VR');
+                    session.end();
                 }
+
                 state.lastPinchState = isPinching;
-
-                // Left hand thumbs up for background toggle
-                const isThumbsUp = detectThumbsUp(hand);
-                if (isThumbsUp && !state.lastThumbsUpState) {
-                    toggleBackground();
-                    console.log('Background toggled (hand gesture)');
-                }
-                state.lastThumbsUpState = isThumbsUp;
-
-                // Left hand palm open (held) to exit VR
-                const isPalmOpen = detectPalmOpen(hand);
-                if (isPalmOpen) {
-                    if (!state.lastPalmOpenState) {
-                        // Start of palm open gesture
-                        state.palmOpenStartTime = Date.now();
-                    } else {
-                        // Check if held for 1.5 seconds
-                        const holdDuration = Date.now() - state.palmOpenStartTime;
-                        if (holdDuration > 1500 && holdDuration < 1600) {
-                            console.log('Palm open held - exiting VR');
-                            session.end();
-                        }
-                    }
-                } else {
-                    state.palmOpenStartTime = 0;
-                }
-                state.lastPalmOpenState = isPalmOpen;
             }
 
-            // === RIGHT HAND GESTURES ===
+            // === RIGHT HAND: PINCH + DRAG FOR FOCAL, QUICK PINCH FOR PLAY/PAUSE ===
             if (handedness === 'right') {
-                // Right hand pinch + drag for focal control
                 const isPinching = detectPinch(hand);
                 const indexTip = getJointPosition(hand, 'index-finger-tip');
 
                 if (isPinching && indexTip) {
                     if (!state.lastPinchState) {
-                        // Start of pinch
-                        state.lastPinchY = indexTip.y;
-                        console.log('Right pinch started - focal control active');
-                    } else if (state.lastPinchY !== null) {
-                        // During pinch - adjust focal based on Y movement
-                        const deltaY = indexTip.y - state.lastPinchY;
-                        if (Math.abs(deltaY) > 0.001) {
-                            // Up = zoom in (increase focal), down = zoom out (decrease focal)
+                        // Start of pinch - record initial X position
+                        state.lastPinchX = indexTip.x;
+                        state.pinchStartTime = Date.now();
+                        console.log('Right pinch started');
+                    } else if (state.lastPinchX !== null) {
+                        // During pinch - adjust focal based on X (horizontal) movement
+                        const deltaX = indexTip.x - state.lastPinchX;
+                        if (Math.abs(deltaX) > 0.001) {
+                            // Right = zoom in (increase focal), left = zoom out (decrease focal)
                             let log2Focal = Math.log2(focal);
-                            const focalDelta = deltaY * 1.5; // sensitivity adjustment
+                            const focalDelta = deltaX * 2.0; // sensitivity adjustment
                             log2Focal += focalDelta;
                             log2Focal = Math.max(-1, Math.min(1, log2Focal));
                             focal = Math.pow(2, log2Focal);
-                            state.lastPinchY = indexTip.y;
+                            state.lastPinchX = indexTip.x;
                             console.log(`Focal: ${focal.toFixed(2)} (${(focal * 36).toFixed(0)}mm) (hand control)`);
                         }
                     }
                 } else {
+                    // Pinch released
                     if (state.lastPinchState) {
-                        console.log('Right pinch released');
+                        // Check if it was a quick pinch (< 300ms) without much movement
+                        const pinchDuration = Date.now() - state.pinchStartTime;
+                        if (pinchDuration < 300) {
+                            togglePlayPause();
+                            console.log('Play/Pause toggled (quick pinch)');
+                        } else {
+                            console.log('Right pinch released');
+                        }
                     }
-                    state.lastPinchY = null;
+                    state.lastPinchX = null;
                 }
                 state.lastPinchState = isPinching;
-
-                // Right hand point gesture for play/pause
-                const isPointing = detectPointGesture(hand);
-                if (isPointing && !state.lastPointState) {
-                    togglePlayPause();
-                    console.log('Play/Pause toggled (hand gesture)');
-                }
-                state.lastPointState = isPointing;
-
-                // Right hand thumbs up for HUD toggle
-                const isThumbsUp = detectThumbsUp(hand);
-                if (isThumbsUp && !state.lastThumbsUpState) {
-                    toggleHUD();
-                    console.log('HUD toggled (hand gesture)');
-                }
-                state.lastThumbsUpState = isThumbsUp;
             }
         }
     }
