@@ -12,7 +12,7 @@ let isInVRMode = false;
 
 // Screen parameters
 let screenDistance = 100; // meters (default)
-let focal = 1.0; // focal length as fraction of image width (default = 36mm equiv)
+let focal = 0.78; // focal length as fraction of image width (default = 36mm equiv)
 let diopters = 0.01; // 1/screenDistance
 let invZmin = 0.05; // Depth effect control
 let feathering = 0.05; // Edge feathering for smooth transitions
@@ -53,6 +53,8 @@ let handInputState = {
     right: {
         isPinching: false,
         pinchStartTime: 0,
+        lastTapTime: 0,
+        tapCount: 0,
         dragStartPosition: null
     }
 };
@@ -651,7 +653,7 @@ function handleHandInput() {
                 }
             }
 
-            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE ===
+            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, SINGLE TAP FOR PLAY/PAUSE, DOUBLE TAP FOR TRANSPARENT GRADIENTS ===
             if (handedness === 'right') {
                 const distance = getPinchDistance(hand);
                 if (distance === null) continue;
@@ -685,13 +687,30 @@ function handleHandInput() {
                     if (state.isPinching) {
                         // Pinch end
                         const pinchDuration = performance.now() - state.pinchStartTime;
+                        const now = performance.now();
+
                         if (pinchDuration < TAP_DURATION_MAX) {
-                            // Quick tap - toggle play/pause
-                            console.log(`Right pinch tap detected (${pinchDuration.toFixed(0)}ms)`);
-                            togglePlayPause();
+                            // It's a tap - check if it's a double tap
+                            const timeSinceLastTap = now - state.lastTapTime;
+
+                            if (timeSinceLastTap < DOUBLE_TAP_WINDOW) {
+                                // Double tap detected - toggle transparent gradients
+                                state.tapCount++;
+                                transparentGradients = !transparentGradients;
+                                console.log(`Right double pinch-tap - transparent gradients: ${transparentGradients}`);
+                                state.tapCount = 0; // Reset
+                            } else {
+                                // First tap - toggle play/pause
+                                state.tapCount = 1;
+                                togglePlayPause();
+                                console.log('Right pinch tap - play/pause toggled');
+                            }
+
+                            state.lastTapTime = now;
                         } else {
                             console.log('Right pinch drag end');
                         }
+
                         state.isPinching = false;
                         state.dragStartPosition = null;
                     }
