@@ -53,13 +53,9 @@ let handInputState = {
     right: {
         isPinching: false,
         pinchStartTime: 0,
-        dragStartPosition: null
-    },
-    // Clap detection state
-    lastClapDistance: null,
-    lastClapTime: 0,
-    CLAP_DISTANCE_THRESHOLD: 0.05, // meters
-    CLAP_COOLDOWN: 500 // milliseconds
+        dragStartPosition: null,
+        verticalDragActivated: false
+    }
 };
 
 // UI elements
@@ -157,39 +153,6 @@ function getPinchDistance(hand) {
     return thumbTip.distanceTo(indexTip);
 }
 
-function detectClap(inputSources, now = performance.now()) {
-    let leftHand = null, rightHand = null;
-
-    for (const source of inputSources) {
-        if (!source.hand) continue;
-        if (source.handedness === 'left') leftHand = source.hand;
-        if (source.handedness === 'right') rightHand = source.hand;
-    }
-
-    if (!leftHand || !rightHand) return false;
-
-    const leftWrist = getJointPosition(leftHand, 'wrist');
-    const rightWrist = getJointPosition(rightHand, 'wrist');
-
-    if (!leftWrist || !rightWrist) return false;
-
-    const currentDistance = leftWrist.distanceTo(rightWrist);
-
-    // Check for clap: hands were far apart and now close together
-    if (handInputState.lastClapDistance !== null &&
-        currentDistance < handInputState.CLAP_DISTANCE_THRESHOLD &&
-        handInputState.lastClapDistance > handInputState.CLAP_DISTANCE_THRESHOLD * 2 &&
-        now - handInputState.lastClapTime > handInputState.CLAP_COOLDOWN) {
-
-        console.log('👏 Hand clap detected!');
-        handInputState.lastClapTime = now;
-        handInputState.lastClapDistance = currentDistance;
-        return true;
-    }
-
-    handInputState.lastClapDistance = currentDistance;
-    return false;
-}
 
 function setupFileHandling() {
     dropZone.addEventListener('click', () => fileInput.click());
@@ -620,12 +583,6 @@ function handleHandInput() {
     const session = renderer.xr.getSession();
     if (!session) return;
 
-    // Check for clap gesture first (uses both hands)
-    if (detectClap(session.inputSources)) {
-        transparentGradients = !transparentGradients;
-        console.log(`Clap detected - transparent gradients: ${transparentGradients}`);
-    }
-
     for (const source of session.inputSources) {
         if (source.hand) {
             const hand = source.hand;
@@ -696,7 +653,7 @@ function handleHandInput() {
                 }
             }
 
-            // === RIGHT HAND: PINCH+DRAG FOR FOCAL, PINCH TAP FOR PLAY/PAUSE ===
+            // === RIGHT HAND: PINCH+DRAG LEFT/RIGHT FOR FOCAL, UP/DOWN FOR TRANSPARENT GRADIENTS, PINCH TAP FOR PLAY/PAUSE ===
             if (handedness === 'right') {
                 const distance = getPinchDistance(hand);
                 if (distance === null) continue;
@@ -710,12 +667,30 @@ function handleHandInput() {
                         state.isPinching = true;
                         state.pinchStartTime = performance.now();
                         state.dragStartPosition = { x: indexTip.x, y: indexTip.y, z: indexTip.z };
+                        state.verticalDragActivated = false;
                         console.log('Right pinch start');
                     } else {
                         // Pinch sustain - dragging
                         const dx = indexTip.x - state.dragStartPosition.x;
+                        const dy = indexTip.y - state.dragStartPosition.y;
 
-                        if (Math.abs(dx) > 0.003) {
+                        // Check for vertical drag (20cm threshold) for transparent gradients
+                        if (Math.abs(dy) > 0.2 && !state.verticalDragActivated) {
+                            state.verticalDragActivated = true;
+
+                            if (dy > 0) {
+                                // Drag up - enable transparent gradients
+                                transparentGradients = true;
+                                console.log('Right pinch drag UP - transparent gradients ON');
+                            } else {
+                                // Drag down - disable transparent gradients
+                                transparentGradients = false;
+                                console.log('Right pinch drag DOWN - transparent gradients OFF');
+                            }
+                        }
+
+                        // Horizontal drag for focal control (only if vertical drag not activated)
+                        if (!state.verticalDragActivated && Math.abs(dx) > 0.003) {
                             // Right = zoom in (increase focal), left = zoom out (decrease focal)
                             let log2Focal = Math.log2(focal);
                             const focalDelta = dx * 2.0;
@@ -731,8 +706,8 @@ function handleHandInput() {
                         // Pinch end
                         const pinchDuration = performance.now() - state.pinchStartTime;
 
-                        if (pinchDuration < TAP_DURATION_MAX) {
-                            // Quick tap - toggle play/pause
+                        // Only trigger play/pause if it was a quick tap without significant drag
+                        if (pinchDuration < TAP_DURATION_MAX && !state.verticalDragActivated) {
                             togglePlayPause();
                             console.log('Right pinch tap - play/pause toggled');
                         } else {
@@ -741,6 +716,7 @@ function handleHandInput() {
 
                         state.isPinching = false;
                         state.dragStartPosition = null;
+                        state.verticalDragActivated = false;
                     }
                 }
             }
