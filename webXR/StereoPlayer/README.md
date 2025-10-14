@@ -1,6 +1,29 @@
 # WebXR SBS 3D Video Player
 
-A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with dynamic focal length and screen distance controls, featuring automatic reconvergence adjustment.
+A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with dynamic focal length and screen distance controls, featuring automatic reconvergence adjustment for proper infinity mapping and full immersive VR experience.
+
+## Content Requirements
+
+### IMPORTANT: Expected Video Format
+This player expects **full-width side-by-side (SBS) stereo content** with the following properties:
+
+- **Format**: Full-width SBS - NOT half-SBS
+- **Layout**: Left eye view in left half (0.0-0.5), right eye view in right half (0.5-1.0)
+- **Convergence**: Content must be **non-reconverged** (parallel view/converged at infinity)
+  - This means distant objects appear at the same horizontal position in both left and right views
+  - The player automatically maps infinity image points to XR space infinity for a fully immersive feel
+- **Camera FOV**: For proper object scale and "fullness" sensation, the viewing angle should match the recording camera's field of view
+  - **Default**: 36mm equivalent lens (1.0x focal multiplier)
+  - Adjustable via controls to match your source content
+  - Common settings: 26mm (wide), 36mm (normal), 50mm (portrait)
+
+### Why Parallel View & FOV Matching Matter
+When content is converged at infinity and FOV is properly matched:
+- Objects at all depths maintain correct parallax relationships
+- Distant objects appear naturally at infinity in VR space
+- Objects and people have correct proportions and "fullness"
+- The 3D effect is comfortable and realistic
+- You get a true "window into the world" experience
 
 ## Features
 
@@ -13,18 +36,21 @@ A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with d
 
 ### VR Mode (WebXR Headsets)
 - **True Stereoscopic Display**: Proper left/right eye separation with layer-based rendering
+- **Infinity Mapping**: Automatically maps infinity points to XR space infinity for true immersion
 - **Dynamic Reconvergence**: Automatic adjustment to maintain correct stereo geometry
-  - Formula: `reconv = focal * IPD / screenDistance`
+  - Formula: `reconv = focal × IPD / screenDistance`
   - Keeps infinity content at infinity regardless of screen position
 - **Adjustable Screen Distance**: 1m to 100m range (controlled via diopters for linear feel)
-- **Adjustable Focal Length**: 0.5x to 2x range (18mm to 72mm equivalent in 35mm format)
-  - Default: 1.0 (36mm equivalent)
+  - Default: 100m for comfortable cinema-like viewing
+- **Adjustable Focal Length**: 0.5x to 2x range (18mm to 72mm equivalent) to match source camera FOV
+  - Default: 1.0x (36mm equivalent)
+  - Critical for proper object scale and proportions
 - **IPD Validation**: Automatic detection with 35-85mm range validation
 - **Spatial Audio**: Video sound enabled in VR mode
-- **Real-time HUD**: Displays current settings and controls (toggleable)
+- **Real-time HUD**: Displays all current settings including initial headset height (toggleable)
 - **Dual Input Support**:
   - VR Controller Support: Full gamepad integration
-  - Hand Tracking: Natural gesture controls (Apple Vision Pro, Meta Quest Pro, etc.)
+  - Hand Tracking: Natural gesture controls (Apple Vision Pro, Meta Quest Pro/3)
 
 ## Requirements
 
@@ -48,15 +74,14 @@ A WebXR application for viewing side-by-side (SBS) stereoscopic 3D videos with d
 
 1. **Open the Application**
    - Navigate to `index.html` in a WebXR-compatible browser
-   - Default Indiana Jones clip loads automatically
+   - Default Indiana Jones (14s) clip loads automatically
 
 2. **Load Your Own Video**
    - Click the drop zone or drag a video file onto the page
    - Wait for video metadata to load
    - View dimension and frame rate will be displayed
 
-3. **Non-VR Viewing**
-   - Put on red/cyan anaglyph glasses
+3. **Non-VR Preview**
    - Video displays in 3D anaglyph format
    - Click to play if autoplay is prevented by browser
 
@@ -90,47 +115,62 @@ The application supports both gamepad controllers and hand tracking. Use whichev
 #### Hand Tracking Controls
 
 **Left Hand:**
-- **Pinch + Drag Vertically**: Adjust screen distance
-  - Drag up/forward = screen moves farther away
-  - Drag down/back = screen moves closer
-- **Thumbs Up**: Toggle background gradient
-- **Palm Open (hold 1.5s)**: Exit VR session
+- **Double Pinch-Tap** (< 300ms each, within 500ms): Exit VR session
+  - Prevents accidental exits with double-tap requirement
 
 **Right Hand:**
-- **Pinch + Drag Vertically**: Adjust focal length
-  - Drag up = zoom in (increase focal length)
-  - Drag down = zoom out (decrease focal length)
-- **Point Gesture** (index finger extended): Play/pause video
-- **Thumbs Up**: Toggle HUD on/off
+- **Pinch + Drag Left/Right**: Adjust focal length to match source camera FOV
+  - Drag right = zoom in / narrower FOV (like 50mm lens)
+  - Drag left = zoom out / wider FOV (like 26mm lens)
+- **Quick Pinch Tap** (< 300ms): Play/pause video
 
 **Hand Tracking Notes:**
-- Hand tracking is automatically enabled on supported devices (Apple Vision Pro, Meta Quest Pro, Quest 3, etc.)
-- Both controller and hand input work simultaneously - use whichever is most comfortable
-- Hand gestures are detected using WebXR Hand Input API
+- Hand tracking automatically enabled on supported devices (Apple Vision Pro, Meta Quest Pro, Quest 3)
+- Pinch requires thumb and index finger to actually touch (< 15mm apart)
+- Both controller and hand input work simultaneously
+- Double-tap protection prevents accidental exits
+- No distance control via hands - use controller thumbstick for screen distance adjustment
 
 ### Understanding the Settings
 
 #### Screen Distance
-- Distance from viewer to virtual screen
-- Controlled via inverse (diopters) for smooth, linear adjustment
-- Default: 100m (cinema-like experience)
+- **Purpose**: Distance from viewer to the virtual screen plane
+- **Range**: 1m to 100m
+- **Default**: 100m (comfortable cinema-like viewing distance)
+- **Controlled via**: Diopters (inverse distance) for smooth, linear adjustment feel
+- **Effect**: Farther = more comfortable for extended viewing, closer = more immediate presence
+- **Note**: Thanks to automatic reconvergence, distant objects maintain proper depth regardless of screen distance
 
-#### Focal Length
-- Simulates the camera focal length used during video recording
-- Expressed as fraction of image width
-- Default: 1.0 (36mm equivalent in 35mm format)
-- Affects screen width: `screenWidth = focal × screenDistance`
+#### Focal Length (Camera FOV Matching)
+- **Purpose**: Simulates the recording camera's focal length to ensure proper object scale and proportions
+- **Range**: 0.5x to 2x multiplier (18mm to 72mm equivalent in 35mm format)
+- **Default**: 1.0x (36mm equivalent - standard "normal" lens)
+- **Critical for immersion**: Match this to your source camera's FOV for natural-looking objects
+  - 26mm (wide angle) - use for wide-angle captures, landscapes
+  - 36mm (normal) - default, works well for most content
+  - 50mm (portrait) - use for portrait/telephoto captures
+- **When properly matched**: Objects and people appear with correct "fullness" and natural proportions
+- **Affects screen width**: `screenWidth = screenDistance / focal`
 
-#### Reconvergence
-- Automatically adjusts the horizontal shift of left/right images
-- Ensures objects at infinity remain fused at infinity
-- Calculated as: `reconv = focal × IPD / screenDistance`
-- Applied as UV texture offset in normalized coordinates
+#### Reconvergence (Automatic)
+- **Purpose**: Automatically adjusts the horizontal shift of left/right images to maintain proper stereo geometry
+- **Formula**: `reconv = focal × IPD / screenDistance`
+- **Effect**: Ensures objects at infinity remain fused at infinity in VR space
+- **Applied as**: UV texture offset in normalized coordinates
+- **Why it matters**: Creates the "window into the world" effect - you're looking through a window, not at a flat surface
 
 #### IPD (Interpupillary Distance)
-- Automatically measured from VR camera positions
-- Valid range: 35mm to 85mm
-- Falls back to 63mm if measurement is outside range
+- **Purpose**: Eye separation distance used for reconvergence calculations
+- **Measurement**: Automatically measured from VR camera positions each frame
+- **Valid range**: 35mm to 85mm
+- **Fallback**: 63mm if measurement is outside valid range
+- **Displayed in HUD**: Shows your actual measured IPD
+
+#### InitialY (Headset Height)
+- **Purpose**: Initial vertical position of headset when VR session started
+- **Measurement**: Automatically captured from XR camera Y position
+- **Validation**: Only accepts readings > 0.1m to avoid zero readings on some devices
+- **Displayed in HUD**: Shows in meters (e.g., 1.600m for seated height)
 
 ## Technical Details
 
@@ -151,22 +191,29 @@ StereoPlayer/
 - **WebXR Hand Input API**: Hand tracking and gesture detection
 - **Custom Shaders**: Anaglyph rendering and stereo separation with reconvergence
 
-### Rendering Pipeline
+### Rendering Pipeline & Infinity Mapping
 
 #### Non-VR Mode
-1. Video texture loaded from SBS source
+1. Video texture loaded from SBS source (full-width format)
 2. Custom fragment shader samples left (0.0-0.5) and right (0.5-1.0) halves
 3. Combines red channel from left, cyan (green+blue) from right
-4. Renders to full-screen plane with correct aspect ratio
+4. Renders to full-screen plane with correct aspect ratio for anaglyph viewing
 
 #### VR Mode
-1. Two separate planes created (left and right)
-2. Each plane uses layer-based visibility (layer 1 = left eye, layer 2 = right eye)
-3. UV offsets applied for reconvergence:
-   - Left: `offset.x = -reconv/2 × 0.5`
-   - Right: `offset.x = 0.5 + reconv/2 × 0.5`
-4. Planes positioned in world space at configurable distance
-5. Proper stereo rendering via WebXR
+1. **Dual Plane Setup**: Two separate planes created (left and right)
+2. **Layer-based Rendering**: Each plane uses exclusive layer visibility
+   - Left plane: layer 1 (left eye only)
+   - Right plane: layer 2 (right eye only)
+3. **Infinity Mapping via Reconvergence**: UV offsets automatically calculated and applied
+   - Content is expected to be converged at infinity (parallel view)
+   - Left plane: `offset.x = -reconv/2 × 0.5`
+   - Right plane: `offset.x = 0.5 + reconv/2 × 0.5`
+   - This mapping ensures infinity points in the image appear at infinity in VR space
+4. **Dynamic Positioning**: Planes positioned in world space at configurable distance
+   - Screen width calculated as: `screenWidth = screenDistance / focal`
+   - Maintains proper aspect ratio from source video
+5. **Continuous Updates**: Reconvergence recalculated each frame as parameters change
+6. **Result**: True "window into the world" effect with natural depth perception
 
 ### Resource Management
 - **On VR Entry**: Anaglyph resources removed, VR planes created, audio enabled
@@ -176,14 +223,17 @@ StereoPlayer/
 
 ## HUD Information
 
-When HUD is enabled in VR mode, the following information is displayed:
+The real-time HUD displays all critical parameters (toggle with B button on controller):
 
-- **Distance**: Current screen distance in meters
-- **Focal**: Current focal length (raw value and mm equivalent)
-- **IPD**: Measured interpupillary distance in millimeters
-- **Reconv**: Reconvergence shift in millimeters
+- **Distance**: Current screen distance in meters (1m to 100m)
+- **Focal**: Current focal length multiplier and mm equivalent (e.g., "1.00 (36mm)")
+- **IPD**: Measured interpupillary distance in millimeters (auto-detected from headset)
+- **Reconv**: Reconvergence shift in millimeters (calculated from focal, IPD, and distance)
+- **InitialY**: Initial headset height when VR session started (meters)
 - **Status**: Video playback status (Playing/Paused)
-- **Controls**: Quick reference for controller inputs
+- **Controls**: Quick reference for controller and hand inputs
+
+**Note**: All values update in real-time as you adjust parameters
 
 ## Troubleshooting
 
@@ -226,11 +276,11 @@ When HUD is enabled in VR mode, the following information is displayed:
 
 ## Example Videos
 
-The application includes a default video (`indiana_relative_g04_b3_tc07_inf_2x1.mp4`). For best results with your own content:
+The application includes a default video (`default_2x1.mp4`). For best results with your own content:
 
 - **Resolution**: 3840×1080 or higher for 4K per eye
 - **Frame Rate**: 24, 30, or 60 fps
-- **Format**: SBS full-width (2:1 aspect ratio)
+- **Format**: SBS full-width
 - **Encoding**: Non-reconverged (parallel view)
 - **Audio**: Stereo or mono
 
