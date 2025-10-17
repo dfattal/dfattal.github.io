@@ -40,11 +40,40 @@ LDI videos are **quad layout format**:
 - **Bottom-left quadrant**: Layer 1 RGB color image
 - **Bottom-right quadrant**: Layer 1 disparity map (grayscale, 0-255)
 
-Video texture coordinates (for layer parameter 0 or 1):
-- Layer 0 RGB: `vec2(uv.x * 0.5, uv.y * 0.5)` (top-left)
-- Layer 0 Disparity: `vec2(0.5 + uv.x * 0.5, uv.y * 0.5)` (top-right)
-- Layer 1 RGB: `vec2(uv.x * 0.5, 0.5 + uv.y * 0.5)` (bottom-left)
-- Layer 1 Disparity: `vec2(0.5 + uv.x * 0.5, 0.5 + uv.y * 0.5)` (bottom-right)
+### Texture Coordinate System (IMPORTANT)
+**WebGL/OpenGL uses bottom-left origin** for texture coordinates, which differs from typical video file formats:
+- In **video files**: origin (0,0) is at **top-left**, Y increases downward
+- In **WebGL textures**: origin (0,0) is at **bottom-left**, Y increases upward
+
+This means the video file layout is **vertically flipped** in texture space:
+
+**Video File Layout (as viewed in video player):**
+```
+┌──────────┬──────────┐
+│ Layer 0  │ Layer 0  │  ← Top half (y: 0.0-0.5 in file)
+│   RGB    │  Disparity│
+├──────────┼──────────┤
+│ Layer 1  │ Layer 1  │  ← Bottom half (y: 0.5-1.0 in file)
+│   RGB    │ Disparity │
+└──────────┴──────────┘
+```
+
+**WebGL Texture Space (what shader sees):**
+```
+┌──────────┬──────────┐
+│ Layer 0  │ Layer 0  │  ← Upper half (y: 0.5-1.0 in texture)
+│   RGB    │  Disparity│
+├──────────┼──────────┤
+│ Layer 1  │ Layer 1  │  ← Lower half (y: 0.0-0.5 in texture)
+│   RGB    │ Disparity │
+└──────────┴──────────┘
+```
+
+**Correct texture sampling coordinates:**
+- Layer 0 RGB: `vec2(uv.x * 0.5, uv.y * 0.5 + 0.5)` (top-left → upper-left in texture)
+- Layer 0 Disparity: `vec2(0.5 + uv.x * 0.5, uv.y * 0.5 + 0.5)` (top-right → upper-right in texture)
+- Layer 1 RGB: `vec2(uv.x * 0.5, uv.y * 0.5)` (bottom-left → lower-left in texture)
+- Layer 1 Disparity: `vec2(0.5 + uv.x * 0.5, uv.y * 0.5)` (bottom-right → lower-right in texture)
 
 ### Companion JSON Format
 Each LDI video requires a companion JSON file with the same base name (e.g., `video.mp4` → `video.json`):

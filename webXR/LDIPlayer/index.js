@@ -438,7 +438,8 @@ function createRGBPlane() {
 
             void main() {
                 // Sample only top-left quadrant (Layer 0 RGB)
-                vec2 rgbUv = vec2(vUv.x * 0.5, vUv.y * 0.5);
+                // Note: WebGL texture coordinates have origin at bottom-left, so layer 0 (top half of video) is at y: 0.5-1.0
+                vec2 rgbUv = vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5);
                 gl_FragColor = texture2D(tDiffuse, rgbUv);
             }
         `
