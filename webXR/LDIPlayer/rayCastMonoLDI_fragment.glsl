@@ -35,10 +35,10 @@ vec3 readColor(sampler2D iChannel, vec2 uv, int layer) {
     vec2 color_uv;
     if (layer == 0) {
         // Layer 0: top-left quadrant
-        color_uv = vec2(uv.x * 0.5, uv.y * 0.5);
+        color_uv = vec2(uv.x * 0.5, uv.y * 0.5 +0.5);
     } else {
         // Layer 1: bottom-left quadrant
-        color_uv = vec2(uv.x * 0.5, 0.5 + uv.y * 0.5);
+        color_uv = vec2(uv.x * 0.5,  uv.y * 0.5);
     }
     return texture(iChannel, color_uv).rgb;
 }
@@ -47,14 +47,26 @@ float readDisp(sampler2D iChannel, vec2 uv, float vMin, float vMax, vec2 iRes, i
     vec2 disp_uv;
     if (layer == 0) {
         // Layer 0: top-right quadrant
-        disp_uv = vec2(0.5 + uv.x * 0.5, uv.y * 0.5);
-        disp_uv = clamp(disp_uv, vec2(0.5, 0.0), vec2(1.0, 0.5));
+        disp_uv = vec2(0.5 + uv.x * 0.5, uv.y * 0.5 +0.5);
+        disp_uv = clamp(disp_uv, vec2(0.5, 0.5), vec2(1.0, 1.0));
     } else {
         // Layer 1: bottom-right quadrant
-        disp_uv = vec2(0.5 + uv.x * 0.5, 0.5 + uv.y * 0.5);
-        disp_uv = clamp(disp_uv, vec2(0.5, 0.5), vec2(1.0, 1.0));
+        disp_uv = vec2(0.5 + uv.x * 0.5, uv.y * 0.5);
+        disp_uv = clamp(disp_uv, vec2(0.5, 0.0), vec2(1.0, 0.5));
     }
     return texture(iChannel, disp_uv).x * (vMin - vMax) + vMax;
+}
+
+float readMask(sampler2D iChannel, vec2 uv, int layer, float threshold) {
+    vec2 mask_uv;
+    if (layer == 0) {
+        // Layer 0: top-right quadrant
+        mask_uv = vec2(0.5 + uv.x * 0.5, uv.y * 0.5 + 0.5);
+    } else {
+        // Layer 1: bottom-right quadrant
+        mask_uv = vec2(0.5 + uv.x * 0.5, uv.y * 0.5);
+    }
+    return texture(iChannel, mask_uv).x > threshold ? 1.0 : 0.0;
 }
 
 mat3 matFromSlant(vec2 sl) {
@@ -142,10 +154,11 @@ vec4 raycasting(vec2 s2, mat3 FSKR2, vec3 C2, mat3 FSKR1, vec3 C1, sampler2D iCh
         // For layer 0, apply threshold-based alpha
         if(layer == 0) {
             float dispValue = readDisp(iChannelDisp, s1 + .5, invZmin, invZmax, iRes, layer);
-            float thresholdAlpha = (dispValue >= uThreshold) ? 1.0 : 0.0;
+            float thresholdAlpha = readMask(iChannelDisp, s1 + .5, layer, uThreshold);
             finalConfidence *= thresholdAlpha;
         }
-
+        // return vec4(vec3(texture(iChannelDisp, 0.5*(s1 + .5)+vec2(0.5,0.5)).x>0.22 ? 1.0 : 0.1), 1.0);
+        // return vec4(vec3(finalConfidence), 1.0);
         return vec4(readColor(iChannelCol, s1 + .5, layer), finalConfidence);
     } else {
         invZ2 = 0.0;
@@ -177,7 +190,7 @@ void main(void) {
         // Layer 1 (back layer) - only composite if layer 0 is not fully opaque
         if(!(result.a == 1.0 || uNumLayers == 1)) {
             vec4 layer1 = raycasting(uv - 0.5, FSKR2, C2, matFromFocal(vec2(f1[1] / iRes[1].x, f1[1] / iRes[1].y)) * SKR1, C1, uRGBD, uRGBD, invZmin[1], invZmax[1], iRes[1], 1.0, 1, invZ, confidence);
-
+            // vec4 layer1 = vec4(1.0, 0.0, 0.0, 1.0);
             // Composite layer 1 behind layer 0
             result.rgb = result.rgb + (1.0 - result.a) * layer1.a * layer1.rgb;
             result.a = layer1.a + result.a * (1.0 - layer1.a);
