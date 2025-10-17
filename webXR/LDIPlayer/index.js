@@ -235,7 +235,7 @@ async function loadVideoSource(src) {
     video.load();
     infoStatus.textContent = 'Loading...';
 
-    video.addEventListener('loadedmetadata', async () => {
+    video.addEventListener('loadedmetadata', () => {
         videoTexture = new THREE.VideoTexture(video);
         videoTexture.encoding = THREE.sRGBEncoding;
 
@@ -244,33 +244,7 @@ async function loadVideoSource(src) {
 
         // For LDI video, each quadrant is half the video dimensions
         infoDimensions.textContent = `${videoWidth / 2} × ${videoHeight / 2} (2 layers)`;
-
-        // Load companion JSON file
         infoStatus.textContent = 'Loading JSON...';
-        const jsonLoaded = await loadThresholdsJSON(src);
-
-        if (!jsonLoaded) {
-            // JSON failed to load - show error and prevent playback
-            infoStatus.textContent = `ERROR: ${jsonLoadError}`;
-            videoInfo.classList.add('visible');
-            console.error('Cannot play video without valid JSON file');
-            video.pause();
-            return;
-        }
-
-        // Validate that we have enough thresholds for the video
-        const videoDuration = video.duration;
-        const expectedFrames = Math.ceil(videoDuration * thresholdsData.frame_rate);
-        if (thresholdsData.thresholds.length < expectedFrames) {
-            jsonLoadError = `Not enough thresholds: need ${expectedFrames}, have ${thresholdsData.thresholds.length}`;
-            infoStatus.textContent = `ERROR: ${jsonLoadError}`;
-            videoInfo.classList.add('visible');
-            console.error(jsonLoadError);
-            video.pause();
-            return;
-        }
-
-        infoStatus.textContent = 'Ready';
         videoInfo.classList.add('visible');
 
         createViewSynthesisMaterial();
@@ -279,16 +253,37 @@ async function loadVideoSource(src) {
         // Start measuring video frame rate
         measureVideoFrameRate();
 
-        // Try to autoplay
+        // Try to autoplay immediately (important for Safari/Vision Pro)
         video.play().catch(err => {
             console.warn('Autoplay prevented:', err);
             infoStatus.textContent = 'Click to play';
             document.addEventListener('click', () => {
-                if (thresholdsData && !jsonLoadError) {
-                    video.play();
-                    infoStatus.textContent = 'Playing';
-                }
+                video.play();
+                infoStatus.textContent = 'Playing';
             }, { once: true });
+        });
+
+        // Load companion JSON file in parallel (don't block video playback)
+        loadThresholdsJSON(src).then(jsonLoaded => {
+            if (!jsonLoaded) {
+                // JSON failed to load - show error but allow video to continue
+                infoStatus.textContent = `ERROR: ${jsonLoadError} (video playing without thresholds)`;
+                console.error('JSON loading failed, but video will continue playing');
+                return;
+            }
+
+            // Validate that we have enough thresholds for the video
+            const videoDuration = video.duration;
+            const expectedFrames = Math.ceil(videoDuration * thresholdsData.frame_rate);
+            if (thresholdsData.thresholds.length < expectedFrames) {
+                jsonLoadError = `Not enough thresholds: need ${expectedFrames}, have ${thresholdsData.thresholds.length}`;
+                infoStatus.textContent = `ERROR: ${jsonLoadError} (video playing with incomplete data)`;
+                console.error(jsonLoadError);
+                return;
+            }
+
+            infoStatus.textContent = 'Ready';
+            console.log('JSON loaded successfully, thresholds active');
         });
     }, { once: true });
 }
