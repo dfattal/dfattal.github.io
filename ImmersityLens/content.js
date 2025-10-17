@@ -272,6 +272,17 @@ window.addEventListener('message', (event) => {
             hasNavigatorXR: event.data.hasNavigatorXR,
             hasIsSessionSupported: event.data.hasIsSessionSupported
         });
+
+        // ⚡ Update context menu for converted images to show "Enter VR" option
+        if (imageLIFMap.size > 0) {
+            console.log('🔄 Updating context menu to show VR option for', imageLIFMap.size, 'converted image(s)');
+            // Send update message - this will affect the next right-click
+            chrome.runtime.sendMessage({
+                action: "updateContextMenu",
+                hasLIF: true,
+                webXRSupported: true
+            });
+        }
     } else {
         console.log('❌ WebXR Test Result: NOT SUPPORTED -', event.data.reason);
         console.log('🚫 VR buttons will be hidden');
@@ -1713,6 +1724,13 @@ async function convertTo3D(img, button, options = {}) {
                 imageLIFMap.set(img.src, lifDownloadUrl);
                 console.log('LIF file stored for image:', img.src);
                 console.log('LIF download URL:', lifDownloadUrl);
+
+                // ⚡ Lazy-load WebXR check after first successful conversion
+                if (!webXRSupportChecked) {
+                    console.log('🥽 First conversion complete - checking WebXR support...');
+                    testWebXRSupport();
+                    // Note: testWebXRSupport() is async, context menu will be updated again when it completes
+                }
 
                 // Proactively update context menu to "Download LIF" state
                 chrome.runtime.sendMessage({
@@ -3609,8 +3627,9 @@ async function initialize() {
         // Inject CSS styles
         injectStyles();
 
-        // Test WebXR support early
-        testWebXRSupport();
+        // ⚡ WebXR check is now LAZY-LOADED after first 2D→3D conversion
+        // This prevents triggering OpenXR runtime on every page load
+        // testWebXRSupport() will be called in handleConversionSuccess() instead
 
         // Pre-load VR system if WebXR is supported (inject once at initialization)
         setTimeout(async () => {
