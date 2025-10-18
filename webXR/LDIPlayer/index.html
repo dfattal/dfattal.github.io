@@ -116,59 +116,6 @@
             color: #ffaaaa;
             font-size: 13px;
         }
-        #debug-console {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            max-height: 300px;
-            background: rgba(0, 0, 0, 0.95);
-            border-top: 2px solid #00ff00;
-            padding: 10px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            z-index: 1000;
-            pointer-events: auto;
-        }
-        #debug-console .log-entry {
-            margin: 2px 0;
-            padding: 2px 5px;
-            border-left: 3px solid #00ff00;
-        }
-        #debug-console .log-entry.info {
-            border-left-color: #00ff00;
-            color: #00ff00;
-        }
-        #debug-console .log-entry.warn {
-            border-left-color: #ffaa00;
-            color: #ffaa00;
-        }
-        #debug-console .log-entry.error {
-            border-left-color: #ff4444;
-            color: #ff4444;
-        }
-        #debug-console .timestamp {
-            color: #888;
-            margin-right: 8px;
-        }
-        #debug-toggle {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0, 255, 0, 0.2);
-            border: 2px solid #00ff00;
-            border-radius: 8px;
-            padding: 10px 15px;
-            color: #00ff00;
-            cursor: pointer;
-            font-family: monospace;
-            font-weight: bold;
-            z-index: 1001;
-        }
-        #debug-toggle:hover {
-            background: rgba(0, 255, 0, 0.3);
-        }
     </style>
     <script type="importmap">
   {
@@ -221,9 +168,6 @@
             <input type="file" id="file-input" accept="video/*">
         </div>
     </div>
-
-    <div id="debug-console"></div>
-    <button id="debug-toggle">Toggle Debug Console</button>
 
     <script type="module" src="index.js"></script>
 </body>

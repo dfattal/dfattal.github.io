@@ -66,11 +66,6 @@ let handInputState = {
 let uiContainer, videoInfo, dropZone, fileInput;
 let infoDimensions, infoFps, infoStatus;
 
-// Debug console
-let debugConsole, debugToggle;
-let debugConsoleVisible = true;
-const MAX_DEBUG_LOGS = 100;
-
 // Video frame rate tracking
 let videoFps = 0;
 let videoFrameCount = 0;
@@ -84,65 +79,6 @@ let fragmentShaderSource = null;
 async function loadShader() {
     const response = await fetch('rayCastMonoLDI_fragment.glsl');
     fragmentShaderSource = await response.text();
-}
-
-// Debug console functions
-function setupDebugConsole() {
-    debugConsole = document.getElementById('debug-console');
-    debugToggle = document.getElementById('debug-toggle');
-
-    debugToggle.addEventListener('click', () => {
-        debugConsoleVisible = !debugConsoleVisible;
-        debugConsole.style.display = debugConsoleVisible ? 'block' : 'none';
-    });
-
-    // Override console methods to also log to visible console
-    const originalLog = console.log;
-    const originalWarn = console.warn;
-    const originalError = console.error;
-
-    console.log = function(...args) {
-        originalLog.apply(console, args);
-        addDebugLog('info', args.join(' '));
-    };
-
-    console.warn = function(...args) {
-        originalWarn.apply(console, args);
-        addDebugLog('warn', args.join(' '));
-    };
-
-    console.error = function(...args) {
-        originalError.apply(console, args);
-        addDebugLog('error', args.join(' '));
-    };
-
-    addDebugLog('info', 'Debug console initialized');
-}
-
-function addDebugLog(type, message) {
-    if (!debugConsole) return;
-
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
-
-    const timestamp = new Date().toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        fractionalSecondDigits: 3
-    });
-
-    entry.innerHTML = `<span class="timestamp">[${timestamp}]</span>${message}`;
-    debugConsole.appendChild(entry);
-
-    // Limit number of logs
-    while (debugConsole.children.length > MAX_DEBUG_LOGS) {
-        debugConsole.removeChild(debugConsole.firstChild);
-    }
-
-    // Auto-scroll to bottom
-    debugConsole.scrollTop = debugConsole.scrollHeight;
 }
 
 // Load thresholds JSON file
@@ -223,14 +159,8 @@ function init() {
     infoStatus = document.getElementById('info-status');
 
     setupFileHandling();
-    setupDebugConsole();
 
     video = document.getElementById('video');
-
-    console.log('Initializing LDI Player...');
-    console.log('User agent:', navigator.userAgent);
-    console.log('Platform:', navigator.platform);
-
     loadVideoSource('default-LDI.mp4');
 
     setupControllers();
@@ -296,79 +226,45 @@ function setupFileHandling() {
 }
 
 async function loadVideoSource(src) {
-    console.log(`loadVideoSource called with src: ${src}`);
-
     // Make sure shader is loaded first
     if (!fragmentShaderSource) {
-        console.log('Fragment shader not loaded, loading now...');
         await loadShader();
-        console.log('Fragment shader loaded successfully');
     }
 
-    console.log('Setting video src and calling video.load()');
     video.src = src;
     video.load();
     infoStatus.textContent = 'Loading...';
 
-    console.log('Waiting for loadedmetadata event...');
-
     video.addEventListener('loadedmetadata', () => {
-        console.log('loadedmetadata event fired!');
+        videoTexture = new THREE.VideoTexture(video);
+        videoTexture.encoding = THREE.sRGBEncoding;
 
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
-        const videoDuration = video.duration;
-
-        console.log(`Video metadata: ${videoWidth}x${videoHeight}, duration: ${videoDuration}s`);
-        console.log(`Video readyState: ${video.readyState}`);
-        console.log(`Video networkState: ${video.networkState}`);
-
-        videoTexture = new THREE.VideoTexture(video);
-        videoTexture.encoding = THREE.sRGBEncoding;
-        console.log('VideoTexture created');
 
         // For LDI video, each quadrant is half the video dimensions
         infoDimensions.textContent = `${videoWidth / 2} × ${videoHeight / 2} (2 layers)`;
         infoStatus.textContent = 'Loading JSON...';
         videoInfo.classList.add('visible');
 
-        console.log('Creating view synthesis material...');
         createViewSynthesisMaterial();
-        console.log('Material created');
-
-        console.log('Creating RGB plane...');
         createRGBPlane();
-        console.log('RGB plane created');
 
         // Start measuring video frame rate
-        console.log('Starting video frame rate measurement...');
         measureVideoFrameRate();
 
         // Try to autoplay immediately (important for Safari/Vision Pro)
-        console.log('Attempting to play video...');
-        video.play()
-            .then(() => {
-                console.log('Video.play() succeeded!');
+        video.play().catch(err => {
+            console.warn('Autoplay prevented:', err);
+            infoStatus.textContent = 'Click to play';
+            document.addEventListener('click', () => {
+                video.play();
                 infoStatus.textContent = 'Playing';
-            })
-            .catch(err => {
-                console.error('Video.play() failed:', err);
-                console.error('Error name:', err.name);
-                console.error('Error message:', err.message);
-                infoStatus.textContent = 'Click to play';
-                document.addEventListener('click', () => {
-                    console.log('User clicked, attempting play again...');
-                    video.play()
-                        .then(() => console.log('Play succeeded after user interaction'))
-                        .catch(err2 => console.error('Play failed even after user interaction:', err2));
-                    infoStatus.textContent = 'Playing';
-                }, { once: true });
-            });
+            }, { once: true });
+        });
 
         // Load companion JSON file in parallel (don't block video playback)
-        console.log('Starting JSON load in parallel...');
         loadThresholdsJSON(src).then(jsonLoaded => {
-            console.log(`JSON load completed, success: ${jsonLoaded}`);
             if (!jsonLoaded) {
                 // JSON failed to load - show error but allow video to continue
                 infoStatus.textContent = `ERROR: ${jsonLoadError} (video playing without thresholds)`;
@@ -379,7 +275,6 @@ async function loadVideoSource(src) {
             // Validate that we have enough thresholds for the video
             const videoDuration = video.duration;
             const expectedFrames = Math.ceil(videoDuration * thresholdsData.frame_rate);
-            console.log(`Video duration: ${videoDuration}s, expected frames: ${expectedFrames}, threshold count: ${thresholdsData.thresholds.length}`);
             if (thresholdsData.thresholds.length < expectedFrames) {
                 jsonLoadError = `Not enough thresholds: need ${expectedFrames}, have ${thresholdsData.thresholds.length}`;
                 infoStatus.textContent = `ERROR: ${jsonLoadError} (video playing with incomplete data)`;
@@ -391,24 +286,6 @@ async function loadVideoSource(src) {
             console.log('JSON loaded successfully, thresholds active');
         });
     }, { once: true });
-
-    // Add error event listeners
-    video.addEventListener('error', (e) => {
-        console.error('Video error event:', e);
-        if (video.error) {
-            console.error('Video error code:', video.error.code);
-            console.error('Video error message:', video.error.message);
-        }
-    });
-
-    video.addEventListener('loadstart', () => console.log('Video loadstart event'));
-    video.addEventListener('loadeddata', () => console.log('Video loadeddata event'));
-    video.addEventListener('canplay', () => console.log('Video canplay event'));
-    video.addEventListener('canplaythrough', () => console.log('Video canplaythrough event'));
-    video.addEventListener('play', () => console.log('Video play event'));
-    video.addEventListener('pause', () => console.log('Video pause event'));
-    video.addEventListener('waiting', () => console.log('Video waiting event'));
-    video.addEventListener('stalled', () => console.log('Video stalled event'));
 }
 
 function measureVideoFrameRate() {
