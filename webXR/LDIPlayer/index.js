@@ -275,15 +275,18 @@ async function loadVideoSource(src) {
             // Validate that we have enough thresholds for the video
             const videoDuration = video.duration;
             const expectedFrames = Math.ceil(videoDuration * thresholdsData.frame_rate);
-            if (thresholdsData.thresholds.length < expectedFrames) {
-                jsonLoadError = `Not enough thresholds: need ${expectedFrames}, have ${thresholdsData.thresholds.length}`;
-                infoStatus.textContent = `ERROR: ${jsonLoadError} (video playing with incomplete data)`;
-                console.error(jsonLoadError);
-                return;
-            }
+            const frameDiff = expectedFrames - thresholdsData.thresholds.length;
 
-            infoStatus.textContent = 'Ready';
-            console.log('JSON loaded successfully, thresholds active');
+            if (frameDiff > 0) {
+                // Decoder reports more frames than we have thresholds
+                // Use last threshold for missing frames (common due to decoder differences)
+                const warningMsg = `Decoder mismatch: video has ${expectedFrames} frames, JSON has ${thresholdsData.thresholds.length} thresholds (using last threshold for ${frameDiff} extra frame${frameDiff > 1 ? 's' : ''})`;
+                infoStatus.textContent = `WARNING: ${warningMsg}`;
+                console.warn(warningMsg);
+            } else {
+                infoStatus.textContent = 'Ready';
+                console.log('JSON loaded successfully, thresholds active');
+            }
         });
     }, { once: true });
 }
