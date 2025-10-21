@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR Gaussian Splat Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #ui-container.hidden {
+            display: none;
+        }
+
+        .ui-panel {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            pointer-events: auto;
+        }
+
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            color: #00ff00;
+        }
+
+        .instructions {
+            margin-bottom: 20px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        #drop-zone {
+            border: 3px dashed #666;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        #drop-zone:hover,
+        #drop-zone.drag-over {
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        #drop-zone p {
+            margin: 10px 0;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .url-input-container {
+            margin-bottom: 20px;
+        }
+
+        .url-input-container label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .url-input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        #url-input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #666;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        #url-input:focus {
+            outline: none;
+            border-color: #00ff00;
+        }
+
+        #load-url-btn {
+            padding: 10px 20px;
+            background: #00ff00;
+            border: none;
+            border-radius: 4px;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        #load-url-btn:hover {
+            background: #00cc00;
+        }
+
+        #load-url-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .quality-selector-container {
+            margin-bottom: 20px;
+        }
+
+        .quality-selector-container label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .quality-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .quality-option {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #666;
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quality-option:hover {
+            border-color: #00ff00;
+        }
+
+        .quality-option.selected {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+
+        .quality-option input[type="radio"] {
+            display: none;
+        }
+
+        #splat-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 8px;
+            display: none;
+        }
+
+        #splat-info.visible {
+            display: block;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #aaa;
+        }
+
+        .info-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+
+        #loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #loading-indicator.visible {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #00ff00;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #error-display {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 68, 68, 0.2);
+            border: 2px solid #ff4444;
+            border-radius: 8px;
+            display: none;
+        }
+
+        #error-display.visible {
+            display: block;
+        }
+
+        #error-display h3 {
+            margin: 0 0 10px 0;
+            color: #ff4444;
+            font-size: 16px;
+        }
+
+        #error-display p {
+            margin: 5px 0;
+            color: #ffaaaa;
+            font-size: 13px;
+        }
+
+        #retry-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #ff4444;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        #retry-btn:hover {
+            background: #cc0000;
+        }
+
+        #vr-button-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+        }
+
+        @media (max-width: 600px) {
+            .ui-panel {
+                padding: 20px;
+                max-width: 90%;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .quality-options {
+                flex-direction: column;
+            }
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+            "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@latest/dist/library/luma-web.module.js",
+            "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@latest/dist/spark.module.js"
+        }
+    }
+    </script>
+</head>
+
+<body>
+    <div id="ui-container">
+        <div class="ui-panel">
+            <h1>WebXR Gaussian Splat Viewer</h1>
+            <p class="instructions">
+                Load a Gaussian Splat file to view in immersive WebXR.<br>
+                Supported formats: <strong>.ply</strong>, <strong>.splat</strong>, <strong>.spz</strong>,
+                <strong>.ksplat</strong>, <strong>.sog</strong>
+            </p>
+
+            <div id="drop-zone">
+                <p style="font-size: 48px; margin: 0;">📦</p>
+                <p><strong>Drop splat file here</strong></p>
+                <p style="color: #888;">or click to browse</p>
+            </div>
+
+            <div class="url-input-container">
+                <label for="url-input">Or load from URL:</label>
+                <div class="url-input-row">
+                    <input type="text" id="url-input" placeholder="https://example.com/splat.ply">
+                    <button id="load-url-btn">Load</button>
+                </div>
+            </div>
+
+            <div class="quality-selector-container">
+                <label>Quality Preset:</label>
+                <div class="quality-options">
+                    <label class="quality-option">
+                        <input type="radio" name="quality" value="low">
+                        <span>Low</span>
+                    </label>
+                    <label class="quality-option selected">
+                        <input type="radio" name="quality" value="medium" checked>
+                        <span>Medium</span>
+                    </label>
+                    <label class="quality-option">
+                        <input type="radio" name="quality" value="high">
+                        <span>High</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="loading-indicator">
+                <div class="spinner"></div>
+                <p>Loading splat...</p>
+            </div>
+
+            <div id="splat-info">
+                <div class="info-row">
+                    <span class="info-label">File:</span>
+                    <span class="info-value" id="info-filename">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Format:</span>
+                    <span class="info-value" id="info-format">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value" id="info-status">Ready</span>
+                </div>
+            </div>
+
+            <div id="error-display">
+                <h3>Error Loading Splat</h3>
+                <p id="error-message">An error occurred.</p>
+                <button id="retry-btn">Retry</button>
+            </div>
+
+            <input type="file" id="file-input" accept=".ply,.splat,.spz,.ksplat,.sog,.glb">
+        </div>
+    </div>
+
+    <div id="vr-button-container"></div>
+
+    <script type="module" src="index.js"></script>
+</body>
+
+</html>
