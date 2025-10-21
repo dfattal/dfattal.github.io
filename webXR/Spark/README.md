@@ -62,17 +62,25 @@ This viewer requires a modern browser with WebXR support:
 
 You can test the viewer with these sample Gaussian Splat files:
 
+**Luma AI Captures (Recommended):**
+Simply paste a Luma AI capture URL into the URL input field:
+- Example: `https://lumalabs.ai/capture/ca9ea966-ca24-4ec1-ab0f-af665cb546ff`
+- Find more at: https://lumalabs.ai/
+
 **PLY Format:**
 - Use any PLY point cloud file for testing
+- Drag and drop local files or provide a URL
 
-**Luma AI Captures:**
-- Visit https://lumalabs.ai/ and grab a capture URL
-- Example format: `https://lumalabs.ai/capture/[capture-id]`
+**Other Formats:**
+- `.splat` - Antimatter15 format
+- `.spz` - Scaniverse format
+- `.ksplat` - GaussianSplats3D format
+- `.sog` - PlayCanvas format
 
-**Note:** To test locally, you'll need sample `.splat` or `.ply` files. You can:
-1. Create your own captures using Luma AI or other Gaussian Splatting tools
+**Note:** To test locally, you'll need sample splat files. You can:
+1. Create your own captures using Luma AI (https://lumalabs.ai/)
 2. Download sample files from Gaussian Splatting research repositories
-3. Convert existing 3D models to PLY format
+3. Use the Spark examples: https://sparkjs.dev/examples/
 
 ## Development
 

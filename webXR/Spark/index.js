@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SplatMesh } from '@sparkjsdev/spark';
-import { validateFile, detectSplatFormat, formatFileSize, isLumaURL } from './utils/fileValidator.js';
+import { LumaSplatsThree } from '@lumaai/luma-web';
+import { validateFile, detectSplatFormat, formatFileSize, isLumaURL, getLumaCaptureId } from './utils/fileValidator.js';
 import { getQualityPreset, applyQualityToRenderer, detectRecommendedQuality, logQualityInfo } from './utils/qualityPresets.js';
 
 // Global variables
 let scene, camera, renderer, controls;
 let currentSplat = null;
+let currentSplatIsLuma = false; // Track if current splat is a Luma capture
 let currentQuality = 'medium';
 let lastFileAttempt = null; // For retry functionality
 
@@ -72,8 +74,8 @@ function setupScene() {
         1000
     );
     // Position camera 2 meters back from origin (where splat will be)
-    // Y at 1.6m for standard VR eye height
-    camera.position.set(0, 1.6, 2); // 2 meters back from splat at origin
+    // Splats have their origin at eye level, so Y should be 0
+    camera.position.set(0, 0, 2); // 2 meters back, at splat origin height
 
     // Create renderer
     const preset = getQualityPreset(currentQuality);
@@ -101,19 +103,18 @@ function setupScene() {
     directionalLight.position.set(1, 1, 1);
     scene.add(directionalLight);
 
-    // Add helper grid and axes for debugging
-    const gridHelper = new THREE.GridHelper(10, 10, 0x00ff00, 0x404040);
-    scene.add(gridHelper);
-
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
-
-    // Add a test cube to verify rendering works
-    const testGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const testMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-    const testCube = new THREE.Mesh(testGeometry, testMaterial);
-    testCube.position.set(0, 0.5, 0);
-    scene.add(testCube);
+    // Add helper grid and axes for debugging (optional - can be removed)
+    // Uncomment these to see grid and axes helpers
+    // const gridHelper = new THREE.GridHelper(10, 10, 0x00ff00, 0x404040);
+    // scene.add(gridHelper);
+    // const axesHelper = new THREE.AxesHelper(5);
+    // scene.add(axesHelper);
+    // const testCube = new THREE.Mesh(
+    //     new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    //     new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    // );
+    // testCube.position.set(0, 0.5, 0);
+    // scene.add(testCube);
 
     // Add OrbitControls for 2D navigation
     controls = new OrbitControls(camera, renderer.domElement);
@@ -281,11 +282,18 @@ async function onLoadFromURL() {
     hideError();
 
     try {
-        const format = detectSplatFormat(url);
+        // Check if it's a Luma AI URL first
+        const format = isLumaURL(url) ? 'luma' : detectSplatFormat(url);
         console.log(`Detected format from URL: ${format}`);
 
         // Extract filename from URL for display
-        const filename = url.split('/').pop().split('?')[0] || 'Remote file';
+        let filename;
+        if (isLumaURL(url)) {
+            const captureId = getLumaCaptureId(url);
+            filename = captureId ? `Luma Capture ${captureId.substring(0, 8)}...` : 'Luma Capture';
+        } else {
+            filename = url.split('/').pop().split('?')[0] || 'Remote file';
+        }
 
         // Load with timeout
         const timeoutMs = 30000; // 30 second timeout
@@ -334,7 +342,7 @@ function onRetry() {
     }
 }
 
-// Load splat based on detected format using Spark's SplatMesh
+// Load splat based on detected format using Spark's SplatMesh or Luma's LumaSplatsThree
 async function loadSplatByFormat(urlOrBuffer, format, filename) {
     console.log(`Loading ${format} format from:`, urlOrBuffer);
 
@@ -346,31 +354,54 @@ async function loadSplatByFormat(urlOrBuffer, format, filename) {
             currentSplat.dispose?.();
         }
 
-        // Create SplatMesh
-        // If urlOrBuffer is a string (URL), pass it directly
-        // If it's a blob URL or buffer, SplatMesh can handle it
-        const splatMesh = new SplatMesh({
-            url: urlOrBuffer,
-            // Additional options can be added here
-        });
+        let splatObject;
 
-        console.log('SplatMesh created, waiting for initialization...');
+        // Check if it's a Luma AI capture URL
+        if (typeof urlOrBuffer === 'string' && isLumaURL(urlOrBuffer)) {
+            console.log('Detected Luma AI capture URL, using LumaSplatsThree');
 
-        // Wait for the splat to initialize
-        await splatMesh.initialized;
+            // Create LumaSplatsThree instance - simple, like Luma examples
+            splatObject = new LumaSplatsThree({
+                source: urlOrBuffer,
+            });
 
-        console.log('SplatMesh initialized successfully');
+            // Mark this as a Luma splat
+            currentSplatIsLuma = true;
+
+            console.log('LumaSplatsThree created');
+
+            // Luma splats load asynchronously but don't need awaiting
+            // They will appear when ready
+            // Just add a small delay to ensure scene.add() happens cleanly
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+        } else {
+            // Use Spark's SplatMesh for standard formats
+            console.log('Using Spark SplatMesh for standard splat format');
+            currentSplatIsLuma = false;
+
+            splatObject = new SplatMesh({
+                url: urlOrBuffer,
+            });
+
+            console.log('SplatMesh created, waiting for initialization...');
+
+            // Wait for the splat to initialize
+            await splatObject.initialized;
+
+            console.log('SplatMesh initialized successfully');
+        }
 
         // Add to scene
-        scene.add(splatMesh);
-        currentSplat = splatMesh;
+        scene.add(splatObject);
+        currentSplat = splatObject;
 
         // Center and scale the splat for optimal viewing
-        centerAndScaleSplat(splatMesh);
+        centerAndScaleSplat(splatObject);
 
         console.log(`${format} file loaded and added to scene`);
 
-        return splatMesh;
+        return splatObject;
     } catch (error) {
         console.error(`Error loading ${format} file:`, error);
         throw error;
@@ -380,8 +411,25 @@ async function loadSplatByFormat(urlOrBuffer, format, filename) {
 // Center and scale splat for optimal viewing
 function centerAndScaleSplat(splatObject) {
     console.log('Centering and scaling splat object:', splatObject);
+    console.log('Splat object type:', splatObject.constructor.name);
 
     try {
+        // Use the global flag we set when loading to determine if this is a Luma splat
+        console.log('🔍 Checking object type:');
+        console.log('  Constructor name:', splatObject.constructor.name);
+        console.log('  currentSplatIsLuma flag:', currentSplatIsLuma);
+
+        if (currentSplatIsLuma) {
+            console.log('✅ LumaSplatsThree detected - skipping all transformations');
+            console.log('Current rotation before skipping:', splatObject.rotation);
+            console.log('Current position before skipping:', splatObject.position);
+            console.log('Current scale before skipping:', splatObject.scale);
+            // Luma splats work correctly as-is, don't touch them
+            return;
+        }
+
+        console.log('⚠️ NOT a LumaSplatsThree - applying transformations for standard splat');
+
         // Fix coordinate system: OpenCV/COLMAP uses Y-down, Three.js uses Y-up
         // Rotate 180 degrees around X axis to flip Y and Z
         splatObject.rotation.x = Math.PI;
@@ -449,16 +497,14 @@ function onXRSessionStart() {
     // Hide UI when entering VR
     uiContainer.classList.add('hidden');
 
-    // In VR, the XR reference space is at the origin (0, 0, 0)
-    // The user's physical position in VR becomes the camera position
-    // To place the user 2m back from the splat, we move the splat 2m forward
+    // In VR, the XR reference space puts the user at their physical height
+    // The splat origin is at eye level (Y=0), but VR user is at ~1.6m
+    // We need to raise the splat and move it forward
     if (currentSplat) {
         console.log('Splat position before VR adjustment:', currentSplat.position);
 
-        // The splat is at origin, we need it 2m in front of the VR user (negative Z)
-        // But the camera is already at Z=2, so when VR resets to origin,
-        // we need to move the splat back by the camera's Z position plus desired distance
-        currentSplat.position.z = -2.0; // Place splat 2m in front of VR origin
+        // Move splat 2m forward (negative Z) and 1.6m up (positive Y) for VR eye level
+        currentSplat.position.set(0, 1.6, -2.0);
 
         console.log('Splat position after VR adjustment:', currentSplat.position);
     }
@@ -480,8 +526,7 @@ function onXRSessionEnd() {
         console.log('Splat position before returning to 2D:', currentSplat.position);
 
         // Return splat to origin for 2D OrbitControls
-        // Need to restore to center position (accounting for the centering offset)
-        currentSplat.position.z = 0;
+        currentSplat.position.set(0, 0, 0);
 
         console.log('Returned splat to center for 2D viewing. Position:', currentSplat.position);
     }

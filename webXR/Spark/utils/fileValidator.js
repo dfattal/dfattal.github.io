@@ -54,10 +54,17 @@ export function validateFile(file) {
 
     // Handle URL strings
     if (typeof file === 'string') {
+        // Check if it's a Luma AI capture URL first
+        if (isLumaURL(file)) {
+            result.valid = true;
+            result.format = 'luma';
+            return result;
+        }
+
         const ext = getFileExtension(file);
 
         if (!isSupportedFormat(file)) {
-            result.error = `Unsupported file format. Please use ${Object.values(SUPPORTED_EXTENSIONS).join(', ')}`;
+            result.error = `Unsupported file format. Please use ${Object.values(SUPPORTED_EXTENSIONS).join(', ')} or a Luma AI capture URL`;
             return result;
         }
 
@@ -122,7 +129,18 @@ export function detectSplatFormat(filename) {
  * @returns {boolean}
  */
 export function isLumaURL(url) {
-    return url.includes('lumalabs.ai') || url.includes('luma.ai') || getFileExtension(url) === '.glb';
+    return url.includes('lumalabs.ai/capture/') || url.includes('luma.ai/capture/');
+}
+
+/**
+ * Extract Luma capture ID from URL if it's a Luma URL
+ * @param {string} url - URL to parse
+ * @returns {string|null} - Capture ID or null if not a Luma URL
+ */
+export function getLumaCaptureId(url) {
+    const match = url.match(/lumalabs\.ai\/capture\/([a-f0-9-]+)/i) ||
+                  url.match(/luma\.ai\/capture\/([a-f0-9-]+)/i);
+    return match ? match[1] : null;
 }
 
 /**
