@@ -1,310 +1,64 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
-
+<html lang="en">
 <head>
-	<title>WebGL Gaussian Splat Viewer</title>
-	<meta charset="utf-8" />
-	<meta name="viewport"
-		content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no" />
-	<meta name="mobile-web-app-capable" content="yes">
-	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-	<style>
-		body {
-			overflow: hidden;
-			margin: 0;
-			height: 100vh;
-			width: 100vw;
-			font-family: sans-serif;
-			background: black;
-			text-shadow: 0 0 3px black;
-		}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1000 - Third Person Character Controller</title>
 
-		a,
-		body {
-			color: white;
-		}
+    <!-- Import Map for Three.js and Spark from CDN -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+            "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@latest/dist/spark.module.js"
+        }
+    }
+    </script>
 
-		#info {
-			z-index: 100;
-			position: absolute;
-			top: 10px;
-			left: 15px;
-		}
-
-		h3 {
-			margin: 5px 0;
-		}
-
-		p {
-			margin: 5px 0;
-			font-size: small;
-		}
-
-		.cube-wrapper {
-			transform-style: preserve-3d;
-		}
-
-		.cube {
-			transform-style: preserve-3d;
-			transform: rotateX(45deg) rotateZ(45deg);
-			animation: rotation 2s infinite;
-		}
-
-		.cube-faces {
-			transform-style: preserve-3d;
-			height: 80px;
-			width: 80px;
-			position: relative;
-			transform-origin: 0 0;
-			transform: translateX(0) translateY(0) translateZ(-40px);
-		}
-
-		.cube-face {
-			position: absolute;
-			inset: 0;
-			background: #0017ff;
-			border: solid 1px #ffffff;
-		}
-
-		.cube-face.top {
-			transform: translateZ(80px);
-		}
-
-		.cube-face.front {
-			transform-origin: 0 50%;
-			transform: rotateY(-90deg);
-		}
-
-		.cube-face.back {
-			transform-origin: 0 50%;
-			transform: rotateY(-90deg) translateZ(-80px);
-		}
-
-		.cube-face.right {
-			transform-origin: 50% 0;
-			transform: rotateX(-90deg) translateY(-80px);
-		}
-
-		.cube-face.left {
-			transform-origin: 50% 0;
-			transform: rotateX(-90deg) translateY(-80px) translateZ(80px);
-		}
-
-		@keyframes rotation {
-			0% {
-				transform: rotateX(45deg) rotateY(0) rotateZ(45deg);
-				animation-timing-function: cubic-bezier(0.17,
-						0.84,
-						0.44,
-						1);
-			}
-
-			50% {
-				transform: rotateX(45deg) rotateY(0) rotateZ(225deg);
-				animation-timing-function: cubic-bezier(0.76,
-						0.05,
-						0.86,
-						0.06);
-			}
-
-			100% {
-				transform: rotateX(45deg) rotateY(0) rotateZ(405deg);
-				animation-timing-function: cubic-bezier(0.17,
-						0.84,
-						0.44,
-						1);
-			}
-		}
-
-		.scene,
-		#message {
-			position: absolute;
-			display: flex;
-			top: 0;
-			right: 0;
-			left: 0;
-			bottom: 0;
-			z-index: 2;
-			height: 100%;
-			width: 100%;
-			align-items: center;
-			justify-content: center;
-		}
-
-		#message {
-			font-weight: bold;
-			font-size: large;
-			color: red;
-			pointer-events: none;
-		}
-
-		details {
-			font-size: small;
-
-		}
-
-		#progress {
-			position: absolute;
-			top: 0;
-			height: 5px;
-			background: blue;
-			z-index: 99;
-			transition: width 0.1s ease-in-out;
-		}
-
-		#quality {
-			position: absolute;
-			bottom: 10px;
-			z-index: 999;
-			right: 10px;
-		}
-
-		#caminfo {
-			position: absolute;
-			top: 10px;
-			z-index: 999;
-			right: 10px;
-		}
-
-		#canvas {
-			display: block;
-			position: absolute;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			touch-action: none;
-		}
-
-		#instructions {
-			background: rgba(0, 0, 0, 0.6);
-			white-space: pre-wrap;
-			padding: 10px;
-			border-radius: 10px;
-			font-size: x-small;
-		}
-
-		body.nohf .nohf {
-			display: none;
-		}
-
-		body.nohf #progress,
-		body.nohf .cube-face {
-			background: #ff9d0d;
-		}
-
-		#xr-button {
-			position: absolute;
-			bottom: 20px;
-			left: 50%;
-			transform: translateX(-50%);
-			padding: 10px 20px;
-			background: #0017ff;
-			color: white;
-			border: none;
-			border-radius: 5px;
-			cursor: pointer;
-			z-index: 1000;
-			font-weight: bold;
-		}
-
-		#xr-button:hover {
-			background: #0012cc;
-		}
-
-		#xr-button:disabled {
-			background: #666;
-			cursor: not-allowed;
-		}
-	</style>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #debug-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            border-radius: 5px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .grounded {
+            color: #00ff00;
+        }
+        .in-air {
+            color: #ff0000;
+        }
+        .jetpack-active {
+            color: #ffaa00;
+            font-weight: bold;
+        }
+    </style>
 </head>
-
 <body>
-	<script>
-		if (location.host.includes('hf.space')) document.body.classList.add('nohf');
-	</script>
-	<div id="info">
-		<h3 class="nohf">WebGL 3D Gaussian Splat Viewer</h3>
-		<p>
-			<small class="nohf">
-				By <a href="https://twitter.com/antimatter15">Kevin Kwok</a>.
-				Code on
-				<a href="https://github.com/antimatter15/splat">Github</a>.
-			</small>
-		</p>
+    <div id="debug-info">
+        <div>State: <span id="debug-state">GROUNDED</span></div>
+        <div>Animation: <span id="debug-animation">Idle</span></div>
+        <div>Jetpack: <span id="debug-jetpack">OFF</span></div>
+        <div>Ground Dist: <span id="debug-ground-dist">0.0m</span></div>
+    </div>
 
-		<details>
-			<summary>Use mouse or arrow keys to navigate.</summary>
-
-			<div id="instructions">movement (arrow keys)
-				- left/right arrow keys to strafe side to side
-				- up/down arrow keys to move forward/back
-				- space to jump
-
-				camera angle (wasd)
-				- a/d to turn camera left/right
-				- w/s to tilt camera up/down
-				- q/e to roll camera counterclockwise/clockwise
-				- i/k and j/l to orbit
-
-				trackpad
-				- scroll up/down/left/right to orbit
-				- pinch to move forward/back
-				- ctrl key + scroll to move forward/back
-				- shift + scroll to move up/down or strafe
-
-				mouse
-				- click and drag to orbit
-				- right click (or ctrl/cmd key) and drag up/down to move
-
-				touch (mobile)
-				- one finger to orbit
-				- two finger pinch to move forward/back
-				- two finger rotate to rotate camera clockwise/counterclockwise
-				- two finger pan to move side-to-side and up-down
-
-				gamepad
-				- if you have a game controller connected it should work
-
-				other
-				- press 0-9 to switch to one of the pre-loaded camera views
-				- press '-' or '+'key to cycle loaded cameras
-				- press p to resume default animation
-				- drag and drop .ply file to convert to .splat
-				- drag and drop cameras.json to load cameras
-			</div>
-
-		</details>
-
-	</div>
-
-	<div id="progress"></div>
-
-	<div id="message"></div>
-	<div class="scene" id="spinner">
-		<div class="cube-wrapper">
-			<div class="cube">
-				<div class="cube-faces">
-					<div class="cube-face bottom"></div>
-					<div class="cube-face top"></div>
-					<div class="cube-face left"></div>
-					<div class="cube-face right"></div>
-					<div class="cube-face back"></div>
-					<div class="cube-face front"></div>
-				</div>
-			</div>
-		</div>
-	</div>
-	<canvas id="canvas"></canvas>
-
-	<div id="quality">
-		<span id="fps"></span>
-	</div>
-	<div id="caminfo">
-		<span id="camid"></span>
-	</div>
-	<button id="xr-button" disabled>Enter VR</button>
-	<script src="main.js"></script>
+    <!-- Load main JavaScript file as ES6 module -->
+    <script type="module" src="main.js"></script>
 </body>
-
 </html>
