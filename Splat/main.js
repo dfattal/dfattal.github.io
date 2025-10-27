@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { SplatMesh, dyno } from '@sparkjsdev/spark';
 import { CharacterControls } from './characterControls.js';
 import { KeyDisplay } from './utils.js';
 
@@ -26,6 +26,10 @@ let gaussianSplat = null;
 
 // Animation
 const clock = new THREE.Clock();
+
+// Magic effect animation timing variables
+const animateT = dyno.dynoFloat(0);
+let baseTime = 0;
 
 // Keyboard state
 const keysPressed = {};
@@ -209,7 +213,7 @@ function createGround() {
             scene.add(wireframeHelper);
 
             console.log('Collision mesh loaded successfully (invisible, use for physics only)');
-            console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat');
+            console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat, R to reset Magic effect');
 
             // Load Gaussian splat and character in parallel
             loadGaussianSplat();
@@ -222,6 +226,87 @@ function createGround() {
             console.error('Error loading collision mesh:', error);
         }
     );
+}
+
+/**
+ * Create the Magic reveal effect modifier
+ */
+function createMagicModifier() {
+  return dyno.dynoBlock(
+    { gsplat: dyno.Gsplat },
+    { gsplat: dyno.Gsplat },
+    ({ gsplat }) => {
+      const d = new dyno.Dyno({
+        inTypes: { gsplat: dyno.Gsplat, t: "float" },
+        outTypes: { gsplat: dyno.Gsplat },
+
+        // Define utility functions in GLSL
+        globals: () => [
+          dyno.unindent(`
+            // Pseudo-random hash function for noise generation
+            vec3 hash(vec3 p) {
+              p = fract(p * 0.3183099 + 0.1);
+              p *= 17.0;
+              return fract(vec3(p.x * p.y * p.z, p.x + p.y * p.z, p.x * p.y + p.z));
+            }
+
+            // 3D Perlin-style noise function
+            vec3 noise(vec3 p) {
+              vec3 i = floor(p);
+              vec3 f = fract(p);
+              f = f * f * (3.0 - 2.0 * f);
+
+              vec3 n000 = hash(i + vec3(0,0,0));
+              vec3 n100 = hash(i + vec3(1,0,0));
+              vec3 n010 = hash(i + vec3(0,1,0));
+              vec3 n110 = hash(i + vec3(1,1,0));
+              vec3 n001 = hash(i + vec3(0,0,1));
+              vec3 n101 = hash(i + vec3(1,0,1));
+              vec3 n011 = hash(i + vec3(0,1,1));
+              vec3 n111 = hash(i + vec3(1,1,1));
+
+              vec3 x0 = mix(n000, n100, f.x);
+              vec3 x1 = mix(n010, n110, f.x);
+              vec3 x2 = mix(n001, n101, f.x);
+              vec3 x3 = mix(n011, n111, f.x);
+
+              vec3 y0 = mix(x0, x1, f.y);
+              vec3 y1 = mix(x2, x3, f.y);
+
+              return mix(y0, y1, f.z);
+            }
+          `)
+        ],
+
+        // Main effect shader logic
+        statements: ({ inputs, outputs }) => dyno.unindentLines(`
+          ${outputs.gsplat} = ${inputs.gsplat};
+          float t = ${inputs.t};
+          float s = smoothstep(0.,10.,t-4.5)*10.;
+          vec3 scales = ${inputs.gsplat}.scales;
+          vec3 localPos = ${inputs.gsplat}.center;
+          float l = length(localPos.xz);
+
+          // Magic Effect: Complex twister with noise and radial reveal
+          float border = abs(s-l-.5);
+          localPos *= 1.-.2*exp(-20.*border);
+          vec3 finalScales = mix(scales,vec3(0.002),smoothstep(s-.5,s,l+.5));
+          ${outputs.gsplat}.center = localPos + .1*noise(localPos.xyz*2.+t*.5)*smoothstep(s-.5,s,l+.5);
+          ${outputs.gsplat}.scales = finalScales;
+          float at = atan(localPos.x,localPos.z)/3.1416;
+          ${outputs.gsplat}.rgba *= step(at,t-3.1416);
+          ${outputs.gsplat}.rgba += exp(-20.*border) + exp(-50.*abs(t-at-3.1416))*.5;
+        `),
+      });
+
+      gsplat = d.apply({
+        gsplat,
+        t: animateT
+      }).gsplat;
+
+      return { gsplat };
+    }
+  );
 }
 
 /**
@@ -253,7 +338,15 @@ async function loadGaussianSplat() {
         // Add to scene
         scene.add(gaussianSplat);
 
-        console.log('Gaussian splat loaded and added to scene');
+        // Apply the Magic effect modifier
+        gaussianSplat.objectModifier = createMagicModifier();
+        gaussianSplat.updateGenerator();
+
+        // Reset time to start the animation
+        baseTime = 0;
+        animateT.value = 0;
+
+        console.log('Gaussian splat loaded and added to scene with Magic effect');
 
     } catch (error) {
         console.error('Error loading Gaussian splat:', error);
@@ -370,6 +463,15 @@ function setupKeyboardControls() {
                 console.log(`Gaussian splat: ${gaussianSplat.visible ? 'ON' : 'OFF'}`);
             }
         }
+
+        // Reset Magic effect on R
+        if (key === 'r') {
+            if (gaussianSplat) {
+                baseTime = 0;
+                animateT.value = 0;
+                console.log('Magic effect reset');
+            }
+        }
     });
 
     document.addEventListener('keyup', (event) => {
@@ -396,6 +498,13 @@ function onWindowResize() {
  */
 function animate() {
     const delta = clock.getDelta();
+
+    // Update magic effect animation time (60 FPS)
+    if (gaussianSplat) {
+        baseTime += 1/60;
+        animateT.value = baseTime;
+        gaussianSplat.updateVersion();
+    }
 
     // Update character controls
     if (characterControls) {
