@@ -24,8 +24,18 @@ let characterControls;
 let groundMesh;
 let infiniteFloor;
 let gaussianSplat = null;
-const splatScale = 1.5; // Scale factor for both collision mesh and Gaussian splat
+const splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat
 let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
+
+// Lighting
+let directionalLight = null; // Main directional light (sun)
+let lightAzimuth = 213; // Light direction azimuth in degrees (0-360, 0=North, 90=East)
+let lightElevation = 37; // Light elevation in degrees (0=horizon, 90=overhead)
+
+// Leveling adjustments (applied LAST, after all other transforms)
+let levelRotationX = 0; // Fine-tune X rotation in degrees (-5 to +5)
+let levelRotationZ = 0; // Fine-tune Z rotation in degrees (-5 to +5)
+let heightOffset = 0.60; // Vertical offset for terrain (how far below Y=0)
 
 // Animation
 const clock = new THREE.Clock();
@@ -68,7 +78,7 @@ function initScene() {
 
     // Create camera
     camera = new THREE.PerspectiveCamera(
-        75,
+        60,
         window.innerWidth / window.innerHeight,
         0.1,
         1000
@@ -113,18 +123,20 @@ function setupLighting() {
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
     // Directional light (sun)
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(-60, 100, -3);
-    dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 50;
-    dirLight.shadow.camera.bottom = -50;
-    dirLight.shadow.camera.left = -50;
-    dirLight.shadow.camera.right = 50;
-    dirLight.shadow.camera.near = 0.1;
-    dirLight.shadow.camera.far = 200;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    scene.add(dirLight);
+    directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.top = 50;
+    directionalLight.shadow.camera.bottom = -50;
+    directionalLight.shadow.camera.left = -50;
+    directionalLight.shadow.camera.right = 50;
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 200;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    scene.add(directionalLight);
+
+    // Apply initial light orientation based on azimuth and elevation
+    applyLightOrientation();
 }
 
 /**
@@ -190,6 +202,9 @@ function createGround() {
             // Flip the mesh upside down (rotate 180 degrees on X axis)
             groundMesh.rotation.x += Math.PI;
 
+            // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
+            groundMesh.position.y = -splatScale * heightOffset;
+
             // Calculate max height after transforms (flipped: max becomes min, scaled)
             // When flipped upside down, the original bbox.max.y becomes the bottom
             // and bbox.min.y becomes the top (max height)
@@ -236,7 +251,7 @@ function createGround() {
 
             infiniteFloor = new THREE.Mesh(infiniteFloorGeometry, infiniteFloorMaterial);
             infiniteFloor.rotation.x = -Math.PI / 2; // Make horizontal
-            infiniteFloor.position.y = splatScale * 0.85; // Raised ground level
+            infiniteFloor.position.y = 0; // Ground level at Y=0
             infiniteFloor.receiveShadow = true;
             scene.add(infiniteFloor);
 
@@ -259,7 +274,10 @@ function createGround() {
             scene.add(wireframeHelper);
 
             console.log('Collision mesh loaded successfully (invisible, use for physics only)');
-            console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat, R to reset Magic effect, F to toggle infinite floor');
+            console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat, R to reset Magic effect, F to toggle infinite floor, L to toggle leveling controls');
+
+            // Apply initial leveling rotations (will be 0,0 at start)
+            applyLevelingRotations();
 
             // Load Gaussian splat and character in parallel
             loadGaussianSplat();
@@ -272,6 +290,85 @@ function createGround() {
             console.error('Error loading collision mesh:', error);
         }
     );
+}
+
+/**
+ * Apply leveling rotations and height offset to terrain meshes
+ * This is called AFTER all base transforms (scale, flip, translate)
+ * to fine-tune the horizontal level and vertical position of the terrain
+ */
+function applyLevelingRotations() {
+    // Convert degrees to radians
+    const levelXRad = levelRotationX * (Math.PI / 180);
+    const levelZRad = levelRotationZ * (Math.PI / 180);
+
+    // Calculate Y position from height offset
+    const yPosition = -splatScale * heightOffset;
+
+    // Apply to collision mesh (if loaded)
+    if (groundMesh) {
+        // Set Y position
+        groundMesh.position.y = yPosition;
+
+        // Reset to base rotation (180° flip on X)
+        groundMesh.rotation.x = Math.PI;
+        groundMesh.rotation.z = 0;
+
+        // Apply leveling adjustments (LAST transform)
+        groundMesh.rotation.x += levelXRad;
+        groundMesh.rotation.z += levelZRad;
+    }
+
+    // Apply to Gaussian splat (if loaded)
+    if (gaussianSplat) {
+        // Set Y position
+        gaussianSplat.position.y = yPosition;
+
+        // Reset to base rotation (180° flip on X)
+        gaussianSplat.rotation.x = Math.PI;
+        gaussianSplat.rotation.z = 0;
+
+        // Apply leveling adjustments (LAST transform)
+        gaussianSplat.rotation.x += levelXRad;
+        gaussianSplat.rotation.z += levelZRad;
+    }
+
+    // Apply to wireframe helper (if exists)
+    if (wireframeHelper) {
+        wireframeHelper.position.y = yPosition;
+        wireframeHelper.rotation.x = Math.PI;
+        wireframeHelper.rotation.z = 0;
+        wireframeHelper.rotation.x += levelXRad;
+        wireframeHelper.rotation.z += levelZRad;
+    }
+
+    console.log(`Leveling applied: X=${levelRotationX.toFixed(1)}°, Z=${levelRotationZ.toFixed(1)}°, Height=${heightOffset.toFixed(2)}`);
+}
+
+/**
+ * Apply directional light orientation based on azimuth and elevation
+ * Azimuth: 0° = North (+Z), 90° = East (+X), 180° = South (-Z), 270° = West (-X)
+ * Elevation: 0° = horizon, 90° = overhead
+ */
+function applyLightOrientation() {
+    if (!directionalLight) return;
+
+    // Convert degrees to radians
+    const azimuthRad = (lightAzimuth * Math.PI) / 180;
+    const elevationRad = (lightElevation * Math.PI) / 180;
+
+    // Light distance from origin (affects shadow quality, not shadow direction)
+    const distance = 100;
+
+    // Calculate light position from spherical coordinates
+    // Azimuth is measured from +Z axis (North), rotating counter-clockwise when viewed from above
+    const x = distance * Math.cos(elevationRad) * Math.sin(azimuthRad);
+    const y = distance * Math.sin(elevationRad);
+    const z = distance * Math.cos(elevationRad) * Math.cos(azimuthRad);
+
+    directionalLight.position.set(x, y, z);
+
+    console.log(`Light orientation: Azimuth=${lightAzimuth}°, Elevation=${lightElevation}°, Position=(${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
 }
 
 /**
@@ -381,8 +478,14 @@ async function loadGaussianSplat() {
         // Flip upside down (rotate 180 degrees on X axis) - matches collision mesh orientation
         gaussianSplat.rotation.x += Math.PI;
 
+        // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
+        gaussianSplat.position.y = -splatScale * heightOffset;
+
         // Add to scene
         scene.add(gaussianSplat);
+
+        // Apply leveling rotations to match collision mesh
+        applyLevelingRotations();
 
         // Apply the Magic effect modifier (desktop only - too complex for mobile GPUs)
         if (!isMobile) {
@@ -453,21 +556,22 @@ function loadCharacter() {
             characterControls.placeOnGround();
 
             // Start 50 units west (negative X), facing east (positive X direction)
-            model.position.x = -50;
-            model.rotation.y = -Math.PI / 2;  // Rotate 90° to face east
+            model.position.x = 0;
+            model.position.z = 40;
+            model.rotation.y = -0*Math.PI / 2;  // Rotate 90° to face east
 
             // Position camera behind character (west) facing east, level with character
             // Character faces east (+X), so camera should be west of character (-X)
             camera.position.set(
-                model.position.x - 5,  // 5 units west (behind character)
-                model.position.y + 1,  // Level with character (azimuth 0.5*pi)
-                model.position.z       // Same Z as character
+                model.position.x ,  // 5 units west (behind character)
+                model.position.y + 2,  // Level with character (azimuth 0.5*pi)
+                model.position.z + 5      // Same Z as character
             );
 
             // Update OrbitControls target to character position
             orbitControls.target.set(
                 model.position.x,
-                model.position.y + 1,
+                model.position.y + 2,
                 model.position.z
             );
             orbitControls.update();
@@ -541,6 +645,16 @@ function setupKeyboardControls() {
             if (infiniteFloor) {
                 infiniteFloor.visible = !infiniteFloor.visible;
                 console.log(`Infinite floor: ${infiniteFloor.visible ? 'ON' : 'OFF'}`);
+            }
+        }
+
+        // Toggle leveling controls on L
+        if (key === 'l') {
+            const levelingControls = document.getElementById('leveling-controls');
+            if (levelingControls) {
+                levelingControls.classList.toggle('visible');
+                const isVisible = levelingControls.classList.contains('visible');
+                console.log(`Leveling controls: ${isVisible ? 'ON' : 'OFF'}`);
             }
         }
     });
@@ -627,6 +741,99 @@ function animate() {
 }
 
 /**
+ * Set up leveling control sliders
+ */
+function setupLevelingControls() {
+    // Get slider elements
+    const xSlider = document.getElementById('level-x-slider');
+    const zSlider = document.getElementById('level-z-slider');
+    const heightSlider = document.getElementById('level-height-slider');
+    const azimuthSlider = document.getElementById('light-azimuth-slider');
+    const elevationSlider = document.getElementById('light-elevation-slider');
+    const xValue = document.getElementById('level-x-value');
+    const zValue = document.getElementById('level-z-value');
+    const heightValue = document.getElementById('level-height-value');
+    const azimuthValue = document.getElementById('light-azimuth-value');
+    const elevationValue = document.getElementById('light-elevation-value');
+    const resetButton = document.getElementById('leveling-reset');
+
+    // X-axis slider handler
+    if (xSlider) {
+        xSlider.addEventListener('input', (e) => {
+            levelRotationX = parseFloat(e.target.value);
+            xValue.textContent = levelRotationX.toFixed(1) + '°';
+            applyLevelingRotations();
+        });
+    }
+
+    // Z-axis slider handler
+    if (zSlider) {
+        zSlider.addEventListener('input', (e) => {
+            levelRotationZ = parseFloat(e.target.value);
+            zValue.textContent = levelRotationZ.toFixed(1) + '°';
+            applyLevelingRotations();
+        });
+    }
+
+    // Height offset slider handler
+    if (heightSlider) {
+        heightSlider.addEventListener('input', (e) => {
+            heightOffset = parseFloat(e.target.value);
+            heightValue.textContent = heightOffset.toFixed(2);
+            applyLevelingRotations();
+        });
+    }
+
+    // Light azimuth slider handler
+    if (azimuthSlider) {
+        azimuthSlider.addEventListener('input', (e) => {
+            lightAzimuth = parseFloat(e.target.value);
+            azimuthValue.textContent = lightAzimuth.toFixed(0) + '°';
+            applyLightOrientation();
+        });
+    }
+
+    // Light elevation slider handler
+    if (elevationSlider) {
+        elevationSlider.addEventListener('input', (e) => {
+            lightElevation = parseFloat(e.target.value);
+            elevationValue.textContent = lightElevation.toFixed(0) + '°';
+            applyLightOrientation();
+        });
+    }
+
+    // Reset button handler
+    if (resetButton) {
+        resetButton.addEventListener('click', () => {
+            // Reset terrain leveling
+            levelRotationX = 0;
+            levelRotationZ = 0;
+            heightOffset = 0.6;
+            xSlider.value = 0;
+            zSlider.value = 0;
+            heightSlider.value = 0.6;
+            xValue.textContent = '0.0°';
+            zValue.textContent = '0.0°';
+            heightValue.textContent = '0.60';
+
+            // Reset light orientation
+            lightAzimuth = 213;
+            lightElevation = 37;
+            azimuthSlider.value = 213;
+            elevationSlider.value = 37;
+            azimuthValue.textContent = '213°';
+            elevationValue.textContent = '37°';
+
+            applyLevelingRotations();
+            applyLightOrientation();
+            console.log('All controls reset to defaults');
+        });
+    }
+
+    console.log('Leveling controls initialized');
+}
+
+/**
  * Initialize the application
  */
 function init() {
@@ -640,6 +847,7 @@ function init() {
 
     // Set up controls
     setupKeyboardControls();
+    setupLevelingControls();
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);

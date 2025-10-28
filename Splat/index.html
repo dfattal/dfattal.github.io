@@ -61,6 +61,110 @@
             font-weight: bold;
         }
 
+        /* Leveling Controls */
+        #leveling-controls {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            z-index: 1000;
+            display: none; /* Hidden by default */
+            min-width: 250px;
+        }
+
+        #leveling-controls.visible {
+            display: block;
+        }
+
+        #leveling-controls h3 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            text-align: center;
+            color: #00ff00;
+        }
+
+        .leveling-slider-group {
+            margin-bottom: 15px;
+        }
+
+        .leveling-slider-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .leveling-slider-group .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .leveling-slider-group input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: #444;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .leveling-slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00ff00;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .leveling-slider-group input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #00ff00;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .leveling-slider-group .value-display {
+            min-width: 45px;
+            text-align: right;
+            font-size: 12px;
+            color: #00ff00;
+        }
+
+        .leveling-reset {
+            width: 100%;
+            padding: 8px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .leveling-reset:hover {
+            background: #444;
+        }
+
+        .leveling-hint {
+            margin-top: 10px;
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+        }
+
         /* Virtual Joystick Styles */
         #joystick-base {
             position: fixed;
@@ -117,6 +221,55 @@
         <div>Animation: <span id="debug-animation">Idle</span></div>
         <div>Jetpack: <span id="debug-jetpack">OFF</span></div>
         <div>Ground Dist: <span id="debug-ground-dist">0.0m</span></div>
+    </div>
+
+    <!-- Leveling Controls (hidden by default, toggle with L key) -->
+    <div id="leveling-controls">
+        <h3>LEVELING CONTROLS</h3>
+
+        <div class="leveling-slider-group">
+            <label>X-Axis Rotation (Pitch)</label>
+            <div class="slider-container">
+                <input type="range" id="level-x-slider" min="-5" max="5" step="0.1" value="0">
+                <span class="value-display" id="level-x-value">0.0°</span>
+            </div>
+        </div>
+
+        <div class="leveling-slider-group">
+            <label>Z-Axis Rotation (Roll)</label>
+            <div class="slider-container">
+                <input type="range" id="level-z-slider" min="-5" max="5" step="0.1" value="0">
+                <span class="value-display" id="level-z-value">0.0°</span>
+            </div>
+        </div>
+
+        <div class="leveling-slider-group">
+            <label>Height Offset</label>
+            <div class="slider-container">
+                <input type="range" id="level-height-slider" min="-1" max="1" step="0.01" value="0.60">
+                <span class="value-display" id="level-height-value">0.60</span>
+            </div>
+        </div>
+
+        <div class="leveling-slider-group">
+            <label>Light Azimuth (Direction)</label>
+            <div class="slider-container">
+                <input type="range" id="light-azimuth-slider" min="0" max="360" step="1" value="213">
+                <span class="value-display" id="light-azimuth-value">213°</span>
+            </div>
+        </div>
+
+        <div class="leveling-slider-group">
+            <label>Light Elevation (Angle)</label>
+            <div class="slider-container">
+                <input type="range" id="light-elevation-slider" min="0" max="90" step="1" value="37">
+                <span class="value-display" id="light-elevation-value">37°</span>
+            </div>
+        </div>
+
+        <button class="leveling-reset" id="leveling-reset">Reset All</button>
+
+        <div class="leveling-hint">Press L to hide</div>
     </div>
 
     <!-- Load main JavaScript file as ES6 module -->
