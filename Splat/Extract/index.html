@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuperSplat Downloader</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      color: #1a202c;
+    }
+
+    .input-group {
+      margin-bottom: 1rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      border-color: #667eea;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .file-list {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #4a5568;
+    }
+
+    .file-item {
+      padding: 0.5rem;
+      margin: 0.25rem 0;
+      background: #f7fafc;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .file-item.downloaded {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .file-item.skipped {
+      background: #fff3cd;
+      color: #856404;
+      opacity: 0.7;
+    }
+
+    .file-item .optional-badge {
+      font-size: 0.7rem;
+      background: #e2e8f0;
+      color: #4a5568;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-left: 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #667eea;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    function SuperSplatDownloader() {
+      const [url, setUrl] = useState('');
+      const [status, setStatus] = useState({ type: '', message: '' });
+      const [downloading, setDownloading] = useState(false);
+      const [fileProgress, setFileProgress] = useState([]);
+      const [modelId, setModelId] = useState('');
+
+      // Core files are required, optional files might not exist for all models
+      const files = [
+        { name: 'meta.json', required: true },
+        { name: 'means_l.webp', required: true },
+        { name: 'means_u.webp', required: true },
+        { name: 'quats.webp', required: true },
+        { name: 'scales.webp', required: true },
+        { name: 'sh0.webp', required: true },
+        { name: 'shN_centroids.webp', required: false },
+        { name: 'shN_labels.webp', required: false },
+      ];
+
+      const checkFileExists = async (url) => {
+        try {
+          const res = await fetch(url, { method: 'HEAD' });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      };
+
+      const downloadWithRetry = async (url, fileName, isRequired = true, maxRetries = 3) => {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) {
+              // For optional files, don't retry on 403/404
+              if (!isRequired && (res.status === 403 || res.status === 404)) {
+                return null; // Skip optional file
+              }
+              if (res.status === 403 && attempt < maxRetries) {
+                // Wait longer on 403 (rate limit)
+                await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                continue;
+              }
+              throw new Error(`HTTP ${res.status} for ${fileName}`);
+            }
+            return await res.blob();
+          } catch (err) {
+            if (attempt === maxRetries) {
+              if (!isRequired) return null; // Skip optional file on final failure
+              throw err;
+            }
+            // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      };
+
+      const handleDownload = async () => {
+        try {
+          // Extract ID from URL
+          const idMatch = url.match(/id=([a-zA-Z0-9]+)/);
+          if (!idMatch) {
+            setStatus({ type: 'error', message: '❌ Invalid URL. Please use format: https://superspl.at/view?id=XXXX' });
+            return;
+          }
+
+          const id = idMatch[1];
+          setModelId(id);
+          const base = `https://d28zzqy0iyovbz.cloudfront.net/${id}/v1`;
+
+          setDownloading(true);
+          setStatus({ type: 'info', message: '⬇️ Downloading files (please wait, rate limited)...' });
+          setFileProgress(files.map(f => ({
+            name: f.name,
+            status: 'pending',
+            required: f.required
+          })));
+
+          let successCount = 0;
+          let skippedCount = 0;
+          const zip = new JSZip();
+          const folderName = `supersplat_${id}`;
+
+          // Download each file with retry logic
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileName = file.name;
+            const fileUrl = `${base}/${fileName}`;
+
+            // Update progress
+            setFileProgress(prev => prev.map((item, idx) =>
+              idx === i ? { ...item, status: 'downloading' } : item
+            ));
+
+            try {
+              const blob = await downloadWithRetry(fileUrl, fileName, file.required);
+
+              if (blob === null) {
+                // Optional file doesn't exist
+                setFileProgress(prev => prev.map((item, idx) =>
+                  idx === i ? { ...item, status: 'skipped' } : item
+                ));
+                skippedCount++;
+                console.log(`Skipped optional file: ${fileName}`);
+              } else {
+                // Add file to zip
+                zip.file(fileName, blob);
+
+                // Update progress
+                setFileProgress(prev => prev.map((item, idx) =>
+                  idx === i ? { ...item, status: 'downloaded' } : item
+                ));
+
+                successCount++;
+              }
+
+              // Longer delay between downloads to avoid rate limiting (1-1.5 seconds)
+              const delay = 1000 + Math.random() * 500;
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } catch (err) {
+              console.error(`Failed to download ${fileName}:`, err);
+              setFileProgress(prev => prev.map((item, idx) =>
+                idx === i ? { ...item, status: 'error' } : item
+              ));
+              // Continue with other files instead of stopping
+            }
+          }
+
+          // Generate and download the zip file
+          if (successCount > 0) {
+            setStatus({ type: 'info', message: '📦 Creating zip file...' });
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(zipBlob);
+            a.download = `${folderName}.sog`;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+          }
+
+          const requiredCount = files.filter(f => f.required).length;
+          const requiredSuccess = files.filter((f, i) =>
+            f.required && fileProgress[i]?.status === 'downloaded'
+          ).length;
+
+          if (successCount === files.length) {
+            setStatus({
+              type: 'success',
+              message: `✅ Downloaded ${folderName}.sog with all ${files.length} files!`
+            });
+          } else if (successCount >= requiredCount) {
+            const msg = skippedCount > 0
+              ? `✅ Downloaded ${folderName}.sog (${successCount} files, ${skippedCount} optional files unavailable)`
+              : `✅ Downloaded ${folderName}.sog with ${successCount}/${files.length} files`;
+            setStatus({ type: 'success', message: msg });
+          } else if (successCount > 0) {
+            setStatus({
+              type: 'error',
+              message: `⚠️ Downloaded ${successCount}/${files.length} files to ${folderName}.sog. Some required files failed.`
+            });
+          } else {
+            setStatus({
+              type: 'error',
+              message: '❌ All downloads failed. The model may not exist or CDN is blocking requests.'
+            });
+          }
+        } catch (err) {
+          console.error(err);
+          setStatus({
+            type: 'error',
+            message: '❌ Download failed. Check console for details.'
+          });
+        } finally {
+          setDownloading(false);
+        }
+      };
+
+      return (
+        <div className="container">
+          <h1>SuperSplat Downloader</h1>
+
+          <div className="input-group">
+            <input
+              type="text"
+              placeholder="Paste SuperSplat URL (e.g. https://superspl.at/view?id=4f1af145)"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={downloading}
+            />
+          </div>
+
+          <button onClick={handleDownload} disabled={downloading || !url.trim()}>
+            {downloading ? (
+              <>
+                Downloading... <span className="spinner"></span>
+              </>
+            ) : (
+              'Download Files'
+            )}
+          </button>
+
+          {status.message && (
+            <div className={`status ${status.type}`}>
+              {status.message}
+            </div>
+          )}
+
+          {fileProgress.length > 0 && (
+            <div className="file-list">
+              {fileProgress.map((file, idx) => (
+                <div
+                  key={idx}
+                  className={`file-item ${file.status === 'downloaded' ? 'downloaded' : ''} ${file.status === 'skipped' ? 'skipped' : ''}`}
+                >
+                  <span>
+                    {file.name}
+                    {!file.required && <span className="optional-badge">optional</span>}
+                  </span>
+                  <span>
+                    {file.status === 'pending' && '⏳'}
+                    {file.status === 'downloading' && '⬇️'}
+                    {file.status === 'downloaded' && '✅'}
+                    {file.status === 'skipped' && '⊝'}
+                    {file.status === 'error' && '❌'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<SuperSplatDownloader />);
+  </script>
+</body>
+</html>
