@@ -24,9 +24,15 @@ let groundMesh;
 let infiniteFloor;
 let gaussianSplat = null;
 const splatScale = 1.5; // Scale factor for both collision mesh and Gaussian splat
+let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
 
 // Animation
 const clock = new THREE.Clock();
+
+// FPS tracking
+let lastTime = performance.now();
+let frameCount = 0;
+let fps = 60;
 
 // Magic effect animation timing variables
 const animateT = dyno.dynoFloat(0);
@@ -138,6 +144,11 @@ function createGround() {
 
             // Create the ground mesh from the collision geometry
             const meshGeometry = collisionMesh.geometry;
+
+            // Compute bounding box to get max height
+            meshGeometry.computeBoundingBox();
+            const bbox = meshGeometry.boundingBox;
+
             groundMesh = new THREE.Mesh(meshGeometry, collisionMaterial);
 
             // Copy transform from the original mesh
@@ -153,6 +164,15 @@ function createGround() {
 
             // Flip the mesh upside down (rotate 180 degrees on X axis)
             groundMesh.rotation.x += Math.PI;
+
+            // Calculate max height after transforms (flipped: max becomes min, scaled)
+            // When flipped upside down, the original bbox.max.y becomes the bottom
+            // and bbox.min.y becomes the top (max height)
+            const rawHeight = Math.abs(bbox.max.y - bbox.min.y);
+            const maxTerrainHeight = rawHeight * splatScale;
+            maxCharacterHeight = maxTerrainHeight * 2;
+
+            console.log(`Terrain max height: ${maxTerrainHeight.toFixed(2)}, Character height cap: ${maxCharacterHeight.toFixed(2)}`);
 
             groundMesh.receiveShadow = true;
             groundMesh.castShadow = true;
@@ -191,7 +211,7 @@ function createGround() {
 
             infiniteFloor = new THREE.Mesh(infiniteFloorGeometry, infiniteFloorMaterial);
             infiniteFloor.rotation.x = -Math.PI / 2; // Make horizontal
-            infiniteFloor.position.y = splatScale * 0.95; // Raised ground level
+            infiniteFloor.position.y = splatScale * 0.85; // Raised ground level
             infiniteFloor.receiveShadow = true;
             scene.add(infiniteFloor);
 
@@ -214,7 +234,7 @@ function createGround() {
             scene.add(wireframeHelper);
 
             console.log('Collision mesh loaded successfully (invisible, use for physics only)');
-            console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat, R to reset Magic effect');
+            console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat, R to reset Magic effect, F to toggle infinite floor');
 
             // Load Gaussian splat and character in parallel
             loadGaussianSplat();
@@ -391,7 +411,8 @@ function loadCharacter() {
                 orbitControls,
                 camera,
                 'Idle',
-                [groundMesh, infiniteFloor]
+                [groundMesh, infiniteFloor],
+                maxCharacterHeight
             );
 
             // Place character on ground at spawn position
@@ -473,6 +494,14 @@ function setupKeyboardControls() {
                 console.log('Magic effect reset');
             }
         }
+
+        // Toggle infinite floor on F
+        if (key === 'f') {
+            if (infiniteFloor) {
+                infiniteFloor.visible = !infiniteFloor.visible;
+                console.log(`Infinite floor: ${infiniteFloor.visible ? 'ON' : 'OFF'}`);
+            }
+        }
     });
 
     document.addEventListener('keyup', (event) => {
@@ -499,6 +528,21 @@ function onWindowResize() {
  */
 function animate() {
     const delta = clock.getDelta();
+
+    // Calculate FPS
+    const currentTime = performance.now();
+    frameCount++;
+    if (currentTime >= lastTime + 1000) {
+        fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+        frameCount = 0;
+        lastTime = currentTime;
+
+        // Update FPS display
+        const debugFps = document.getElementById('debug-fps');
+        if (debugFps) {
+            debugFps.textContent = fps;
+        }
+    }
 
     // Update magic effect animation time (60 FPS)
     if (gaussianSplat) {

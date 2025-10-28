@@ -26,6 +26,7 @@ export class CharacterControls {
     maxFallSpeed = -50;          // Maximum falling velocity
     jumpCooldownDuration = 0.3;  // Jump cooldown in seconds
     characterHeightOffset = 0;   // Character pivot offset (0 = pivot at feet)
+    maxHeight = null;            // Maximum height cap (null = no cap)
 
     // Jump state
     verticalVelocity = 0;        // Current vertical velocity
@@ -75,7 +76,8 @@ export class CharacterControls {
         orbitControl,
         camera,
         currentAction,
-        groundMeshes
+        groundMeshes,
+        maxHeight = null
     ) {
         this.model = model;
         this.mixer = mixer;
@@ -87,6 +89,11 @@ export class CharacterControls {
         // Support both single mesh and array of meshes
         if (groundMeshes) {
             this.groundMeshes = Array.isArray(groundMeshes) ? groundMeshes : [groundMeshes];
+        }
+
+        // Set max height cap if provided
+        if (maxHeight !== null) {
+            this.maxHeight = maxHeight;
         }
 
         // Play initial animation
@@ -316,6 +323,12 @@ export class CharacterControls {
                     this.verticalVelocity = 0;  // Stop upward movement
                 }
             }
+        }
+
+        // Check for maximum height cap (2x terrain height)
+        if (this.maxHeight !== null && this.model.position.y > this.maxHeight) {
+            this.model.position.y = this.maxHeight;
+            this.verticalVelocity = 0;  // Stop upward movement
         }
 
         // Check if character should be on the ground
