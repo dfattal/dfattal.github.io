@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { SplatMesh, dyno } from '@sparkjsdev/spark';
 import { CharacterControls } from './characterControls.js';
 import { KeyDisplay } from './utils.js';
+import { TouchControls } from './touchControls.js';
 
 /**
  * F1000 - Third Person Character Controller
@@ -38,9 +39,21 @@ let fps = 60;
 const animateT = dyno.dynoFloat(0);
 let baseTime = 0;
 
+// Mobile detection (do this FIRST before creating UI elements)
+const isMobile = (function() {
+    const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const userAgent = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const mobile = touch || userAgent;
+    console.log('Mobile detection:', { touch, userAgent, isMobile: mobile });
+    return mobile;
+})();
+
 // Keyboard state
 const keysPressed = {};
-const keyDisplayQueue = new KeyDisplay();
+const keyDisplayQueue = new KeyDisplay(isMobile);
+
+// Touch controls
+let touchControls = null;
 
 // Debug wireframe for terrain
 let wireframeHelper = null;
@@ -82,6 +95,12 @@ function initScene() {
     orbitControls.enablePan = false;
     orbitControls.maxPolarAngle = Math.PI * 0.55; // Allow looking up (85% toward straight up from below)
     orbitControls.update();
+
+    // Initialize touch controls for mobile
+    if (isMobile) {
+        touchControls = new TouchControls(keysPressed, orbitControls);
+        console.log('Touch controls initialized early (before character load)');
+    }
 
     console.log('Scene initialized');
 }
@@ -442,6 +461,13 @@ function loadCharacter() {
             console.log('Camera positioned at:', camera.position);
             console.log('Character facing east (rotation Y:', model.rotation.y, ')');
             console.log('Available animations:', Array.from(animationsMap.keys()));
+
+            // Mobile-specific setup
+            if (isMobile) {
+                // Enable run mode by default on mobile
+                characterControls.toggleRun = true;
+                console.log('Mobile: run mode enabled by default');
+            }
         },
         (xhr) => {
             console.log((xhr.loaded / xhr.total) * 100 + '% loaded');

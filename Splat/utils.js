@@ -14,13 +14,15 @@ export const DIRECTIONS = [W, A, S, D];
 export class KeyDisplay {
     map = new Map();
 
-    constructor() {
-        const w = this.createKeyDiv(W);
-        const a = this.createKeyDiv(A);
-        const s = this.createKeyDiv(S);
-        const d = this.createKeyDiv(D);
-        const shift = this.createKeyDiv(SHIFT);
-        const space = this.createKeyDiv('SPACE');
+    constructor(isMobile = false) {
+        console.log('KeyDisplay: isMobile =', isMobile);
+
+        const w = this.createKeyDiv(W, isMobile);
+        const a = this.createKeyDiv(A, isMobile);
+        const s = this.createKeyDiv(S, isMobile);
+        const d = this.createKeyDiv(D, isMobile);
+        const shift = this.createKeyDiv(SHIFT, isMobile);
+        const space = this.createKeyDiv('SPACE', isMobile);
 
         this.map.set(W, w);
         this.map.set(A, a);
@@ -42,13 +44,19 @@ export class KeyDisplay {
     /**
      * Create a key display div element
      */
-    createKeyDiv(key) {
+    createKeyDiv(key, isMobile = false) {
         const div = document.createElement('div');
         div.style.color = 'blue';
         div.style.fontSize = '50px';
         div.style.fontWeight = '800';
         div.style.position = 'absolute';
         div.textContent = key.toUpperCase();
+
+        // Hide on mobile devices
+        if (isMobile) {
+            div.style.display = 'none';
+        }
+
         return div;
     }
 
