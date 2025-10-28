@@ -21,9 +21,21 @@
             margin: 0;
             overflow: hidden;
             font-family: Arial, sans-serif;
+            /* Disable iOS context menu, text selection, and unwanted touch behaviors */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            /* Prevent double-tap zoom, but allow pan/scroll */
+            touch-action: manipulation;
         }
         canvas {
             display: block;
+            /* Additional protection for canvas element */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         #debug-info {
             position: absolute;

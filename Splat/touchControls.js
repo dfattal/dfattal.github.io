@@ -39,6 +39,7 @@ export class TouchControls {
         this.handleTouchStart = this.handleTouchStart.bind(this);
         this.handleTouchMove = this.handleTouchMove.bind(this);
         this.handleTouchEnd = this.handleTouchEnd.bind(this);
+        this.handleContextMenu = this.handleContextMenu.bind(this);
 
         // Add event listeners
         this.setupEventListeners();
@@ -51,12 +52,14 @@ export class TouchControls {
      * Set up touch event listeners
      */
     setupEventListeners() {
-        // Use passive:true initially to allow OrbitControls to work
-        // We'll call preventDefault() selectively when needed
+        // Use passive:false to allow preventDefault() calls
         document.addEventListener('touchstart', this.handleTouchStart, { passive: false });
         document.addEventListener('touchmove', this.handleTouchMove, { passive: false });
         document.addEventListener('touchend', this.handleTouchEnd, { passive: false });
         document.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
+
+        // Prevent iOS context menu (long-press lens/magnifier)
+        document.addEventListener('contextmenu', this.handleContextMenu, { passive: false });
     }
 
     /**
@@ -95,6 +98,9 @@ export class TouchControls {
         // Start long-press timer for joystick activation
         // Only if no joystick is currently active
         if (!this.joystick.isActive() && !this.jetpackActive) {
+            // Prevent iOS context menu during long press detection
+            event.preventDefault();
+
             this.touchStartTime = currentTime;
             const touchId = touch.identifier;
             const touchX = touch.clientX;
@@ -308,6 +314,14 @@ export class TouchControls {
     }
 
     /**
+     * Prevent iOS context menu (lens/magnifier)
+     */
+    handleContextMenu(event) {
+        event.preventDefault();
+        return false;
+    }
+
+    /**
      * Clean up event listeners
      */
     destroy() {
@@ -315,5 +329,6 @@ export class TouchControls {
         document.removeEventListener('touchmove', this.handleTouchMove);
         document.removeEventListener('touchend', this.handleTouchEnd);
         document.removeEventListener('touchcancel', this.handleTouchEnd);
+        document.removeEventListener('contextmenu', this.handleContextMenu);
     }
 }
