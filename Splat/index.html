@@ -48,6 +48,54 @@
             color: #ffaa00;
             font-weight: bold;
         }
+
+        /* Virtual Joystick Styles */
+        #joystick-base {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 999;
+            transition: opacity 0.2s ease;
+            opacity: 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        #joystick-thumb {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.5) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.05s ease-out;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            #debug-info {
+                font-size: 12px;
+                padding: 10px;
+            }
+
+            #joystick-base {
+                width: 100px;
+                height: 100px;
+            }
+
+            #joystick-thumb {
+                width: 40px;
+                height: 40px;
+            }
+        }
     </style>
 </head>
 <body>

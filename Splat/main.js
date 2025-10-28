@@ -168,6 +168,12 @@ function createGround() {
             meshGeometry.computeBoundingBox();
             const bbox = meshGeometry.boundingBox;
 
+            console.log('Collision mesh bounding box (local geometry space):');
+            console.log('  min:', bbox.min);
+            console.log('  max:', bbox.max);
+            console.log('  Y range: min =', bbox.min.y.toFixed(4), ', max =', bbox.max.y.toFixed(4));
+            console.log('  After 180° flip on X-axis, the lowest point will be at:', bbox.max.y.toFixed(4));
+
             groundMesh = new THREE.Mesh(meshGeometry, collisionMaterial);
 
             // Copy transform from the original mesh
@@ -378,15 +384,24 @@ async function loadGaussianSplat() {
         // Add to scene
         scene.add(gaussianSplat);
 
-        // Apply the Magic effect modifier
-        gaussianSplat.objectModifier = createMagicModifier();
-        gaussianSplat.updateGenerator();
+        // Apply the Magic effect modifier (desktop only - too complex for mobile GPUs)
+        if (!isMobile) {
+            try {
+                gaussianSplat.objectModifier = createMagicModifier();
+                gaussianSplat.updateGenerator();
 
-        // Reset time to start the animation
-        baseTime = 0;
-        animateT.value = 0;
+                // Reset time to start the animation
+                baseTime = 0;
+                animateT.value = 0;
 
-        console.log('Gaussian splat loaded and added to scene with Magic effect');
+                console.log('Gaussian splat loaded with Magic effect (desktop)');
+            } catch (error) {
+                console.error('Error applying Magic effect modifier:', error);
+                console.log('Gaussian splat loaded without Magic effect (shader compilation failed)');
+            }
+        } else {
+            console.log('Gaussian splat loaded without Magic effect (mobile - shader too complex)');
+        }
 
     } catch (error) {
         console.error('Error loading Gaussian splat:', error);
