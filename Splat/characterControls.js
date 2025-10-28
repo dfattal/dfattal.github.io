@@ -41,6 +41,12 @@ export class CharacterControls {
     jetpackTransitionDuration = 0.3;  // Time to smoothly restore gravity after release
     jetpackTransitionTimer = 0;  // Tracks transition progress
 
+    // Jetpack audio
+    thrusterSound = null;        // Audio element for thruster sound
+    thrusterFadeSpeed = 2.0;     // Volume fade speed (units per second)
+    thrusterTargetVolume = 0;    // Target volume for smooth fading
+    thrusterMaxVolume = 0.5;     // Maximum volume when jetpack is active
+
     // Ground detection
     raycaster = new THREE.Raycaster();
     groundMeshes = [];
@@ -96,6 +102,9 @@ export class CharacterControls {
             this.maxHeight = maxHeight;
         }
 
+        // Initialize thruster sound
+        this.initThrusterSound();
+
         // Play initial animation
         this.animationsMap.forEach((value, key) => {
             if (key === currentAction) {
@@ -138,6 +147,77 @@ export class CharacterControls {
     getGroundDistance() {
         const groundInfo = this.getGroundInfo();
         return Math.max(0, this.model.position.y - groundInfo.height);
+    }
+
+    /**
+     * Initialize thruster sound effect
+     */
+    initThrusterSound() {
+        try {
+            this.thrusterSound = new Audio('sounds/thrusters_loopwav-14699.mp3');
+            this.thrusterSound.loop = true;
+            this.thrusterSound.volume = 0; // Start at 0 volume
+            console.log('Thruster sound loaded');
+        } catch (error) {
+            console.error('Error loading thruster sound:', error);
+        }
+    }
+
+    /**
+     * Start thruster sound with fade-in
+     */
+    startThrusterSound() {
+        if (this.thrusterSound) {
+            this.thrusterTargetVolume = this.thrusterMaxVolume;
+            // Start playing if not already playing
+            if (this.thrusterSound.paused) {
+                this.thrusterSound.currentTime = 0;
+                this.thrusterSound.play().catch(err => {
+                    console.warn('Could not play thruster sound:', err);
+                });
+            }
+        }
+    }
+
+    /**
+     * Stop thruster sound with fade-out
+     */
+    stopThrusterSound() {
+        if (this.thrusterSound) {
+            this.thrusterTargetVolume = 0;
+        }
+    }
+
+    /**
+     * Update thruster sound volume (smooth fade)
+     * Called every frame in update loop
+     */
+    updateThrusterSound(delta) {
+        if (!this.thrusterSound) return;
+
+        // Smooth fade to target volume
+        if (this.thrusterSound.volume !== this.thrusterTargetVolume) {
+            const volumeDelta = this.thrusterFadeSpeed * delta;
+
+            if (this.thrusterSound.volume < this.thrusterTargetVolume) {
+                // Fade in
+                this.thrusterSound.volume = Math.min(
+                    this.thrusterTargetVolume,
+                    this.thrusterSound.volume + volumeDelta
+                );
+            } else {
+                // Fade out
+                this.thrusterSound.volume = Math.max(
+                    this.thrusterTargetVolume,
+                    this.thrusterSound.volume - volumeDelta
+                );
+
+                // Pause audio when fully faded out to save resources
+                if (this.thrusterSound.volume === 0 && !this.thrusterSound.paused) {
+                    this.thrusterSound.pause();
+                }
+            }
+        }
     }
 
     /**
@@ -259,6 +339,9 @@ export class CharacterControls {
     update(delta, keysPressed) {
         // ===== PHYSICS FIRST: Update grounded state before selecting animations =====
 
+        // Update thruster sound volume (smooth fade in/out)
+        this.updateThrusterSound(delta);
+
         // Update jump cooldown
         if (this.jumpCooldown > 0) {
             this.jumpCooldown -= delta;
@@ -276,6 +359,7 @@ export class CharacterControls {
             // Activate jetpack if not already active
             if (!this.isJetpackActive) {
                 this.isJetpackActive = true;
+                this.startThrusterSound();  // Start sound with fade-in
             }
             // Apply jetpack thrust to counter gravity
             this.verticalVelocity += this.jetpackThrust * delta;
@@ -283,6 +367,7 @@ export class CharacterControls {
             // Jetpack was active but space released - start transition
             this.isJetpackActive = false;
             this.jetpackTransitionTimer = this.jetpackTransitionDuration;
+            this.stopThrusterSound();  // Stop sound with fade-out
         }
 
         // Apply gravity with smooth transition after jetpack release
@@ -342,7 +427,12 @@ export class CharacterControls {
             this.verticalVelocity = 0;
             this.isGrounded = true;
             this.timeInAir = 0;  // Reset air time when grounded
-            this.isJetpackActive = false;  // Deactivate jetpack on landing
+
+            // Deactivate jetpack on landing
+            if (this.isJetpackActive) {
+                this.isJetpackActive = false;
+                this.stopThrusterSound();  // Stop sound with fade-out
+            }
             this.jetpackTransitionTimer = 0;  // Reset transition timer
         } else {
             // Character is airborne
