@@ -23,6 +23,7 @@ let characterControls;
 let groundMesh;
 let infiniteFloor;
 let gaussianSplat = null;
+const splatScale = 1.5; // Scale factor for both collision mesh and Gaussian splat
 
 // Animation
 const clock = new THREE.Clock();
@@ -108,7 +109,7 @@ function createGround() {
     const loader = new GLTFLoader();
 
     loader.load(
-        'models/arc-collision.glb',
+        'models/StoneHenge-small-collision.glb',
         (gltf) => {
             // Extract the collision mesh from the loaded model
             let foundMesh = undefined;
@@ -147,8 +148,8 @@ function createGround() {
             // Apply any transforms from parent nodes
             groundMesh.applyMatrix4(gltf.scene.matrix);
 
-            // Scale the collision mesh by 27.8
-            groundMesh.scale.multiplyScalar(27.8);
+            // Scale the collision mesh
+            groundMesh.scale.multiplyScalar(splatScale);
 
             // Flip the mesh upside down (rotate 180 degrees on X axis)
             groundMesh.rotation.x += Math.PI;
@@ -190,7 +191,7 @@ function createGround() {
 
             infiniteFloor = new THREE.Mesh(infiniteFloorGeometry, infiniteFloorMaterial);
             infiniteFloor.rotation.x = -Math.PI / 2; // Make horizontal
-            infiniteFloor.position.y = 0; // At ground level (may overlap with collision mesh)
+            infiniteFloor.position.y = splatScale * 0.95; // Raised ground level
             infiniteFloor.receiveShadow = true;
             scene.add(infiniteFloor);
 
@@ -232,17 +233,17 @@ function createGround() {
  * Create the Magic reveal effect modifier
  */
 function createMagicModifier() {
-  return dyno.dynoBlock(
-    { gsplat: dyno.Gsplat },
-    { gsplat: dyno.Gsplat },
-    ({ gsplat }) => {
-      const d = new dyno.Dyno({
-        inTypes: { gsplat: dyno.Gsplat, t: "float" },
-        outTypes: { gsplat: dyno.Gsplat },
+    return dyno.dynoBlock(
+        { gsplat: dyno.Gsplat },
+        { gsplat: dyno.Gsplat },
+        ({ gsplat }) => {
+            const d = new dyno.Dyno({
+                inTypes: { gsplat: dyno.Gsplat, t: "float" },
+                outTypes: { gsplat: dyno.Gsplat },
 
-        // Define utility functions in GLSL
-        globals: () => [
-          dyno.unindent(`
+                // Define utility functions in GLSL
+                globals: () => [
+                    dyno.unindent(`
             // Pseudo-random hash function for noise generation
             vec3 hash(vec3 p) {
               p = fract(p * 0.3183099 + 0.1);
@@ -276,18 +277,18 @@ function createMagicModifier() {
               return mix(y0, y1, f.z);
             }
           `)
-        ],
+                ],
 
-        // Main effect shader logic
-        statements: ({ inputs, outputs }) => dyno.unindentLines(`
+                // Main effect shader logic
+                statements: ({ inputs, outputs }) => dyno.unindentLines(`
           ${outputs.gsplat} = ${inputs.gsplat};
           float t = ${inputs.t};
-          float s = smoothstep(0.,10.,t-4.5)*10.;
+          float s = smoothstep(0., 2., t) * 2500.;
           vec3 scales = ${inputs.gsplat}.scales;
           vec3 localPos = ${inputs.gsplat}.center;
           float l = length(localPos.xz);
 
-          // Magic Effect: Complex twister with noise and radial reveal
+          // Magic Effect: Complex twister with noise and radial reveal (2500 unit radius in 2 seconds)
           float border = abs(s-l-.5);
           localPos *= 1.-.2*exp(-20.*border);
           vec3 finalScales = mix(scales,vec3(0.002),smoothstep(s-.5,s,l+.5));
@@ -297,16 +298,16 @@ function createMagicModifier() {
           ${outputs.gsplat}.rgba *= step(at,t-3.1416);
           ${outputs.gsplat}.rgba += exp(-20.*border) + exp(-50.*abs(t-at-3.1416))*.5;
         `),
-      });
+            });
 
-      gsplat = d.apply({
-        gsplat,
-        t: animateT
-      }).gsplat;
+            gsplat = d.apply({
+                gsplat,
+                t: animateT
+            }).gsplat;
 
-      return { gsplat };
-    }
-  );
+            return { gsplat };
+        }
+    );
 }
 
 /**
@@ -318,7 +319,7 @@ async function loadGaussianSplat() {
     try {
         // Create SplatMesh from PLY file
         gaussianSplat = new SplatMesh({
-            url: 'models/Arc-clean.ply',
+            url: 'models/StoneHenge.sog',
         });
 
         console.log('SplatMesh created, waiting for initialization...');
@@ -329,8 +330,8 @@ async function loadGaussianSplat() {
         console.log('SplatMesh initialized successfully');
 
         // Apply same transformations as collision mesh
-        // Scale by 27.8
-        gaussianSplat.scale.multiplyScalar(27.8);
+        // Scale to match collision mesh
+        gaussianSplat.scale.multiplyScalar(splatScale);
 
         // Flip upside down (rotate 180 degrees on X axis) - matches collision mesh orientation
         gaussianSplat.rotation.x += Math.PI;
@@ -501,7 +502,7 @@ function animate() {
 
     // Update magic effect animation time (60 FPS)
     if (gaussianSplat) {
-        baseTime += 1/60;
+        baseTime += 1 / 60;
         animateT.value = baseTime;
         gaussianSplat.updateVersion();
     }
