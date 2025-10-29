@@ -157,10 +157,7 @@ export class CharacterControls {
      * Get current movement state for audio system
      * @returns {string} - 'idle', 'walk', 'run', or 'jetpack'
      *
-     * NOTE: This state detection logic is correct and working properly.
-     * The iOS audio issues (running sound audible at startup) are NOT caused
-     * by incorrect state detection - they are caused by iOS Safari's volume
-     * control bugs in the AudioManager class. See src/audioManager.js for details.
+     * NOTE: AudioManager now uses Web Audio API for reliable volume control on iOS.
      */
     getMovementState() {
         // Jetpack state takes priority (airborne with active thrust)

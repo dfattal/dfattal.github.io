@@ -144,6 +144,7 @@ export class AudioManager {
     // Unlock state
     audioUnlocked = false;
     loopedSoundsStarted = false;
+    preloadPromise = null;  // Track preload progress
 
     /**
      * @param {Object} config - paths to audio assets
@@ -158,7 +159,7 @@ export class AudioManager {
         this.setupGraph();
 
         // Begin preloading/decoding buffers (safe while context is suspended)
-        this.preloadAll().then(() => {
+        this.preloadPromise = this.preloadAll().then(() => {
             console.log('Audio buffers preloaded');
         }).catch((e) => {
             console.warn('Audio preload failed:', e);
@@ -189,19 +190,40 @@ export class AudioManager {
 
     async preloadAll() {
         const tasks = [];
-        if (this.config.backgroundMusic) tasks.push(this.loadBuffer(this.config.backgroundMusic).then(b => this.buffers.background = b));
-        if (this.config.runningSound) tasks.push(this.loadBuffer(this.config.runningSound).then(b => this.buffers.running = b));
-        if (this.config.jetpackSound) tasks.push(this.loadBuffer(this.config.jetpackSound).then(b => this.buffers.jetpack = b));
-        if (!this.isMobile && this.config.walkingSound) tasks.push(this.loadBuffer(this.config.walkingSound).then(b => this.buffers.walking = b));
-        if (this.config.magicReveal) tasks.push(this.loadBuffer(this.config.magicReveal).then(b => this.buffers.magicReveal = b));
-        await Promise.all(tasks);
+        // Only load buffers that aren't already loaded
+        if (this.config.backgroundMusic && !this.buffers.background) {
+            tasks.push(this.loadBuffer(this.config.backgroundMusic, 'background').then(b => this.buffers.background = b));
+        }
+        if (this.config.runningSound && !this.buffers.running) {
+            tasks.push(this.loadBuffer(this.config.runningSound, 'running').then(b => this.buffers.running = b));
+        }
+        if (this.config.jetpackSound && !this.buffers.jetpack) {
+            tasks.push(this.loadBuffer(this.config.jetpackSound, 'jetpack').then(b => this.buffers.jetpack = b));
+        }
+        if (!this.isMobile && this.config.walkingSound && !this.buffers.walking) {
+            tasks.push(this.loadBuffer(this.config.walkingSound, 'walking').then(b => this.buffers.walking = b));
+        }
+        if (this.config.magicReveal && !this.buffers.magicReveal) {
+            tasks.push(this.loadBuffer(this.config.magicReveal, 'magicReveal').then(b => this.buffers.magicReveal = b));
+        }
+
+        if (tasks.length > 0) {
+            console.log(`Loading ${tasks.length} audio buffers...`);
+            await Promise.all(tasks);
+        } else {
+            console.log('All audio buffers already loaded');
+        }
     }
 
-    async loadBuffer(url) {
+    async loadBuffer(url, name = 'unknown') {
+        console.log(`Fetching ${name} from ${url}`);
         const ctx = this.ensureContext();
         const response = await fetch(url);
+        console.log(`Fetched ${name}, decoding...`);
         const arrayBuffer = await response.arrayBuffer();
-        return await ctx.decodeAudioData(arrayBuffer);
+        const buffer = await ctx.decodeAudioData(arrayBuffer);
+        console.log(`✓ ${name} decoded successfully`);
+        return buffer;
     }
 
     /**
@@ -213,17 +235,39 @@ export class AudioManager {
             return;
         }
 
-        const ctx = this.ensureContext();
-        try { await ctx.resume(); } catch (e) { console.warn('AudioContext resume failed:', e); }
+        console.log('unlockAudio() started...');
 
-        // Ensure buffers are ready
+        const ctx = this.ensureContext();
+        console.log('AudioContext state:', ctx.state);
+
         try {
-            await this.preloadAll();
+            await ctx.resume();
+            console.log('AudioContext resumed, state:', ctx.state);
         } catch (e) {
-            console.warn('Continuing without all audio buffers:', e);
+            console.warn('AudioContext resume failed:', e);
+        }
+
+        // Wait for preload that started in constructor (with timeout)
+        console.log('Waiting for audio buffers to load...');
+        try {
+            // Add 5 second timeout to prevent hanging
+            await Promise.race([
+                this.preloadPromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Preload timeout')), 5000))
+            ]);
+            console.log('Preload promise resolved');
+        } catch (e) {
+            console.warn('Preload promise failed or timed out:', e);
+            console.log('Attempting to load any missing buffers...');
+            try {
+                await this.preloadAll();
+            } catch (e2) {
+                console.warn('Continuing without all audio buffers:', e2);
+            }
         }
 
         // Create looped tracks and start them silently
+        console.log('Starting looped tracks...');
         this.startOrCreateTrack('background', this.buffers.background);
         if (!this.isMobile) this.startOrCreateTrack('walking', this.buffers.walking);
         this.startOrCreateTrack('running', this.buffers.running);
