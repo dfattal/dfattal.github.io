@@ -77,6 +77,7 @@ let touchControls = null;
 
 // Magic reveal state
 let magicRevealStarted = false;
+let experienceStarted = false; // Flag to prevent rendering before user clicks start
 
 // Loading state tracking (for mobile compatibility)
 let collisionLoaded = false;
@@ -618,6 +619,9 @@ async function loadGaussianSplat() {
         // Add to scene
         scene.add(gaussianSplat);
 
+        // Hide the splat initially (will show when experience starts)
+        gaussianSplat.visible = false;
+
         // Apply leveling rotations to match collision mesh
         applyLevelingRotations();
 
@@ -721,6 +725,11 @@ function startMagicReveal() {
     }
 
     magicRevealStarted = true;
+
+    // Show the Gaussian splat (was hidden until user interaction)
+    if (gaussianSplat) {
+        gaussianSplat.visible = true;
+    }
 
     // Reset and start animation (only if splat exists and has the modifier)
     if (gaussianSplat && gaussianSplat.objectModifier) {
@@ -993,6 +1002,19 @@ function setupStartButton() {
 
             console.log('Start button triggered - experience beginning');
 
+            // CRITICAL: Unlock audio for iOS (must be in user interaction handler)
+            if (audioManager) {
+                audioManager.unlockAudio();
+            }
+
+            // Unlock jetpack/thruster audio (separate from AudioManager)
+            if (characterControls) {
+                characterControls.unlockThrusterAudio();
+            }
+
+            // Mark experience as started (allows rendering)
+            experienceStarted = true;
+
             // Hide start overlay with fade out
             startOverlay.classList.remove('visible');
 
@@ -1045,7 +1067,8 @@ function animate() {
     }
 
     // Update magic effect animation time (60 FPS)
-    if (gaussianSplat) {
+    // Only update if experience has started (prevents animation before button click)
+    if (gaussianSplat && experienceStarted) {
         baseTime += 1 / 60;
         animateT.value = baseTime;
         gaussianSplat.updateVersion();

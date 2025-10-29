@@ -34,6 +34,9 @@ export class AudioManager {
     currentMovementState = 'idle';  // 'idle', 'walk', 'run'
     previousMovementState = 'idle';
 
+    // iOS audio unlock flag
+    audioUnlocked = false;
+
     /**
      * Initialize AudioManager with audio file paths
      * @param {Object} config - Audio configuration object with paths
@@ -136,6 +139,45 @@ export class AudioManager {
     }
 
     /**
+     * Unlock all audio elements for iOS
+     * Must be called directly from a user interaction event handler
+     */
+    unlockAudio() {
+        if (this.audioUnlocked) {
+            console.log('Audio already unlocked, skipping');
+            return;
+        }
+
+        console.log('Unlocking audio for iOS...');
+
+        // Play each audio element briefly at zero volume to unlock it
+        const audioElements = [
+            this.backgroundMusic,
+            this.walkingSound,
+            this.runningSound,
+            this.magicRevealSound
+        ];
+
+        audioElements.forEach(audio => {
+            if (audio) {
+                const originalVolume = audio.volume;
+                audio.volume = 0;
+                audio.play().then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    audio.volume = originalVolume;
+                    console.log('Audio element unlocked');
+                }).catch(err => {
+                    console.warn('Could not unlock audio element:', err);
+                });
+            }
+        });
+
+        this.audioUnlocked = true;
+        console.log('Audio unlocked successfully');
+    }
+
+    /**
      * Start background music (call after user interaction to comply with autoplay policies)
      */
     startBackgroundMusic() {
@@ -174,6 +216,13 @@ export class AudioManager {
 
         // Detect state transitions - restart sound at each new walking/running session
         const stateChanged = this.previousMovementState !== this.currentMovementState;
+
+        // Only play movement sounds if enabled
+        if (!this.movementSoundsEnabled) {
+            this.walkingSoundTarget = 0;
+            this.runningSoundTarget = 0;
+            return;
+        }
 
         if (state === 'walk') {
             // Walking state

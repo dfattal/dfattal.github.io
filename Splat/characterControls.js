@@ -200,6 +200,30 @@ export class CharacterControls {
     }
 
     /**
+     * Unlock thruster audio for iOS (must be called from user interaction)
+     */
+    unlockThrusterAudio() {
+        if (!this.thrusterSound) {
+            console.log('No thruster sound to unlock');
+            return;
+        }
+
+        console.log('Unlocking thruster audio for iOS...');
+
+        // Play briefly at zero volume to unlock
+        const originalVolume = this.thrusterSound.volume;
+        this.thrusterSound.volume = 0;
+        this.thrusterSound.play().then(() => {
+            this.thrusterSound.pause();
+            this.thrusterSound.currentTime = 0;
+            this.thrusterSound.volume = originalVolume;
+            console.log('Thruster audio unlocked');
+        }).catch(err => {
+            console.warn('Could not unlock thruster audio:', err);
+        });
+    }
+
+    /**
      * Start thruster sound with fade-in
      */
     startThrusterSound() {
@@ -268,17 +292,19 @@ export class CharacterControls {
 
     /**
      * Detect ground height and normal using raycasting
-     * Returns object with ground height and normal vector
+     * Returns object with ground height and normal vector (in world space)
      */
     getGroundInfo() {
         if (this.groundMeshes.length === 0) {
             return { height: 0, normal: null }; // Fallback to Y=0 if no ground meshes
         }
 
-        // Set raycast origin well above character position to ensure we hit ground
+        // CRITICAL: Cast ray from character CENTER, not above
+        // This prevents detecting bridges/platforms ABOVE the character
+        // Ray starts from character center (same height as forward collision check)
         this.rayOrigin.set(
             this.model.position.x,
-            this.model.position.y + 10, // Start ray 10 units above character
+            this.model.position.y + 1.0,  // Start from character center (NOT above)
             this.model.position.z
         );
 
@@ -287,10 +313,20 @@ export class CharacterControls {
         const intersects = this.raycaster.intersectObjects(this.groundMeshes, true);
 
         if (intersects.length > 0) {
+            const hit = intersects[0];
+            let worldNormal = null;
+
+            // Transform normal to world space (critical for rotated/scaled meshes)
+            if (hit.face && hit.object) {
+                worldNormal = hit.face.normal.clone();
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                worldNormal.applyMatrix3(normalMatrix).normalize();
+            }
+
             // Return ground height and normal at intersection point
             return {
-                height: intersects[0].point.y,
-                normal: intersects[0].face ? intersects[0].face.normal : null
+                height: hit.point.y,
+                normal: worldNormal
             };
         }
 
@@ -300,12 +336,12 @@ export class CharacterControls {
 
     /**
      * Check for obstacles in the forward direction
-     * Returns collision info: { hit: boolean, point: Vector3, normal: Vector3, distance: number }
+     * Returns collision info: { hit: boolean, point: Vector3, normal: Vector3, distance: number, isWalkable: boolean }
      * @param forwardDirection - Normalized direction vector to check (typically walkDirection)
      */
     checkForwardCollision(forwardDirection) {
         if (this.groundMeshes.length === 0) {
-            return { hit: false, point: null, normal: null, distance: Infinity };
+            return { hit: false, point: null, normal: null, distance: Infinity, isWalkable: true };
         }
 
         // Cast ray from character's center position in the movement direction
@@ -322,15 +358,30 @@ export class CharacterControls {
 
         if (intersects.length > 0) {
             const hit = intersects[0];
+            const hitNormal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+
+            // Transform normal to world space (important for rotated/scaled meshes)
+            if (hit.object && hit.face) {
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                hitNormal.applyMatrix3(normalMatrix).normalize();
+            }
+
+            // Check surface angle: dot product with vertical unit vector (0, 1, 0)
+            // If dot < 0.5, surface angle > 60° (too steep to walk on)
+            const verticalDot = hitNormal.dot(new THREE.Vector3(0, 1, 0));
+            const isWalkable = verticalDot >= 0.5;
+
             return {
                 hit: true,
                 point: hit.point,
-                normal: hit.face ? hit.face.normal : new THREE.Vector3(0, 1, 0),
-                distance: hit.distance
+                normal: hitNormal,
+                distance: hit.distance,
+                isWalkable: isWalkable,
+                surfaceAngle: Math.acos(Math.abs(verticalDot)) * (180 / Math.PI)  // For debugging
             };
         }
 
-        return { hit: false, point: null, normal: null, distance: Infinity };
+        return { hit: false, point: null, normal: null, distance: Infinity, isWalkable: true };
     }
 
     /**
@@ -522,8 +573,16 @@ export class CharacterControls {
         const characterBottom = this.model.position.y - this.characterHeightOffset;
         const distanceToGround = characterBottom - groundHeight;
 
-        if (distanceToGround <= 0) {
-            // Character is at or below ground level - snap to ground
+        // CRITICAL: Check if ground surface is walkable (not too steep)
+        // Prevents character from sticking to walls
+        let groundIsWalkable = true;
+        if (groundInfo.normal) {
+            const verticalDot = groundInfo.normal.dot(new THREE.Vector3(0, 1, 0));
+            groundIsWalkable = verticalDot >= 0.5;  // Same 60° threshold as forward collision
+        }
+
+        if (distanceToGround <= 0 && groundIsWalkable) {
+            // Character is at or below ground level AND ground is walkable - snap to ground
             this.model.position.y = groundHeight + this.characterHeightOffset;
             this.verticalVelocity = 0;
             this.isGrounded = true;
@@ -541,7 +600,7 @@ export class CharacterControls {
             this.inertiaVelocityX = 0;
             this.inertiaVelocityZ = 0;
         } else {
-            // Character is airborne
+            // Character is airborne (either above ground OR ground is too steep to stand on)
             this.isGrounded = false;
             this.timeInAir += delta;  // Accumulate time in air
         }
@@ -647,12 +706,11 @@ export class CharacterControls {
                 }
             }
 
-            // Check for forward collision and apply wall sliding if needed
+            // Check for forward collision and apply lateral sliding (horizontal only, no vertical)
             const forwardCollision = this.checkForwardCollision(this.walkDirection);
 
-            // Apply wall sliding if either:
-            // 1. Hit a physical wall (forwardCollision.hit), OR
-            // 2. Terrain ahead is unwalkable (too steep or cliff)
+            // Apply wall sliding for ANY collision (steep or gentle)
+            // But ensure sliding is LATERAL only (no vertical component)
             if (forwardCollision.hit || terrainBlocked) {
                 // Determine which normal to use for sliding
                 let worldNormal;
@@ -662,6 +720,13 @@ export class CharacterControls {
                 } else {
                     // Unwalkable terrain - use terrain normal
                     worldNormal = terrainNormal.clone();
+                }
+
+                // For steep walls: flatten the normal to horizontal plane (remove Y component)
+                // This ensures sliding is lateral only, preventing vertical climbing
+                if (forwardCollision.hit && !forwardCollision.isWalkable) {
+                    worldNormal.y = 0;  // Force horizontal normal (lateral sliding only)
+                    worldNormal.normalize();
                 }
 
                 // Project movement onto the wall plane (slide along wall)
@@ -698,12 +763,20 @@ export class CharacterControls {
             let moveX = this.inertiaVelocityX * delta;
             let moveZ = this.inertiaVelocityZ * delta;
 
-            // Check for forward collision and apply wall sliding
+            // Check for forward collision and apply lateral sliding (horizontal only, no vertical)
             const inertiaDirection = new THREE.Vector3(this.inertiaVelocityX, 0, this.inertiaVelocityZ).normalize();
             const forwardCollision = this.checkForwardCollision(inertiaDirection);
 
             if (forwardCollision.hit) {
                 const worldNormal = forwardCollision.normal.clone();
+
+                // For steep walls: flatten the normal to horizontal plane (remove Y component)
+                // This ensures sliding is lateral only, preventing vertical climbing
+                if (!forwardCollision.isWalkable) {
+                    worldNormal.y = 0;  // Force horizontal normal (lateral sliding only)
+                    worldNormal.normalize();
+                }
+
                 const movementVector = this.tempSlideVector.set(moveX, 0, moveZ);
                 const dotProduct = movementVector.dot(worldNormal);
 
