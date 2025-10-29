@@ -162,10 +162,7 @@ export class AudioManager {
             if (!audio) return Promise.resolve();
 
             try {
-                // Save original state
-                const originalVolume = audio.volume;
-
-                // Set to silent
+                // Set to silent for unlock
                 audio.volume = 0;
                 audio.muted = true; // Extra safety
 
@@ -176,8 +173,8 @@ export class AudioManager {
                 audio.pause();
                 audio.currentTime = 0;
 
-                // Restore state
-                audio.volume = originalVolume;
+                // DON'T restore volume - leave it at 0
+                // The fade system will increase volume when needed
                 audio.muted = false;
 
                 // Ensure it's definitely stopped

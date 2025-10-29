@@ -273,8 +273,11 @@ export class CharacterControls {
                 );
 
                 // Pause audio when fully faded out to save resources
-                if (this.thrusterSound.volume === 0 && !this.thrusterSound.paused) {
+                // Use threshold instead of exact equality for floating point
+                if (this.thrusterSound.volume <= 0.001 && !this.thrusterSound.paused) {
+                    this.thrusterSound.volume = 0; // Snap to exactly 0
                     this.thrusterSound.pause();
+                    console.log('Jetpack sound stopped after fade out');
                 }
             }
         }
