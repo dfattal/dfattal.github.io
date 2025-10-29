@@ -238,29 +238,34 @@ export class AudioManager {
         }
     }
 
-    async loadBuffer(url, name = 'unknown') {
-        console.log(`Fetching ${name} from ${url}`);
+    async loadBuffer(url) {
         const ctx = this.ensureContext();
-
-        // Timeout protection: don't let a single file hang forever
-        // Mobile: 3s, Desktop: 10s
-        const fetchTimeout = this.isMobile ? 3000 : 10000;
-
-        const fetchWithTimeout = Promise.race([
-            (async () => {
-                const response = await fetch(url);
-                console.log(`Fetched ${name}, decoding...`);
-                const arrayBuffer = await response.arrayBuffer();
-                const buffer = await ctx.decodeAudioData(arrayBuffer);
-                console.log(`✓ ${name} decoded successfully`);
-                return buffer;
-            })(),
-            new Promise((_, reject) =>
-                setTimeout(() => reject(new Error(`${name} load timeout`)), fetchTimeout)
-            )
-        ]);
-
-        return await fetchWithTimeout;
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        // Safari compatibility: support both promise and callback forms
+        return await new Promise((resolve, reject) => {
+            try {
+                const maybePromise = ctx.decodeAudioData(arrayBuffer);
+                if (maybePromise && typeof maybePromise.then === 'function') {
+                    maybePromise.then(resolve).catch((e) => {
+                        // Fallback to callback form
+                        try {
+                            ctx.decodeAudioData(arrayBuffer, resolve, reject);
+                        } catch (err) {
+                            reject(err);
+                        }
+                    });
+                } else {
+                    ctx.decodeAudioData(arrayBuffer, resolve, reject);
+                }
+            } catch (_) {
+                try {
+                    ctx.decodeAudioData(arrayBuffer, resolve, reject);
+                } catch (err) {
+                    reject(err);
+                }
+            }
+        });
     }
 
     /**
@@ -272,42 +277,34 @@ export class AudioManager {
             return;
         }
 
-        console.log('unlockAudio() started...');
-
-        const ctx = this.ensureContext();
-        console.log('AudioContext state:', ctx.state);
-
-        try {
-            await ctx.resume();
-            console.log('AudioContext resumed, state:', ctx.state);
-        } catch (e) {
-            console.warn('AudioContext resume failed:', e);
+        // iOS robustness: create a fresh AudioContext inside the gesture on mobile
+        if (this.isMobile) {
+            try {
+                if (this.audioContext && this.audioContext.state !== 'closed') {
+                    // Some Safari versions require closing old contexts to free hardware
+                    try { await this.audioContext.close(); } catch (_) { }
+                }
+            } catch (_) { }
+            const Ctor = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new Ctor();
+            // Reset graph and tracks
+            this.masterGain = null;
+            this.oneShotGain = null;
+            this.tracks = { background: null, walking: null, running: null, jetpack: null };
+            this.setupGraph();
         }
 
-        // Wait for preload that started in constructor (with timeout)
-        // Use shorter timeout on mobile (1s) vs desktop (3s)
-        const timeout = this.isMobile ? 1000 : 3000;
-        console.log(`Waiting for audio buffers to load (${timeout}ms timeout)...`);
+        const ctx = this.ensureContext();
+        try { await ctx.resume(); } catch (e) { console.warn('AudioContext resume failed:', e); }
+
+        // Decode using the (possibly new) context to ensure buffers are valid
         try {
-            await Promise.race([
-                this.preloadPromise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Preload timeout')), timeout))
-            ]);
-            console.log('Preload promise resolved');
+            await this.preloadAll();
         } catch (e) {
-            console.warn('Preload promise failed or timed out:', e);
-            // On timeout, don't try to reload - just continue with whatever we have
-            console.log('Continuing with available buffers:', {
-                background: !!this.buffers.background,
-                running: !!this.buffers.running,
-                jetpack: !!this.buffers.jetpack,
-                walking: !!this.buffers.walking,
-                magicReveal: !!this.buffers.magicReveal
-            });
+            console.warn('Continuing without all audio buffers:', e);
         }
 
         // Create looped tracks and start them silently
-        console.log('Starting looped tracks...');
         this.startOrCreateTrack('background', this.buffers.background);
         if (!this.isMobile) this.startOrCreateTrack('walking', this.buffers.walking);
         this.startOrCreateTrack('running', this.buffers.running);
