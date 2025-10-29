@@ -995,7 +995,7 @@ function setupStartButton() {
 
     if (startButton && startOverlay) {
         // Handler function to avoid duplication
-        const handleStart = (event) => {
+        const handleStart = async (event) => {
             // Prevent default behavior and event propagation
             event.preventDefault();
             event.stopPropagation();
@@ -1003,8 +1003,9 @@ function setupStartButton() {
             console.log('Start button triggered - experience beginning');
 
             // CRITICAL: Unlock audio for iOS (must be in user interaction handler)
+            // Wait for unlock to complete before proceeding
             if (audioManager) {
-                audioManager.unlockAudio();
+                await audioManager.unlockAudio();
             }
 
             // Unlock jetpack/thruster audio (separate from AudioManager)

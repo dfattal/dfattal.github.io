@@ -142,7 +142,7 @@ export class AudioManager {
      * Unlock all audio elements for iOS
      * Must be called directly from a user interaction event handler
      */
-    unlockAudio() {
+    async unlockAudio() {
         if (this.audioUnlocked) {
             console.log('Audio already unlocked, skipping');
             return;
@@ -152,29 +152,35 @@ export class AudioManager {
 
         // Play each audio element briefly at zero volume to unlock it
         const audioElements = [
-            this.backgroundMusic,
-            this.walkingSound,
-            this.runningSound,
-            this.magicRevealSound
+            { audio: this.backgroundMusic, name: 'background music' },
+            { audio: this.walkingSound, name: 'walking sound' },
+            { audio: this.runningSound, name: 'running sound' },
+            { audio: this.magicRevealSound, name: 'magic reveal' }
         ];
 
-        audioElements.forEach(audio => {
-            if (audio) {
-                const originalVolume = audio.volume;
-                audio.volume = 0;
-                audio.play().then(() => {
+        const unlockPromises = audioElements.map(({ audio, name }) => {
+            if (!audio) return Promise.resolve();
+
+            const originalVolume = audio.volume;
+            audio.volume = 0;
+
+            return audio.play()
+                .then(() => {
                     audio.pause();
                     audio.currentTime = 0;
                     audio.volume = originalVolume;
-                    console.log('Audio element unlocked');
-                }).catch(err => {
-                    console.warn('Could not unlock audio element:', err);
+                    console.log(`Audio unlocked: ${name}`);
+                })
+                .catch(err => {
+                    console.warn(`Could not unlock ${name}:`, err);
                 });
-            }
         });
 
+        // Wait for all audio to be unlocked
+        await Promise.all(unlockPromises);
+
         this.audioUnlocked = true;
-        console.log('Audio unlocked successfully');
+        console.log('All audio unlocked successfully');
     }
 
     /**
@@ -217,6 +223,11 @@ export class AudioManager {
         // Detect state transitions - restart sound at each new walking/running session
         const stateChanged = this.previousMovementState !== this.currentMovementState;
 
+        // Debug logging for state changes
+        if (stateChanged) {
+            console.log(`Movement state changed: ${this.previousMovementState} -> ${state}`);
+        }
+
         // Only play movement sounds if enabled
         if (!this.movementSoundsEnabled) {
             this.walkingSoundTarget = 0;
@@ -231,6 +242,7 @@ export class AudioManager {
 
             // Restart walking sound on state transition
             if (stateChanged && this.walkingSound) {
+                console.log('Starting walking sound');
                 this.walkingSound.currentTime = 0;
                 if (this.walkingSound.paused) {
                     this.walkingSound.play().catch(err => {
@@ -245,6 +257,7 @@ export class AudioManager {
 
             // Restart running sound on state transition
             if (stateChanged && this.runningSound) {
+                console.log('Starting running sound');
                 this.runningSound.currentTime = 0;
                 if (this.runningSound.paused) {
                     this.runningSound.play().catch(err => {
@@ -254,6 +267,9 @@ export class AudioManager {
             }
         } else {
             // Idle state - fade out both sounds
+            if (stateChanged) {
+                console.log('Stopping movement sounds (idle state)');
+            }
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = 0;
         }
@@ -314,8 +330,18 @@ export class AudioManager {
                 audio.volume = Math.max(targetVolume, audio.volume - volumeDelta);
 
                 // Pause audio when fully faded out to save resources
-                if (audio.volume === 0 && !audio.paused) {
+                // Use small threshold instead of exact equality to handle floating point
+                if (audio.volume <= 0.001 && !audio.paused) {
+                    audio.volume = 0; // Snap to exactly 0
                     audio.pause();
+
+                    // Identify which audio was paused
+                    let audioName = 'unknown';
+                    if (audio === this.walkingSound) audioName = 'walking';
+                    if (audio === this.runningSound) audioName = 'running';
+                    if (audio === this.backgroundMusic) audioName = 'background music';
+
+                    console.log(`Audio paused after fade out: ${audioName}`);
                 }
             }
         }
