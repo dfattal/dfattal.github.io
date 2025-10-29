@@ -202,7 +202,7 @@ export class CharacterControls {
     /**
      * Unlock thruster audio for iOS (must be called from user interaction)
      */
-    async unlockThrusterAudio() {
+    unlockThrusterAudio() {
         if (!this.thrusterSound) {
             console.log('No thruster sound to unlock');
             return;
@@ -210,32 +210,19 @@ export class CharacterControls {
 
         console.log('Unlocking thruster audio for iOS...');
 
-        try {
-            // Set to silent for unlock
-            this.thrusterSound.volume = 0;
-            this.thrusterSound.muted = true; // Extra safety
-
-            // Play to unlock
-            await this.thrusterSound.play();
-
-            // Stop immediately and reset state
-            this.thrusterSound.pause();
-            this.thrusterSound.currentTime = 0;
-
-            // DON'T restore volume - leave it at 0
-            // The fade system will increase volume when needed
-            this.thrusterSound.muted = false;
-
-            // Ensure it's definitely stopped
-            if (!this.thrusterSound.paused) {
-                console.warn('Thruster sound still playing after unlock, forcing stop');
+        // Play briefly at zero volume to unlock, then immediately stop
+        this.thrusterSound.volume = 0;
+        this.thrusterSound.play()
+            .then(() => {
+                // Immediately pause after unlock
                 this.thrusterSound.pause();
-            }
-
-            console.log(`Thruster audio unlocked (paused: ${this.thrusterSound.paused}, volume: ${this.thrusterSound.volume})`);
-        } catch (err) {
-            console.warn('Could not unlock thruster audio:', err);
-        }
+                this.thrusterSound.currentTime = 0;
+                // Keep volume at 0 - fade system will increase it when needed
+                console.log('Thruster audio unlocked successfully');
+            })
+            .catch(err => {
+                console.warn('Could not unlock thruster audio:', err);
+            });
     }
 
     /**

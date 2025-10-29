@@ -1010,7 +1010,7 @@ function setupStartButton() {
 
             // Unlock jetpack/thruster audio (separate from AudioManager)
             if (characterControls) {
-                await characterControls.unlockThrusterAudio();
+                characterControls.unlockThrusterAudio();
             }
 
             // Mark experience as started (allows rendering)

@@ -258,7 +258,7 @@ export class AudioManager {
                 console.log('Stopping running sound (switching to walk)');
                 this.runningSound.pause();
                 this.runningSound.currentTime = 0;
-                this.runningSound.volume = 0;
+                // Don't set volume to 0 - let fade system handle it
             }
 
             // Restart walking sound on state transition
@@ -280,7 +280,7 @@ export class AudioManager {
                 console.log('Stopping walking sound (switching to run)');
                 this.walkingSound.pause();
                 this.walkingSound.currentTime = 0;
-                this.walkingSound.volume = 0;
+                // Don't set volume to 0 - let fade system handle it
             }
 
             // Restart running sound on state transition
@@ -298,17 +298,15 @@ export class AudioManager {
                 console.log('Stopping movement sounds (idle state)');
             }
 
-            // Immediately pause both sounds and reset volume
+            // Immediately pause both sounds
             if (this.walkingSound && !this.walkingSound.paused) {
                 this.walkingSound.pause();
                 this.walkingSound.currentTime = 0;
-                this.walkingSound.volume = 0;
                 console.log('Walking sound stopped immediately');
             }
             if (this.runningSound && !this.runningSound.paused) {
                 this.runningSound.pause();
                 this.runningSound.currentTime = 0;
-                this.runningSound.volume = 0;
                 console.log('Running sound stopped immediately');
             }
 
