@@ -172,6 +172,11 @@ export class AudioManager {
         if (this.audioContext) return this.audioContext;
         const Ctor = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new Ctor();
+        try {
+            this.audioContext.onstatechange = () => {
+                try { console.log('[AudioContext] state:', this.audioContext.state); } catch (_) { }
+            };
+        } catch (_) { }
         return this.audioContext;
     }
 
@@ -288,6 +293,15 @@ export class AudioManager {
         });
     }
 
+    isIOSChrome() {
+        try {
+            const ua = navigator.userAgent || '';
+            return /CriOS/i.test(ua); // Chrome on iOS
+        } catch (_) {
+            return false;
+        }
+    }
+
     /**
      * Must be called from a user gesture. Resumes context and starts looped tracks at gain=0.
      */
@@ -297,45 +311,66 @@ export class AudioManager {
             return;
         }
 
-        // iOS robustness: create a fresh AudioContext inside the gesture on mobile
-        if (this.isMobile) {
+        // On iOS Chrome, create a fresh context inside the gesture to satisfy routing policies
+        if (this.isMobile && this.isIOSChrome()) {
             try {
                 if (this.audioContext && this.audioContext.state !== 'closed') {
-                    // Some Safari versions require closing old contexts to free hardware
                     try { await this.audioContext.close(); } catch (_) { }
                 }
             } catch (_) { }
             const Ctor = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new Ctor();
+            try {
+                this.audioContext.onstatechange = () => {
+                    try { console.log('[AudioContext] state:', this.audioContext.state); } catch (_) { }
+                };
+            } catch (_) { }
             // Reset graph and tracks
             this.masterGain = null;
             this.oneShotGain = null;
             this.tracks = { background: null, walking: null, running: null, jetpack: null };
+            // Buffers are context-bound; clear to force re-decode on new context
+            this.buffers.background = null;
+            this.buffers.walking = null;
+            this.buffers.running = null;
+            this.buffers.jetpack = null;
+            // Keep magic reveal as bufferless until needed
             this.setupGraph();
         }
 
+        // Resume the context
         const ctx = this.ensureContext();
         try { await ctx.resume(); } catch (e) { console.warn('AudioContext resume failed:', e); }
 
         // Kick the audio route with an inaudible short tone (helps Chrome iOS)
         this.primeOutput();
 
-        // Decode using the (possibly new) context to ensure buffers are valid
-        try {
-            await this.preloadAll();
-        } catch (e) {
-            console.warn('Continuing without all audio buffers:', e);
-        }
-
-        // Create looped tracks and start them silently
-        this.startOrCreateTrack('background', this.buffers.background);
-        if (!this.isMobile) this.startOrCreateTrack('walking', this.buffers.walking);
-        this.startOrCreateTrack('running', this.buffers.running);
-        this.startOrCreateTrack('jetpack', this.buffers.jetpack);
+        // Start any tracks that already have decoded buffers (no await to keep gesture alive)
+        const startedNow = [];
+        if (this.buffers.background) { this.startOrCreateTrack('background', this.buffers.background); startedNow.push('background'); }
+        if (!this.isMobile && this.buffers.walking) { this.startOrCreateTrack('walking', this.buffers.walking); startedNow.push('walking'); }
+        if (this.buffers.running) { this.startOrCreateTrack('running', this.buffers.running); startedNow.push('running'); }
+        if (this.buffers.jetpack) { this.startOrCreateTrack('jetpack', this.buffers.jetpack); startedNow.push('jetpack'); }
+        if (startedNow.length) console.log('Tracks started immediately after resume:', startedNow);
 
         this.audioUnlocked = true;
         this.loopedSoundsStarted = true;
-        console.log('✓ Web Audio unlocked, looped tracks running at gain 0');
+
+        // In the background, ensure all buffers are decoded for this (possibly new) context
+        this.preloadAll().then(() => {
+            const startedLater = [];
+            if (!this.tracks.background && this.buffers.background) { this.startOrCreateTrack('background', this.buffers.background); startedLater.push('background'); }
+            if (!this.isMobile && !this.tracks.walking && this.buffers.walking) { this.startOrCreateTrack('walking', this.buffers.walking); startedLater.push('walking'); }
+            if (!this.tracks.running && this.buffers.running) { this.startOrCreateTrack('running', this.buffers.running); startedLater.push('running'); }
+            if (!this.tracks.jetpack && this.buffers.jetpack) { this.startOrCreateTrack('jetpack', this.buffers.jetpack); startedLater.push('jetpack'); }
+            if (startedLater.length) {
+                console.log('Tracks started after background decode:', startedLater);
+            }
+        }).catch((e) => {
+            console.warn('Background audio preload failed:', e);
+        });
+
+        console.log('✓ Web Audio unlocked; looped tracks running when buffers available');
     }
 
     startOrCreateTrack(key, buffer) {
