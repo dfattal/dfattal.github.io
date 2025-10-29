@@ -238,6 +238,26 @@ export class AudioManager {
         }
     }
 
+    // Some iOS Chrome builds need a brief, near-silent signal post-resume to route audio
+    primeOutput() {
+        try {
+            const osc = this.audioContext.createOscillator();
+            const g = this.audioContext.createGain();
+            g.gain.value = 0.00001; // inaudible
+            osc.frequency.value = 440;
+            osc.connect(g).connect(this.masterGain);
+            const t = this.audioContext.currentTime;
+            osc.start(t);
+            osc.stop(t + 0.05);
+            osc.onended = () => {
+                try { osc.disconnect(); } catch (_) { }
+                try { g.disconnect(); } catch (_) { }
+            };
+        } catch (e) {
+            console.warn('primeOutput failed:', e);
+        }
+    }
+
     async loadBuffer(url) {
         const ctx = this.ensureContext();
         const response = await fetch(url);
@@ -296,6 +316,9 @@ export class AudioManager {
 
         const ctx = this.ensureContext();
         try { await ctx.resume(); } catch (e) { console.warn('AudioContext resume failed:', e); }
+
+        // Kick the audio route with an inaudible short tone (helps Chrome iOS)
+        this.primeOutput();
 
         // Decode using the (possibly new) context to ensure buffers are valid
         try {
