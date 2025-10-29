@@ -630,6 +630,13 @@ async function loadGaussianSplat() {
         const shouldEnableEffect = magicCfg.enabled !== false &&
                                   (!isMobile || magicCfg.mobileEnabled === true);
 
+        console.log('Magic effect config check:', {
+            enabled: magicCfg.enabled,
+            mobileEnabled: magicCfg.mobileEnabled,
+            isMobile: isMobile,
+            shouldEnableEffect: shouldEnableEffect
+        });
+
         if (shouldEnableEffect) {
             try {
                 gaussianSplat.objectModifier = createMagicModifier();
@@ -642,6 +649,7 @@ async function loadGaussianSplat() {
 
                 const platform = isMobile ? 'mobile' : 'desktop';
                 console.log(`Gaussian splat loaded with Magic effect (${platform}) - awaiting user interaction`);
+                console.log('Magic effect modifier attached:', !!gaussianSplat.objectModifier);
             } catch (error) {
                 console.error('Error applying Magic effect modifier:', error);
                 console.log('Gaussian splat loaded without Magic effect (shader compilation failed)');
@@ -707,16 +715,21 @@ function checkAllLoaded() {
  */
 function startMagicReveal() {
     // Prevent multiple triggers
-    if (magicRevealStarted || !gaussianSplat) {
-        console.log('Magic reveal already started or splat not loaded');
+    if (magicRevealStarted) {
+        console.log('Magic reveal already started');
         return;
     }
 
     magicRevealStarted = true;
 
-    // Reset and start animation
-    baseTime = 0;
-    animateT.value = 0;
+    // Reset and start animation (only if splat exists and has the modifier)
+    if (gaussianSplat && gaussianSplat.objectModifier) {
+        baseTime = 0;
+        animateT.value = 0;
+        console.log('Magic reveal animation started by user interaction');
+    } else {
+        console.log('Gaussian splat not ready for animation, skipping magic effect');
+    }
 
     // Start background music
     if (audioManager) {
@@ -731,8 +744,6 @@ function startMagicReveal() {
         audioManager.playMagicReveal(soundDelay);
         console.log(`Magic reveal sound will play in ${soundDelay}s`);
     }
-
-    console.log('Magic reveal animation started by user interaction');
 }
 
 /**
@@ -974,17 +985,31 @@ function setupStartButton() {
     const startOverlay = document.getElementById('start-overlay');
 
     if (startButton && startOverlay) {
-        startButton.addEventListener('click', () => {
+        // Handler function to avoid duplication
+        const handleStart = (event) => {
+            // Prevent default behavior and event propagation
+            event.preventDefault();
+            event.stopPropagation();
+
+            console.log('Start button triggered - experience beginning');
+
             // Hide start overlay with fade out
             startOverlay.classList.remove('visible');
 
             // Start the magic reveal animation and audio
             startMagicReveal();
+        };
 
-            console.log('Start button clicked - experience beginning');
-        });
+        // Add both click (for desktop/fallback) and touchstart (for mobile) events
+        startButton.addEventListener('click', handleStart);
 
-        console.log('Start button initialized');
+        // For mobile, use touchstart for immediate response (no 300ms delay)
+        if (isMobile) {
+            startButton.addEventListener('touchstart', handleStart, { passive: false });
+            console.log('Start button initialized with touch support (mobile)');
+        } else {
+            console.log('Start button initialized (desktop)');
+        }
     }
 }
 
