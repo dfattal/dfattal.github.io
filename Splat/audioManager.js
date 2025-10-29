@@ -223,9 +223,8 @@ export class AudioManager {
     /**
      * Update movement sounds based on character state
      * @param {string} state - Current movement state: 'idle', 'walk', or 'run'
-     * @param {boolean} isGrounded - Whether character is on the ground (unused - hysteresis handled by CharacterControls)
      */
-    updateMovementSounds(state, isGrounded) {
+    updateMovementSounds(state) {
         // The state already includes hysteresis logic from CharacterControls.getMovementState()
         // which prevents flickering during brief air moments (< 0.4s) when going downhill.
         // We trust that state and don't override it here.

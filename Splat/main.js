@@ -1010,7 +1010,7 @@ function setupStartButton() {
 
             // Unlock jetpack/thruster audio (separate from AudioManager)
             if (characterControls) {
-                characterControls.unlockThrusterAudio();
+                await characterControls.unlockThrusterAudio();
             }
 
             // Mark experience as started (allows rendering)
@@ -1102,8 +1102,7 @@ function animate() {
         // Update audio based on character movement state
         if (audioManager) {
             const movementState = characterControls.getMovementState();
-            const isGrounded = characterControls.getGroundedState();
-            audioManager.updateMovementSounds(movementState, isGrounded);
+            audioManager.updateMovementSounds(movementState);
         }
     }
 
