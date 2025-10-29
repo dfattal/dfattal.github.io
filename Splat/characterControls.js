@@ -770,11 +770,6 @@ export class CharacterControls {
             // Update camera position to follow character
             this.camera.position.x += moveX;
             this.camera.position.z += moveZ;
-        } else if (!directionPressed && !this.isGrounded) {
-            // No keys pressed while in air - clear inertia (prevents unwanted drift)
-            this.inertiaVelocityX = 0;
-            this.inertiaVelocityZ = 0;
-            this.hasInertia = false;
         } else if (this.hasInertia && !this.isGrounded) {
             // Apply inertia during fall (after jump or jetpack deactivation)
             // Keep the last horizontal velocity constant for realistic physics
