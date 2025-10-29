@@ -158,29 +158,46 @@ export class AudioManager {
             { audio: this.magicRevealSound, name: 'magic reveal' }
         ];
 
-        const unlockPromises = audioElements.map(({ audio, name }) => {
+        const unlockPromises = audioElements.map(async ({ audio, name }) => {
             if (!audio) return Promise.resolve();
 
-            const originalVolume = audio.volume;
-            audio.volume = 0;
+            try {
+                // Save original state
+                const originalVolume = audio.volume;
 
-            return audio.play()
-                .then(() => {
+                // Set to silent
+                audio.volume = 0;
+                audio.muted = true; // Extra safety
+
+                // Play to unlock
+                await audio.play();
+
+                // CRITICAL: Stop immediately and reset state
+                audio.pause();
+                audio.currentTime = 0;
+
+                // Restore state
+                audio.volume = originalVolume;
+                audio.muted = false;
+
+                // Ensure it's definitely stopped
+                if (!audio.paused) {
+                    console.warn(`Audio ${name} still playing after unlock attempt, forcing stop`);
                     audio.pause();
-                    audio.currentTime = 0;
-                    audio.volume = originalVolume;
-                    console.log(`Audio unlocked: ${name}`);
-                })
-                .catch(err => {
-                    console.warn(`Could not unlock ${name}:`, err);
-                });
+                }
+
+                console.log(`Audio unlocked: ${name} (paused: ${audio.paused}, volume: ${audio.volume})`);
+            } catch (err) {
+                console.warn(`Could not unlock ${name}:`, err);
+            }
         });
 
         // Wait for all audio to be unlocked
         await Promise.all(unlockPromises);
 
         this.audioUnlocked = true;
-        console.log('All audio unlocked successfully');
+        this.audioReady = true;
+        console.log('All audio unlocked successfully and ready');
     }
 
     /**
@@ -240,36 +257,65 @@ export class AudioManager {
             this.walkingSoundTarget = this.walkingSoundVolume;
             this.runningSoundTarget = 0;
 
+            // Stop running sound immediately if it's playing
+            if (this.runningSound && !this.runningSound.paused) {
+                console.log('Stopping running sound (switching to walk)');
+                this.runningSound.pause();
+                this.runningSound.currentTime = 0;
+                this.runningSound.volume = 0;
+            }
+
             // Restart walking sound on state transition
             if (stateChanged && this.walkingSound) {
                 console.log('Starting walking sound');
                 this.walkingSound.currentTime = 0;
-                if (this.walkingSound.paused) {
-                    this.walkingSound.play().catch(err => {
-                        console.warn('Could not play walking sound:', err);
-                    });
-                }
+                // Always call play() on state change, regardless of paused state
+                this.walkingSound.play().catch(err => {
+                    console.warn('Could not play walking sound:', err);
+                });
             }
         } else if (state === 'run') {
             // Running state
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = this.runningSoundVolume;
 
+            // Stop walking sound immediately if it's playing
+            if (this.walkingSound && !this.walkingSound.paused) {
+                console.log('Stopping walking sound (switching to run)');
+                this.walkingSound.pause();
+                this.walkingSound.currentTime = 0;
+                this.walkingSound.volume = 0;
+            }
+
             // Restart running sound on state transition
             if (stateChanged && this.runningSound) {
                 console.log('Starting running sound');
                 this.runningSound.currentTime = 0;
-                if (this.runningSound.paused) {
-                    this.runningSound.play().catch(err => {
-                        console.warn('Could not play running sound:', err);
-                    });
-                }
+                // Always call play() on state change, regardless of paused state
+                this.runningSound.play().catch(err => {
+                    console.warn('Could not play running sound:', err);
+                });
             }
         } else {
-            // Idle state - fade out both sounds
+            // Idle state - stop both sounds immediately
             if (stateChanged) {
                 console.log('Stopping movement sounds (idle state)');
             }
+
+            // Immediately pause both sounds and reset volume
+            if (this.walkingSound && !this.walkingSound.paused) {
+                this.walkingSound.pause();
+                this.walkingSound.currentTime = 0;
+                this.walkingSound.volume = 0;
+                console.log('Walking sound stopped immediately');
+            }
+            if (this.runningSound && !this.runningSound.paused) {
+                this.runningSound.pause();
+                this.runningSound.currentTime = 0;
+                this.runningSound.volume = 0;
+                console.log('Running sound stopped immediately');
+            }
+
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = 0;
         }
