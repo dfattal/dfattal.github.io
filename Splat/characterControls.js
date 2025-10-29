@@ -46,12 +46,6 @@ export class CharacterControls {
     inertiaVelocityZ = 0;        // Stored horizontal Z velocity from last airborne movement
     hasInertia = false;          // Flag indicating if inertia should be applied during fall
 
-    // Jetpack audio
-    thrusterSound = null;        // Audio element for thruster sound
-    thrusterFadeSpeed = 2.0;     // Volume fade speed (units per second)
-    thrusterTargetVolume = 0;    // Target volume for smooth fading
-    thrusterMaxVolume = 0.5;     // Maximum volume when jetpack is active
-
     // Ground detection
     raycaster = new THREE.Raycaster();
     groundMeshes = [];
@@ -93,9 +87,9 @@ export class CharacterControls {
         camera,
         currentAction,
         groundMeshes,
-        maxHeight = null,
-        audioPath = 'sounds/thrusters_loopwav-14699.mp3'
+        maxHeight = null
     ) {
+        // Jetpack audio is now handled by AudioManager
         this.model = model;
         this.mixer = mixer;
         this.animationsMap = animationsMap;
@@ -113,11 +107,7 @@ export class CharacterControls {
             this.maxHeight = maxHeight;
         }
 
-        // Store audio path for thruster sound
-        this.audioPath = audioPath;
-
-        // Initialize thruster sound
-        this.initThrusterSound();
+        // Jetpack audio is now handled by AudioManager
 
         // Play initial animation
         this.animationsMap.forEach((value, key) => {
@@ -165,11 +155,15 @@ export class CharacterControls {
 
     /**
      * Get current movement state for audio system
-     * @returns {string} - 'idle', 'walk', or 'run'
+     * @returns {string} - 'idle', 'walk', 'run', or 'jetpack'
      */
     getMovementState() {
-        // Return the current animation state which matches movement
-        // If in air for longer than threshold, it's 'idle'
+        // Jetpack state takes priority (airborne with active thrust)
+        if (this.isJetpackActive && !this.isGrounded) {
+            return 'jetpack';
+        }
+
+        // If in air for longer than threshold without jetpack, it's 'idle'
         if (!this.isGrounded && this.timeInAir > this.airTimeThreshold) {
             return 'idle';
         }
@@ -188,102 +182,7 @@ export class CharacterControls {
     /**
      * Initialize thruster sound effect
      */
-    initThrusterSound() {
-        try {
-            this.thrusterSound = new Audio(this.audioPath);
-            this.thrusterSound.loop = true;
-            this.thrusterSound.volume = 0; // Start at 0 volume
-            console.log('Thruster sound loaded from:', this.audioPath);
-        } catch (error) {
-            console.error('Error loading thruster sound:', error);
-        }
-    }
-
-    /**
-     * Unlock thruster audio for iOS (must be called from user interaction)
-     */
-    unlockThrusterAudio() {
-        if (!this.thrusterSound) {
-            console.log('No thruster sound to unlock');
-            return;
-        }
-
-        console.log('Unlocking thruster audio for iOS...');
-
-        // Play briefly at zero volume to unlock, then immediately stop
-        this.thrusterSound.volume = 0;
-        this.thrusterSound.play()
-            .then(() => {
-                // Immediately pause after unlock
-                this.thrusterSound.pause();
-                this.thrusterSound.currentTime = 0;
-                // Keep volume at 0 - fade system will increase it when needed
-                console.log('Thruster audio unlocked successfully');
-            })
-            .catch(err => {
-                console.warn('Could not unlock thruster audio:', err);
-            });
-    }
-
-    /**
-     * Start thruster sound with fade-in
-     */
-    startThrusterSound() {
-        if (this.thrusterSound) {
-            this.thrusterTargetVolume = this.thrusterMaxVolume;
-            // Start playing if not already playing
-            if (this.thrusterSound.paused) {
-                this.thrusterSound.currentTime = 0;
-                this.thrusterSound.play().catch(err => {
-                    console.warn('Could not play thruster sound:', err);
-                });
-            }
-        }
-    }
-
-    /**
-     * Stop thruster sound with fade-out
-     */
-    stopThrusterSound() {
-        if (this.thrusterSound) {
-            this.thrusterTargetVolume = 0;
-        }
-    }
-
-    /**
-     * Update thruster sound volume (smooth fade)
-     * Called every frame in update loop
-     */
-    updateThrusterSound(delta) {
-        if (!this.thrusterSound) return;
-
-        // Smooth fade to target volume
-        if (this.thrusterSound.volume !== this.thrusterTargetVolume) {
-            const volumeDelta = this.thrusterFadeSpeed * delta;
-
-            if (this.thrusterSound.volume < this.thrusterTargetVolume) {
-                // Fade in
-                this.thrusterSound.volume = Math.min(
-                    this.thrusterTargetVolume,
-                    this.thrusterSound.volume + volumeDelta
-                );
-            } else {
-                // Fade out
-                this.thrusterSound.volume = Math.max(
-                    this.thrusterTargetVolume,
-                    this.thrusterSound.volume - volumeDelta
-                );
-
-                // Pause audio when fully faded out to save resources
-                // Use threshold instead of exact equality for floating point
-                if (this.thrusterSound.volume <= 0.001 && !this.thrusterSound.paused) {
-                    this.thrusterSound.volume = 0; // Snap to exactly 0
-                    this.thrusterSound.pause();
-                    console.log('Jetpack sound stopped after fade out');
-                }
-            }
-        }
-    }
+    // Jetpack audio methods removed - now handled by AudioManager
 
     /**
      * Initialize character position on ground
@@ -489,8 +388,7 @@ export class CharacterControls {
     update(delta, keysPressed) {
         // ===== PHYSICS FIRST: Update grounded state before selecting animations =====
 
-        // Update thruster sound volume (smooth fade in/out)
-        this.updateThrusterSound(delta);
+        // Jetpack audio is now handled by AudioManager
 
         // Update jump cooldown
         if (this.jumpCooldown > 0) {
@@ -509,7 +407,7 @@ export class CharacterControls {
             // Activate jetpack if not already active
             if (!this.isJetpackActive) {
                 this.isJetpackActive = true;
-                this.startThrusterSound();  // Start sound with fade-in
+                // Audio is now handled by AudioManager
             }
             // Apply jetpack thrust to counter gravity
             this.verticalVelocity += this.jetpackThrust * delta;
@@ -517,7 +415,7 @@ export class CharacterControls {
             // Jetpack was active but space released - start transition
             this.isJetpackActive = false;
             this.jetpackTransitionTimer = this.jetpackTransitionDuration;
-            this.stopThrusterSound();  // Stop sound with fade-out
+            // Audio is now handled by AudioManager
 
             // Enable inertia to preserve horizontal velocity during fall
             // Only if there was actually some movement
@@ -596,7 +494,7 @@ export class CharacterControls {
             // Deactivate jetpack on landing
             if (this.isJetpackActive) {
                 this.isJetpackActive = false;
-                this.stopThrusterSound();  // Stop sound with fade-out
+                // Audio is now handled by AudioManager
             }
             this.jetpackTransitionTimer = 0;  // Reset transition timer
 

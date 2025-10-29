@@ -786,8 +786,7 @@ function loadCharacter() {
                     animationsMap.set(a.name, mixer.clipAction(a));
                 });
 
-            // Get audio path from config
-            const audioPath = sceneConfig?.assets?.audio?.jetpack || 'sounds/thrusters_loopwav-14699.mp3';
+            // Jetpack audio is now configured in AudioManager during initAudio()
 
             // Initialize character controls with ground meshes for collision detection
             // Pass both the collision mesh and infinite floor
@@ -799,8 +798,7 @@ function loadCharacter() {
                 camera,
                 'Idle',
                 [groundMesh, infiniteFloor],
-                maxCharacterHeight,
-                audioPath
+                maxCharacterHeight
             );
 
             // Place character on ground at spawn position
@@ -859,13 +857,17 @@ function loadCharacter() {
  * Initialize audio manager
  */
 function initAudio() {
-    // Initialize AudioManager with sound paths (relative to src/index.html)
+    // Get jetpack sound path from config
+    const jetpackPath = sceneConfig?.assets?.audio?.jetpack || 'sounds/thrusters_loopwav-14699.mp3';
+
+    // Initialize AudioManager with sound paths and mobile flag
     audioManager = new AudioManager({
         backgroundMusic: 'sounds/happy-relaxing-loop-275536.mp3',
         walkingSound: 'sounds/walking-on-gravel-version-2-308744.mp3',
         runningSound: 'sounds/running-on-gravel-301880.mp3',
+        jetpackSound: jetpackPath,
         magicReveal: 'sounds/a-magical-intro-395716.mp3'
-    });
+    }, isMobile);  // Pass mobile flag
 
     // Audio will be started by start button click (guaranteed user interaction)
     console.log('Audio system initialized - will start on user clicking start button');
@@ -1004,13 +1006,9 @@ function setupStartButton() {
 
             // CRITICAL: Unlock audio for iOS (must be in user interaction handler)
             // Wait for unlock to complete before proceeding
+            // All looped sounds will start playing at volume 0
             if (audioManager) {
                 await audioManager.unlockAudio();
-            }
-
-            // Unlock jetpack/thruster audio (separate from AudioManager)
-            if (characterControls) {
-                characterControls.unlockThrusterAudio();
             }
 
             // Mark experience as started (allows rendering)

@@ -1,55 +1,73 @@
 /**
- * AudioManager - Handles all audio playback including background music and movement sounds
+ * AudioManager - Handles all audio playback including background music, movement, and jetpack sounds
+ *
+ * iOS-FRIENDLY "PLAY-ONCE, FADE-ONLY" STRATEGY:
+ * - All looped sounds (background music, running, jetpack) start playing at volume 0 during unlock
+ * - They NEVER pause - only volume changes (0 = silent, >0 = audible)
+ * - This avoids iOS restrictions on repeated play()/pause() calls
+ * - One-shot sounds (magic reveal) use traditional play() when needed
  *
  * Features:
  * - Background music with looping
- * - Walking and running sound effects
- * - Automatic restart of movement sounds on state transitions
+ * - Running sound (walking sound skipped on mobile)
+ * - Jetpack sound with fade in/out
  * - Smooth volume fading for all sounds
+ * - Mobile-optimized audio handling
  */
 export class AudioManager {
     // Audio elements
     backgroundMusic = null;
-    walkingSound = null;
+    walkingSound = null;      // Desktop only
     runningSound = null;
-    magicRevealSound = null;
+    jetpackSound = null;      // Moved from CharacterControls
+    magicRevealSound = null;  // One-shot, non-looped
+
+    // Platform detection
+    isMobile = false;
 
     // Audio state
     backgroundMusicEnabled = true;
     movementSoundsEnabled = true;
 
     // Volume settings
-    backgroundMusicVolume = 0.3;  // Lower volume for background music
-    walkingSoundVolume = 0.25;    // Dimmer walking sound
-    runningSoundVolume = 0.3;     // Dimmer running sound
+    backgroundMusicVolume = 0.3;
+    walkingSoundVolume = 0.25;
+    runningSoundVolume = 0.3;
+    jetpackVolume = 0.5;
     magicRevealVolume = 0.6;
     fadeSpeed = 2.0;  // Volume fade speed (units per second)
 
-    // Target volumes for smooth fading
+    // Target volumes for smooth fading (current volume fades to target)
     backgroundMusicTarget = 0;
     walkingSoundTarget = 0;
     runningSoundTarget = 0;
+    jetpackTarget = 0;
 
     // Movement state tracking (to detect transitions)
-    currentMovementState = 'idle';  // 'idle', 'walk', 'run'
+    currentMovementState = 'idle';  // 'idle', 'walk', 'run', 'jetpack'
     previousMovementState = 'idle';
 
     // iOS audio unlock flag
     audioUnlocked = false;
+    loopedSoundsStarted = false;  // Flag to ensure looped sounds start only once
 
     /**
      * Initialize AudioManager with audio file paths
      * @param {Object} config - Audio configuration object with paths
+     * @param {boolean} isMobile - Mobile device detection
      */
-    constructor(config = {}) {
+    constructor(config = {}, isMobile = false) {
         this.config = config;
+        this.isMobile = isMobile;
 
         // Initialize audio elements
         this.initBackgroundMusic(config.backgroundMusic);
         this.initMovementSounds(config.walkingSound, config.runningSound);
+        this.initJetpackSound(config.jetpackSound);
         this.initMagicRevealSound(config.magicReveal);
 
         console.log('AudioManager initialized with config:', config);
+        console.log('Mobile mode:', isMobile);
     }
 
     /**
@@ -61,7 +79,7 @@ export class AudioManager {
         try {
             this.backgroundMusic = new Audio(path);
             this.backgroundMusic.loop = true;
-            this.backgroundMusic.volume = 0;  // Start at 0, will fade in
+            this.backgroundMusic.volume = 0;
             console.log('Background music loaded from:', path);
         } catch (error) {
             console.error('Error loading background music:', error);
@@ -72,7 +90,8 @@ export class AudioManager {
      * Initialize movement sounds (walking and running)
      */
     initMovementSounds(walkingPath, runningPath) {
-        if (walkingPath) {
+        // Walking sound (desktop only - mobile doesn't need it)
+        if (walkingPath && !this.isMobile) {
             try {
                 this.walkingSound = new Audio(walkingPath);
                 this.walkingSound.loop = true;
@@ -83,6 +102,7 @@ export class AudioManager {
             }
         }
 
+        // Running sound (both desktop and mobile)
         if (runningPath) {
             try {
                 this.runningSound = new Audio(runningPath);
@@ -92,6 +112,22 @@ export class AudioManager {
             } catch (error) {
                 console.error('Error loading running sound:', error);
             }
+        }
+    }
+
+    /**
+     * Initialize jetpack sound (looped with fade)
+     */
+    initJetpackSound(path) {
+        if (!path) return;
+
+        try {
+            this.jetpackSound = new Audio(path);
+            this.jetpackSound.loop = true;
+            this.jetpackSound.volume = 0;
+            console.log('Jetpack sound loaded from:', path);
+        } catch (error) {
+            console.error('Error loading jetpack sound:', error);
         }
     }
 
@@ -112,15 +148,110 @@ export class AudioManager {
     }
 
     /**
+     * Unlock and start all looped audio (iOS-friendly approach)
+     * Must be called directly from a user interaction event handler
+     *
+     * CRITICAL: All looped sounds start playing at volume 0 and never stop
+     * Only volume changes - this is the iOS-friendly pattern
+     */
+    async unlockAudio() {
+        if (this.audioUnlocked) {
+            console.log('Audio already unlocked, skipping');
+            return;
+        }
+
+        console.log('Unlocking audio for iOS (play-once, fade-only strategy)...');
+
+        // Looped sounds: Start playing at volume 0, never stop
+        const loopedSounds = [
+            { audio: this.backgroundMusic, name: 'background music' },
+            { audio: this.walkingSound, name: 'walking sound' },
+            { audio: this.runningSound, name: 'running sound' },
+            { audio: this.jetpackSound, name: 'jetpack sound' }
+        ];
+
+        // One-shot sounds: Just unlock them (play briefly then pause)
+        const oneshotSounds = [
+            { audio: this.magicRevealSound, name: 'magic reveal' }
+        ];
+
+        const unlockPromises = [];
+
+        // Start all looped sounds at volume 0 (they'll play forever, controlled by volume)
+        for (const { audio, name } of loopedSounds) {
+            if (!audio) continue;
+
+            unlockPromises.push(
+                (async () => {
+                    try {
+                        // CRITICAL: Set volume to 0 BEFORE loop is set
+                        // iOS can sometimes start playback with wrong volume if done in wrong order
+                        audio.volume = 0;
+
+                        // Verify volume is actually 0
+                        if (audio.volume !== 0) {
+                            console.warn(`${name} volume not 0, forcing it`);
+                            audio.volume = 0;
+                        }
+
+                        audio.loop = true;
+
+                        // Start playing - this will continue forever at various volumes
+                        await audio.play();
+
+                        // Double-check volume after play starts (iOS safety)
+                        if (audio.volume !== 0) {
+                            console.warn(`${name} volume changed during play(), resetting to 0`);
+                            audio.volume = 0;
+                        }
+
+                        console.log(`✓ Looped audio started: ${name} (volume: ${audio.volume})`);
+                    } catch (err) {
+                        console.warn(`Could not start looped audio ${name}:`, err);
+                    }
+                })()
+            );
+        }
+
+        // Unlock one-shot sounds (play briefly then pause)
+        for (const { audio, name } of oneshotSounds) {
+            if (!audio) continue;
+
+            unlockPromises.push(
+                (async () => {
+                    try {
+                        const originalVolume = audio.volume;
+                        audio.volume = 0;
+
+                        await audio.play();
+                        audio.pause();
+                        audio.currentTime = 0;
+                        audio.volume = originalVolume;
+
+                        console.log(`✓ One-shot audio unlocked: ${name}`);
+                    } catch (err) {
+                        console.warn(`Could not unlock one-shot audio ${name}:`, err);
+                    }
+                })()
+            );
+        }
+
+        // Wait for all audio to be unlocked/started
+        await Promise.all(unlockPromises);
+
+        this.audioUnlocked = true;
+        this.loopedSoundsStarted = true;
+        console.log('✓ All audio unlocked - looped sounds playing at volume 0');
+    }
+
+    /**
      * Play magic reveal sound (one-shot)
-     * Restarts from beginning if already playing
      * @param {number} delay - Delay in seconds before playing (default: 0)
      */
     playMagicReveal(delay = 0) {
         if (!this.magicRevealSound) return;
 
         if (delay > 0) {
-            // Play after delay
             setTimeout(() => {
                 this.magicRevealSound.currentTime = 0;
                 this.magicRevealSound.volume = this.magicRevealVolume;
@@ -129,7 +260,6 @@ export class AudioManager {
                 });
             }, delay * 1000);
         } else {
-            // Play immediately
             this.magicRevealSound.currentTime = 0;
             this.magicRevealSound.volume = this.magicRevealVolume;
             this.magicRevealSound.play().catch(err => {
@@ -139,179 +269,76 @@ export class AudioManager {
     }
 
     /**
-     * Unlock all audio elements for iOS
-     * Must be called directly from a user interaction event handler
-     */
-    async unlockAudio() {
-        if (this.audioUnlocked) {
-            console.log('Audio already unlocked, skipping');
-            return;
-        }
-
-        console.log('Unlocking audio for iOS...');
-
-        // Play each audio element briefly at zero volume to unlock it
-        const audioElements = [
-            { audio: this.backgroundMusic, name: 'background music' },
-            { audio: this.walkingSound, name: 'walking sound' },
-            { audio: this.runningSound, name: 'running sound' },
-            { audio: this.magicRevealSound, name: 'magic reveal' }
-        ];
-
-        const unlockPromises = audioElements.map(async ({ audio, name }) => {
-            if (!audio) return Promise.resolve();
-
-            try {
-                // Set to silent for unlock
-                audio.volume = 0;
-                audio.muted = true; // Extra safety
-
-                // Play to unlock
-                await audio.play();
-
-                // CRITICAL: Stop immediately and reset state
-                audio.pause();
-                audio.currentTime = 0;
-
-                // DON'T restore volume - leave it at 0
-                // The fade system will increase volume when needed
-                audio.muted = false;
-
-                // Ensure it's definitely stopped
-                if (!audio.paused) {
-                    console.warn(`Audio ${name} still playing after unlock attempt, forcing stop`);
-                    audio.pause();
-                }
-
-                console.log(`Audio unlocked: ${name} (paused: ${audio.paused}, volume: ${audio.volume})`);
-            } catch (err) {
-                console.warn(`Could not unlock ${name}:`, err);
-            }
-        });
-
-        // Wait for all audio to be unlocked
-        await Promise.all(unlockPromises);
-
-        this.audioUnlocked = true;
-        this.audioReady = true;
-        console.log('All audio unlocked successfully and ready');
-    }
-
-    /**
-     * Start background music (call after user interaction to comply with autoplay policies)
+     * Start background music (sets target volume to fade in)
      */
     startBackgroundMusic() {
         if (!this.backgroundMusic || !this.backgroundMusicEnabled) return;
-
         this.backgroundMusicTarget = this.backgroundMusicVolume;
-
-        if (this.backgroundMusic.paused) {
-            this.backgroundMusic.play().catch(err => {
-                console.warn('Could not play background music:', err);
-            });
-        }
+        console.log('Background music fading in');
     }
 
     /**
-     * Stop background music
+     * Stop background music (sets target volume to fade out)
      */
     stopBackgroundMusic() {
         if (!this.backgroundMusic) return;
         this.backgroundMusicTarget = 0;
+        console.log('Background music fading out');
     }
 
     /**
      * Update movement sounds based on character state
-     * @param {string} state - Current movement state: 'idle', 'walk', or 'run'
+     * @param {string} state - Current movement state: 'idle', 'walk', 'run', 'jetpack'
      */
     updateMovementSounds(state) {
-        // The state already includes hysteresis logic from CharacterControls.getMovementState()
-        // which prevents flickering during brief air moments (< 0.4s) when going downhill.
-        // We trust that state and don't override it here.
-
         // Store previous state
         this.previousMovementState = this.currentMovementState;
         this.currentMovementState = state;
 
-        // Detect state transitions - restart sound at each new walking/running session
+        // Detect state transitions
         const stateChanged = this.previousMovementState !== this.currentMovementState;
 
-        // Debug logging for state changes
         if (stateChanged) {
             console.log(`Movement state changed: ${this.previousMovementState} -> ${state}`);
         }
 
-        // Only play movement sounds if enabled
+        // Early exit if sounds disabled
         if (!this.movementSoundsEnabled) {
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = 0;
+            this.jetpackTarget = 0;
             return;
         }
 
+        // Set target volumes based on state (audio is already playing, just change volume)
         if (state === 'walk') {
-            // Walking state
-            this.walkingSoundTarget = this.walkingSoundVolume;
+            // Walking state (desktop only)
+            if (!this.isMobile && this.walkingSound) {
+                this.walkingSoundTarget = this.walkingSoundVolume;
+            }
             this.runningSoundTarget = 0;
-
-            // Stop running sound immediately if it's playing
-            if (this.runningSound && !this.runningSound.paused) {
-                console.log('Stopping running sound (switching to walk)');
-                this.runningSound.pause();
-                this.runningSound.currentTime = 0;
-                // Don't set volume to 0 - let fade system handle it
-            }
-
-            // Restart walking sound on state transition
-            if (stateChanged && this.walkingSound) {
-                console.log('Starting walking sound');
-                this.walkingSound.currentTime = 0;
-                // Always call play() on state change, regardless of paused state
-                this.walkingSound.play().catch(err => {
-                    console.warn('Could not play walking sound:', err);
-                });
-            }
+            this.jetpackTarget = 0;
         } else if (state === 'run') {
             // Running state
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = this.runningSoundVolume;
-
-            // Stop walking sound immediately if it's playing
-            if (this.walkingSound && !this.walkingSound.paused) {
-                console.log('Stopping walking sound (switching to run)');
-                this.walkingSound.pause();
-                this.walkingSound.currentTime = 0;
-                // Don't set volume to 0 - let fade system handle it
-            }
-
-            // Restart running sound on state transition
-            if (stateChanged && this.runningSound) {
-                console.log('Starting running sound');
-                this.runningSound.currentTime = 0;
-                // Always call play() on state change, regardless of paused state
-                this.runningSound.play().catch(err => {
-                    console.warn('Could not play running sound:', err);
-                });
-            }
-        } else {
-            // Idle state - stop both sounds immediately
+            this.jetpackTarget = 0;
             if (stateChanged) {
-                console.log('Stopping movement sounds (idle state)');
+                console.log(`Setting running sound target to ${this.runningSoundVolume}`);
             }
-
-            // Immediately pause both sounds
-            if (this.walkingSound && !this.walkingSound.paused) {
-                this.walkingSound.pause();
-                this.walkingSound.currentTime = 0;
-                console.log('Walking sound stopped immediately');
-            }
-            if (this.runningSound && !this.runningSound.paused) {
-                this.runningSound.pause();
-                this.runningSound.currentTime = 0;
-                console.log('Running sound stopped immediately');
-            }
-
+        } else if (state === 'jetpack') {
+            // Jetpack state (airborne with thrust)
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = 0;
+            this.jetpackTarget = this.jetpackVolume;
+        } else {
+            // Idle state - all movement sounds silent
+            this.walkingSoundTarget = 0;
+            this.runningSoundTarget = 0;
+            this.jetpackTarget = 0;
+            if (stateChanged) {
+                console.log('Setting all sound targets to 0 (idle)');
+            }
         }
     }
 
@@ -321,31 +348,21 @@ export class AudioManager {
      * @param {number} delta - Time since last frame in seconds
      */
     update(delta) {
-        // Update background music volume
+        // Update all audio volumes (they're already playing, just change volume)
         if (this.backgroundMusic) {
-            this.updateVolume(
-                this.backgroundMusic,
-                this.backgroundMusicTarget,
-                delta
-            );
+            this.updateVolume(this.backgroundMusic, this.backgroundMusicTarget, delta, 'background');
         }
 
-        // Update walking sound volume
-        if (this.walkingSound) {
-            this.updateVolume(
-                this.walkingSound,
-                this.walkingSoundTarget,
-                delta
-            );
+        if (this.walkingSound && !this.isMobile) {
+            this.updateVolume(this.walkingSound, this.walkingSoundTarget, delta, 'walking');
         }
 
-        // Update running sound volume
         if (this.runningSound) {
-            this.updateVolume(
-                this.runningSound,
-                this.runningSoundTarget,
-                delta
-            );
+            this.updateVolume(this.runningSound, this.runningSoundTarget, delta, 'running');
+        }
+
+        if (this.jetpackSound) {
+            this.updateVolume(this.jetpackSound, this.jetpackTarget, delta, 'jetpack');
         }
     }
 
@@ -354,8 +371,12 @@ export class AudioManager {
      * @param {HTMLAudioElement} audio - Audio element to update
      * @param {number} targetVolume - Target volume (0-1)
      * @param {number} delta - Time delta in seconds
+     * @param {string} name - Name for debugging
+     *
+     * NOTE: Audio is always playing (never paused) - we only change volume
+     * This is the iOS-friendly "play-once, fade-only" pattern
      */
-    updateVolume(audio, targetVolume, delta) {
+    updateVolume(audio, targetVolume, delta, name = 'unknown') {
         if (!audio) return;
 
         // Smooth fade to target volume
@@ -364,25 +385,18 @@ export class AudioManager {
 
             if (audio.volume < targetVolume) {
                 // Fade in
-                audio.volume = Math.min(targetVolume, audio.volume + volumeDelta);
+                const newVolume = Math.min(targetVolume, audio.volume + volumeDelta);
+                if (audio.volume === 0 && newVolume > 0) {
+                    console.log(`${name} sound fading in from 0 to ${newVolume.toFixed(3)}`);
+                }
+                audio.volume = newVolume;
             } else {
                 // Fade out
-                audio.volume = Math.max(targetVolume, audio.volume - volumeDelta);
-
-                // Pause audio when fully faded out to save resources
-                // Use small threshold instead of exact equality to handle floating point
-                if (audio.volume <= 0.001 && !audio.paused) {
-                    audio.volume = 0; // Snap to exactly 0
-                    audio.pause();
-
-                    // Identify which audio was paused
-                    let audioName = 'unknown';
-                    if (audio === this.walkingSound) audioName = 'walking';
-                    if (audio === this.runningSound) audioName = 'running';
-                    if (audio === this.backgroundMusic) audioName = 'background music';
-
-                    console.log(`Audio paused after fade out: ${audioName}`);
+                const newVolume = Math.max(targetVolume, audio.volume - volumeDelta);
+                if (newVolume === 0 && audio.volume > 0) {
+                    console.log(`${name} sound faded to 0`);
                 }
+                audio.volume = newVolume;
             }
         }
     }
@@ -411,6 +425,7 @@ export class AudioManager {
         if (!this.movementSoundsEnabled) {
             this.walkingSoundTarget = 0;
             this.runningSoundTarget = 0;
+            this.jetpackTarget = 0;
         }
 
         console.log('Movement sounds:', this.movementSoundsEnabled ? 'ON' : 'OFF');
@@ -426,6 +441,7 @@ export class AudioManager {
         this.backgroundMusicVolume = clampedVolume * 0.3;
         this.walkingSoundVolume = clampedVolume * 0.25;
         this.runningSoundVolume = clampedVolume * 0.3;
+        this.jetpackVolume = clampedVolume * 0.5;
 
         console.log('Master volume set to:', clampedVolume);
     }
@@ -434,22 +450,28 @@ export class AudioManager {
      * Clean up audio resources
      */
     dispose() {
-        if (this.backgroundMusic) {
-            this.backgroundMusic.pause();
-            this.backgroundMusic = null;
-        }
-        if (this.walkingSound) {
-            this.walkingSound.pause();
-            this.walkingSound = null;
-        }
-        if (this.runningSound) {
-            this.runningSound.pause();
-            this.runningSound = null;
-        }
-        if (this.magicRevealSound) {
-            this.magicRevealSound.pause();
-            this.magicRevealSound = null;
-        }
+        // Stop all looped sounds
+        const allSounds = [
+            this.backgroundMusic,
+            this.walkingSound,
+            this.runningSound,
+            this.jetpackSound,
+            this.magicRevealSound
+        ];
+
+        allSounds.forEach(audio => {
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+        });
+
+        this.backgroundMusic = null;
+        this.walkingSound = null;
+        this.runningSound = null;
+        this.jetpackSound = null;
+        this.magicRevealSound = null;
+
         console.log('AudioManager disposed');
     }
 }
