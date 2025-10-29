@@ -1,0 +1,20 @@
+{
+  "audio": {
+    "backgroundMusic": "sounds/happy-relaxing-loop-275536.mp3",
+    "walkingSound": "sounds/walking-on-gravel-version-2-308744.mp3",
+    "runningSound": "sounds/running-on-gravel-301880.mp3",
+    "jetpackSound": "sounds/thrusters_loopwav-14699.mp3",
+    "magicReveal": "sounds/a-magical-intro-395716.mp3",
+    "volumes": {
+      "backgroundMusic": 0.3,
+      "walking": 0.4,
+      "running": 0.5,
+      "jetpack": 0.5,
+      "magicReveal": 0.6
+    },
+    "enabled": {
+      "backgroundMusic": true,
+      "movementSounds": true
+    }
+  }
+}

@@ -5,11 +5,18 @@ import { SplatMesh, dyno } from '@sparkjsdev/spark';
 import { CharacterControls } from './characterControls.js';
 import { KeyDisplay } from './utils.js';
 import { TouchControls } from './touchControls.js';
+import { loadScenesManifest, loadSceneConfig, getAvailableScenes, getDefaultScene, getSceneConfigPath } from './sceneLoader.js';
+import { AudioManager } from './audioManager.js';
 
 /**
  * F1000 - Third Person Character Controller
  * Following the approach from threejs-character-controls-example
  */
+
+// Scene configuration
+let scenesManifest = null;   // Loaded scenes manifest
+let sceneConfig = null;       // Currently loaded scene configuration
+let currentSceneId = null;    // Current scene ID
 
 // Scene, camera, renderer
 let scene;
@@ -19,6 +26,9 @@ let orbitControls;
 
 // Character
 let characterControls;
+
+// Audio
+let audioManager;
 
 // Terrain
 let groundMesh;
@@ -65,6 +75,14 @@ const keyDisplayQueue = new KeyDisplay(isMobile);
 // Touch controls
 let touchControls = null;
 
+// Magic reveal state
+let magicRevealStarted = false;
+
+// Loading state tracking (for mobile compatibility)
+let collisionLoaded = false;
+let splatLoaded = false;
+let loadingTimeout = null;
+
 // Debug wireframe for terrain
 let wireframeHelper = null;
 
@@ -72,19 +90,22 @@ let wireframeHelper = null;
  * Initialize the Three.js scene
  */
 function initScene() {
-    // Create scene with light blue background
+    // Create scene with background color from config
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xa8def0);
+    const bgColor = sceneConfig?.scene?.backgroundColor || '#a8def0';
+    scene.background = new THREE.Color(bgColor);
 
-    // Create camera
+    // Create camera with config values
+    const camCfg = sceneConfig?.camera || {};
     camera = new THREE.PerspectiveCamera(
-        60,
+        camCfg.fov || 60,
         window.innerWidth / window.innerHeight,
-        0.1,
-        1000
+        camCfg.near || 0.1,
+        camCfg.far || 1000
     );
-    // Initial camera position (will be updated when character loads)
-    camera.position.set(0, 5, 5);
+    // Initial camera position from config (will be updated when character loads)
+    const initPos = camCfg.initial || { x: 0, y: 5, z: 5 };
+    camera.position.set(initPos.x, initPos.y, initPos.z);
 
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -97,13 +118,14 @@ function initScene() {
     // Add lights
     setupLighting();
 
-    // Set up orbit controls
+    // Set up orbit controls with config values
+    const orbitCfg = sceneConfig?.camera?.orbitControls || {};
     orbitControls = new OrbitControls(camera, renderer.domElement);
-    orbitControls.enableDamping = true;
-    orbitControls.minDistance = 1;
-    orbitControls.maxDistance = 5;
-    orbitControls.enablePan = false;
-    orbitControls.maxPolarAngle = Math.PI * 0.55; // Allow looking up (85% toward straight up from below)
+    orbitControls.enableDamping = orbitCfg.enableDamping !== undefined ? orbitCfg.enableDamping : true;
+    orbitControls.minDistance = orbitCfg.minDistance || 1;
+    orbitControls.maxDistance = orbitCfg.maxDistance || 5;
+    orbitControls.enablePan = orbitCfg.enablePan !== undefined ? orbitCfg.enablePan : false;
+    orbitControls.maxPolarAngle = Math.PI * (orbitCfg.maxPolarAngle || 0.55);
     orbitControls.update();
 
     // Initialize touch controls for mobile
@@ -119,20 +141,38 @@ function initScene() {
  * Set up scene lighting
  */
 function setupLighting() {
-    // Ambient light
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    // Ambient light from config
+    const ambientCfg = sceneConfig?.lighting?.ambient || {};
+    scene.add(new THREE.AmbientLight(
+        ambientCfg.color || 0xffffff,
+        ambientCfg.intensity !== undefined ? ambientCfg.intensity : 0.7
+    ));
 
-    // Directional light (sun)
-    directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.camera.top = 50;
-    directionalLight.shadow.camera.bottom = -50;
-    directionalLight.shadow.camera.left = -50;
-    directionalLight.shadow.camera.right = 50;
-    directionalLight.shadow.camera.near = 0.1;
-    directionalLight.shadow.camera.far = 200;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
+    // Directional light (sun) from config
+    const dirCfg = sceneConfig?.lighting?.directional || {};
+    directionalLight = new THREE.DirectionalLight(
+        dirCfg.color || 0xffffff,
+        dirCfg.intensity !== undefined ? dirCfg.intensity : 1.0
+    );
+    directionalLight.castShadow = dirCfg.castShadow !== undefined ? dirCfg.castShadow : true;
+
+    // Shadow camera settings from config
+    const shadowCam = dirCfg.shadowCamera || {};
+    directionalLight.shadow.camera.top = shadowCam.top || 50;
+    directionalLight.shadow.camera.bottom = shadowCam.bottom || -50;
+    directionalLight.shadow.camera.left = shadowCam.left || -50;
+    directionalLight.shadow.camera.right = shadowCam.right || 50;
+    directionalLight.shadow.camera.near = shadowCam.near || 0.1;
+    directionalLight.shadow.camera.far = shadowCam.far || 200;
+
+    // Shadow map size from config (can be a number or object)
+    const shadowMapSizeCfg = dirCfg.shadowMapSize;
+    const shadowMapSize = typeof shadowMapSizeCfg === 'number' ? shadowMapSizeCfg : 2048;
+    const shadowWidth = shadowMapSizeCfg?.width || shadowMapSize;
+    const shadowHeight = shadowMapSizeCfg?.height || shadowMapSize;
+    directionalLight.shadow.mapSize.width = shadowWidth;
+    directionalLight.shadow.mapSize.height = shadowHeight;
+
     scene.add(directionalLight);
 
     // Apply initial light orientation based on azimuth and elevation
@@ -145,8 +185,11 @@ function setupLighting() {
 function createGround() {
     const loader = new GLTFLoader();
 
+    // Load collision mesh from config
+    const collisionPath = sceneConfig?.assets?.collisionFile || 'models/StoneHenge-collision.glb';
+
     loader.load(
-        'models/StoneHenge-small-collision.glb',
+        collisionPath,
         (gltf) => {
             // Extract the collision mesh from the loaded model
             let foundMesh = undefined;
@@ -222,12 +265,13 @@ function createGround() {
             // Create infinite floor plane at ground level (Y=0) with sand texture
             const infiniteFloorGeometry = new THREE.PlaneGeometry(10000, 10000);
 
-            // Load sand textures
+            // Load sand textures from config
             const textureLoader = new THREE.TextureLoader();
-            const sandColor = textureLoader.load('textures/sand/Sand 002_COLOR.jpg');
-            const sandNormal = textureLoader.load('textures/sand/Sand 002_NRM.jpg');
-            const sandDisplacement = textureLoader.load('textures/sand/Sand 002_DISP.jpg');
-            const sandAO = textureLoader.load('textures/sand/Sand 002_OCC.jpg');
+            const floorTexCfg = sceneConfig?.assets?.textures?.floor || {};
+            const sandColor = textureLoader.load(floorTexCfg.color || 'textures/sand/Sand 002_COLOR.jpg');
+            const sandNormal = textureLoader.load(floorTexCfg.normal || 'textures/sand/Sand 002_NRM.jpg');
+            const sandDisplacement = textureLoader.load(floorTexCfg.displacement || 'textures/sand/Sand 002_DISP.jpg');
+            const sandAO = textureLoader.load(floorTexCfg.ao || 'textures/sand/Sand 002_OCC.jpg');
 
             // Configure texture tiling (repeat the texture to cover the large plane)
             const repeatCount = 1000; // Tile the texture 1000 times across the 10000 unit plane
@@ -275,16 +319,63 @@ function createGround() {
 
             console.log('Collision mesh loaded successfully (invisible, use for physics only)');
             console.log('Press G to toggle collision wireframe, H to toggle Gaussian splat, R to reset Magic effect, F to toggle infinite floor, L to toggle leveling controls');
+            console.log('Press M to toggle background music, N to toggle movement sounds');
 
             // Apply initial leveling rotations (will be 0,0 at start)
             applyLevelingRotations();
+
+            // Mark collision mesh as loaded
+            collisionLoaded = true;
+
+            // Set progress bars to 100% for visual feedback
+            const progressBar = document.getElementById('collision-progress-bar');
+            const progressText = document.getElementById('collision-progress-text');
+            const startProgressBar = document.getElementById('start-collision-bar');
+            const startProgressText = document.getElementById('start-collision-text');
+
+            if (progressBar && progressText) {
+                progressBar.style.width = '100%';
+                progressText.textContent = '100%';
+            }
+
+            if (startProgressBar && startProgressText) {
+                startProgressBar.style.width = '100%';
+                startProgressText.textContent = '100%';
+            }
+
+            checkAllLoaded();
 
             // Load Gaussian splat and character in parallel
             loadGaussianSplat();
             loadCharacter();
         },
         (xhr) => {
-            console.log('Collision mesh: ' + (xhr.loaded / xhr.total) * 100 + '% loaded');
+            // Calculate progress with bounds checking (fixes 168% bug on mobile)
+            // Handle case where xhr.total is 0 or undefined (mobile networks sometimes don't send Content-Length)
+            const percent = xhr.total > 0
+                ? Math.min(100, Math.round((xhr.loaded / xhr.total) * 100))
+                : 0;
+
+            console.log('Collision mesh: ' + percent + '% loaded');
+
+            // Update progress bars (both old and new for compatibility)
+            const progressBar = document.getElementById('collision-progress-bar');
+            const progressText = document.getElementById('collision-progress-text');
+            const startProgressBar = document.getElementById('start-collision-bar');
+            const startProgressText = document.getElementById('start-collision-text');
+
+            if (progressBar && progressText) {
+                progressBar.style.width = percent + '%';
+                progressText.textContent = percent + '%';
+            }
+
+            if (startProgressBar && startProgressText) {
+                startProgressBar.style.width = percent + '%';
+                startProgressText.textContent = percent + '%';
+            }
+
+            // Don't rely on percent === 100 check (unreliable on mobile)
+            // Instead, set flag in the onLoad callback
         },
         (error) => {
             console.error('Error loading collision mesh:', error);
@@ -375,6 +466,11 @@ function applyLightOrientation() {
  * Create the Magic reveal effect modifier
  */
 function createMagicModifier() {
+    // Get Magic effect settings from config
+    const magicCfg = sceneConfig?.scene?.magicEffect || {};
+    const expansionRadius = magicCfg.expansionRadius || 2500;
+    const duration = magicCfg.duration || 2.0;
+
     return dyno.dynoBlock(
         { gsplat: dyno.Gsplat },
         { gsplat: dyno.Gsplat },
@@ -425,12 +521,12 @@ function createMagicModifier() {
                 statements: ({ inputs, outputs }) => dyno.unindentLines(`
           ${outputs.gsplat} = ${inputs.gsplat};
           float t = ${inputs.t};
-          float s = smoothstep(0., 2., t) * 2500.;
+          float s = smoothstep(0., ${duration.toFixed(1)}, t) * ${expansionRadius.toFixed(1)};
           vec3 scales = ${inputs.gsplat}.scales;
           vec3 localPos = ${inputs.gsplat}.center;
           float l = length(localPos.xz);
 
-          // Magic Effect: Complex twister with noise and radial reveal (2500 unit radius in 2 seconds)
+          // Magic Effect: Complex twister with noise and radial reveal (${expansionRadius} unit radius in ${duration} seconds)
           float border = abs(s-l-.5);
           localPos *= 1.-.2*exp(-20.*border);
           vec3 finalScales = mix(scales,vec3(0.002),smoothstep(s-.5,s,l+.5));
@@ -459,17 +555,55 @@ async function loadGaussianSplat() {
     console.log('Loading Gaussian splat...');
 
     try {
-        // Create SplatMesh from PLY file
+        // Update progress bars to show loading started (both old and new for compatibility)
+        const progressBar = document.getElementById('splat-progress-bar');
+        const progressText = document.getElementById('splat-progress-text');
+        const startProgressBar = document.getElementById('start-splat-bar');
+        const startProgressText = document.getElementById('start-splat-text');
+
+        if (progressBar && progressText) {
+            progressBar.style.width = '10%';
+            progressText.textContent = '10%';
+        }
+        if (startProgressBar && startProgressText) {
+            startProgressBar.style.width = '10%';
+            startProgressText.textContent = '10%';
+        }
+
+        // Load splat file from config
+        const splatPath = sceneConfig?.assets?.splatFile || 'models/StoneHenge.sog';
+
+        // Create SplatMesh from file
         gaussianSplat = new SplatMesh({
-            url: 'models/StoneHenge.sog',
+            url: splatPath,
         });
 
         console.log('SplatMesh created, waiting for initialization...');
+
+        // Update progress to show download in progress
+        if (progressBar && progressText) {
+            progressBar.style.width = '50%';
+            progressText.textContent = '50%';
+        }
+        if (startProgressBar && startProgressText) {
+            startProgressBar.style.width = '50%';
+            startProgressText.textContent = '50%';
+        }
 
         // Wait for the splat to initialize
         await gaussianSplat.initialized;
 
         console.log('SplatMesh initialized successfully');
+
+        // Update progress to 100%
+        if (progressBar && progressText) {
+            progressBar.style.width = '100%';
+            progressText.textContent = '100%';
+        }
+        if (startProgressBar && startProgressText) {
+            startProgressBar.style.width = '100%';
+            startProgressText.textContent = '100%';
+        }
 
         // Apply same transformations as collision mesh
         // Scale to match collision mesh
@@ -487,28 +621,118 @@ async function loadGaussianSplat() {
         // Apply leveling rotations to match collision mesh
         applyLevelingRotations();
 
-        // Apply the Magic effect modifier (desktop only - too complex for mobile GPUs)
-        if (!isMobile) {
+        // Mark splat as loaded
+        splatLoaded = true;
+
+        // Apply the Magic effect modifier
+        // Check config for mobile support (default: desktop only - too complex for mobile GPUs)
+        const magicCfg = sceneConfig?.scene?.magicEffect || {};
+        const shouldEnableEffect = magicCfg.enabled !== false &&
+                                  (!isMobile || magicCfg.mobileEnabled === true);
+
+        if (shouldEnableEffect) {
             try {
                 gaussianSplat.objectModifier = createMagicModifier();
                 gaussianSplat.updateGenerator();
 
-                // Reset time to start the animation
-                baseTime = 0;
-                animateT.value = 0;
+                // NOTE: Animation and sound are now triggered by start button click
+                // Don't auto-start the animation here - wait for user interaction
+                // baseTime = 0;
+                // animateT.value = 0;
 
-                console.log('Gaussian splat loaded with Magic effect (desktop)');
+                const platform = isMobile ? 'mobile' : 'desktop';
+                console.log(`Gaussian splat loaded with Magic effect (${platform}) - awaiting user interaction`);
             } catch (error) {
                 console.error('Error applying Magic effect modifier:', error);
                 console.log('Gaussian splat loaded without Magic effect (shader compilation failed)');
             }
         } else {
-            console.log('Gaussian splat loaded without Magic effect (mobile - shader too complex)');
+            const reason = isMobile ? 'mobile not enabled in config' : 'disabled in config';
+            console.log(`Gaussian splat loaded without Magic effect (${reason})`);
         }
+
+        // Check if all assets are loaded
+        checkAllLoaded();
 
     } catch (error) {
         console.error('Error loading Gaussian splat:', error);
     }
+}
+
+/**
+ * Check if all assets are loaded and show start button
+ * Uses boolean flags instead of string comparison for mobile compatibility
+ */
+function checkAllLoaded() {
+    const loadingBars = document.getElementById('start-loading-bars');
+    const startButton = document.getElementById('start-button');
+
+    if (loadingBars && startButton) {
+        // Use boolean flags instead of fragile string comparison
+        // This fixes the mobile bug where progress can be unreliable
+        if (collisionLoaded && splatLoaded) {
+            // Clear any existing timeout
+            if (loadingTimeout) {
+                clearTimeout(loadingTimeout);
+                loadingTimeout = null;
+            }
+
+            // Add a small delay before showing button to ensure user sees 100%
+            setTimeout(() => {
+                // Hide loading bars
+                loadingBars.style.display = 'none';
+
+                // Show start button
+                startButton.style.display = 'inline-block';
+
+                console.log('Assets loaded, start button shown');
+            }, 500);
+        } else {
+            // Set a timeout fallback in case progress tracking fails on mobile
+            // If button hasn't shown after 10 seconds, show it anyway
+            if (!loadingTimeout) {
+                loadingTimeout = setTimeout(() => {
+                    console.warn('Loading timeout reached - showing start button as fallback');
+                    loadingBars.style.display = 'none';
+                    startButton.style.display = 'inline-block';
+                }, 10000);
+            }
+        }
+    }
+}
+
+/**
+ * Start the magic reveal animation and audio
+ * Triggered by user clicking the start button
+ */
+function startMagicReveal() {
+    // Prevent multiple triggers
+    if (magicRevealStarted || !gaussianSplat) {
+        console.log('Magic reveal already started or splat not loaded');
+        return;
+    }
+
+    magicRevealStarted = true;
+
+    // Reset and start animation
+    baseTime = 0;
+    animateT.value = 0;
+
+    // Start background music
+    if (audioManager) {
+        audioManager.startBackgroundMusic();
+        console.log('Background music started');
+    }
+
+    // Play magic reveal sound with delay from config
+    if (audioManager) {
+        const magicCfg = sceneConfig?.scene?.magicEffect || {};
+        const soundDelay = magicCfg.soundDelay || 0;
+        audioManager.playMagicReveal(soundDelay);
+        console.log(`Magic reveal sound will play in ${soundDelay}s`);
+    }
+
+    console.log('Magic reveal animation started by user interaction');
 }
 
 /**
@@ -517,8 +741,11 @@ async function loadGaussianSplat() {
 function loadCharacter() {
     const loader = new GLTFLoader();
 
+    // Load character model from config
+    const characterPath = sceneConfig?.assets?.characterFile || 'models/Soldier.glb';
+
     loader.load(
-        'models/Soldier.glb',
+        characterPath,
         (gltf) => {
             const model = gltf.scene;
             model.traverse((object) => {
@@ -539,6 +766,9 @@ function loadCharacter() {
                     animationsMap.set(a.name, mixer.clipAction(a));
                 });
 
+            // Get audio path from config
+            const audioPath = sceneConfig?.assets?.audio?.jetpack || 'sounds/thrusters_loopwav-14699.mp3';
+
             // Initialize character controls with ground meshes for collision detection
             // Pass both the collision mesh and infinite floor
             characterControls = new CharacterControls(
@@ -549,23 +779,31 @@ function loadCharacter() {
                 camera,
                 'Idle',
                 [groundMesh, infiniteFloor],
-                maxCharacterHeight
+                maxCharacterHeight,
+                audioPath
             );
 
             // Place character on ground at spawn position
             characterControls.placeOnGround();
 
-            // Start 50 units west (negative X), facing east (positive X direction)
-            model.position.x = 0;
-            model.position.z = 40;
-            model.rotation.y = -0*Math.PI / 2;  // Rotate 90° to face east
+            // Get spawn position and rotation from config
+            const spawnCfg = sceneConfig?.character?.spawn || {};
+            const spawnPos = spawnCfg.position || { x: 0, y: 'auto', z: 40 };
+            const spawnRot = spawnCfg.rotation || { y: 0 };
 
-            // Position camera behind character (west) facing east, level with character
-            // Character faces east (+X), so camera should be west of character (-X)
+            // Set character position (Y is handled by placeOnGround)
+            model.position.x = spawnPos.x;
+            model.position.z = spawnPos.z;
+            model.rotation.y = spawnRot.y * (Math.PI / 180);  // Convert degrees to radians
+
+            // Get camera config for initial positioning
+            const camRelPos = sceneConfig?.camera?.relativeToCharacter || { x: 0, y: 2, z: 5 };
+
+            // Position camera relative to character
             camera.position.set(
-                model.position.x ,  // 5 units west (behind character)
-                model.position.y + 2,  // Level with character (azimuth 0.5*pi)
-                model.position.z + 5      // Same Z as character
+                model.position.x + camRelPos.x,
+                model.position.y + camRelPos.y,
+                model.position.z + camRelPos.z
             );
 
             // Update OrbitControls target to character position
@@ -598,15 +836,53 @@ function loadCharacter() {
 }
 
 /**
+ * Initialize audio manager
+ */
+function initAudio() {
+    // Initialize AudioManager with sound paths (relative to src/index.html)
+    audioManager = new AudioManager({
+        backgroundMusic: 'sounds/happy-relaxing-loop-275536.mp3',
+        walkingSound: 'sounds/walking-on-gravel-version-2-308744.mp3',
+        runningSound: 'sounds/running-on-gravel-301880.mp3',
+        magicReveal: 'sounds/a-magical-intro-395716.mp3'
+    });
+
+    // Audio will be started by start button click (guaranteed user interaction)
+    console.log('Audio system initialized - will start on user clicking start button');
+}
+
+/**
  * Set up keyboard event listeners
  */
 function setupKeyboardControls() {
+    // Flag to track if background music has been started (autoplay policy requires user interaction)
+    let backgroundMusicStarted = false;
+
+    // Fallback: Start background music on first touch (for mobile)
+    const startAudioOnTouch = () => {
+        if (!backgroundMusicStarted && audioManager) {
+            audioManager.startBackgroundMusic();
+            backgroundMusicStarted = true;
+            console.log('Background music started on touch interaction (fallback)');
+            // Remove listener after first touch
+            document.removeEventListener('touchstart', startAudioOnTouch);
+        }
+    };
+    document.addEventListener('touchstart', startAudioOnTouch, { once: true });
+
     document.addEventListener('keydown', (event) => {
         const key = event.key.toLowerCase();
 
         // Update key state
         keysPressed[key] = true;
         keyDisplayQueue.down(key);
+
+        // Fallback: Start background music on first keypress if autoplay was blocked
+        if (!backgroundMusicStarted && audioManager) {
+            audioManager.startBackgroundMusic();
+            backgroundMusicStarted = true;
+            console.log('Background music started on keyboard interaction (fallback)');
+        }
 
         // Toggle run on Shift
         if (key === 'shift') {
@@ -636,6 +912,14 @@ function setupKeyboardControls() {
             if (gaussianSplat) {
                 baseTime = 0;
                 animateT.value = 0;
+
+                // Play magic reveal sound with delay from config
+                if (audioManager) {
+                    const magicCfg = sceneConfig?.scene?.magicEffect || {};
+                    const soundDelay = magicCfg.soundDelay || 0;
+                    audioManager.playMagicReveal(soundDelay);
+                }
+
                 console.log('Magic effect reset');
             }
         }
@@ -657,6 +941,20 @@ function setupKeyboardControls() {
                 console.log(`Leveling controls: ${isVisible ? 'ON' : 'OFF'}`);
             }
         }
+
+        // Toggle background music on M
+        if (key === 'm') {
+            if (audioManager) {
+                audioManager.toggleBackgroundMusic();
+            }
+        }
+
+        // Toggle movement sounds on N
+        if (key === 'n') {
+            if (audioManager) {
+                audioManager.toggleMovementSounds();
+            }
+        }
     });
 
     document.addEventListener('keyup', (event) => {
@@ -666,6 +964,28 @@ function setupKeyboardControls() {
     });
 
     console.log('Keyboard controls initialized');
+}
+
+/**
+ * Set up start button click handler
+ */
+function setupStartButton() {
+    const startButton = document.getElementById('start-button');
+    const startOverlay = document.getElementById('start-overlay');
+
+    if (startButton && startOverlay) {
+        startButton.addEventListener('click', () => {
+            // Hide start overlay with fade out
+            startOverlay.classList.remove('visible');
+
+            // Start the magic reveal animation and audio
+            startMagicReveal();
+
+            console.log('Start button clicked - experience beginning');
+        });
+
+        console.log('Start button initialized');
+    }
 }
 
 /**
@@ -729,6 +1049,18 @@ function animate() {
             debugJetpack.className = isJetpackActive ? 'jetpack-active' : '';
             debugGroundDist.textContent = groundDistance.toFixed(1) + 'm';
         }
+
+        // Update audio based on character movement state
+        if (audioManager) {
+            const movementState = characterControls.getMovementState();
+            const isGrounded = characterControls.getGroundedState();
+            audioManager.updateMovementSounds(movementState, isGrounded);
+        }
+    }
+
+    // Update audio manager (volume fading)
+    if (audioManager) {
+        audioManager.update(delta);
     }
 
     // Update orbit controls
@@ -834,13 +1166,172 @@ function setupLevelingControls() {
 }
 
 /**
+ * Initialize scene selector dropdowns (both original and start overlay)
+ */
+async function initSceneSelector() {
+    try {
+        // Load scenes manifest
+        scenesManifest = await loadScenesManifest();
+        const scenes = getAvailableScenes(scenesManifest);
+        const dropdown = document.getElementById('scene-dropdown');
+        const startDropdown = document.getElementById('start-scene-dropdown');
+
+        // Clear loading options
+        dropdown.innerHTML = '';
+        if (startDropdown) startDropdown.innerHTML = '';
+
+        // Populate both dropdowns with scenes
+        scenes.forEach(scene => {
+            const option = document.createElement('option');
+            option.value = scene.id;
+            option.textContent = scene.name;
+            dropdown.appendChild(option);
+
+            if (startDropdown) {
+                const startOption = document.createElement('option');
+                startOption.value = scene.id;
+                startOption.textContent = scene.name;
+                startDropdown.appendChild(startOption);
+            }
+        });
+
+        // Set default scene
+        const defaultScene = getDefaultScene(scenesManifest);
+        dropdown.value = defaultScene;
+        if (startDropdown) startDropdown.value = defaultScene;
+
+        // Add change event listener to original dropdown
+        dropdown.addEventListener('change', async (e) => {
+            const sceneId = e.target.value;
+            if (sceneId !== currentSceneId) {
+                console.log(`Switching to scene: ${sceneId}`);
+                await loadAndInitializeScene(sceneId);
+            }
+        });
+
+        // Add change event listener to start overlay dropdown
+        if (startDropdown) {
+            startDropdown.addEventListener('change', async (e) => {
+                const sceneId = e.target.value;
+                if (sceneId !== currentSceneId) {
+                    console.log(`Switching to scene: ${sceneId}`);
+                    // Sync the other dropdown
+                    dropdown.value = sceneId;
+                    // Update scene info immediately
+                    const scenes = getAvailableScenes(scenesManifest);
+                    const selectedScene = scenes.find(s => s.id === sceneId);
+                    if (selectedScene) {
+                        const startTitle = document.getElementById('start-title');
+                        const startDescription = document.getElementById('start-description');
+                        if (startTitle) startTitle.textContent = selectedScene.name;
+                        if (startDescription) startDescription.textContent = selectedScene.description || 'Prepare for an amazing journey';
+                    }
+                    await loadAndInitializeScene(sceneId);
+                }
+            });
+        }
+
+        console.log('Scene selectors initialized');
+    } catch (error) {
+        console.error('Failed to initialize scene selector:', error);
+    }
+}
+
+/**
+ * Load scene configuration and initialize
+ * @param {string} sceneId - Scene ID to load
+ */
+async function loadAndInitializeScene(sceneId) {
+    try {
+        // Get config path for this scene
+        const configPath = getSceneConfigPath(scenesManifest, sceneId);
+        if (!configPath) {
+            throw new Error(`Scene config not found for: ${sceneId}`);
+        }
+
+        // Load scene configuration
+        sceneConfig = await loadSceneConfig(configPath);
+        currentSceneId = sceneId;
+
+        // Apply configuration to global variables
+        applySceneConfig();
+
+        // Reload the page content (simplified approach - full reload)
+        location.reload();
+
+    } catch (error) {
+        console.error(`Failed to load scene ${sceneId}:`, error);
+        alert(`Failed to load scene: ${error.message}`);
+    }
+}
+
+/**
+ * Apply scene configuration to global state variables
+ */
+function applySceneConfig() {
+    // Store scene ID in sessionStorage for reload
+    sessionStorage.setItem('currentScene', currentSceneId);
+
+    // Apply leveling defaults from config
+    if (sceneConfig.transform.defaultLeveling) {
+        levelRotationX = sceneConfig.transform.defaultLeveling.x || 0;
+        levelRotationZ = sceneConfig.transform.defaultLeveling.z || 0;
+    }
+
+    // Apply height offset
+    if (sceneConfig.transform.heightOffset !== undefined) {
+        heightOffset = sceneConfig.transform.heightOffset;
+    }
+
+    // Apply lighting defaults
+    if (sceneConfig.lighting.directional) {
+        lightAzimuth = sceneConfig.lighting.directional.azimuth;
+        lightElevation = sceneConfig.lighting.directional.elevation;
+    }
+
+    console.log('Scene configuration applied to global state');
+}
+
+/**
  * Initialize the application
  */
-function init() {
+async function init() {
     console.log('Initializing F1000...');
+
+    // Initialize scene selector first
+    await initSceneSelector();
+
+    // Check if there's a scene stored in session
+    const storedScene = sessionStorage.getItem('currentScene');
+    let sceneToLoad = storedScene || getDefaultScene(scenesManifest);
+
+    // Load scene configuration
+    const configPath = getSceneConfigPath(scenesManifest, sceneToLoad);
+    sceneConfig = await loadSceneConfig(configPath);
+    currentSceneId = sceneToLoad;
+
+    // Apply scene config to globals
+    applySceneConfig();
+
+    // Update UI to show correct scene
+    const dropdown = document.getElementById('scene-dropdown');
+    if (dropdown) {
+        dropdown.value = currentSceneId;
+    }
+
+    // Update start overlay with scene information
+    const startTitle = document.getElementById('start-title');
+    const startDescription = document.getElementById('start-description');
+    if (sceneConfig && startTitle && startDescription) {
+        startTitle.textContent = sceneConfig.name || 'Unknown Location';
+        startDescription.textContent = sceneConfig.description || 'Prepare for an amazing journey';
+    }
 
     // Set up scene
     initScene();
+
+    // Initialize audio system
+    initAudio();
 
     // Load ground (which will load character after completion)
     createGround();
@@ -848,6 +1339,7 @@ function init() {
     // Set up controls
     setupKeyboardControls();
     setupLevelingControls();
+    setupStartButton();
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);

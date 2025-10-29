@@ -1,0 +1,11 @@
+{
+  "defaultScene": "StoneHenge",
+  "scenes": [
+    {
+      "id": "StoneHenge",
+      "name": "Stonehenge",
+      "description": "Ancient stone circle",
+      "config": "models/StoneHenge.json"
+    }
+  ]
+}

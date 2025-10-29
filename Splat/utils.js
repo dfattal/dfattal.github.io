@@ -42,14 +42,27 @@ export class KeyDisplay {
     }
 
     /**
-     * Create a key display div element
+     * Create a key display div element styled like a keyboard key
      */
     createKeyDiv(key, isMobile = false) {
         const div = document.createElement('div');
-        div.style.color = 'blue';
-        div.style.fontSize = '50px';
-        div.style.fontWeight = '800';
+
+        // Keyboard key styling
         div.style.position = 'absolute';
+        div.style.padding = '8px 12px';
+        div.style.minWidth = '40px';
+        div.style.textAlign = 'center';
+        div.style.fontFamily = "'Courier New', monospace";
+        div.style.fontSize = '16px';
+        div.style.fontWeight = 'bold';
+        div.style.color = '#333';
+        div.style.background = 'linear-gradient(180deg, #f0f0f0, #d0d0d0)';
+        div.style.border = '1px solid #999';
+        div.style.borderRadius = '4px';
+        div.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.5)';
+        div.style.transition = 'all 0.1s ease';
+        div.style.userSelect = 'none';
+        div.style.opacity = '0.6';
         div.textContent = key.toUpperCase();
 
         // Hide on mobile devices
@@ -62,42 +75,66 @@ export class KeyDisplay {
 
     /**
      * Update positions of key displays on screen
+     * Arranged in a tight keyboard-style layout: SHIFT and SPACE symmetric around WASD
      */
     updatePosition() {
-        this.map.get(W).style.top = `${window.innerHeight - 150}px`;
-        this.map.get(W).style.left = `${300}px`;
+        const bottomOffset = 80;   // Distance from bottom
+        const keyWidth = 64;       // Actual rendered width (40px minWidth + 24px padding)
+        const keyGap = 4;          // Tight gap between keys
+        const rowHeight = 45;      // Height between rows
+        const sideGap = 15;        // Gap between WASD cluster and SHIFT/SPACE
 
-        this.map.get(A).style.top = `${window.innerHeight - 100}px`;
-        this.map.get(A).style.left = `${250}px`;
+        // WASD cluster centered
+        const wasdStartX = 100;
 
-        this.map.get(S).style.top = `${window.innerHeight - 100}px`;
-        this.map.get(S).style.left = `${300}px`;
+        // W key (top row, centered above S)
+        this.map.get(W).style.top = `${window.innerHeight - bottomOffset - rowHeight}px`;
+        this.map.get(W).style.left = `${wasdStartX + keyWidth + keyGap}px`;
 
-        this.map.get(D).style.top = `${window.innerHeight - 100}px`;
-        this.map.get(D).style.left = `${350}px`;
+        // Bottom row: A, S, D
+        this.map.get(A).style.top = `${window.innerHeight - bottomOffset}px`;
+        this.map.get(A).style.left = `${wasdStartX}px`;
 
-        this.map.get(SHIFT).style.top = `${window.innerHeight - 100}px`;
-        this.map.get(SHIFT).style.left = `${50}px`;
+        this.map.get(S).style.top = `${window.innerHeight - bottomOffset}px`;
+        this.map.get(S).style.left = `${wasdStartX + keyWidth + keyGap}px`;
 
-        this.map.get(SPACE).style.top = `${window.innerHeight - 100}px`;
-        this.map.get(SPACE).style.left = `${450}px`;
+        this.map.get(D).style.top = `${window.innerHeight - bottomOffset}px`;
+        this.map.get(D).style.left = `${wasdStartX + (keyWidth + keyGap) * 2}px`;
+
+        // SHIFT - symmetric on the left
+        this.map.get(SHIFT).style.top = `${window.innerHeight - bottomOffset}px`;
+        this.map.get(SHIFT).style.left = `${wasdStartX - keyWidth - sideGap}px`;
+
+        // SPACE - symmetric on the right
+        this.map.get(SPACE).style.top = `${window.innerHeight - bottomOffset}px`;
+        this.map.get(SPACE).style.left = `${wasdStartX + (keyWidth + keyGap) * 3 + sideGap}px`;
     }
 
     /**
-     * Visual feedback when key is pressed
+     * Visual feedback when key is pressed (key pressed down effect)
      */
     down(key) {
-        if (this.map.get(key.toLowerCase())) {
-            this.map.get(key.toLowerCase()).style.color = 'red';
+        const div = this.map.get(key.toLowerCase());
+        if (div) {
+            div.style.background = 'linear-gradient(180deg, #00ff00, #00cc00)';
+            div.style.color = '#000';
+            div.style.boxShadow = '0 1px 2px rgba(0,0,0,0.3), inset 0 2px 4px rgba(0,0,0,0.2)';
+            div.style.transform = 'translateY(2px)';
+            div.style.opacity = '1';
         }
     }
 
     /**
-     * Visual feedback when key is released
+     * Visual feedback when key is released (key released effect)
      */
     up(key) {
-        if (this.map.get(key.toLowerCase())) {
-            this.map.get(key.toLowerCase()).style.color = 'blue';
+        const div = this.map.get(key.toLowerCase());
+        if (div) {
+            div.style.background = 'linear-gradient(180deg, #f0f0f0, #d0d0d0)';
+            div.style.color = '#333';
+            div.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.5)';
+            div.style.transform = 'translateY(0)';
+            div.style.opacity = '0.6';
         }
     }
 }

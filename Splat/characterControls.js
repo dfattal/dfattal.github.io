@@ -41,6 +41,11 @@ export class CharacterControls {
     jetpackTransitionDuration = 0.3;  // Time to smoothly restore gravity after release
     jetpackTransitionTimer = 0;  // Tracks transition progress
 
+    // Movement inertia - preserve horizontal velocity during falls (jumps & jetpack)
+    inertiaVelocityX = 0;        // Stored horizontal X velocity from last airborne movement
+    inertiaVelocityZ = 0;        // Stored horizontal Z velocity from last airborne movement
+    hasInertia = false;          // Flag indicating if inertia should be applied during fall
+
     // Jetpack audio
     thrusterSound = null;        // Audio element for thruster sound
     thrusterFadeSpeed = 2.0;     // Volume fade speed (units per second)
@@ -56,8 +61,13 @@ export class CharacterControls {
     // Forward and ceiling collision detection
     forwardRaycaster = new THREE.Raycaster();
     ceilingRaycaster = new THREE.Raycaster();
+    forwardGroundRaycaster = new THREE.Raycaster();
     forwardCollisionDistance = 0.5;  // Distance to check ahead (short range)
     ceilingCollisionDistance = 2.5;  // Distance to check above (character height + buffer)
+
+    // Walkable terrain limits
+    maxSlopeAngle = Math.PI / 3;     // 60 degrees - maximum walkable slope
+    maxStepHeight = 0.5;              // Maximum step height character can climb
 
     // Collision calculation vectors (reused to avoid allocations)
     tempCollisionVector = new THREE.Vector3();
@@ -83,7 +93,8 @@ export class CharacterControls {
         camera,
         currentAction,
         groundMeshes,
-        maxHeight = null
+        maxHeight = null,
+        audioPath = 'sounds/thrusters_loopwav-14699.mp3'
     ) {
         this.model = model;
         this.mixer = mixer;
@@ -101,6 +112,9 @@ export class CharacterControls {
         if (maxHeight !== null) {
             this.maxHeight = maxHeight;
         }
+
+        // Store audio path for thruster sound
+        this.audioPath = audioPath;
 
         // Initialize thruster sound
         this.initThrusterSound();
@@ -150,14 +164,36 @@ export class CharacterControls {
     }
 
     /**
+     * Get current movement state for audio system
+     * @returns {string} - 'idle', 'walk', or 'run'
+     */
+    getMovementState() {
+        // Return the current animation state which matches movement
+        // If in air for longer than threshold, it's 'idle'
+        if (!this.isGrounded && this.timeInAir > this.airTimeThreshold) {
+            return 'idle';
+        }
+
+        // Check if any direction key is pressed by looking at current action
+        // The current action is already set based on movement in update()
+        if (this.currentAction === 'Run') {
+            return 'run';
+        } else if (this.currentAction === 'Walk') {
+            return 'walk';
+        }
+
+        return 'idle';
+    }
+
+    /**
      * Initialize thruster sound effect
      */
     initThrusterSound() {
         try {
-            this.thrusterSound = new Audio('sounds/thrusters_loopwav-14699.mp3');
+            this.thrusterSound = new Audio(this.audioPath);
             this.thrusterSound.loop = true;
             this.thrusterSound.volume = 0; // Start at 0 volume
-            console.log('Thruster sound loaded');
+            console.log('Thruster sound loaded from:', this.audioPath);
         } catch (error) {
             console.error('Error loading thruster sound:', error);
         }
@@ -332,6 +368,64 @@ export class CharacterControls {
     }
 
     /**
+     * Check ground at a forward position to validate walkability
+     * Returns ground info: { exists: boolean, height: number, normal: Vector3, isWalkable: boolean }
+     * @param forwardDirection - Normalized direction vector (typically walkDirection)
+     * @param distance - Distance ahead to check (typically velocity * delta)
+     */
+    checkForwardGround(forwardDirection, distance) {
+        if (this.groundMeshes.length === 0) {
+            return { exists: false, height: -100, normal: null, isWalkable: false };
+        }
+
+        // Calculate next position based on movement
+        const nextX = this.model.position.x + forwardDirection.x * distance;
+        const nextZ = this.model.position.z + forwardDirection.z * distance;
+
+        // Set raycast origin above the next position
+        this.tempCollisionVector.set(nextX, this.model.position.y + 10, nextZ);
+
+        // Cast ray downward from next position
+        const downDirection = new THREE.Vector3(0, -1, 0);
+        this.forwardGroundRaycaster.set(this.tempCollisionVector, downDirection);
+
+        const intersects = this.forwardGroundRaycaster.intersectObjects(this.groundMeshes, true);
+
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const groundHeight = hit.point.y;
+            const groundNormal = hit.face ? hit.face.normal : new THREE.Vector3(0, 1, 0);
+
+            // Calculate current ground height for step height comparison
+            const currentGroundHeight = this.getGroundInfo().height;
+            const heightDifference = groundHeight - currentGroundHeight;
+
+            // Check slope angle: angle from vertical = acos(normal.y)
+            const slopeAngle = Math.acos(Math.abs(groundNormal.y));
+
+            // Terrain is walkable if:
+            // 1. Slope is within acceptable angle, OR
+            // 2. It's a small step up/down within step height limit
+            const isWalkable = (
+                slopeAngle <= this.maxSlopeAngle ||
+                Math.abs(heightDifference) <= this.maxStepHeight
+            );
+
+            return {
+                exists: true,
+                height: groundHeight,
+                normal: groundNormal,
+                isWalkable: isWalkable,
+                slopeAngle: slopeAngle,
+                heightDifference: heightDifference
+            };
+        }
+
+        // No ground found ahead - treat as unwalkable (cliff/gap)
+        return { exists: false, height: -100, normal: null, isWalkable: false };
+    }
+
+    /**
      * Main update loop - called every frame
      * @param delta - Time since last frame in seconds
      * @param keysPressed - Object containing currently pressed keys
@@ -368,6 +462,13 @@ export class CharacterControls {
             this.isJetpackActive = false;
             this.jetpackTransitionTimer = this.jetpackTransitionDuration;
             this.stopThrusterSound();  // Stop sound with fade-out
+
+            // Enable inertia to preserve horizontal velocity during fall
+            // Only if there was actually some movement
+            if (this.inertiaVelocityX !== 0 || this.inertiaVelocityZ !== 0) {
+                this.hasInertia = true;
+            }
+            // Inertia velocities were captured in the movement section during jetpack flight
         }
 
         // Apply gravity with smooth transition after jetpack release
@@ -434,6 +535,11 @@ export class CharacterControls {
                 this.stopThrusterSound();  // Stop sound with fade-out
             }
             this.jetpackTransitionTimer = 0;  // Reset transition timer
+
+            // Clear inertia on landing
+            this.hasInertia = false;
+            this.inertiaVelocityX = 0;
+            this.inertiaVelocityZ = 0;
         } else {
             // Character is airborne
             this.isGrounded = false;
@@ -477,8 +583,9 @@ export class CharacterControls {
         // Update animation mixer
         this.mixer.update(delta);
 
-        // Movement: WASD works when grounded OR during jetpack flight
+        // Movement: WASD works when grounded OR during jetpack flight OR shortly after jump
         // WASD is disabled during falls (in air without jetpack for > airTimeThreshold)
+        // However, inertia from jump/jetpack preserves horizontal momentum during fall
         // Use hysteresis to prevent stuttering on downhill slopes
         const functionallyGrounded = this.isGrounded || this.timeInAir <= this.airTimeThreshold;
         if (directionPressed && (functionallyGrounded || this.isJetpackActive)) {
@@ -510,15 +617,52 @@ export class CharacterControls {
             let moveX = this.walkDirection.x * velocity * delta;
             let moveZ = this.walkDirection.z * velocity * delta;
 
+            // If in air (jumping or jetpack), capture velocity for inertia
+            // This preserves horizontal momentum during falls
+            if (!this.isGrounded) {
+                this.inertiaVelocityX = this.walkDirection.x * velocity;
+                this.inertiaVelocityZ = this.walkDirection.z * velocity;
+                this.hasInertia = true; // Enable inertia for when control is lost
+            }
+
+            // Check forward ground walkability when grounded (prevents wall walking)
+            // Don't apply during jetpack/jumping - allow free movement in air
+            let terrainBlocked = false;
+            let terrainNormal = null;
+            if (this.isGrounded) {
+                const moveDistance = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                const forwardGround = this.checkForwardGround(this.walkDirection, moveDistance);
+
+                if (!forwardGround.isWalkable) {
+                    // Terrain ahead is too steep or no ground exists
+                    // Treat as a wall collision for sliding behavior
+                    terrainBlocked = true;
+                    if (forwardGround.normal) {
+                        // Use terrain normal for wall sliding
+                        terrainNormal = forwardGround.normal.clone();
+                    } else {
+                        // No ground ahead (cliff) - use movement opposite as normal
+                        terrainNormal = new THREE.Vector3(-this.walkDirection.x, 0, -this.walkDirection.z).normalize();
+                    }
+                }
+            }
+
             // Check for forward collision and apply wall sliding if needed
             const forwardCollision = this.checkForwardCollision(this.walkDirection);
 
-            if (forwardCollision.hit) {
-                // Wall detected - calculate slide direction
-                // Slide direction = movement direction projected onto wall plane
-
-                // Get world-space normal (face normal is in local space)
-                const worldNormal = forwardCollision.normal.clone();
+            // Apply wall sliding if either:
+            // 1. Hit a physical wall (forwardCollision.hit), OR
+            // 2. Terrain ahead is unwalkable (too steep or cliff)
+            if (forwardCollision.hit || terrainBlocked) {
+                // Determine which normal to use for sliding
+                let worldNormal;
+                if (forwardCollision.hit) {
+                    // Physical wall collision - use wall normal
+                    worldNormal = forwardCollision.normal.clone();
+                } else {
+                    // Unwalkable terrain - use terrain normal
+                    worldNormal = terrainNormal.clone();
+                }
 
                 // Project movement onto the wall plane (slide along wall)
                 // slideDir = moveDir - (moveDir · wallNormal) * wallNormal
@@ -543,8 +687,42 @@ export class CharacterControls {
             // Update camera position to follow character
             this.camera.position.x += moveX;
             this.camera.position.z += moveZ;
+        } else if (!directionPressed && !this.isGrounded) {
+            // No keys pressed while in air - clear inertia (prevents unwanted drift)
+            this.inertiaVelocityX = 0;
+            this.inertiaVelocityZ = 0;
+            this.hasInertia = false;
+        } else if (this.hasInertia && !this.isGrounded) {
+            // Apply inertia during fall (after jump or jetpack deactivation)
+            // Keep the last horizontal velocity constant for realistic physics
+            let moveX = this.inertiaVelocityX * delta;
+            let moveZ = this.inertiaVelocityZ * delta;
+
+            // Check for forward collision and apply wall sliding
+            const inertiaDirection = new THREE.Vector3(this.inertiaVelocityX, 0, this.inertiaVelocityZ).normalize();
+            const forwardCollision = this.checkForwardCollision(inertiaDirection);
+
+            if (forwardCollision.hit) {
+                const worldNormal = forwardCollision.normal.clone();
+                const movementVector = this.tempSlideVector.set(moveX, 0, moveZ);
+                const dotProduct = movementVector.dot(worldNormal);
+
+                if (dotProduct < 0) {
+                    const slideX = moveX - dotProduct * worldNormal.x;
+                    const slideZ = moveZ - dotProduct * worldNormal.z;
+                    moveX = slideX;
+                    moveZ = slideZ;
+                }
+            }
+
+            this.model.position.x += moveX;
+            this.model.position.z += moveZ;
+
+            // Update camera position to follow character
+            this.camera.position.x += moveX;
+            this.camera.position.z += moveZ;
         }
-        // When falling (in air, no jetpack, no ground), no horizontal movement allowed
+        // When falling without inertia (regular fall), no horizontal movement allowed
 
         // Always update camera target to track character (fixes downhill stutter)
         this.updateCameraTargetOffset.x = this.model.position.x;
