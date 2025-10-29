@@ -1007,6 +1007,19 @@ function setupStartButton() {
             // CRITICAL: Unlock audio for iOS (must be in user interaction handler)
             // Wait for unlock to complete before proceeding
             // All looped sounds will start playing at volume 0
+            //
+            // ⚠️ TODO: iOS AUDIO ISSUE - Running sound audible immediately after unlock
+            // PROBLEM: Despite setting all looped sounds to volume 0, iOS plays
+            //          running sound audibly from this moment onward.
+            // EXPECTED: All looped sounds should be silent until character moves.
+            // ROOT CAUSE: iOS Safari appears to ignore HTMLAudioElement.volume property
+            //             on looped audio elements. This is likely a browser bug.
+            // ALTERNATIVES TO TRY:
+            //   1. Migrate to Web Audio API (AudioContext + GainNode + AudioBuffer)
+            //   2. Don't start looped sounds until first needed (breaks iOS unlock requirement)
+            //   3. Use audio.muted property instead of audio.volume = 0
+            //   4. Create audio elements dynamically per play instead of pre-loading
+            // See src/audioManager.js for more detailed documentation of the issue.
             if (audioManager) {
                 await audioManager.unlockAudio();
             }
