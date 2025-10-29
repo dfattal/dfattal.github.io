@@ -997,36 +997,33 @@ function setupStartButton() {
 
     if (startButton && startOverlay) {
         // Handler function to avoid duplication
-        const handleStart = async (event) => {
+        const handleStart = (event) => {
             // Prevent default behavior and event propagation
             event.preventDefault();
             event.stopPropagation();
 
             console.log('Start button triggered - experience beginning');
 
-            // CRITICAL: Unlock audio for iOS (must be in user interaction handler)
-            // Wait for unlock to complete before proceeding
-            // All looped sounds will start playing at volume 0
-            //
-            // NOTE: Now using Web Audio API (AudioContext + GainNode) to fix iOS volume issues
-            if (audioManager) {
-                try {
-                    await audioManager.unlockAudio();
-                    console.log('Audio unlocked successfully');
-                } catch (error) {
-                    console.error('Audio unlock failed:', error);
-                    // Continue anyway - experience should work even if audio fails
-                }
-            }
-
-            // Mark experience as started (allows rendering)
+            // Mark experience as started immediately (allows rendering)
             experienceStarted = true;
 
-            // Hide start overlay with fade out
+            // Hide start overlay with fade out immediately (responsive UI)
             startOverlay.classList.remove('visible');
 
             // Start the magic reveal animation and audio
             startMagicReveal();
+
+            // Unlock audio in the background (don't wait for it - iOS can be slow)
+            // CRITICAL: Must be called from user interaction handler, but don't block UI on it
+            // NOTE: Now using Web Audio API (AudioContext + GainNode) to fix iOS volume issues
+            if (audioManager) {
+                audioManager.unlockAudio().then(() => {
+                    console.log('Audio unlocked successfully in background');
+                }).catch(error => {
+                    console.error('Audio unlock failed:', error);
+                    // Experience continues without audio
+                });
+            }
         };
 
         // Add both click (for desktop/fallback) and touchstart (for mobile) events

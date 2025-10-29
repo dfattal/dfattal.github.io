@@ -191,25 +191,48 @@ export class AudioManager {
     async preloadAll() {
         const tasks = [];
         // Only load buffers that aren't already loaded
+        // Catch individual failures so one bad file doesn't stop others
         if (this.config.backgroundMusic && !this.buffers.background) {
-            tasks.push(this.loadBuffer(this.config.backgroundMusic, 'background').then(b => this.buffers.background = b));
+            tasks.push(
+                this.loadBuffer(this.config.backgroundMusic, 'background')
+                    .then(b => this.buffers.background = b)
+                    .catch(e => console.warn('Failed to load background:', e))
+            );
         }
         if (this.config.runningSound && !this.buffers.running) {
-            tasks.push(this.loadBuffer(this.config.runningSound, 'running').then(b => this.buffers.running = b));
+            tasks.push(
+                this.loadBuffer(this.config.runningSound, 'running')
+                    .then(b => this.buffers.running = b)
+                    .catch(e => console.warn('Failed to load running:', e))
+            );
         }
         if (this.config.jetpackSound && !this.buffers.jetpack) {
-            tasks.push(this.loadBuffer(this.config.jetpackSound, 'jetpack').then(b => this.buffers.jetpack = b));
+            tasks.push(
+                this.loadBuffer(this.config.jetpackSound, 'jetpack')
+                    .then(b => this.buffers.jetpack = b)
+                    .catch(e => console.warn('Failed to load jetpack:', e))
+            );
         }
         if (!this.isMobile && this.config.walkingSound && !this.buffers.walking) {
-            tasks.push(this.loadBuffer(this.config.walkingSound, 'walking').then(b => this.buffers.walking = b));
+            tasks.push(
+                this.loadBuffer(this.config.walkingSound, 'walking')
+                    .then(b => this.buffers.walking = b)
+                    .catch(e => console.warn('Failed to load walking:', e))
+            );
         }
         if (this.config.magicReveal && !this.buffers.magicReveal) {
-            tasks.push(this.loadBuffer(this.config.magicReveal, 'magicReveal').then(b => this.buffers.magicReveal = b));
+            tasks.push(
+                this.loadBuffer(this.config.magicReveal, 'magicReveal')
+                    .then(b => this.buffers.magicReveal = b)
+                    .catch(e => console.warn('Failed to load magicReveal:', e))
+            );
         }
 
         if (tasks.length > 0) {
             console.log(`Loading ${tasks.length} audio buffers...`);
-            await Promise.all(tasks);
+            // Use allSettled instead of all - continues even if some fail
+            await Promise.allSettled(tasks);
+            console.log('Audio preload complete (some may have failed)');
         } else {
             console.log('All audio buffers already loaded');
         }
@@ -218,12 +241,26 @@ export class AudioManager {
     async loadBuffer(url, name = 'unknown') {
         console.log(`Fetching ${name} from ${url}`);
         const ctx = this.ensureContext();
-        const response = await fetch(url);
-        console.log(`Fetched ${name}, decoding...`);
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = await ctx.decodeAudioData(arrayBuffer);
-        console.log(`✓ ${name} decoded successfully`);
-        return buffer;
+
+        // Timeout protection: don't let a single file hang forever
+        // Mobile: 3s, Desktop: 10s
+        const fetchTimeout = this.isMobile ? 3000 : 10000;
+
+        const fetchWithTimeout = Promise.race([
+            (async () => {
+                const response = await fetch(url);
+                console.log(`Fetched ${name}, decoding...`);
+                const arrayBuffer = await response.arrayBuffer();
+                const buffer = await ctx.decodeAudioData(arrayBuffer);
+                console.log(`✓ ${name} decoded successfully`);
+                return buffer;
+            })(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error(`${name} load timeout`)), fetchTimeout)
+            )
+        ]);
+
+        return await fetchWithTimeout;
     }
 
     /**
@@ -248,22 +285,25 @@ export class AudioManager {
         }
 
         // Wait for preload that started in constructor (with timeout)
-        console.log('Waiting for audio buffers to load...');
+        // Use shorter timeout on mobile (1s) vs desktop (3s)
+        const timeout = this.isMobile ? 1000 : 3000;
+        console.log(`Waiting for audio buffers to load (${timeout}ms timeout)...`);
         try {
-            // Add 5 second timeout to prevent hanging
             await Promise.race([
                 this.preloadPromise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Preload timeout')), 5000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Preload timeout')), timeout))
             ]);
             console.log('Preload promise resolved');
         } catch (e) {
             console.warn('Preload promise failed or timed out:', e);
-            console.log('Attempting to load any missing buffers...');
-            try {
-                await this.preloadAll();
-            } catch (e2) {
-                console.warn('Continuing without all audio buffers:', e2);
-            }
+            // On timeout, don't try to reload - just continue with whatever we have
+            console.log('Continuing with available buffers:', {
+                background: !!this.buffers.background,
+                running: !!this.buffers.running,
+                jetpack: !!this.buffers.jetpack,
+                walking: !!this.buffers.walking,
+                magicReveal: !!this.buffers.magicReveal
+            });
         }
 
         // Create looped tracks and start them silently
