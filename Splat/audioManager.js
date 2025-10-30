@@ -126,7 +126,7 @@ export class AudioManager {
     // Volume model (category-relative)
     backgroundMusicVolume = 0.3;
     walkingSoundVolume = 0.25;
-    runningSoundVolume = 0.3;
+    runningSoundVolume = 0.15;
     jetpackVolume = 0.5;
     magicRevealVolume = 0.6;
     fadeSpeed = 2.0; // units per second
@@ -454,7 +454,7 @@ export class AudioManager {
         // Keep relative category scaling consistent with previous implementation
         this.backgroundMusicVolume = clamped * 0.3;
         this.walkingSoundVolume = clamped * 0.25;
-        this.runningSoundVolume = clamped * 0.3;
+        this.runningSoundVolume = clamped * 0.15;
         this.jetpackVolume = clamped * 0.5;
         // One-shot volume
         if (this.oneShotGain) this.oneShotGain.gain.value = this.magicRevealVolume * clamped;

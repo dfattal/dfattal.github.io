@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -30,6 +31,7 @@
             /* Prevent double-tap zoom, but allow pan/scroll */
             touch-action: manipulation;
         }
+
         canvas {
             display: block;
             /* Additional protection for canvas element */
@@ -37,6 +39,7 @@
             -webkit-user-select: none;
             user-select: none;
         }
+
         /* Debug Info HUD */
         #debug-info {
             position: absolute;
@@ -83,12 +86,15 @@
         #scene-selector select:hover {
             background: #444;
         }
+
         .grounded {
             color: #00ff00;
         }
+
         .in-air {
             color: #ff0000;
         }
+
         .jetpack-active {
             color: #ffaa00;
             font-weight: bold;
@@ -107,7 +113,8 @@
             font-family: 'Courier New', monospace;
             font-size: 14px;
             z-index: 1000;
-            display: none; /* Hidden by default */
+            display: none;
+            /* Hidden by default */
             min-width: 250px;
         }
 
@@ -370,7 +377,17 @@
             line-height: 1.6;
         }
 
-        #start-button {
+        /* Start buttons container */
+        #start-buttons-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        #start-button,
+        #start-web-button,
+        #start-vr-button {
             display: inline-block;
             padding: 18px 50px;
             font-size: 22px;
@@ -385,18 +402,30 @@
             box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
             text-transform: uppercase;
             letter-spacing: 2px;
-            margin-bottom: 40px;
         }
 
-        #start-button:hover {
+        #start-vr-button {
+            background: #0088ff;
+            box-shadow: 0 4px 15px rgba(0, 136, 255, 0.3);
+        }
+
+        #start-button:hover,
+        #start-web-button:hover {
             background: #00cc00;
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 255, 0, 0.5);
         }
 
-        #start-button:active {
+        #start-vr-button:hover {
+            background: #0066cc;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 136, 255, 0.5);
+        }
+
+        #start-button:active,
+        #start-web-button:active,
+        #start-vr-button:active {
             transform: translateY(0);
-            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.3);
         }
 
         /* Scene selector in start overlay */
@@ -512,8 +541,49 @@
                 margin: 30px 0;
             }
         }
+
+        /* Camera Toggle Button (Mobile) */
+        #camera-toggle-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            display: none;
+            /* Hidden by default, shown only on mobile */
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #camera-toggle-button:active {
+            transform: scale(0.95);
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        #camera-toggle-button svg {
+            width: 30px;
+            height: 30px;
+            fill: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Show camera toggle button only on mobile */
+        @media (max-width: 768px),
+        (hover: none) and (pointer: coarse) {
+            #camera-toggle-button {
+                display: flex;
+            }
+        }
     </style>
 </head>
+
 <body>
     <!-- Scene Selector (hidden - using one in start overlay instead) -->
     <div id="scene-selector" style="display: none;">
@@ -551,10 +621,10 @@
         </div>
 
         <div class="leveling-slider-group">
-            <label>Height Offset</label>
+            <label>Height Offset (±1 from default)</label>
             <div class="slider-container">
-                <input type="range" id="level-height-slider" min="-1" max="1" step="0.01" value="0.60">
-                <span class="value-display" id="level-height-value">0.60</span>
+                <input type="range" id="level-height-slider" min="-1" max="1" step="0.01" value="0">
+                <span class="value-display" id="level-height-value">0.00</span>
             </div>
         </div>
 
@@ -604,7 +674,12 @@
             <h1 id="start-title">Loading...</h1>
             <p id="start-description">Preparing your journey</p>
 
-            <button id="start-button" style="display: none;">Enter Experience</button>
+            <!-- Start buttons: Single button or dual buttons based on WebXR availability -->
+            <div id="start-buttons-container">
+                <button id="start-button" style="display: none;">Enter Experience</button>
+                <button id="start-web-button" style="display: none;">Enter Web</button>
+                <button id="start-vr-button" style="display: none;">Enter VR</button>
+            </div>
 
             <!-- Scene Selector (integrated into start screen) -->
             <div id="start-scene-selector">
@@ -635,7 +710,21 @@
         </div>
     </div>
 
+    <!-- Camera Toggle Button (Mobile Only) -->
+    <button id="camera-toggle-button" title="Toggle Camera View" aria-label="Toggle camera view between first-person and third-person">
+        <!-- Third-person camera icon (default) -->
+        <svg id="camera-icon-3rd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+            <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h4.05l1.83-2h4.24l1.83 2H20v12z"/>
+        </svg>
+        <!-- First-person eye icon (shown when in first-person mode) -->
+        <svg id="camera-icon-1st" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+        </svg>
+    </button>
+
     <!-- Load main JavaScript file as ES6 module -->
     <script type="module" src="main.js"></script>
 </body>
+
 </html>

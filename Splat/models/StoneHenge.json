@@ -45,15 +45,25 @@
     },
     "maxHeightMultiplier": 2.0
   },
+  "xr": {
+    "enabled": true,
+    "referenceSpaceType": "local-floor",
+    "referenceSpaceOrigin": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 30
+      },
+      "rotation": {
+        "y": 0
+      }
+    },
+    "userHeight": 1.6
+  },
   "camera": {
     "fov": 60,
     "near": 0.1,
     "far": 1000,
-    "initial": {
-      "x": 0,
-      "y": 5,
-      "z": 5
-    },
     "offsetFromCharacter": {
       "x": 0,
       "y": 2,

@@ -6,6 +6,12 @@
       "name": "Stonehenge",
       "description": "Ancient stone circle",
       "config": "models/StoneHenge.json"
+    },
+    {
+      "id": "AvoncroftMuseum",
+      "name": "Avoncroft Museum",
+      "description": "This is the Postmill at Avoncroft Museum of Historic Buildings.",
+      "config": "models/AvoncroftMuseum.json"
     }
   ]
 }

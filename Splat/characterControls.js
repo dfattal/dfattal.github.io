@@ -79,6 +79,13 @@ export class CharacterControls {
     // Temporary calculation objects
     updateCameraTargetOffset = new THREE.Vector3();
 
+    // Camera mode (third-person or first-person)
+    cameraMode = 'third-person';  // 'third-person' or 'first-person'
+    firstPersonPitch = 0;         // Camera pitch rotation (radians)
+    firstPersonYaw = 0;           // Camera yaw rotation (radians)
+    firstPersonHeadHeight = 1.6;  // Height offset for first-person camera
+    targetOffsetY = 1;            // Camera target Y offset from character (default 1)
+
     constructor(
         model,
         mixer,
@@ -87,7 +94,8 @@ export class CharacterControls {
         camera,
         currentAction,
         groundMeshes,
-        maxHeight = null
+        maxHeight = null,
+        targetOffsetY = 1
     ) {
         // Jetpack audio is now handled by AudioManager
         this.model = model;
@@ -106,6 +114,9 @@ export class CharacterControls {
         if (maxHeight !== null) {
             this.maxHeight = maxHeight;
         }
+
+        // Set camera target offset
+        this.targetOffsetY = targetOffsetY;
 
         // Jetpack audio is now handled by AudioManager
 
@@ -179,6 +190,25 @@ export class CharacterControls {
         }
 
         return 'idle';
+    }
+
+    /**
+     * Set camera mode (third-person or first-person)
+     * @param {string} mode - 'third-person' or 'first-person'
+     */
+    setCameraMode(mode) {
+        this.cameraMode = mode;
+        console.log(`CharacterControls: Camera mode set to ${mode}`);
+    }
+
+    /**
+     * Set first-person camera rotation
+     * @param {number} pitch - Vertical rotation in radians
+     * @param {number} yaw - Horizontal rotation in radians
+     */
+    setFirstPersonRotation(pitch, yaw) {
+        this.firstPersonPitch = pitch;
+        this.firstPersonYaw = yaw;
     }
 
     /**
@@ -409,6 +439,10 @@ export class CharacterControls {
             // Activate jetpack if not already active
             if (!this.isJetpackActive) {
                 this.isJetpackActive = true;
+                // Clear any existing inertia when jetpack activates (start with clean slate)
+                this.hasInertia = false;
+                this.inertiaVelocityX = 0;
+                this.inertiaVelocityZ = 0;
                 // Audio is now handled by AudioManager
             }
             // Apply jetpack thrust to counter gravity
@@ -512,17 +546,27 @@ export class CharacterControls {
 
         // Update camera Y position to follow character's vertical movement
         // (applies to jumping, falling, landing, and terrain following)
-        const deltaY = this.model.position.y - prevY;
-        this.camera.position.y += deltaY;
+        if (this.cameraMode === 'first-person') {
+            // In first-person: camera positioned at character's head/eye level
+            this.camera.position.y = this.model.position.y + this.firstPersonHeadHeight;
+        } else {
+            // In third-person: camera follows vertical movement with offset
+            const deltaY = this.model.position.y - prevY;
+            this.camera.position.y += deltaY;
+        }
 
         // ===== ANIMATION: Now select animation based on updated grounded state =====
 
         const directionPressed = DIRECTIONS.some(key => keysPressed[key] === true);
 
         let play = '';
+        // Jetpack active: use TPose animation (arms extended for flying pose)
+        if (this.isJetpackActive && !this.isGrounded) {
+            play = 'TPose';
+        }
         // Only switch to Idle animation if character has been in air for longer than threshold
         // This prevents animation flickering when going downhill (rapid ground/air oscillation)
-        if (!this.isGrounded && this.timeInAir > this.airTimeThreshold) {
+        else if (!this.isGrounded && this.timeInAir > this.airTimeThreshold) {
             play = 'Idle';
         } else if (directionPressed && this.toggleRun) {
             play = 'Run';
@@ -552,13 +596,29 @@ export class CharacterControls {
         // However, inertia from jump/jetpack preserves horizontal momentum during fall
         // Use hysteresis to prevent stuttering on downhill slopes
         const functionallyGrounded = this.isGrounded || this.timeInAir <= this.airTimeThreshold;
+
+        // Clear inertia velocities if stationary in jetpack mode
+        // This ensures falling from stationary jetpack has no momentum
+        if (this.isJetpackActive && !directionPressed) {
+            this.inertiaVelocityX = 0;
+            this.inertiaVelocityZ = 0;
+        }
+
         if (directionPressed && (functionallyGrounded || this.isJetpackActive)) {
             // WASD controls enabled - normal directional movement
             // Calculate direction offset based on pressed keys
-            const angleYCameraDirection = Math.atan2(
-                this.camera.position.x - this.model.position.x,
-                this.camera.position.z - this.model.position.z
-            );
+            let angleYCameraDirection;
+
+            if (this.cameraMode === 'first-person') {
+                // In first-person: use camera yaw directly (character faces where camera looks)
+                angleYCameraDirection = this.firstPersonYaw;
+            } else {
+                // In third-person: calculate from camera position relative to character
+                angleYCameraDirection = Math.atan2(
+                    this.camera.position.x - this.model.position.x,
+                    this.camera.position.z - this.model.position.z
+                );
+            }
 
             // Calculate direction offset
             const directionOffset = this.directionOffset(keysPressed);
@@ -655,11 +715,19 @@ export class CharacterControls {
             this.model.position.z += moveZ;
 
             // Update camera position to follow character
-            this.camera.position.x += moveX;
-            this.camera.position.z += moveZ;
-        } else if (this.hasInertia && !this.isGrounded) {
+            if (this.cameraMode === 'first-person') {
+                // In first-person: camera positioned at character's XZ location
+                this.camera.position.x = this.model.position.x;
+                this.camera.position.z = this.model.position.z;
+            } else {
+                // In third-person: camera follows with offset
+                this.camera.position.x += moveX;
+                this.camera.position.z += moveZ;
+            }
+        } else if (this.hasInertia && !this.isGrounded && !this.isJetpackActive) {
             // Apply inertia during fall (after jump or jetpack deactivation)
             // Keep the last horizontal velocity constant for realistic physics
+            // NOTE: Inertia is NOT applied during active jetpack flight - only during passive falling
             let moveX = this.inertiaVelocityX * delta;
             let moveZ = this.inertiaVelocityZ * delta;
 
@@ -692,16 +760,51 @@ export class CharacterControls {
             this.model.position.z += moveZ;
 
             // Update camera position to follow character
-            this.camera.position.x += moveX;
-            this.camera.position.z += moveZ;
+            if (this.cameraMode === 'first-person') {
+                // In first-person: camera positioned at character's XZ location
+                this.camera.position.x = this.model.position.x;
+                this.camera.position.z = this.model.position.z;
+            } else {
+                // In third-person: camera follows with offset
+                this.camera.position.x += moveX;
+                this.camera.position.z += moveZ;
+            }
         }
         // When falling without inertia (regular fall), no horizontal movement allowed
 
-        // Always update camera target to track character (fixes downhill stutter)
-        this.updateCameraTargetOffset.x = this.model.position.x;
-        this.updateCameraTargetOffset.y = this.model.position.y + 1;
-        this.updateCameraTargetOffset.z = this.model.position.z;
-        this.orbitControl.target = this.updateCameraTargetOffset;
+        // Update camera rotation and target based on camera mode
+        if (this.cameraMode === 'first-person') {
+            // ALWAYS keep camera at character position in first-person mode
+            this.camera.position.x = this.model.position.x;
+            this.camera.position.z = this.model.position.z;
+
+            // ALWAYS keep character facing camera yaw direction (even when not moving)
+            this.model.rotation.y = this.firstPersonYaw;
+
+            // Apply pitch/yaw rotation to camera
+            this.camera.rotation.order = 'YXZ'; // Yaw-Pitch-Roll order (prevents gimbal lock)
+            this.camera.rotation.y = this.firstPersonYaw;
+            this.camera.rotation.x = this.firstPersonPitch;
+            this.camera.rotation.z = 0;
+
+            // Set camera target to look direction (1 unit ahead)
+            const lookDirection = new THREE.Vector3();
+            this.camera.getWorldDirection(lookDirection);
+            this.updateCameraTargetOffset.copy(this.camera.position).add(lookDirection);
+            // Use .copy() to update values without breaking reference
+            this.orbitControl.target.copy(this.updateCameraTargetOffset);
+        } else {
+            // In third-person: camera target tracks character center (in local space)
+            // CRITICAL: Target offset must be rotated by character's quaternion
+            // to maintain constant camera-to-target distance regardless of character orientation
+            const localTargetOffset = new THREE.Vector3(0, this.targetOffsetY, 0);
+            const worldTargetOffset = localTargetOffset.clone().applyQuaternion(this.model.quaternion);
+            this.updateCameraTargetOffset.x = this.model.position.x + worldTargetOffset.x;
+            this.updateCameraTargetOffset.y = this.model.position.y + worldTargetOffset.y;
+            this.updateCameraTargetOffset.z = this.model.position.z + worldTargetOffset.z;
+            // Use .copy() to update values without breaking reference
+            this.orbitControl.target.copy(this.updateCameraTargetOffset);
+        }
     }
 
     /**
@@ -732,6 +835,264 @@ export class CharacterControls {
         }
 
         return directionOffset;
+    }
+
+    /**
+     * Update VR physics - applies gravity, collision, jumping, and jetpack to VR camera
+     * Called by XRManager each frame
+     *
+     * @param {THREE.Vector3} currentPosition - Current VR camera position
+     * @param {THREE.Vector3} velocity - Current velocity (modified in place)
+     * @param {THREE.Vector3} thumbstickMovement - Movement from thumbstick (already calculated, world space)
+     * @param {number} delta - Frame delta time in seconds
+     * @param {Array} groundMeshes - Array of meshes for collision detection
+     * @param {boolean} isGrounded - Current grounded state
+     * @param {number} airTime - Time spent in air
+     * @param {boolean} jetpackActive - Is jetpack currently active
+     * @param {number} jetpackTransitionTimer - Jetpack transition timer
+     * @returns {Object} - { newPosition, velocity, isGrounded, airTime, jetpackActive, jetpackTransitionTimer }
+     */
+    updateVRPhysics(
+        currentPosition,
+        velocity,
+        thumbstickMovement,
+        delta,
+        groundMeshes,
+        isGrounded,
+        airTime,
+        jetpackActive,
+        jetpackTransitionTimer
+    ) {
+        // Create a copy of current position for calculations
+        const newPosition = currentPosition.clone();
+
+        // Apply gravity with jetpack thrust if active
+        if (jetpackActive) {
+            velocity.y += this.jetpackThrust * delta;
+        }
+
+        // Apply gravity with smooth transition after jetpack release
+        if (jetpackTransitionTimer > 0) {
+            const thrustFactor = jetpackTransitionTimer / this.jetpackTransitionDuration;
+            velocity.y += (this.jetpackThrust * thrustFactor) * delta;
+            jetpackTransitionTimer -= delta;
+        }
+
+        // Always apply gravity
+        velocity.y += this.gravity * delta;
+
+        // Clamp fall speed
+        if (velocity.y < this.maxFallSpeed) {
+            velocity.y = this.maxFallSpeed;
+        }
+
+        // Apply vertical velocity
+        newPosition.y += velocity.y * delta;
+
+        // Check for ceiling collision when moving upward
+        if (velocity.y > 0) {
+            const ceilingCollision = this.checkCeilingCollisionAtPosition(newPosition, groundMeshes);
+            if (ceilingCollision.hit) {
+                const maxY = ceilingCollision.height;
+                if (newPosition.y > maxY) {
+                    newPosition.y = maxY;
+                    velocity.y = 0;
+                }
+            }
+        }
+
+        // Check for maximum height cap
+        if (this.maxHeight !== null && newPosition.y > this.maxHeight) {
+            newPosition.y = this.maxHeight;
+            velocity.y = 0;
+        }
+
+        // Ground collision detection
+        const groundInfo = this.getGroundInfoAtPosition(newPosition, groundMeshes);
+        const groundHeight = groundInfo.height;
+
+        // Check if ground surface is walkable
+        let groundIsWalkable = true;
+        if (groundInfo.normal) {
+            const verticalDot = groundInfo.normal.dot(new THREE.Vector3(0, 1, 0));
+            groundIsWalkable = verticalDot >= 0.5;
+        }
+
+        const distanceToGround = newPosition.y - groundHeight;
+
+        if (distanceToGround <= 0 && groundIsWalkable) {
+            // Snap to ground
+            newPosition.y = groundHeight;
+            velocity.y = 0;
+            isGrounded = true;
+            airTime = 0;
+
+            // Deactivate jetpack on landing
+            if (jetpackActive) {
+                jetpackActive = false;
+            }
+            jetpackTransitionTimer = 0;
+        } else {
+            // Airborne
+            isGrounded = false;
+            airTime += delta;
+        }
+
+        // Apply horizontal movement from thumbstick
+        if (thumbstickMovement && thumbstickMovement.lengthSq() > 0) {
+            let moveX = thumbstickMovement.x;
+            let moveZ = thumbstickMovement.z;
+
+            // Check forward collision
+            const moveDirection = thumbstickMovement.clone().normalize();
+            const forwardCollision = this.checkForwardCollisionAtPosition(
+                newPosition,
+                moveDirection,
+                groundMeshes
+            );
+
+            // Apply wall sliding if collision detected
+            if (forwardCollision.hit) {
+                const worldNormal = forwardCollision.normal.clone();
+
+                // For steep walls, flatten normal to horizontal
+                if (!forwardCollision.isWalkable) {
+                    worldNormal.y = 0;
+                    worldNormal.normalize();
+                }
+
+                const movementVector = new THREE.Vector3(moveX, 0, moveZ);
+                const dotProduct = movementVector.dot(worldNormal);
+
+                if (dotProduct < 0) {
+                    moveX = moveX - dotProduct * worldNormal.x;
+                    moveZ = moveZ - dotProduct * worldNormal.z;
+                }
+            }
+
+            newPosition.x += moveX;
+            newPosition.z += moveZ;
+        }
+
+        return {
+            newPosition,
+            velocity,
+            isGrounded,
+            airTime,
+            jetpackActive,
+            jetpackTransitionTimer
+        };
+    }
+
+    /**
+     * Get ground info at a specific position (for VR physics)
+     * Position should be at ground/feet level (reference space origin)
+     * CRITICAL: Always raycast from ABOVE to ensure we detect ground even if character falls below it
+     */
+    getGroundInfoAtPosition(position, groundMeshes) {
+        if (!groundMeshes || groundMeshes.length === 0) {
+            return { height: 0, normal: null };
+        }
+
+        // CRITICAL: Always raycast from high above to ensure we catch the ground
+        // even if the character has fallen below the ground surface
+        // Use max of (position.y + 10, 100) to ensure we're always above terrain
+        const rayStartY = Math.max(position.y + 10, 100);
+        const rayOrigin = new THREE.Vector3(position.x, rayStartY, position.z);
+        const rayDirection = new THREE.Vector3(0, -1, 0);
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(rayOrigin, rayDirection);
+
+        const intersects = raycaster.intersectObjects(groundMeshes, true);
+
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            let worldNormal = null;
+
+            if (hit.face && hit.object) {
+                worldNormal = hit.face.normal.clone();
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                worldNormal.applyMatrix3(normalMatrix).normalize();
+            }
+
+            return {
+                height: hit.point.y,
+                normal: worldNormal
+            };
+        }
+
+        return { height: -100, normal: null };
+    }
+
+    /**
+     * Check ceiling collision at a specific position (for VR physics)
+     * Position should be at ground/feet level (reference space origin)
+     */
+    checkCeilingCollisionAtPosition(position, groundMeshes) {
+        if (!groundMeshes || groundMeshes.length === 0) {
+            return { hit: false, height: Infinity, distance: Infinity };
+        }
+
+        // Raycast upward from 1.0m above the reference space origin (same as non-VR)
+        const rayOrigin = new THREE.Vector3(position.x, position.y + 1.0, position.z);
+        const upwardDirection = new THREE.Vector3(0, 1, 0);
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(rayOrigin, upwardDirection);
+        raycaster.far = this.ceilingCollisionDistance;
+
+        const intersects = raycaster.intersectObjects(groundMeshes, true);
+
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            return {
+                hit: true,
+                height: hit.point.y,
+                distance: hit.distance
+            };
+        }
+
+        return { hit: false, height: Infinity, distance: Infinity };
+    }
+
+    /**
+     * Check forward collision at a specific position (for VR physics)
+     * Position should be at ground/feet level (reference space origin)
+     */
+    checkForwardCollisionAtPosition(position, forwardDirection, groundMeshes) {
+        if (!groundMeshes || groundMeshes.length === 0) {
+            return { hit: false, point: null, normal: null, distance: Infinity, isWalkable: true };
+        }
+
+        // Raycast forward from 1.0m above the reference space origin (same as non-VR)
+        const rayOrigin = new THREE.Vector3(position.x, position.y + 1.0, position.z);
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(rayOrigin, forwardDirection);
+        raycaster.far = this.forwardCollisionDistance;
+
+        const intersects = raycaster.intersectObjects(groundMeshes, true);
+
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const hitNormal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+
+            if (hit.object && hit.face) {
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                hitNormal.applyMatrix3(normalMatrix).normalize();
+            }
+
+            const verticalDot = hitNormal.dot(new THREE.Vector3(0, 1, 0));
+            const isWalkable = verticalDot >= 0.5;
+
+            return {
+                hit: true,
+                point: hit.point,
+                normal: hitNormal,
+                distance: hit.distance,
+                isWalkable: isWalkable
+            };
+        }
+
+        return { hit: false, point: null, normal: null, distance: Infinity, isWalkable: true };
     }
 
 }

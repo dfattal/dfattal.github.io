@@ -35,6 +35,13 @@ export class TouchControls {
         // OrbitControls state
         this.orbitControlsEnabled = true;
 
+        // First-person camera mode
+        this.cameraMode = 'third-person'; // 'third-person' or 'first-person'
+        this.firstPersonLookTouchId = null; // Track touch controlling first-person look
+        this.firstPersonLookStartX = 0;
+        this.firstPersonLookStartY = 0;
+        this.firstPersonCallback = null; // Callback to update camera rotation
+
         // Bind event handlers
         this.handleTouchStart = this.handleTouchStart.bind(this);
         this.handleTouchMove = this.handleTouchMove.bind(this);
@@ -68,6 +75,23 @@ export class TouchControls {
     handleTouchStart(event) {
         const touch = event.changedTouches[0];
         const currentTime = Date.now();
+
+        // In first-person mode: check if touch is on right side of screen for look control
+        if (this.cameraMode === 'first-person') {
+            const screenMidpoint = window.innerWidth / 2;
+
+            // Right side: first-person look
+            if (touch.clientX > screenMidpoint && !this.firstPersonLookTouchId) {
+                event.preventDefault();
+                this.firstPersonLookTouchId = touch.identifier;
+                this.firstPersonLookStartX = touch.clientX;
+                this.firstPersonLookStartY = touch.clientY;
+                console.log('First-person look touch started (right side)');
+                return;
+            }
+
+            // Left side: joystick for movement (handled by existing logic below)
+        }
 
         // If joystick is already active, don't process new touches
         // (stay in joystick mode)
@@ -120,6 +144,33 @@ export class TouchControls {
     handleTouchMove(event) {
         const touch = event.changedTouches[0];
 
+        // In first-person mode: check if this is a look control touch
+        if (this.cameraMode === 'first-person' && this.firstPersonLookTouchId !== null) {
+            event.preventDefault();
+
+            // Find the touch controlling the look
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touchItem = event.changedTouches[i];
+
+                if (touchItem.identifier === this.firstPersonLookTouchId) {
+                    // Calculate delta from last position
+                    const deltaX = touchItem.clientX - this.firstPersonLookStartX;
+                    const deltaY = touchItem.clientY - this.firstPersonLookStartY;
+
+                    // Update start position for next delta
+                    this.firstPersonLookStartX = touchItem.clientX;
+                    this.firstPersonLookStartY = touchItem.clientY;
+
+                    // Call callback to update camera rotation
+                    if (this.firstPersonCallback) {
+                        this.firstPersonCallback(deltaX, deltaY);
+                    }
+
+                    return;
+                }
+            }
+        }
+
         // If joystick is active, prevent default and update joystick
         if (this.joystick.isActive()) {
             event.preventDefault();
@@ -162,9 +213,17 @@ export class TouchControls {
         // Check if the joystick touch ended
         let joystickTouchEnded = false;
         let jetpackTouchEnded = false;
+        let firstPersonLookEnded = false;
 
         for (let i = 0; i < event.changedTouches.length; i++) {
             const touch = event.changedTouches[i];
+
+            // Check first-person look touch
+            if (this.firstPersonLookTouchId === touch.identifier) {
+                firstPersonLookEnded = true;
+                this.firstPersonLookTouchId = null;
+                console.log('First-person look touch ended');
+            }
 
             // Check jetpack FIRST (jetpack mode includes joystick, so check this first)
             if (this.jetpackTouchId === touch.identifier) {
@@ -311,6 +370,23 @@ export class TouchControls {
         };
 
         update();
+    }
+
+    /**
+     * Set camera mode for first-person touch controls
+     * @param {string} mode - 'third-person' or 'first-person'
+     */
+    setCameraMode(mode) {
+        this.cameraMode = mode;
+        console.log(`TouchControls: Camera mode set to ${mode}`);
+    }
+
+    /**
+     * Set callback for first-person camera rotation updates
+     * @param {function} callback - Function(deltaX, deltaY) to update camera rotation
+     */
+    setFirstPersonCallback(callback) {
+        this.firstPersonCallback = callback;
     }
 
     /**

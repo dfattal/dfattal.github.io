@@ -7,6 +7,9 @@ import { KeyDisplay } from './utils.js';
 import { TouchControls } from './touchControls.js';
 import { loadScenesManifest, loadSceneConfig, getAvailableScenes, getDefaultScene, getSceneConfigPath } from './sceneLoader.js';
 import { AudioManager } from './audioManager.js';
+import { XRManager } from './xrManager.js';
+import { XRControllers } from './xrControllers.js';
+import { XRHands } from './xrHands.js';
 
 /**
  * F1000 - Third Person Character Controller
@@ -29,6 +32,11 @@ let characterControls;
 
 // Audio
 let audioManager;
+
+// WebXR
+let xrManager = null;
+let xrControllers = null;
+let xrHands = null;
 
 // Terrain
 let groundMesh;
@@ -60,7 +68,7 @@ const animateT = dyno.dynoFloat(0);
 let baseTime = 0;
 
 // Mobile detection (do this FIRST before creating UI elements)
-const isMobile = (function() {
+const isMobile = (function () {
     const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     const userAgent = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const mobile = touch || userAgent;
@@ -74,6 +82,29 @@ const keyDisplayQueue = new KeyDisplay(isMobile);
 
 // Touch controls
 let touchControls = null;
+
+// Camera mode and first-person controls
+let cameraMode = 'third-person'; // 'third-person' or 'first-person'
+let firstPersonPitch = 0; // Camera pitch rotation (X-axis) in radians
+let firstPersonYaw = 0;   // Camera yaw rotation (Y-axis) in radians
+let isPointerLocked = false; // Track pointer lock state
+
+// First-person camera constants
+const FIRST_PERSON_MOUSE_SENSITIVITY = 0.002; // Mouse movement sensitivity
+const FIRST_PERSON_TOUCH_SENSITIVITY = 0.005; // Touch movement sensitivity for mobile
+const FIRST_PERSON_MAX_PITCH = Math.PI / 2 - 0.1; // ±85 degrees vertical look limit (in radians)
+
+// Camera transition state
+let isCameraTransitioning = false;
+let cameraTransitionProgress = 0;
+const CAMERA_TRANSITION_DURATION = 0.5; // seconds
+let transitionStartPos = new THREE.Vector3();
+let transitionTargetPos = new THREE.Vector3();
+let transitionStartQuat = new THREE.Quaternion();
+let transitionTargetQuat = new THREE.Quaternion();
+let targetCameraMode = 'third-person';
+let postTransitionLogTimer = 0; // Log for 0.2s after transition
+const POST_TRANSITION_LOG_DURATION = 0.2;
 
 // Magic reveal state
 let magicRevealStarted = false;
@@ -104,9 +135,8 @@ function initScene() {
         camCfg.near || 0.1,
         camCfg.far || 1000
     );
-    // Initial camera position from config (will be updated when character loads)
-    const initPos = camCfg.initial || { x: 0, y: 5, z: 5 };
-    camera.position.set(initPos.x, initPos.y, initPos.z);
+    // Temporary camera position (will be properly positioned behind character when loaded)
+    camera.position.set(0, 5, 10);
 
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -132,6 +162,8 @@ function initScene() {
     // Initialize touch controls for mobile
     if (isMobile) {
         touchControls = new TouchControls(keysPressed, orbitControls);
+        // Set up first-person look callback for mobile
+        touchControls.setFirstPersonCallback(onTouchLook);
         console.log('Touch controls initialized early (before character load)');
     }
 
@@ -632,7 +664,7 @@ async function loadGaussianSplat() {
         // Check config for mobile support (default: desktop only - too complex for mobile GPUs)
         const magicCfg = sceneConfig?.scene?.magicEffect || {};
         const shouldEnableEffect = magicCfg.enabled !== false &&
-                                  (!isMobile || magicCfg.mobileEnabled === true);
+            (!isMobile || magicCfg.mobileEnabled === true);
 
         console.log('Magic effect config check:', {
             enabled: magicCfg.enabled,
@@ -781,12 +813,15 @@ function loadCharacter() {
             const animationsMap = new Map();
 
             gltfAnimations
-                .filter(a => a.name !== 'TPose')
                 .forEach((a) => {
                     animationsMap.set(a.name, mixer.clipAction(a));
                 });
 
             // Jetpack audio is now configured in AudioManager during initAudio()
+
+            // Get camera offsets from config before initializing CharacterControls
+            const camOffset = sceneConfig?.camera?.offsetFromCharacter || { x: 0, y: 2, z: 5 };
+            const targetOffsetY = sceneConfig?.camera?.targetOffset?.y || 1;
 
             // Initialize character controls with ground meshes for collision detection
             // Pass both the collision mesh and infinite floor
@@ -798,7 +833,8 @@ function loadCharacter() {
                 camera,
                 'Idle',
                 [groundMesh, infiniteFloor],
-                maxCharacterHeight
+                maxCharacterHeight,
+                targetOffsetY
             );
 
             // Place character on ground at spawn position
@@ -814,21 +850,23 @@ function loadCharacter() {
             model.position.z = spawnPos.z;
             model.rotation.y = spawnRot.y * (Math.PI / 180);  // Convert degrees to radians
 
-            // Get camera config for initial positioning
-            const camRelPos = sceneConfig?.camera?.relativeToCharacter || { x: 0, y: 2, z: 5 };
+            // Create offset vector in local space and rotate it by character's quaternion
+            const localOffset = new THREE.Vector3(camOffset.x, camOffset.y, camOffset.z);
+            const worldOffset = localOffset.clone().applyQuaternion(model.quaternion);
 
-            // Position camera relative to character
             camera.position.set(
-                model.position.x + camRelPos.x,
-                model.position.y + camRelPos.y,
-                model.position.z + camRelPos.z
+                model.position.x + worldOffset.x,
+                model.position.y + worldOffset.y,
+                model.position.z + worldOffset.z
             );
 
-            // Update OrbitControls target to character position
+            // Update OrbitControls target to character center (with vertical offset in local space)
+            const localTargetOffset = new THREE.Vector3(0, targetOffsetY, 0);
+            const worldTargetOffset = localTargetOffset.clone().applyQuaternion(model.quaternion);
             orbitControls.target.set(
-                model.position.x,
-                model.position.y + 2,
-                model.position.z
+                model.position.x + worldTargetOffset.x,
+                model.position.y + worldTargetOffset.y,
+                model.position.z + worldTargetOffset.z
             );
             orbitControls.update();
 
@@ -843,6 +881,9 @@ function loadCharacter() {
                 characterControls.toggleRun = true;
                 console.log('Mobile: run mode enabled by default');
             }
+
+            // Initialize WebXR after character is loaded
+            initXR();
         },
         (xhr) => {
             console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
@@ -851,6 +892,29 @@ function loadCharacter() {
             console.error('Error loading character:', error);
         }
     );
+}
+
+/**
+ * Initialize WebXR system
+ */
+function initXR() {
+    // Create XR manager
+    xrManager = new XRManager(renderer, camera, scene, sceneConfig);
+
+    // Create XR controllers
+    xrControllers = new XRControllers(renderer, scene, xrManager);
+    xrControllers.setGroundMeshes([groundMesh, infiniteFloor]);
+
+    // Create XR hands
+    xrHands = new XRHands(renderer, scene, characterControls?.model);
+
+    // Link components together
+    xrManager.characterControls = characterControls;
+    xrManager.orbitControls = orbitControls;
+    xrManager.xrControllers = xrControllers;
+    xrManager.xrHands = xrHands;
+
+    console.log('WebXR system initialized');
 }
 
 /**
@@ -871,6 +935,221 @@ function initAudio() {
 
     // Audio will be started by start button click (guaranteed user interaction)
     console.log('Audio system initialized - will start on user clicking start button');
+}
+
+/**
+ * Update camera toggle button icon based on current mode
+ */
+function updateCameraButtonIcon() {
+    const icon3rd = document.getElementById('camera-icon-3rd');
+    const icon1st = document.getElementById('camera-icon-1st');
+
+    if (cameraMode === 'first-person') {
+        // Show eye icon (first-person)
+        if (icon3rd) icon3rd.style.display = 'none';
+        if (icon1st) icon1st.style.display = 'block';
+    } else {
+        // Show camera icon (third-person)
+        if (icon3rd) icon3rd.style.display = 'block';
+        if (icon1st) icon1st.style.display = 'none';
+    }
+}
+
+/**
+ * Toggle between first-person and third-person camera modes
+ */
+function toggleCameraMode() {
+    if (!characterControls) {
+        console.log('Character not loaded yet');
+        return;
+    }
+
+    // Don't allow toggling during an active transition
+    if (isCameraTransitioning) {
+        return;
+    }
+
+    if (cameraMode === 'third-person') {
+        // Prepare transition to first-person mode
+        const model = characterControls.model;
+
+        // Extract character's current facing direction from quaternion
+        const euler = new THREE.Euler();
+        euler.setFromQuaternion(model.quaternion, 'YXZ');
+        firstPersonYaw = euler.y;
+        firstPersonPitch = 0;
+
+        // Store current camera state as start
+        transitionStartPos.copy(camera.position);
+        transitionStartQuat.copy(camera.quaternion);
+
+        // Calculate target position (first-person at head/eye level)
+        transitionTargetPos.set(
+            model.position.x,
+            model.position.y + characterControls.firstPersonHeadHeight,
+            model.position.z
+        );
+
+        // Calculate target rotation (first-person looking forward)
+        camera.rotation.order = 'YXZ';
+        const tempEuler = new THREE.Euler(firstPersonPitch, firstPersonYaw, 0, 'YXZ');
+        transitionTargetQuat.setFromEuler(tempEuler);
+
+        // Start transition
+        isCameraTransitioning = true;
+        cameraTransitionProgress = 0;
+        targetCameraMode = 'first-person';
+
+        console.log('Starting transition to first-person mode');
+    } else {
+        // Prepare transition to third-person mode
+        const model = characterControls.model;
+        if (model) {
+            // Get camera offset from config
+            const camOffset = sceneConfig?.camera?.offsetFromCharacter || { x: 0, y: 2, z: 5 };
+            const targetOffsetY = sceneConfig?.camera?.targetOffset?.y || 1;
+
+            // Use current first-person camera direction as character's forward direction
+            const characterForwardAngle = firstPersonYaw;
+
+            // Update character rotation using quaternion
+            const targetQuaternion = new THREE.Quaternion();
+            targetQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), characterForwardAngle);
+            model.quaternion.copy(targetQuaternion);
+
+            // Calculate target position behind character
+            const localOffset = new THREE.Vector3(camOffset.x, camOffset.y, camOffset.z);
+            const worldOffset = localOffset.clone().applyQuaternion(model.quaternion);
+
+            // Store CURRENT camera state as start (position AND quaternion)
+            transitionStartPos.copy(camera.position);
+            transitionStartQuat.copy(camera.quaternion);
+
+            // Calculate target position - EXACT same logic as initial spawn
+            transitionTargetPos.set(
+                model.position.x + worldOffset.x,
+                model.position.y + worldOffset.y,
+                model.position.z + worldOffset.z
+            );
+
+            // Set OrbitControls target - EXACT same as initial spawn (in local space)
+            // This will be used during the transition to continuously update camera lookAt
+            const localTargetOffset2 = new THREE.Vector3(0, targetOffsetY, 0);
+            const worldTargetOffset2 = localTargetOffset2.clone().applyQuaternion(targetQuaternion);
+            orbitControls.target.set(
+                model.position.x + worldTargetOffset2.x,
+                model.position.y + worldTargetOffset2.y,
+                model.position.z + worldTargetOffset2.z
+            );
+
+            // Note: We don't pre-calculate target quaternion for 3rd person transition
+            // The camera will continuously lookAt the OrbitControls target during lerp
+            // This ensures perfect alignment with OrbitControls expectations
+
+            // Log the setup for debugging
+            const targetDistance = transitionTargetPos.distanceTo(orbitControls.target);
+            console.log('Transition target distance:', targetDistance.toFixed(3));
+            console.log('WorldOffset:', worldOffset);
+            console.log('TargetOffsetY:', targetOffsetY);
+
+            // Start transition
+            isCameraTransitioning = true;
+            cameraTransitionProgress = 0;
+            targetCameraMode = 'third-person';
+
+            console.log('Starting transition to third-person mode');
+            console.log('Start pos:', transitionStartPos);
+            console.log('Start quat:', transitionStartQuat);
+            console.log('Target pos (OrbitControls final):', transitionTargetPos);
+            console.log('Target quat (OrbitControls final):', transitionTargetQuat);
+        }
+    }
+}
+
+/**
+ * Set up camera toggle button for mobile
+ */
+function setupCameraToggleButton() {
+    const toggleButton = document.getElementById('camera-toggle-button');
+
+    if (toggleButton) {
+        // Handle both click and touchstart for mobile
+        toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleCameraMode();
+        });
+
+        // For mobile, also handle touchstart for immediate response
+        if (isMobile) {
+            toggleButton.addEventListener('touchstart', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleCameraMode();
+            }, { passive: false });
+        }
+
+        console.log('Camera toggle button initialized');
+    }
+}
+
+/**
+ * Handle pointer lock change events
+ */
+function onPointerLockChange() {
+    isPointerLocked = document.pointerLockElement === renderer.domElement;
+
+    if (!isPointerLocked && cameraMode === 'first-person' && !isMobile) {
+        console.log('Pointer lock lost in first-person mode');
+    }
+}
+
+/**
+ * Handle mouse movement for first-person camera rotation
+ */
+function onMouseMove(event) {
+    if (!isPointerLocked || cameraMode !== 'first-person') {
+        return;
+    }
+
+    // Update yaw (horizontal rotation) - unlimited
+    firstPersonYaw -= event.movementX * FIRST_PERSON_MOUSE_SENSITIVITY;
+
+    // Update pitch (vertical rotation) - clamped to ±85 degrees
+    // Mouse down (positive movementY) -> look up (negative pitch in Three.js)
+    // Mouse up (negative movementY) -> look down (positive pitch in Three.js)
+    firstPersonPitch -= event.movementY * FIRST_PERSON_MOUSE_SENSITIVITY;
+    firstPersonPitch = Math.max(-FIRST_PERSON_MAX_PITCH, Math.min(FIRST_PERSON_MAX_PITCH, firstPersonPitch));
+
+    // Send rotation to CharacterControls
+    if (characterControls) {
+        characterControls.setFirstPersonRotation(firstPersonPitch, firstPersonYaw);
+    }
+}
+
+/**
+ * Handle touch movement for first-person camera rotation (mobile)
+ * @param {number} deltaX - Horizontal touch movement in pixels
+ * @param {number} deltaY - Vertical touch movement in pixels
+ */
+function onTouchLook(deltaX, deltaY) {
+    if (cameraMode !== 'first-person') {
+        return;
+    }
+
+    // Update yaw (horizontal rotation) - unlimited
+    firstPersonYaw -= deltaX * FIRST_PERSON_TOUCH_SENSITIVITY;
+
+    // Update pitch (vertical rotation) - clamped to ±85 degrees
+    // Drag down (positive deltaY) -> look up (negative pitch in Three.js)
+    // Drag up (negative deltaY) -> look down (positive pitch in Three.js)
+    firstPersonPitch -= deltaY * FIRST_PERSON_TOUCH_SENSITIVITY;
+    firstPersonPitch = Math.max(-FIRST_PERSON_MAX_PITCH, Math.min(FIRST_PERSON_MAX_PITCH, firstPersonPitch));
+
+    // Send rotation to CharacterControls
+    if (characterControls) {
+        characterControls.setFirstPersonRotation(firstPersonPitch, firstPersonYaw);
+    }
 }
 
 /**
@@ -977,6 +1256,11 @@ function setupKeyboardControls() {
                 audioManager.toggleMovementSounds();
             }
         }
+
+        // Toggle camera view on P
+        if (key === 'p') {
+            toggleCameraMode();
+        }
     });
 
     document.addEventListener('keyup', (event) => {
@@ -1070,7 +1354,7 @@ function animate() {
         }
     }
 
-    // Update magic effect animation time (60 FPS)
+    // Update magic effect animation time (60 FPS) - ALWAYS animate scene
     // Only update if experience has started (prevents animation before button click)
     if (gaussianSplat && experienceStarted) {
         baseTime += 1 / 60;
@@ -1078,34 +1362,233 @@ function animate() {
         gaussianSplat.updateVersion();
     }
 
-    // Update character controls
-    if (characterControls) {
-        characterControls.update(delta, keysPressed);
+    // Update camera transition (doesn't block scene animations)
+    if (isCameraTransitioning) {
+        cameraTransitionProgress += delta / CAMERA_TRANSITION_DURATION;
 
-        // Update debug display
-        const debugState = document.getElementById('debug-state');
-        const debugAnimation = document.getElementById('debug-animation');
-        const debugJetpack = document.getElementById('debug-jetpack');
-        const debugGroundDist = document.getElementById('debug-ground-dist');
-
-        if (debugState && debugAnimation && debugJetpack && debugGroundDist) {
-            const isGrounded = characterControls.getGroundedState();
-            const currentAction = characterControls.getCurrentAction();
-            const isJetpackActive = characterControls.getJetpackActive();
-            const groundDistance = characterControls.getGroundDistance();
-
-            debugState.textContent = isGrounded ? 'GROUNDED' : 'IN AIR';
-            debugState.className = isGrounded ? 'grounded' : 'in-air';
-            debugAnimation.textContent = currentAction;
-            debugJetpack.textContent = isJetpackActive ? 'ACTIVE' : 'OFF';
-            debugJetpack.className = isJetpackActive ? 'jetpack-active' : '';
-            debugGroundDist.textContent = groundDistance.toFixed(1) + 'm';
+        // Log camera state during transition to 3rd person
+        if (targetCameraMode === 'third-person') {
+            const distToTarget = camera.position.distanceTo(orbitControls.target);
+            console.log(`[Transition ${(cameraTransitionProgress * 100).toFixed(1)}%] Pos: (${camera.position.x.toFixed(3)}, ${camera.position.y.toFixed(3)}, ${camera.position.z.toFixed(3)}) Distance: ${distToTarget.toFixed(6)}`);
         }
 
-        // Update audio based on character movement state
-        if (audioManager) {
-            const movementState = characterControls.getMovementState();
-            audioManager.updateMovementSounds(movementState);
+        if (cameraTransitionProgress >= 1.0) {
+            // Transition complete - ensure camera is at EXACT target position
+            cameraTransitionProgress = 1.0;
+
+            // Set camera to exact target position (no interpolation)
+            camera.position.copy(transitionTargetPos);
+
+            // Set camera to exact target rotation
+            if (targetCameraMode === 'first-person') {
+                camera.quaternion.copy(transitionTargetQuat);
+            } else {
+                // For third-person, look at target one final time
+                camera.lookAt(orbitControls.target);
+            }
+
+            isCameraTransitioning = false;
+
+            // Start post-transition logging for 0.2s
+            if (targetCameraMode === 'third-person') {
+                postTransitionLogTimer = POST_TRANSITION_LOG_DURATION;
+            }
+
+            // Finalize the mode change
+            cameraMode = targetCameraMode;
+
+            // Apply mode-specific settings when transition completes
+            if (cameraMode === 'first-person') {
+                // Disable OrbitControls
+                orbitControls.enabled = false;
+
+                // Hide character model and reset material properties
+                if (characterControls.model) {
+                    characterControls.model.visible = false;
+                    // Reset material opacity to default
+                    characterControls.model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.opacity = 1.0;
+                            child.material.transparent = false;
+                        }
+                    });
+                }
+
+                // Request pointer lock for desktop
+                if (!isMobile) {
+                    renderer.domElement.requestPointerLock();
+                }
+
+                // Notify CharacterControls and TouchControls
+                characterControls.setCameraMode('first-person');
+                characterControls.setFirstPersonRotation(firstPersonPitch, firstPersonYaw);
+                if (touchControls) {
+                    touchControls.setCameraMode('first-person');
+                }
+
+                console.log('Transition to first-person complete');
+            } else {
+                // Show character model and reset material properties
+                if (characterControls.model) {
+                    characterControls.model.visible = true;
+                    // Reset material opacity to default
+                    characterControls.model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.opacity = 1.0;
+                            child.material.transparent = false;
+                        }
+                    });
+                }
+
+                // Exit pointer lock
+                if (!isMobile && document.pointerLockElement) {
+                    document.exitPointerLock();
+                }
+
+                // Notify CharacterControls and TouchControls
+                characterControls.setCameraMode('third-person');
+                if (touchControls) {
+                    touchControls.setCameraMode('third-person');
+                }
+
+                // CRITICAL: Re-sync OrbitControls target to character's CURRENT position (in local space)
+                // The character may have moved slightly during transition
+                const model = characterControls.model;
+                const targetOffsetY = sceneConfig?.camera?.targetOffset?.y || 1;
+                if (model) {
+                    const localTargetOffset3 = new THREE.Vector3(0, targetOffsetY, 0);
+                    const worldTargetOffset3 = localTargetOffset3.clone().applyQuaternion(model.quaternion);
+                    orbitControls.target.set(
+                        model.position.x + worldTargetOffset3.x,
+                        model.position.y + worldTargetOffset3.y,
+                        model.position.z + worldTargetOffset3.z
+                    );
+                    console.log('Re-synced OrbitControls target to character position:', orbitControls.target);
+                }
+
+                // Enable OrbitControls
+                orbitControls.enabled = true;
+
+                // CRITICAL: Update OrbitControls to recalculate internal spherical coordinates
+                // This prevents distance drift when characterControls updates the target on next frame
+                orbitControls.update();
+
+                // Log final state for debugging
+                const finalDistance = camera.position.distanceTo(orbitControls.target);
+                console.log('Transition to third-person complete');
+                console.log('Final camera pos:', camera.position);
+                console.log('Final distance to target:', finalDistance.toFixed(3));
+                console.log('OrbitControls target:', orbitControls.target);
+            }
+
+            // Update button icon
+            updateCameraButtonIcon();
+        }
+
+        // Smooth easing function (ease-in-out)
+        const t = cameraTransitionProgress;
+        const easedT = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+        // Lerp position
+        camera.position.lerpVectors(transitionStartPos, transitionTargetPos, easedT);
+
+        // For rotation: different behavior based on target mode
+        if (targetCameraMode === 'first-person') {
+            // Transitioning TO first-person: slerp rotation
+            camera.quaternion.slerpQuaternions(transitionStartQuat, transitionTargetQuat, easedT);
+        } else {
+            // Transitioning TO third-person: always look at OrbitControls target
+            // This ensures the camera orientation matches OrbitControls expectations
+            camera.lookAt(orbitControls.target);
+        }
+
+        // Fade character model during transition
+        if (characterControls && characterControls.model) {
+            if (targetCameraMode === 'first-person') {
+                // Fading out when entering first-person - hide completely once mostly faded
+                if (easedT < 0.7) {
+                    characterControls.model.visible = true;
+                    characterControls.model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.opacity = 1 - easedT;
+                            child.material.transparent = true;
+                        }
+                    });
+                } else {
+                    // Completely hide once 70% through transition to avoid seeing contours
+                    characterControls.model.visible = false;
+                }
+            } else {
+                // Fading in when entering third-person
+                characterControls.model.visible = true;
+                characterControls.model.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material.opacity = easedT;
+                        child.material.transparent = true;
+                    }
+                });
+            }
+        }
+    }
+
+    // Update XR system if active
+    if (xrManager && xrManager.getIsXRActive()) {
+        // In VR mode: update XR physics and controllers
+        xrManager.update(delta, [groundMesh, infiniteFloor]);
+
+        // Still update debug display
+        if (characterControls) {
+            const debugState = document.getElementById('debug-state');
+            const debugAnimation = document.getElementById('debug-animation');
+            const debugJetpack = document.getElementById('debug-jetpack');
+            const debugGroundDist = document.getElementById('debug-ground-dist');
+
+            if (debugState && debugAnimation && debugJetpack && debugGroundDist) {
+                const isGrounded = xrManager.isGrounded;
+                const currentAction = characterControls.getCurrentAction();
+                const isJetpackActive = xrManager.jetpackActive;
+
+                debugState.textContent = isGrounded ? 'GROUNDED' : 'IN AIR';
+                debugState.className = isGrounded ? 'grounded' : 'in-air';
+                debugAnimation.textContent = 'VR Mode';
+                debugJetpack.textContent = isJetpackActive ? 'ACTIVE' : 'OFF';
+                debugJetpack.className = isJetpackActive ? 'jetpack-active' : '';
+                debugGroundDist.textContent = 'N/A (VR)';
+            }
+        }
+    } else {
+        // Normal mode: update character controls (freeze ONLY during camera transition)
+        if (characterControls) {
+            if (!isCameraTransitioning) {
+                characterControls.update(delta, keysPressed);
+            }
+            // Still update debug display even during transition
+
+            // Update debug display
+            const debugState = document.getElementById('debug-state');
+            const debugAnimation = document.getElementById('debug-animation');
+            const debugJetpack = document.getElementById('debug-jetpack');
+            const debugGroundDist = document.getElementById('debug-ground-dist');
+
+            if (debugState && debugAnimation && debugJetpack && debugGroundDist) {
+                const isGrounded = characterControls.getGroundedState();
+                const currentAction = characterControls.getCurrentAction();
+                const isJetpackActive = characterControls.getJetpackActive();
+                const groundDistance = characterControls.getGroundDistance();
+
+                debugState.textContent = isGrounded ? 'GROUNDED' : 'IN AIR';
+                debugState.className = isGrounded ? 'grounded' : 'in-air';
+                debugAnimation.textContent = currentAction;
+                debugJetpack.textContent = isJetpackActive ? 'ACTIVE' : 'OFF';
+                debugJetpack.className = isJetpackActive ? 'jetpack-active' : '';
+                debugGroundDist.textContent = groundDistance.toFixed(1) + 'm';
+            }
+
+            // Update audio based on character movement state
+            if (audioManager) {
+                const movementState = characterControls.getMovementState();
+                audioManager.updateMovementSounds(movementState);
+            }
         }
     }
 
@@ -1114,13 +1597,20 @@ function animate() {
         audioManager.update(delta);
     }
 
-    // Update orbit controls
-    orbitControls.update();
+    // Post-transition logging
+    if (postTransitionLogTimer > 0) {
+        postTransitionLogTimer -= delta;
+        const distToTarget = camera.position.distanceTo(orbitControls.target);
+        console.log(`[Post-transition ${((POST_TRANSITION_LOG_DURATION - postTransitionLogTimer) * 1000).toFixed(0)}ms] Pos: (${camera.position.x.toFixed(3)}, ${camera.position.y.toFixed(3)}, ${camera.position.z.toFixed(3)}) Distance: ${distToTarget.toFixed(6)} OrbitEnabled: ${orbitControls.enabled}`);
+    }
+
+    // Update orbit controls (not during transition to avoid interference, and not in XR mode)
+    if (!isCameraTransitioning && (!xrManager || !xrManager.getIsXRActive())) {
+        orbitControls.update();
+    }
 
     // Render scene
     renderer.render(scene, camera);
-
-    requestAnimationFrame(animate);
 }
 
 /**
@@ -1139,6 +1629,15 @@ function setupLevelingControls() {
     const azimuthValue = document.getElementById('light-azimuth-value');
     const elevationValue = document.getElementById('light-elevation-value');
     const resetButton = document.getElementById('leveling-reset');
+
+    // Configure height slider based on scene config (±1 unit from config value)
+    if (heightSlider && sceneConfig?.transform?.heightOffset !== undefined) {
+        const configHeight = sceneConfig.transform.heightOffset;
+        heightSlider.min = (configHeight - 1).toString();
+        heightSlider.max = (configHeight + 1).toString();
+        heightSlider.value = heightOffset.toString();
+        heightValue.textContent = heightOffset.toFixed(2);
+    }
 
     // X-axis slider handler
     if (xSlider) {
@@ -1188,24 +1687,31 @@ function setupLevelingControls() {
     // Reset button handler
     if (resetButton) {
         resetButton.addEventListener('click', () => {
-            // Reset terrain leveling
-            levelRotationX = 0;
-            levelRotationZ = 0;
-            heightOffset = 0.6;
-            xSlider.value = 0;
-            zSlider.value = 0;
-            heightSlider.value = 0.6;
-            xValue.textContent = '0.0°';
-            zValue.textContent = '0.0°';
-            heightValue.textContent = '0.60';
+            // Reset terrain leveling to scene config defaults
+            const defaultLevelingX = sceneConfig?.transform?.defaultLeveling?.x || 0;
+            const defaultLevelingZ = sceneConfig?.transform?.defaultLeveling?.z || 0;
+            const defaultHeight = sceneConfig?.transform?.heightOffset || 0.6;
 
-            // Reset light orientation
-            lightAzimuth = 213;
-            lightElevation = 37;
-            azimuthSlider.value = 213;
-            elevationSlider.value = 37;
-            azimuthValue.textContent = '213°';
-            elevationValue.textContent = '37°';
+            levelRotationX = defaultLevelingX;
+            levelRotationZ = defaultLevelingZ;
+            heightOffset = defaultHeight;
+            xSlider.value = defaultLevelingX;
+            zSlider.value = defaultLevelingZ;
+            heightSlider.value = defaultHeight;
+            xValue.textContent = defaultLevelingX.toFixed(1) + '°';
+            zValue.textContent = defaultLevelingZ.toFixed(1) + '°';
+            heightValue.textContent = defaultHeight.toFixed(2);
+
+            // Reset light orientation to scene config defaults
+            const defaultAzimuth = sceneConfig?.lighting?.directional?.azimuth || 213;
+            const defaultElevation = sceneConfig?.lighting?.directional?.elevation || 37;
+
+            lightAzimuth = defaultAzimuth;
+            lightElevation = defaultElevation;
+            azimuthSlider.value = defaultAzimuth;
+            elevationSlider.value = defaultElevation;
+            azimuthValue.textContent = defaultAzimuth.toFixed(0) + '°';
+            elevationValue.textContent = defaultElevation.toFixed(0) + '°';
 
             applyLevelingRotations();
             applyLightOrientation();
@@ -1369,6 +1875,10 @@ async function init() {
     if (dropdown) {
         dropdown.value = currentSceneId;
     }
+    const startDropdown = document.getElementById('start-scene-dropdown');
+    if (startDropdown) {
+        startDropdown.value = currentSceneId;
+    }
 
     // Update start overlay with scene information
     const startTitle = document.getElementById('start-title');
@@ -1391,12 +1901,22 @@ async function init() {
     setupKeyboardControls();
     setupLevelingControls();
     setupStartButton();
+    setupCameraToggleButton();
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
 
-    // Start animation loop
-    animate();
+    // Set up pointer lock event listeners for first-person mode
+    document.addEventListener('pointerlockchange', onPointerLockChange);
+    document.addEventListener('pointerlockerror', () => {
+        console.error('Pointer lock error');
+    });
+
+    // Set up mouse movement listener for first-person camera control
+    document.addEventListener('mousemove', onMouseMove);
+
+    // Start animation loop using setAnimationLoop for WebXR compatibility
+    renderer.setAnimationLoop(animate);
 
     console.log('F1000 initialized successfully');
 }

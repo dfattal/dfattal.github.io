@@ -5,6 +5,7 @@ export const S = 's';
 export const D = 'd';
 export const SHIFT = 'shift';
 export const SPACE = ' ';
+export const P = 'p';
 export const DIRECTIONS = [W, A, S, D];
 
 /**
@@ -23,6 +24,7 @@ export class KeyDisplay {
         const d = this.createKeyDiv(D, isMobile);
         const shift = this.createKeyDiv(SHIFT, isMobile);
         const space = this.createKeyDiv('SPACE', isMobile);
+        const p = this.createKeyDiv(P, isMobile);
 
         this.map.set(W, w);
         this.map.set(A, a);
@@ -30,6 +32,7 @@ export class KeyDisplay {
         this.map.set(D, d);
         this.map.set(SHIFT, shift);
         this.map.set(SPACE, space);
+        this.map.set(P, p);
 
         document.body.appendChild(w);
         document.body.appendChild(a);
@@ -37,6 +40,7 @@ export class KeyDisplay {
         document.body.appendChild(d);
         document.body.appendChild(shift);
         document.body.appendChild(space);
+        document.body.appendChild(p);
 
         this.updatePosition();
     }
@@ -75,7 +79,7 @@ export class KeyDisplay {
 
     /**
      * Update positions of key displays on screen
-     * Arranged in a tight keyboard-style layout: SHIFT and SPACE symmetric around WASD
+     * Arranged in a tight keyboard-style layout: SHIFT and SPACE symmetric around WASD, P on the right
      */
     updatePosition() {
         const bottomOffset = 80;   // Distance from bottom
@@ -108,6 +112,10 @@ export class KeyDisplay {
         // SPACE - symmetric on the right
         this.map.get(SPACE).style.top = `${window.innerHeight - bottomOffset}px`;
         this.map.get(SPACE).style.left = `${wasdStartX + (keyWidth + keyGap) * 3 + sideGap}px`;
+
+        // P - camera toggle, placed to the right of SPACE with a gap
+        this.map.get(P).style.top = `${window.innerHeight - bottomOffset}px`;
+        this.map.get(P).style.left = `${wasdStartX + (keyWidth + keyGap) * 4 + sideGap * 2}px`;
     }
 
     /**
