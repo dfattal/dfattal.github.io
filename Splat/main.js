@@ -10,6 +10,7 @@ import { AudioManager } from './audioManager.js';
 import { XRManager } from './xrManager.js';
 import { XRControllers } from './xrControllers.js';
 import { XRHands } from './xrHands.js';
+import { AdaptiveProgressiveLOD } from './adaptiveProgressiveLOD.js';
 
 /**
  * F1000 - Third Person Character Controller
@@ -45,6 +46,9 @@ let infiniteFloor;
 let gaussianSplat = null;
 const splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat
 let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
+
+// Adaptive LOD system
+let adaptiveLOD = null;
 
 // Lighting
 let directionalLight = null; // Main directional light (sun)
@@ -169,7 +173,8 @@ function initScene() {
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    // Start with clamped pixel ratio - adaptive LOD will reduce further if needed
+    renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
@@ -775,6 +780,19 @@ async function loadGaussianSplat() {
 
         // Mark splat as loaded
         splatLoaded = true;
+
+        // Initialize adaptive LOD system for performance optimization
+        // NOTE: applyShaderDecimation=false to avoid conflict with brush worldModifier
+        // System will still apply threshold optimizations (stochastic, pixel ratio, etc.)
+        // TODO: Combine brush and decimation modifiers for full shader-based decimation
+        adaptiveLOD = new AdaptiveProgressiveLOD(
+            gaussianSplat,
+            spark,
+            camera,
+            20, // Target FPS
+            { applyShaderDecimation: false } // Disable shader decimation to avoid conflict with brush modifier
+        );
+        console.log('Adaptive LOD system initialized (threshold optimizations only)');
 
         // Apply the Magic effect modifier
         // Check config for mobile support (default: desktop only - too complex for mobile GPUs)
@@ -1683,6 +1701,28 @@ function setupKeyboardControls() {
             togglePaintMode();
         }
 
+        // Manual decimation controls for testing adaptive LOD
+        // Q: Decrease decimation (improve quality)
+        if (key === 'q') {
+            if (adaptiveLOD) {
+                adaptiveLOD.decreaseDecimation(0.1);
+            }
+        }
+
+        // E: Increase decimation (reduce quality)
+        if (key === 'e') {
+            if (adaptiveLOD) {
+                adaptiveLOD.increaseDecimation(0.1);
+            }
+        }
+
+        // T: Reset to full quality
+        if (key === 't') {
+            if (adaptiveLOD) {
+                adaptiveLOD.resetToFullQuality();
+            }
+        }
+
         // Adjust brush radius with +/- keys
         if (key === '=' || key === '+') {
             adjustBrushRadius(0.01);
@@ -1839,18 +1879,34 @@ function onWindowResize() {
 function animate() {
     const delta = clock.getDelta();
 
-    // Calculate FPS
-    const currentTime = performance.now();
-    frameCount++;
-    if (currentTime >= lastTime + 1000) {
-        fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
-        frameCount = 0;
-        lastTime = currentTime;
+    // Update adaptive LOD system (includes FPS tracking and quality adjustment)
+    if (adaptiveLOD) {
+        adaptiveLOD.update();
+        fps = adaptiveLOD.getFPS();
 
         // Update FPS display
         const debugFps = document.getElementById('debug-fps');
         if (debugFps) {
             debugFps.textContent = fps;
+        }
+
+        // Update decimation level display if element exists
+        const debugDecimation = document.getElementById('debug-decimation');
+        if (debugDecimation) {
+            debugDecimation.textContent = `${adaptiveLOD.getDecimationPercent()}%`;
+        }
+
+        // Update quality level display
+        const debugQuality = document.getElementById('debug-quality');
+        if (debugQuality) {
+            const level = adaptiveLOD.getDecimationLevel();
+            let qualityText = 'Full';
+            if (level > 0.8) qualityText = 'Potato';
+            else if (level > 0.6) qualityText = 'Low';
+            else if (level > 0.4) qualityText = 'Medium';
+            else if (level > 0.2) qualityText = 'High';
+            else if (level > 0.0) qualityText = 'Very High';
+            debugQuality.textContent = qualityText;
         }
     }
 

@@ -25,7 +25,7 @@ export const QUALITY_PRESETS = {
         pixelRatio: 1.25,
         maxPoints: 1000000,        // Moderate point count
         renderScale: 1.0,          // Full resolution
-        antialias: true,
+        antialias: false,
         shadowQuality: 'low',
         targetFPS: 72,
         deviceTypes: ['standalone', 'mobile_high'],
