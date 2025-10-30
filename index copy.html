@@ -405,8 +405,10 @@
         }
 
         #start-vr-button {
-            background: #0088ff;
-            box-shadow: 0 4px 15px rgba(0, 136, 255, 0.3);
+            background: black;
+            color: #00ff00;
+            border: 3px solid #00ff00;
+            box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
         }
 
         #start-button:hover,
@@ -417,9 +419,11 @@
         }
 
         #start-vr-button:hover {
-            background: #0066cc;
+            background: #1a1a1a;
+            color: #00cc00;
+            border-color: #00cc00;
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 136, 255, 0.5);
+            box-shadow: 0 6px 20px rgba(0, 255, 0, 0.5);
         }
 
         #start-button:active,
@@ -469,9 +473,13 @@
 
         /* Loading bars in start overlay */
         #start-loading-bars {
-            margin: 40px 0;
-            width: 100%;
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
             max-width: 500px;
+            pointer-events: none;
         }
 
         .start-loading-bar {
@@ -522,10 +530,17 @@
                 margin-bottom: 30px;
             }
 
-            #start-button {
+            #start-buttons-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            #start-button,
+            #start-web-button,
+            #start-vr-button {
                 padding: 15px 40px;
                 font-size: 18px;
-                margin-bottom: 30px;
+                width: 100%;
             }
 
             #start-content {
@@ -538,7 +553,8 @@
             }
 
             #start-loading-bars {
-                margin: 30px 0;
+                bottom: 30px;
+                width: 85%;
             }
         }
 

@@ -118,6 +118,7 @@ export class XRManager {
         vrButton.style.bottom = '90px'; // Above camera toggle button
         vrButton.style.right = '30px';
         vrButton.style.zIndex = '1000';
+        vrButton.style.display = 'none'; // Hidden by default (used programmatically from start screen)
         document.body.appendChild(vrButton);
         this.vrButton = vrButton;
     }

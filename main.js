@@ -704,14 +704,16 @@ async function loadGaussianSplat() {
 }
 
 /**
- * Check if all assets are loaded and show start button
+ * Check if all assets are loaded and show start button(s)
  * Uses boolean flags instead of string comparison for mobile compatibility
  */
-function checkAllLoaded() {
+async function checkAllLoaded() {
     const loadingBars = document.getElementById('start-loading-bars');
     const startButton = document.getElementById('start-button');
+    const startWebButton = document.getElementById('start-web-button');
+    const startVRButton = document.getElementById('start-vr-button');
 
-    if (loadingBars && startButton) {
+    if (loadingBars) {
         // Use boolean flags instead of fragile string comparison
         // This fixes the mobile bug where progress can be unreliable
         if (collisionLoaded && splatLoaded) {
@@ -722,23 +724,41 @@ function checkAllLoaded() {
             }
 
             // Add a small delay before showing button to ensure user sees 100%
-            setTimeout(() => {
+            setTimeout(async () => {
                 // Hide loading bars
                 loadingBars.style.display = 'none';
 
-                // Show start button
-                startButton.style.display = 'inline-block';
+                // Check WebXR availability and show appropriate button(s)
+                const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
 
-                console.log('Assets loaded, start button shown');
+                if (isWebXRAvailable) {
+                    // Show dual buttons for WebXR
+                    if (startWebButton) startWebButton.style.display = 'inline-block';
+                    if (startVRButton) startVRButton.style.display = 'inline-block';
+                    console.log('Assets loaded, WebXR buttons shown');
+                } else {
+                    // Show single button for non-WebXR
+                    if (startButton) startButton.style.display = 'inline-block';
+                    console.log('Assets loaded, start button shown');
+                }
             }, 500);
         } else {
             // Set a timeout fallback in case progress tracking fails on mobile
             // If button hasn't shown after 10 seconds, show it anyway
             if (!loadingTimeout) {
-                loadingTimeout = setTimeout(() => {
+                loadingTimeout = setTimeout(async () => {
                     console.warn('Loading timeout reached - showing start button as fallback');
                     loadingBars.style.display = 'none';
-                    startButton.style.display = 'inline-block';
+
+                    // Check WebXR availability and show appropriate button(s)
+                    const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
+
+                    if (isWebXRAvailable) {
+                        if (startWebButton) startWebButton.style.display = 'inline-block';
+                        if (startVRButton) startVRButton.style.display = 'inline-block';
+                    } else {
+                        if (startButton) startButton.style.display = 'inline-block';
+                    }
                 }, 10000);
             }
         }
@@ -1275,52 +1295,109 @@ function setupKeyboardControls() {
 /**
  * Set up start button click handler
  */
-function setupStartButton() {
+async function setupStartButton() {
     const startButton = document.getElementById('start-button');
+    const startWebButton = document.getElementById('start-web-button');
+    const startVRButton = document.getElementById('start-vr-button');
     const startOverlay = document.getElementById('start-overlay');
 
-    if (startButton && startOverlay) {
-        // Handler function to avoid duplication
-        const handleStart = (event) => {
-            // Prevent default behavior and event propagation
-            event.preventDefault();
-            event.stopPropagation();
+    // Handler function for starting the experience (Web mode)
+    const handleStartWeb = (event) => {
+        // Prevent default behavior and event propagation
+        event.preventDefault();
+        event.stopPropagation();
 
-            console.log('Start button triggered - experience beginning');
+        console.log('Start button triggered - entering Web experience');
 
-            // Mark experience as started immediately (allows rendering)
-            experienceStarted = true;
+        // Mark experience as started immediately (allows rendering)
+        experienceStarted = true;
 
-            // Hide start overlay with fade out immediately (responsive UI)
-            startOverlay.classList.remove('visible');
+        // Hide start overlay with fade out immediately (responsive UI)
+        startOverlay.classList.remove('visible');
 
-            // Start the magic reveal animation and audio
-            startMagicReveal();
+        // Start the magic reveal animation and audio
+        startMagicReveal();
 
-            // Unlock audio in the background (don't wait for it - iOS can be slow)
-            // CRITICAL: Must be called from user interaction handler, but don't block UI on it
-            // NOTE: Now using Web Audio API (AudioContext + GainNode) to fix iOS volume issues
-            if (audioManager) {
-                audioManager.unlockAudio().then(() => {
-                    console.log('Audio unlocked successfully in background');
-                }).catch(error => {
-                    console.error('Audio unlock failed:', error);
-                    // Experience continues without audio
-                });
+        // Unlock audio in the background (don't wait for it - iOS can be slow)
+        // CRITICAL: Must be called from user interaction handler, but don't block UI on it
+        // NOTE: Now using Web Audio API (AudioContext + GainNode) to fix iOS volume issues
+        if (audioManager) {
+            audioManager.unlockAudio().then(() => {
+                console.log('Audio unlocked successfully in background');
+            }).catch(error => {
+                console.error('Audio unlock failed:', error);
+                // Experience continues without audio
+            });
+        }
+    };
+
+    // Handler function for entering VR mode
+    const handleStartVR = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        console.log('Start VR button triggered - entering VR experience');
+
+        // Mark experience as started immediately
+        experienceStarted = true;
+
+        // Hide start overlay
+        startOverlay.classList.remove('visible');
+
+        // Start magic reveal
+        startMagicReveal();
+
+        // Unlock audio
+        if (audioManager) {
+            audioManager.unlockAudio().then(() => {
+                console.log('Audio unlocked successfully in background');
+            }).catch(error => {
+                console.error('Audio unlock failed:', error);
+            });
+        }
+
+        // Request VR session after a short delay to allow experience to initialize
+        setTimeout(() => {
+            if (xrManager && xrManager.vrButton) {
+                // Programmatically click the VR button
+                xrManager.vrButton.click();
             }
-        };
+        }, 500);
+    };
 
-        // Add both click (for desktop/fallback) and touchstart (for mobile) events
-        startButton.addEventListener('click', handleStart);
+    // Check WebXR availability
+    const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
 
-        // For mobile, use touchstart for immediate response (no 300ms delay)
-        if (isMobile) {
-            startButton.addEventListener('touchstart', handleStart, { passive: false });
-            console.log('Start button initialized with touch support (mobile)');
-        } else {
-            console.log('Start button initialized (desktop)');
+    if (isWebXRAvailable) {
+        // Show dual buttons: Enter Web and Enter VR
+        console.log('WebXR supported - showing dual buttons');
+        if (startWebButton) {
+            startWebButton.style.display = 'inline-block';
+            startWebButton.addEventListener('click', handleStartWeb);
+            if (isMobile) {
+                startWebButton.addEventListener('touchstart', handleStartWeb, { passive: false });
+            }
+        }
+        if (startVRButton) {
+            startVRButton.style.display = 'inline-block';
+            startVRButton.addEventListener('click', handleStartVR);
+            if (isMobile) {
+                startVRButton.addEventListener('touchstart', handleStartVR, { passive: false });
+            }
+        }
+    } else {
+        // Show single button: Enter Experience
+        console.log('WebXR not supported - showing single button');
+        if (startButton) {
+            startButton.style.display = 'inline-block';
+            startButton.addEventListener('click', handleStartWeb);
+            if (isMobile) {
+                startButton.addEventListener('touchstart', handleStartWeb, { passive: false });
+            }
         }
     }
+
+    console.log('Start button(s) initialized');
 }
 
 /**
