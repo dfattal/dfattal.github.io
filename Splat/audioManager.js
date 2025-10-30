@@ -263,6 +263,29 @@ export class AudioManager {
         }
     }
 
+    // Use a muted HTMLAudioElement with a silent WAV to unlock media policies on iOS Chrome
+    async mediaElementUnlock() {
+        try {
+            const el = document.createElement('audio');
+            el.setAttribute('playsinline', 'true');
+            el.setAttribute('webkit-playsinline', 'true');
+            el.muted = true;
+            // Minimal silent WAV (zero-length data)
+            el.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+            const p = el.play();
+            if (p && typeof p.then === 'function') {
+                await p.catch(() => { });
+            }
+            // Give the UA a tick to engage the audio route
+            await new Promise(r => setTimeout(r, 50));
+            try { el.pause(); } catch (_) { }
+            try { el.remove(); } catch (_) { }
+            console.log('Media element unlock attempted');
+        } catch (e) {
+            console.warn('mediaElementUnlock failed:', e);
+        }
+    }
+
     async loadBuffer(url) {
         const ctx = this.ensureContext();
         const response = await fetch(url);
@@ -311,36 +334,25 @@ export class AudioManager {
             return;
         }
 
-        // On iOS Chrome, create a fresh context inside the gesture to satisfy routing policies
-        if (this.isMobile && this.isIOSChrome()) {
-            try {
-                if (this.audioContext && this.audioContext.state !== 'closed') {
-                    try { await this.audioContext.close(); } catch (_) { }
-                }
-            } catch (_) { }
-            const Ctor = window.AudioContext || window.webkitAudioContext;
-            this.audioContext = new Ctor();
-            try {
-                this.audioContext.onstatechange = () => {
-                    try { console.log('[AudioContext] state:', this.audioContext.state); } catch (_) { }
-                };
-            } catch (_) { }
-            // Reset graph and tracks
-            this.masterGain = null;
-            this.oneShotGain = null;
-            this.tracks = { background: null, walking: null, running: null, jetpack: null };
-            // Buffers are context-bound; clear to force re-decode on new context
-            this.buffers.background = null;
-            this.buffers.walking = null;
-            this.buffers.running = null;
-            this.buffers.jetpack = null;
-            // Keep magic reveal as bufferless until needed
-            this.setupGraph();
+        // On iOS Chrome, (and generally if suspended) try media element unlock first
+        if (this.isMobile && (this.isIOSChrome() || (this.audioContext && this.audioContext.state === 'suspended'))) {
+            await this.mediaElementUnlock();
         }
 
         // Resume the context
         const ctx = this.ensureContext();
         try { await ctx.resume(); } catch (e) { console.warn('AudioContext resume failed:', e); }
+        console.log('[AudioContext] state after resume():', ctx.state);
+
+        // Poll briefly if still suspended
+        if (ctx.state === 'suspended') {
+            const start = performance.now();
+            while (ctx.state === 'suspended' && performance.now() - start < 800) {
+                try { await ctx.resume(); } catch (_) { }
+                await new Promise(r => setTimeout(r, 50));
+            }
+            console.log('[AudioContext] state after polling:', ctx.state);
+        }
 
         // Kick the audio route with an inaudible short tone (helps Chrome iOS)
         this.primeOutput();
