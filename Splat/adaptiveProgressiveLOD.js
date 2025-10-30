@@ -41,11 +41,13 @@ export class AdaptiveProgressiveLOD {
         // Tier decimation factors (calculated from decimationLevel)
         this.tierDecimationFactors = [1, 1, 1, 1, 1]; // Updated each frame
 
-        // Optimization thresholds
+        // Store original values to restore when quality improves
         this.stochasticEnabled = false;
         this.originalPixelRatio = this.spark.renderer.getPixelRatio();
-        this.originalMinPixelRadius = this.spark.minPixelRadius;
-        this.originalMaxStdDev = this.spark.maxStdDev;
+        this.originalMinPixelRadius = this.spark.minPixelRadius || 0.0;
+        this.originalMaxStdDev = this.spark.maxStdDev || Math.sqrt(8);
+        this.originalSortDistance = this.spark.defaultView.sortDistance || 0.01;
+        this.originalSortCoorient = this.spark.defaultView.sortCoorient || 0.99;
 
         // Debug stats
         this.stats = {
@@ -245,6 +247,15 @@ export class AdaptiveProgressiveLOD {
             this.spark.renderer.setPixelRatio(1.0);
         } else {
             this.spark.renderer.setPixelRatio(this.originalPixelRatio);
+        }
+
+        // Reduce sorting frequency at decimationLevel > 0.6 (further reduce sorting overhead)
+        if (this.decimationLevel > 0.6) {
+            this.spark.defaultView.sortDistance = 0.1;  // Even less frequent sorting
+            this.spark.defaultView.sortCoorient = 0.95;
+        } else {
+            this.spark.defaultView.sortDistance = this.originalSortDistance;
+            this.spark.defaultView.sortCoorient = this.originalSortCoorient;
         }
 
         // Increase minPixelRadius at decimationLevel > 0.7 (cull tiny splats)

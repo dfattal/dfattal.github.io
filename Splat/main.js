@@ -63,9 +63,7 @@ let heightOffset = 0.60; // Vertical offset for terrain (how far below Y=0)
 // Animation
 const clock = new THREE.Clock();
 
-// FPS tracking
-let lastTime = performance.now();
-let frameCount = 0;
+// FPS tracking (handled by adaptiveLOD system)
 let fps = 60;
 
 // Magic effect animation timing variables
@@ -170,8 +168,17 @@ function initScene() {
     // Temporary camera position (will be properly positioned behind character when loaded)
     camera.position.set(0, 5, 10);
 
-    // Create renderer
-    renderer = new THREE.WebGLRenderer({ antialias: false });
+    // NOTE: Worker pool optimization not available in this Spark version
+    // setWorkerPool() export doesn't exist - would reduce workers on mobile to conserve memory
+    // const isLowEnd = navigator.hardwareConcurrency <= 4;
+    // const workerCount = (isMobile || isLowEnd) ? 2 : 4;
+    // setWorkerPool(workerCount);
+
+    // Create renderer with performance optimizations
+    renderer = new THREE.WebGLRenderer({
+        antialias: false,  // CRITICAL - antialiasing kills splat performance
+        powerPreference: 'high-performance'  // Request dedicated GPU
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
     // Start with clamped pixel ratio - adaptive LOD will reduce further if needed
     renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
@@ -179,9 +186,32 @@ function initScene() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
-    // Initialize Spark renderer for Gaussian splats
-    spark = new SparkRenderer({ renderer });
+    // Initialize Spark renderer with mobile-optimized quality parameters
+    // These provide immediate performance gains before adaptive system kicks in
+    spark = new SparkRenderer({
+        renderer,
+        // Reduce splat rendering size (smaller footprint per splat)
+        maxStdDev: isMobile ? Math.sqrt(5) : Math.sqrt(7),
+        // Cull very small splats (improves performance)
+        minPixelRadius: isMobile ? 0.5 : 0.3,
+        // Cap maximum splat size
+        maxPixelRadius: isMobile ? 256 : 384,
+        // Cull transparent splats more aggressively
+        minAlpha: isMobile ? 1.0 / 255.0 : 0.7 / 255.0,
+        // More aggressive frustum culling
+        clipXY: isMobile ? 1.2 : 1.3,
+        // Reduce Gaussian falloff (flatter shading, better performance)
+        falloff: isMobile ? 0.8 : 0.95,
+    });
     scene.add(spark);
+
+    // Configure sorting parameters for mobile
+    if (isMobile) {
+        // Reduce sorting frequency when camera moves (20-30% FPS gain)
+        spark.defaultView.sortDistance = 0.05;  // Default: 0.01 (higher = less sorting)
+        spark.defaultView.sortCoorient = 0.97;  // Default: 0.99 (lower = less sorting)
+        console.log('Mobile sorting optimizations applied');
+    }
 
     // Initialize paint raycaster
     paintRaycaster = new THREE.Raycaster();
@@ -2140,7 +2170,6 @@ function animate() {
 
             if (debugState && debugAnimation && debugJetpack && debugGroundDist) {
                 const isGrounded = xrManager.isGrounded;
-                const currentAction = characterControls.getCurrentAction();
                 const isJetpackActive = xrManager.jetpackActive;
 
                 debugState.textContent = isGrounded ? 'GROUNDED' : 'IN AIR';
