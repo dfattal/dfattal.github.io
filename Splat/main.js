@@ -69,14 +69,19 @@ const animateT = dyno.dynoFloat(0);
 let baseTime = 0;
 
 // Brush/Paint parameters
+// Hybrid approach: lateral radius ALWAYS controlled by brushRadius,
+// depth selection uses collision mesh surface (preferred) or brushDepth (fallback)
 const BRUSH_PARAMS = {
     enabled: dyno.dynoBool(false),
-    eraseEnabled: dyno.dynoBool(false),
-    brushRadius: dyno.dynoFloat(0.05),
-    brushDepth: dyno.dynoFloat(10.0),
+    brushRadius: dyno.dynoFloat(0.05),      // Lateral radius (perpendicular to ray), controlled by +/- keys
+    brushDepth: dyno.dynoFloat(10.0),       // Depth range (along ray), fallback when no collision mesh hit, controlled by [/] keys
     brushOrigin: dyno.dynoVec3(new THREE.Vector3(0.0, 0.0, 0.0)),
     brushDirection: dyno.dynoVec3(new THREE.Vector3(0.0, 0.0, 0.0)),
     brushColor: dyno.dynoVec3(new THREE.Vector3(1.0, 0.0, 1.0)),
+    // Collision mesh surface-based depth selection (preferred over brushDepth when available)
+    useSurface: dyno.dynoBool(false),       // Flag: use surface-based depth when collision mesh hit
+    surfacePoint: dyno.dynoVec3(new THREE.Vector3(0.0, 0.0, 0.0)),  // Collision mesh intersection point
+    surfaceRadius: dyno.dynoFloat(0.2),     // Depth tolerance along ray (0.2 units from surface)
 };
 
 const MIN_BRUSH_RADIUS = 0.01;
@@ -87,6 +92,7 @@ const MAX_BRUSH_DEPTH = 100.0;
 let isPaintMode = false;
 let isDragging = false;
 let paintRaycaster = null;
+let isCtrlPressed = false; // Track CTRL key state for paint-on-move
 
 // Mobile detection (do this FIRST before creating UI elements)
 const isMobile = (function () {
@@ -108,10 +114,11 @@ let touchControls = null;
 let cameraMode = 'third-person'; // 'third-person' or 'first-person'
 let firstPersonPitch = 0; // Camera pitch rotation (X-axis) in radians
 let firstPersonYaw = 0;   // Camera yaw rotation (Y-axis) in radians
-let isPointerLocked = false; // Track pointer lock state
+let pointerLocked = false; // Track pointer lock state
+let isLeftMouseDown = false; // Track left mouse button for camera rotation in paint mode
 
 // First-person camera constants
-const FIRST_PERSON_MOUSE_SENSITIVITY = 0.002; // Mouse movement sensitivity
+const FIRST_PERSON_MOUSE_SENSITIVITY = 0.002; // Mouse movement sensitivity (for pointer lock)
 const FIRST_PERSON_TOUCH_SENSITIVITY = 0.005; // Touch movement sensitivity for mobile
 const FIRST_PERSON_MAX_PITCH = Math.PI / 2 - 0.1; // ±85 degrees vertical look limit (in radians)
 
@@ -160,7 +167,7 @@ function initScene() {
     camera.position.set(0, 5, 10);
 
     // Create renderer
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true;
@@ -185,6 +192,14 @@ function initScene() {
     orbitControls.maxDistance = orbitCfg.maxDistance || 5;
     orbitControls.enablePan = orbitCfg.enablePan !== undefined ? orbitCfg.enablePan : false;
     orbitControls.maxPolarAngle = Math.PI * (orbitCfg.maxPolarAngle || 0.55);
+
+    // Configure mouse buttons: LEFT click for rotation, RIGHT click disabled (used for painting)
+    orbitControls.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE,  // Left-click for camera rotation
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: -1  // Disable right-click (reserved for painting)
+    };
+
     orbitControls.update();
 
     // Initialize touch controls for mobile
@@ -611,15 +626,31 @@ function createMagicModifier() {
 
 /**
  * Create brush/paint modifier for Gaussian splat
+ *
+ * Hybrid painting approach:
+ * - Lateral radius: ALWAYS uses brushRadius (perpendicular distance from ray)
+ * - Depth selection: Uses collision mesh surface point (preferred) or brushDepth (fallback)
+ *
+ * @param {dynoBool} brushEnabled - Enable/disable brush effect
+ * @param {dynoFloat} brushRadius - Lateral paint radius (perpendicular to ray), controlled by +/- keys
+ * @param {dynoFloat} brushDepth - Depth range along ray (fallback when no collision mesh hit), controlled by [/] keys
+ * @param {dynoVec3} brushOrigin - Ray origin (camera position)
+ * @param {dynoVec3} brushDirection - Ray direction (normalized)
+ * @param {dynoVec3} brushColor - Paint color (RGB linear)
+ * @param {dynoBool} useSurface - Flag to enable surface-based depth selection
+ * @param {dynoVec3} surfacePoint - Collision mesh intersection point
+ * @param {dynoFloat} surfaceRadius - Depth tolerance from surface (0.2 units default)
  */
 function createBrushModifier(
     brushEnabled,
-    eraseEnabled,
     brushRadius,
     brushDepth,
     brushOrigin,
     brushDirection,
-    brushColor
+    brushColor,
+    useSurface,
+    surfacePoint,
+    surfaceRadius
 ) {
     return dyno.dynoBlock(
         { gsplat: dyno.Gsplat },
@@ -629,27 +660,38 @@ function createBrushModifier(
                 throw new Error("No gsplat input");
             }
 
-            let { center, rgb, opacity } = dyno.splitGsplat(gsplat).outputs;
+            let { center, rgb } = dyno.splitGsplat(gsplat).outputs;
 
-            // Project splat centers onto brush ray (cylinder shape)
+            // Project splat center onto brush ray
             const projectionAmplitude = dyno.dot(brushDirection, dyno.sub(center, brushOrigin));
             const projectedCenter = dyno.add(brushOrigin, dyno.mul(brushDirection, projectionAmplitude));
-            const distance = dyno.length(dyno.sub(projectedCenter, center));
 
-            // Check if splat is inside brush cylinder
-            const isInside = dyno.and(
-                dyno.lessThan(distance, brushRadius),
-                dyno.and(
-                    dyno.greaterThan(projectionAmplitude, dyno.dynoFloat(0.0)),
-                    dyno.lessThan(projectionAmplitude, brushDepth)
-                )
+            // Lateral check: Distance from splat to ray (perpendicular distance)
+            // This is ALWAYS controlled by brushRadius (+/- keys)
+            const distanceToCylinder = dyno.length(dyno.sub(projectedCenter, center));
+            const isWithinRadius = dyno.lessThan(distanceToCylinder, brushRadius);
+
+            // Depth check (along the ray): Two modes
+            // Mode 1 (surface-based): Check if projected point is near collision mesh surface
+            const distanceToSurface = dyno.length(dyno.sub(projectedCenter, surfacePoint));
+            const isNearSurface = dyno.lessThan(distanceToSurface, surfaceRadius);
+
+            // Mode 2 (cylinder-based fallback): Use brushDepth parameter
+            const isWithinDepth = dyno.and(
+                dyno.greaterThan(projectionAmplitude, dyno.dynoFloat(0.0)),
+                dyno.lessThan(projectionAmplitude, brushDepth)
             );
 
-            // Apply brush color or erase
-            const newRgb = dyno.select(brushEnabled, dyno.select(isInside, brushColor, rgb), rgb);
-            const newOpacity = dyno.select(eraseEnabled, dyno.select(isInside, dyno.dynoFloat(0.0), opacity), opacity);
+            // Choose depth check method based on whether collision mesh was hit
+            const depthCheck = dyno.select(useSurface, isNearSurface, isWithinDepth);
 
-            gsplat = dyno.combineGsplat({ gsplat, rgb: newRgb, opacity: newOpacity });
+            // Final check: Lateral radius AND depth check
+            const isInside = dyno.and(isWithinRadius, depthCheck);
+
+            // Apply brush color
+            const newRgb = dyno.select(brushEnabled, dyno.select(isInside, brushColor, rgb), rgb);
+
+            gsplat = dyno.combineGsplat({ gsplat, rgb: newRgb });
             return { gsplat };
         }
     );
@@ -773,12 +815,14 @@ async function loadGaussianSplat() {
         try {
             gaussianSplat.worldModifier = createBrushModifier(
                 BRUSH_PARAMS.enabled,
-                BRUSH_PARAMS.eraseEnabled,
                 BRUSH_PARAMS.brushRadius,
                 BRUSH_PARAMS.brushDepth,
                 BRUSH_PARAMS.brushOrigin,
                 BRUSH_PARAMS.brushDirection,
-                BRUSH_PARAMS.brushColor
+                BRUSH_PARAMS.brushColor,
+                BRUSH_PARAMS.useSurface,
+                BRUSH_PARAMS.surfacePoint,
+                BRUSH_PARAMS.surfaceRadius
             );
             gaussianSplat.updateGenerator();
             console.log('Brush modifier applied to Gaussian splat');
@@ -1205,21 +1249,17 @@ function setupCameraToggleButton() {
 }
 
 /**
- * Handle pointer lock change events
- */
-function onPointerLockChange() {
-    isPointerLocked = document.pointerLockElement === renderer.domElement;
-
-    if (!isPointerLocked && cameraMode === 'first-person' && !isMobile) {
-        console.log('Pointer lock lost in first-person mode');
-    }
-}
-
-/**
  * Handle mouse movement for first-person camera rotation
  */
 function onMouseMove(event) {
-    if (!isPointerLocked || cameraMode !== 'first-person') {
+    if (cameraMode !== 'first-person') {
+        return;
+    }
+
+    // Two modes: pointer lock (normal) or left-click drag (paint mode)
+    const shouldRotate = pointerLocked || (isLeftMouseDown && isPaintMode);
+
+    if (!shouldRotate) {
         return;
     }
 
@@ -1227,14 +1267,67 @@ function onMouseMove(event) {
     firstPersonYaw -= event.movementX * FIRST_PERSON_MOUSE_SENSITIVITY;
 
     // Update pitch (vertical rotation) - clamped to ±85 degrees
-    // Mouse down (positive movementY) -> look up (negative pitch in Three.js)
-    // Mouse up (negative movementY) -> look down (positive pitch in Three.js)
     firstPersonPitch -= event.movementY * FIRST_PERSON_MOUSE_SENSITIVITY;
     firstPersonPitch = Math.max(-FIRST_PERSON_MAX_PITCH, Math.min(FIRST_PERSON_MAX_PITCH, firstPersonPitch));
 
     // Send rotation to CharacterControls
     if (characterControls) {
         characterControls.setFirstPersonRotation(firstPersonPitch, firstPersonYaw);
+    }
+}
+
+/**
+ * Handle mouse down for first-person camera rotation in paint mode
+ */
+function onMouseDown(event) {
+    // Track left mouse button (button 0) for first-person rotation in paint mode
+    if (event.button === 0 && cameraMode === 'first-person' && isPaintMode) {
+        isLeftMouseDown = true;
+    }
+}
+
+/**
+ * Handle mouse up for first-person camera rotation in paint mode
+ */
+function onMouseUp(event) {
+    // Release left mouse button
+    if (event.button === 0) {
+        isLeftMouseDown = false;
+    }
+}
+
+/**
+ * Handle pointer lock change events
+ */
+function onPointerLockChange() {
+    pointerLocked = document.pointerLockElement === renderer.domElement;
+    console.log(`Pointer lock: ${pointerLocked ? 'LOCKED' : 'UNLOCKED'}`);
+}
+
+/**
+ * Handle pointer lock error
+ */
+function onPointerLockError() {
+    console.error('Pointer lock failed');
+}
+
+/**
+ * Request pointer lock for first-person mode
+ * (disabled in paint mode)
+ */
+function requestPointerLock() {
+    // Don't request if in paint mode (uses left-click drag instead)
+    if (cameraMode === 'first-person' && !isMobile && !isPaintMode) {
+        renderer.domElement.requestPointerLock();
+    }
+}
+
+/**
+ * Exit pointer lock
+ */
+function exitPointerLock() {
+    if (document.pointerLockElement === renderer.domElement) {
+        document.exitPointerLock();
     }
 }
 
@@ -1269,7 +1362,6 @@ function onTouchLook(deltaX, deltaY) {
 function togglePaintMode() {
     isPaintMode = !isPaintMode;
     BRUSH_PARAMS.enabled.value = isPaintMode;
-    BRUSH_PARAMS.eraseEnabled.value = false;
 
     // Update splat to reflect brush state change
     if (gaussianSplat) {
@@ -1290,68 +1382,24 @@ function togglePaintMode() {
     if (isPaintMode) {
         renderer.domElement.classList.add('paint-mode');
     } else {
-        renderer.domElement.classList.remove('paint-mode', 'erase-mode');
+        renderer.domElement.classList.remove('paint-mode');
     }
 
-    // Disable camera controls in paint mode
+    // Paint mode doesn't disable camera controls anymore
+    // LEFT-click rotates camera, RIGHT-click or CTRL+move paints
     if (isPaintMode) {
-        orbitControls.enabled = false;
-        // Exit pointer lock if in first-person mode
-        if (document.pointerLockElement === renderer.domElement) {
-            document.exitPointerLock();
-        }
-        // Disable touch controls on mobile
-        if (touchControls) {
-            touchControls.disable();
-        }
-        showModeOverlay('Paint Mode');
-        console.log('Paint mode: ON');
+        // Exit pointer lock when entering paint mode
+        exitPointerLock();
+        console.log('Paint mode: ON - RIGHT-click drag or CTRL+move to paint, LEFT-click drag to rotate camera');
     } else {
-        // Re-enable camera controls
-        if (cameraMode !== 'first-person') {
-            orbitControls.enabled = true;
-        } else {
-            // Re-request pointer lock for first-person mode (desktop only)
-            if (!isMobile) {
-                renderer.domElement.requestPointerLock();
-            }
+        // Request pointer lock when exiting paint mode (if in first-person)
+        if (cameraMode === 'first-person') {
+            requestPointerLock();
         }
-        if (touchControls) {
-            touchControls.enable();
-        }
-        showModeOverlay('View Mode');
         console.log('Paint mode: OFF');
     }
 }
 
-/**
- * Toggle erase mode on/off (can be active alongside paint mode)
- */
-function toggleEraseMode() {
-    const wasEraseMode = BRUSH_PARAMS.eraseEnabled.value;
-    BRUSH_PARAMS.eraseEnabled.value = !wasEraseMode;
-
-    // Update canvas cursor class
-    if (BRUSH_PARAMS.eraseEnabled.value) {
-        renderer.domElement.classList.remove('paint-mode');
-        renderer.domElement.classList.add('erase-mode');
-    } else {
-        renderer.domElement.classList.remove('erase-mode');
-        renderer.domElement.classList.add('paint-mode');
-    }
-
-    // If turning on erase mode, also enable paint mode
-    if (BRUSH_PARAMS.eraseEnabled.value) {
-        if (!isPaintMode) {
-            togglePaintMode();
-        }
-        showModeOverlay('Erase Mode');
-        console.log('Erase mode: ON');
-    } else {
-        showModeOverlay('Paint Mode');
-        console.log('Erase mode: OFF');
-    }
-}
 
 /**
  * Adjust brush radius
@@ -1383,41 +1431,6 @@ function updateBrushSizeDisplay() {
     if (display) {
         display.textContent = `Radius: ${BRUSH_PARAMS.brushRadius.value.toFixed(3)} | Depth: ${BRUSH_PARAMS.brushDepth.value.toFixed(1)}`;
     }
-}
-
-/**
- * Show mode overlay with fade effect
- */
-function showModeOverlay(message) {
-    let overlay = document.getElementById('mode-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'mode-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 20px 40px;
-            border-radius: 10px;
-            font-size: 24px;
-            font-weight: bold;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            z-index: 1000;
-        `;
-        document.body.appendChild(overlay);
-    }
-
-    overlay.textContent = message;
-    overlay.style.opacity = '1';
-
-    setTimeout(() => {
-        overlay.style.opacity = '0';
-    }, 2000);
 }
 
 /**
@@ -1468,13 +1481,33 @@ function setupPaintControls() {
         BRUSH_PARAMS.brushOrigin.value.y = paintRaycaster.ray.origin.y;
         BRUSH_PARAMS.brushOrigin.value.z = paintRaycaster.ray.origin.z;
 
+        // Raycast against collision mesh for surface-based painting
+        if (groundMesh) {
+            const intersects = paintRaycaster.intersectObject(groundMesh, false);
+
+            if (intersects.length > 0) {
+                // Hit the collision mesh - use surface-based painting
+                const hitPoint = intersects[0].point;
+                BRUSH_PARAMS.useSurface.value = true;
+                BRUSH_PARAMS.surfacePoint.value.x = hitPoint.x;
+                BRUSH_PARAMS.surfacePoint.value.y = hitPoint.y;
+                BRUSH_PARAMS.surfacePoint.value.z = hitPoint.z;
+            } else {
+                // No collision mesh hit - use cylinder-based painting (fallback)
+                BRUSH_PARAMS.useSurface.value = false;
+            }
+        } else {
+            // No collision mesh available - use cylinder-based painting
+            BRUSH_PARAMS.useSurface.value = false;
+        }
+
         // Mark splat as needing update for preview
         if (gaussianSplat) {
             gaussianSplat.needsUpdate = true;
         }
 
-        // Apply painting effect while dragging
-        if (isDragging && gaussianSplat) {
+        // Apply painting effect while dragging or CTRL pressed
+        if ((isDragging || isCtrlPressed) && gaussianSplat) {
             const noSplatRgba = !gaussianSplat.splatRgba;
             gaussianSplat.splatRgba = spark.getRgba({
                 generator: gaussianSplat,
@@ -1489,9 +1522,13 @@ function setupPaintControls() {
         }
     });
 
-    // Mouse down handler to start painting
-    renderer.domElement.addEventListener('pointerdown', () => {
-        if (!isPaintMode || !gaussianSplat) return;
+    // Mouse down handler to start painting (RIGHT click drag only)
+    renderer.domElement.addEventListener('pointerdown', (event) => {
+        // Handle RIGHT button (button 2) for click-drag painting
+        if (!isPaintMode || !gaussianSplat || event.button !== 2) return;
+
+        // Prevent context menu on right-click
+        event.preventDefault();
 
         isDragging = true;
 
@@ -1509,10 +1546,18 @@ function setupPaintControls() {
         }
     });
 
-    // Mouse up handler to stop painting
-    renderer.domElement.addEventListener('pointerup', () => {
-        if (!isPaintMode) return;
+    // Mouse up handler to stop painting (RIGHT click drag only)
+    renderer.domElement.addEventListener('pointerup', (event) => {
+        // Handle RIGHT button (button 2) for click-drag painting
+        if (!isPaintMode || event.button !== 2) return;
         isDragging = false;
+    });
+
+    // Prevent context menu when in paint mode (for right-click painting)
+    renderer.domElement.addEventListener('contextmenu', (event) => {
+        if (isPaintMode) {
+            event.preventDefault();
+        }
     });
 
     console.log('Paint controls initialized');
@@ -1539,6 +1584,11 @@ function setupKeyboardControls() {
 
     document.addEventListener('keydown', (event) => {
         const key = event.key.toLowerCase();
+
+        // Track CTRL key for paint-on-move
+        if (event.key === 'Control') {
+            isCtrlPressed = true;
+        }
 
         // Update key state
         keysPressed[key] = true;
@@ -1633,11 +1683,6 @@ function setupKeyboardControls() {
             togglePaintMode();
         }
 
-        // Toggle erase mode on E
-        if (key === 'e') {
-            toggleEraseMode();
-        }
-
         // Adjust brush radius with +/- keys
         if (key === '=' || key === '+') {
             adjustBrushRadius(0.01);
@@ -1657,6 +1702,12 @@ function setupKeyboardControls() {
 
     document.addEventListener('keyup', (event) => {
         const key = event.key.toLowerCase();
+
+        // Track CTRL key for paint-on-move
+        if (event.key === 'Control') {
+            isCtrlPressed = false;
+        }
+
         keysPressed[key] = false;
         keyDisplayQueue.up(key);
     });
@@ -1863,17 +1914,15 @@ function animate() {
                     });
                 }
 
-                // Request pointer lock for desktop
-                if (!isMobile) {
-                    renderer.domElement.requestPointerLock();
-                }
-
                 // Notify CharacterControls and TouchControls
                 characterControls.setCameraMode('first-person');
                 characterControls.setFirstPersonRotation(firstPersonPitch, firstPersonYaw);
                 if (touchControls) {
                     touchControls.setCameraMode('first-person');
                 }
+
+                // Request pointer lock for first-person camera control
+                requestPointerLock();
 
                 console.log('Transition to first-person complete');
             } else {
@@ -1889,16 +1938,14 @@ function animate() {
                     });
                 }
 
-                // Exit pointer lock
-                if (!isMobile && document.pointerLockElement) {
-                    document.exitPointerLock();
-                }
-
                 // Notify CharacterControls and TouchControls
                 characterControls.setCameraMode('third-person');
                 if (touchControls) {
                     touchControls.setCameraMode('third-person');
                 }
+
+                // Exit pointer lock when returning to third-person
+                exitPointerLock();
 
                 // CRITICAL: Re-sync OrbitControls target to character's CURRENT position (in local space)
                 // The character may have moved slightly during transition
@@ -2004,7 +2051,6 @@ function animate() {
 
                     // Enable brush in VR paint mode
                     BRUSH_PARAMS.enabled.value = true;
-                    BRUSH_PARAMS.eraseEnabled.value = xrControllers.isEraseMode;
 
                     // If dragging (trigger held), bake the painting
                     if (xrControllers.isDragging) {
@@ -2401,14 +2447,14 @@ async function init() {
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
 
-    // Set up pointer lock event listeners for first-person mode
-    document.addEventListener('pointerlockchange', onPointerLockChange);
-    document.addEventListener('pointerlockerror', () => {
-        console.error('Pointer lock error');
-    });
-
-    // Set up mouse movement listener for first-person camera control
+    // Set up mouse event listeners for camera control
     document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
+
+    // Set up pointer lock event listeners
+    document.addEventListener('pointerlockchange', onPointerLockChange);
+    document.addEventListener('pointerlockerror', onPointerLockError);
 
     // Start animation loop using setAnimationLoop for WebXR compatibility
     renderer.setAnimationLoop(animate);

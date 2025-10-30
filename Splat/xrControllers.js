@@ -40,7 +40,6 @@ export class XRControllers {
 
         // Paint mode state
         this.isPaintMode = false;
-        this.isEraseMode = false;
         this.colorPalette = null; // VR color palette group
         this.paletteColors = [
             { name: 'Red', hex: 0xff0000 },
@@ -142,13 +141,8 @@ export class XRControllers {
         const rayLine = controllerIndex === 0 ? this.rayLine0 : this.rayLine1;
         if (rayLine) {
             rayLine.visible = true;
-            // Update ray color based on mode
-            if (this.isPaintMode) {
-                const color = this.isEraseMode ? 0xff0000 : 0x00ff00; // Red for erase, green for paint
-                rayLine.material.color.setHex(color);
-            } else {
-                rayLine.material.color.setHex(0x00ff00); // Green for teleport
-            }
+            // Update ray color: green for both paint and teleport modes
+            rayLine.material.color.setHex(0x00ff00);
         }
 
         // Start painting if in paint mode
@@ -261,7 +255,6 @@ export class XRControllers {
             this.showColorPalette();
         } else {
             console.log('VR Paint mode: OFF');
-            this.isEraseMode = false; // Reset erase mode when exiting paint
             this.hideColorPalette();
         }
     }

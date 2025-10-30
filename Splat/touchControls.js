@@ -4,7 +4,8 @@ import { VirtualJoystick } from './virtualJoystick.js';
  * TouchControls - Gesture-based mobile controls
  *
  * Features:
- * - Long press (300ms) → activate virtual joystick
+ * - Single-finger drag on left side → activate virtual joystick
+ * - Two-finger drag anywhere → camera rotation
  * - Double tap → jump
  * - Double tap + hold → jetpack mode with joystick control
  * - Integrates with existing keysPressed system
@@ -18,12 +19,8 @@ export class TouchControls {
         this.joystick = new VirtualJoystick();
 
         // Touch tracking
-        this.touchStartTime = 0;
         this.touchStartX = 0;
         this.touchStartY = 0;
-        this.longPressTimer = null;
-        this.longPressThreshold = 300; // ms to trigger joystick
-        this.movementThreshold = 15; // pixels - movement beyond this cancels long press
         this.activeTouchId = null; // Track which touch is controlling joystick
 
         // Double-tap detection
@@ -41,6 +38,12 @@ export class TouchControls {
         this.firstPersonLookStartX = 0;
         this.firstPersonLookStartY = 0;
         this.firstPersonCallback = null; // Callback to update camera rotation
+
+        // Two-finger camera rotation
+        this.twoFingerRotation = false; // Track if two-finger gesture is active
+        this.twoFingerTouchIds = []; // Array of touch IDs for two-finger gesture
+        this.twoFingerStartX = 0;
+        this.twoFingerStartY = 0;
 
         // Bind event handlers
         this.handleTouchStart = this.handleTouchStart.bind(this);
@@ -75,11 +78,38 @@ export class TouchControls {
     handleTouchStart(event) {
         const touch = event.changedTouches[0];
         const currentTime = Date.now();
+        const screenMidpoint = window.innerWidth / 2;
+
+        // Check for two-finger touch (camera rotation)
+        if (event.touches.length === 2) {
+            event.preventDefault();
+
+            // Deactivate joystick if it was active
+            if (this.joystick.isActive()) {
+                this.deactivateJoystick();
+            }
+
+            // Activate two-finger rotation mode
+            this.twoFingerRotation = true;
+            this.twoFingerTouchIds = [event.touches[0].identifier, event.touches[1].identifier];
+
+            // Calculate center point of two fingers
+            const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            const centerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            this.twoFingerStartX = centerX;
+            this.twoFingerStartY = centerY;
+
+            console.log('Two-finger camera rotation started');
+            return;
+        }
+
+        // If already in two-finger mode, ignore new single touches
+        if (this.twoFingerRotation) {
+            return;
+        }
 
         // In first-person mode: check if touch is on right side of screen for look control
         if (this.cameraMode === 'first-person') {
-            const screenMidpoint = window.innerWidth / 2;
-
             // Right side: first-person look
             if (touch.clientX > screenMidpoint && !this.firstPersonLookTouchId) {
                 event.preventDefault();
@@ -99,11 +129,6 @@ export class TouchControls {
             return;
         }
 
-        // Don't prevent default if no joystick active - allow OrbitControls to work
-        if (!this.joystick.isActive() && !this.jetpackActive) {
-            // Allow event to propagate to OrbitControls
-        }
-
         // Store initial touch position
         this.touchStartX = touch.clientX;
         this.touchStartY = touch.clientY;
@@ -119,23 +144,19 @@ export class TouchControls {
 
         this.lastTapTime = currentTime;
 
-        // Start long-press timer for joystick activation
-        // Only if no joystick is currently active
-        if (!this.joystick.isActive() && !this.jetpackActive) {
-            // Prevent iOS context menu during long press detection
+        // Single-finger on left side activates joystick instantly (both third-person and first-person)
+        if (touch.clientX <= screenMidpoint && !this.jetpackActive) {
             event.preventDefault();
-
-            this.touchStartTime = currentTime;
             const touchId = touch.identifier;
             const touchX = touch.clientX;
             const touchY = touch.clientY;
 
-            this.longPressTimer = setTimeout(() => {
-                // Activate joystick at the initial touch position
-                this.activateJoystick(touchId, touchX, touchY);
-                console.log('Long press detected - joystick activated');
-            }, this.longPressThreshold);
+            // Activate joystick immediately (no long-press delay)
+            this.activateJoystick(touchId, touchX, touchY);
+            console.log('Single-finger joystick activated (left side)');
         }
+
+        // Right side or other touches: allow for camera rotation
     }
 
     /**
@@ -144,7 +165,47 @@ export class TouchControls {
     handleTouchMove(event) {
         const touch = event.changedTouches[0];
 
-        // In first-person mode: check if this is a look control touch
+        // Handle two-finger camera rotation
+        if (this.twoFingerRotation && event.touches.length === 2) {
+            event.preventDefault();
+
+            // Calculate center point of two fingers
+            const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            const centerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+
+            // Calculate delta from last position
+            const deltaX = centerX - this.twoFingerStartX;
+            const deltaY = centerY - this.twoFingerStartY;
+
+            // Update start position for next delta
+            this.twoFingerStartX = centerX;
+            this.twoFingerStartY = centerY;
+
+            // Apply rotation based on camera mode
+            if (this.cameraMode === 'first-person') {
+                // First-person: Use existing callback
+                if (this.firstPersonCallback) {
+                    this.firstPersonCallback(deltaX, deltaY);
+                }
+            } else {
+                // Third-person: Use OrbitControls
+                if (this.orbitControls) {
+                    // Sensitivity for two-finger rotation
+                    const rotateSpeed = 0.005;
+
+                    // Update OrbitControls spherical coordinates
+                    // Horizontal movement affects azimuthal angle (horizontal rotation)
+                    // Vertical movement affects polar angle (vertical rotation)
+                    this.orbitControls.rotateLeft(deltaX * rotateSpeed);
+                    this.orbitControls.rotateUp(-deltaY * rotateSpeed);
+                    this.orbitControls.update();
+                }
+            }
+
+            return;
+        }
+
+        // In first-person mode: check if this is a look control touch (single-finger right side)
         if (this.cameraMode === 'first-person' && this.firstPersonLookTouchId !== null) {
             event.preventDefault();
 
@@ -188,21 +249,6 @@ export class TouchControls {
             return;
         }
 
-        // If joystick is not active, check if we should cancel long press
-        if (this.longPressTimer) {
-            // Calculate distance from initial touch position
-            const dx = Math.abs(touch.clientX - this.touchStartX);
-            const dy = Math.abs(touch.clientY - this.touchStartY);
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            // If moved beyond threshold, cancel long press (user is swiping camera)
-            if (distance > this.movementThreshold) {
-                clearTimeout(this.longPressTimer);
-                this.longPressTimer = null;
-                console.log('Long press cancelled - finger moved (camera swipe detected)');
-            }
-        }
-
         // Allow event to propagate to OrbitControls if joystick not active
     }
 
@@ -210,6 +256,21 @@ export class TouchControls {
      * Handle touch end event
      */
     handleTouchEnd(event) {
+        // Check if two-finger mode should end
+        if (this.twoFingerRotation) {
+            // Check if any of the two-finger touches ended
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touch = event.changedTouches[i];
+                if (this.twoFingerTouchIds.includes(touch.identifier)) {
+                    // One of the two fingers lifted - end two-finger mode
+                    this.twoFingerRotation = false;
+                    this.twoFingerTouchIds = [];
+                    console.log('Two-finger camera rotation ended');
+                    return;
+                }
+            }
+        }
+
         // Check if the joystick touch ended
         let joystickTouchEnded = false;
         let jetpackTouchEnded = false;
@@ -238,14 +299,6 @@ export class TouchControls {
                 this.deactivateJoystick();
                 break;
             }
-        }
-
-        // Clear long-press timer if touch ended before threshold
-        // But only if joystick wasn't already active
-        if (this.longPressTimer && !joystickTouchEnded && !jetpackTouchEnded) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = null;
-            // This was a tap or quick swipe - allow OrbitControls to have handled it
         }
 
         // If joystick is not active, allow event to propagate to OrbitControls
@@ -395,6 +448,47 @@ export class TouchControls {
     handleContextMenu(event) {
         event.preventDefault();
         return false;
+    }
+
+    /**
+     * Disable touch controls
+     */
+    disable() {
+        // Deactivate any active gestures
+        if (this.joystick.isActive()) {
+            this.deactivateJoystick();
+        }
+        if (this.jetpackActive) {
+            this.deactivateJetpack();
+        }
+        if (this.twoFingerRotation) {
+            this.twoFingerRotation = false;
+            this.twoFingerTouchIds = [];
+        }
+        if (this.firstPersonLookTouchId !== null) {
+            this.firstPersonLookTouchId = null;
+        }
+
+        // Remove event listeners
+        document.removeEventListener('touchstart', this.handleTouchStart);
+        document.removeEventListener('touchmove', this.handleTouchMove);
+        document.removeEventListener('touchend', this.handleTouchEnd);
+        document.removeEventListener('touchcancel', this.handleTouchEnd);
+
+        console.log('TouchControls disabled');
+    }
+
+    /**
+     * Enable touch controls
+     */
+    enable() {
+        // Re-add event listeners
+        document.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+        document.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+        document.addEventListener('touchend', this.handleTouchEnd, { passive: false });
+        document.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
+
+        console.log('TouchControls enabled');
     }
 
     /**
