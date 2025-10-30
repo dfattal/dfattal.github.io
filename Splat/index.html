@@ -597,6 +597,66 @@
                 display: flex;
             }
         }
+
+        /* Paint Controls */
+        #paint-controls {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1000;
+            display: none;
+            /* Hidden by default, shown when paint mode active */
+        }
+
+        #paint-controls.visible {
+            display: block;
+        }
+
+        #paint-controls h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: white;
+            text-align: center;
+        }
+
+        #color-picker-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #color-picker {
+            width: 60px;
+            height: 60px;
+            border: 2px solid white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #color-picker-label {
+            color: white;
+            font-size: 12px;
+        }
+
+        #brush-size-display {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 11px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        /* Paint mode cursor styles */
+        canvas.paint-mode {
+            cursor: crosshair !important;
+        }
+
+        canvas.erase-mode {
+            cursor: not-allowed !important;
+        }
     </style>
 </head>
 
@@ -724,6 +784,16 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Paint Controls -->
+    <div id="paint-controls">
+        <h4>PAINT</h4>
+        <div id="color-picker-wrapper">
+            <input type="color" id="color-picker" value="#ff00ff" />
+            <span id="color-picker-label">Color</span>
+        </div>
+        <div id="brush-size-display">Radius: 0.050 | Depth: 10.0</div>
     </div>
 
     <!-- Camera Toggle Button (Mobile Only) -->

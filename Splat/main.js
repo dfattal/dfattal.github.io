@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { SplatMesh, dyno } from '@sparkjsdev/spark';
+import { SplatMesh, dyno, SparkRenderer } from '@sparkjsdev/spark';
 import { CharacterControls } from './characterControls.js';
 import { KeyDisplay } from './utils.js';
 import { TouchControls } from './touchControls.js';
@@ -25,6 +25,7 @@ let currentSceneId = null;    // Current scene ID
 let scene;
 let camera;
 let renderer;
+let spark; // Spark renderer for Gaussian splats
 let orbitControls;
 
 // Character
@@ -66,6 +67,26 @@ let fps = 60;
 // Magic effect animation timing variables
 const animateT = dyno.dynoFloat(0);
 let baseTime = 0;
+
+// Brush/Paint parameters
+const BRUSH_PARAMS = {
+    enabled: dyno.dynoBool(false),
+    eraseEnabled: dyno.dynoBool(false),
+    brushRadius: dyno.dynoFloat(0.05),
+    brushDepth: dyno.dynoFloat(10.0),
+    brushOrigin: dyno.dynoVec3(new THREE.Vector3(0.0, 0.0, 0.0)),
+    brushDirection: dyno.dynoVec3(new THREE.Vector3(0.0, 0.0, 0.0)),
+    brushColor: dyno.dynoVec3(new THREE.Vector3(1.0, 0.0, 1.0)),
+};
+
+const MIN_BRUSH_RADIUS = 0.01;
+const MAX_BRUSH_RADIUS = 0.25;
+const MIN_BRUSH_DEPTH = 0.1;
+const MAX_BRUSH_DEPTH = 100.0;
+
+let isPaintMode = false;
+let isDragging = false;
+let paintRaycaster = null;
 
 // Mobile detection (do this FIRST before creating UI elements)
 const isMobile = (function () {
@@ -145,6 +166,13 @@ function initScene() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
+
+    // Initialize Spark renderer for Gaussian splats
+    spark = new SparkRenderer({ renderer });
+    scene.add(spark);
+
+    // Initialize paint raycaster
+    paintRaycaster = new THREE.Raycaster();
 
     // Add lights
     setupLighting();
@@ -582,6 +610,52 @@ function createMagicModifier() {
 }
 
 /**
+ * Create brush/paint modifier for Gaussian splat
+ */
+function createBrushModifier(
+    brushEnabled,
+    eraseEnabled,
+    brushRadius,
+    brushDepth,
+    brushOrigin,
+    brushDirection,
+    brushColor
+) {
+    return dyno.dynoBlock(
+        { gsplat: dyno.Gsplat },
+        { gsplat: dyno.Gsplat },
+        ({ gsplat }) => {
+            if (!gsplat) {
+                throw new Error("No gsplat input");
+            }
+
+            let { center, rgb, opacity } = dyno.splitGsplat(gsplat).outputs;
+
+            // Project splat centers onto brush ray (cylinder shape)
+            const projectionAmplitude = dyno.dot(brushDirection, dyno.sub(center, brushOrigin));
+            const projectedCenter = dyno.add(brushOrigin, dyno.mul(brushDirection, projectionAmplitude));
+            const distance = dyno.length(dyno.sub(projectedCenter, center));
+
+            // Check if splat is inside brush cylinder
+            const isInside = dyno.and(
+                dyno.lessThan(distance, brushRadius),
+                dyno.and(
+                    dyno.greaterThan(projectionAmplitude, dyno.dynoFloat(0.0)),
+                    dyno.lessThan(projectionAmplitude, brushDepth)
+                )
+            );
+
+            // Apply brush color or erase
+            const newRgb = dyno.select(brushEnabled, dyno.select(isInside, brushColor, rgb), rgb);
+            const newOpacity = dyno.select(eraseEnabled, dyno.select(isInside, dyno.dynoFloat(0.0), opacity), opacity);
+
+            gsplat = dyno.combineGsplat({ gsplat, rgb: newRgb, opacity: newOpacity });
+            return { gsplat };
+        }
+    );
+}
+
+/**
  * Load the Gaussian splat visualization
  */
 async function loadGaussianSplat() {
@@ -648,8 +722,8 @@ async function loadGaussianSplat() {
         // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
         gaussianSplat.position.y = -splatScale * heightOffset;
 
-        // Add to scene
-        scene.add(gaussianSplat);
+        // Add to spark renderer (not directly to scene)
+        spark.add(gaussianSplat);
 
         // Hide the splat initially (will show when experience starts)
         gaussianSplat.visible = false;
@@ -693,6 +767,23 @@ async function loadGaussianSplat() {
         } else {
             const reason = isMobile ? 'mobile not enabled in config' : 'disabled in config';
             console.log(`Gaussian splat loaded without Magic effect (${reason})`);
+        }
+
+        // Apply brush/paint modifier (runs after magic effect in shader pipeline)
+        try {
+            gaussianSplat.worldModifier = createBrushModifier(
+                BRUSH_PARAMS.enabled,
+                BRUSH_PARAMS.eraseEnabled,
+                BRUSH_PARAMS.brushRadius,
+                BRUSH_PARAMS.brushDepth,
+                BRUSH_PARAMS.brushOrigin,
+                BRUSH_PARAMS.brushDirection,
+                BRUSH_PARAMS.brushColor
+            );
+            gaussianSplat.updateGenerator();
+            console.log('Brush modifier applied to Gaussian splat');
+        } catch (error) {
+            console.error('Error applying brush modifier:', error);
         }
 
         // Check if all assets are loaded
@@ -1173,6 +1264,261 @@ function onTouchLook(deltaX, deltaY) {
 }
 
 /**
+ * Toggle paint mode on/off
+ */
+function togglePaintMode() {
+    isPaintMode = !isPaintMode;
+    BRUSH_PARAMS.enabled.value = isPaintMode;
+    BRUSH_PARAMS.eraseEnabled.value = false;
+
+    // Update splat to reflect brush state change
+    if (gaussianSplat) {
+        gaussianSplat.needsUpdate = true;
+    }
+
+    // Show/hide paint controls UI
+    const paintControls = document.getElementById('paint-controls');
+    if (paintControls) {
+        if (isPaintMode) {
+            paintControls.classList.add('visible');
+        } else {
+            paintControls.classList.remove('visible');
+        }
+    }
+
+    // Update canvas cursor class
+    if (isPaintMode) {
+        renderer.domElement.classList.add('paint-mode');
+    } else {
+        renderer.domElement.classList.remove('paint-mode', 'erase-mode');
+    }
+
+    // Disable camera controls in paint mode
+    if (isPaintMode) {
+        orbitControls.enabled = false;
+        // Exit pointer lock if in first-person mode
+        if (document.pointerLockElement === renderer.domElement) {
+            document.exitPointerLock();
+        }
+        // Disable touch controls on mobile
+        if (touchControls) {
+            touchControls.disable();
+        }
+        showModeOverlay('Paint Mode');
+        console.log('Paint mode: ON');
+    } else {
+        // Re-enable camera controls
+        if (cameraMode !== 'first-person') {
+            orbitControls.enabled = true;
+        } else {
+            // Re-request pointer lock for first-person mode (desktop only)
+            if (!isMobile) {
+                renderer.domElement.requestPointerLock();
+            }
+        }
+        if (touchControls) {
+            touchControls.enable();
+        }
+        showModeOverlay('View Mode');
+        console.log('Paint mode: OFF');
+    }
+}
+
+/**
+ * Toggle erase mode on/off (can be active alongside paint mode)
+ */
+function toggleEraseMode() {
+    const wasEraseMode = BRUSH_PARAMS.eraseEnabled.value;
+    BRUSH_PARAMS.eraseEnabled.value = !wasEraseMode;
+
+    // Update canvas cursor class
+    if (BRUSH_PARAMS.eraseEnabled.value) {
+        renderer.domElement.classList.remove('paint-mode');
+        renderer.domElement.classList.add('erase-mode');
+    } else {
+        renderer.domElement.classList.remove('erase-mode');
+        renderer.domElement.classList.add('paint-mode');
+    }
+
+    // If turning on erase mode, also enable paint mode
+    if (BRUSH_PARAMS.eraseEnabled.value) {
+        if (!isPaintMode) {
+            togglePaintMode();
+        }
+        showModeOverlay('Erase Mode');
+        console.log('Erase mode: ON');
+    } else {
+        showModeOverlay('Paint Mode');
+        console.log('Erase mode: OFF');
+    }
+}
+
+/**
+ * Adjust brush radius
+ */
+function adjustBrushRadius(delta) {
+    const current = BRUSH_PARAMS.brushRadius.value;
+    const newValue = Math.max(MIN_BRUSH_RADIUS, Math.min(MAX_BRUSH_RADIUS, current + delta));
+    BRUSH_PARAMS.brushRadius.value = newValue;
+    console.log(`Brush radius: ${newValue.toFixed(3)}`);
+    updateBrushSizeDisplay();
+}
+
+/**
+ * Adjust brush depth
+ */
+function adjustBrushDepth(delta) {
+    const current = BRUSH_PARAMS.brushDepth.value;
+    const newValue = Math.max(MIN_BRUSH_DEPTH, Math.min(MAX_BRUSH_DEPTH, current + delta));
+    BRUSH_PARAMS.brushDepth.value = newValue;
+    console.log(`Brush depth: ${newValue.toFixed(1)}`);
+    updateBrushSizeDisplay();
+}
+
+/**
+ * Update brush size display in UI
+ */
+function updateBrushSizeDisplay() {
+    const display = document.getElementById('brush-size-display');
+    if (display) {
+        display.textContent = `Radius: ${BRUSH_PARAMS.brushRadius.value.toFixed(3)} | Depth: ${BRUSH_PARAMS.brushDepth.value.toFixed(1)}`;
+    }
+}
+
+/**
+ * Show mode overlay with fade effect
+ */
+function showModeOverlay(message) {
+    let overlay = document.getElementById('mode-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'mode-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    overlay.textContent = message;
+    overlay.style.opacity = '1';
+
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+    }, 2000);
+}
+
+/**
+ * Initialize color picker
+ */
+function setupColorPicker() {
+    const colorPicker = document.getElementById('color-picker');
+    if (colorPicker) {
+        colorPicker.addEventListener('input', (event) => {
+            const hexColor = event.target.value;
+            // Convert hex to linear RGB (same as example)
+            const color = new THREE.Color(hexColor).convertLinearToSRGB();
+            BRUSH_PARAMS.brushColor.value.x = color.r;
+            BRUSH_PARAMS.brushColor.value.y = color.g;
+            BRUSH_PARAMS.brushColor.value.z = color.b;
+            console.log(`Brush color changed to: ${hexColor}`, color);
+        });
+        console.log('Color picker initialized');
+    }
+
+    // Initialize brush size display
+    updateBrushSizeDisplay();
+}
+
+/**
+ * Set up paint event listeners for mouse interactions
+ */
+function setupPaintControls() {
+    // Mouse move handler for brush preview and painting
+    renderer.domElement.addEventListener('pointermove', (event) => {
+        if (!isPaintMode || !gaussianSplat || !paintRaycaster) return;
+
+        // Calculate normalized device coordinates
+        const clickCoords = new THREE.Vector2(
+            (event.clientX / window.innerWidth) * 2 - 1,
+            -(event.clientY / window.innerHeight) * 2 + 1
+        );
+
+        // Update raycaster from camera
+        paintRaycaster.setFromCamera(clickCoords, camera);
+
+        // Update brush parameters with ray
+        const direction = paintRaycaster.ray.direction.normalize();
+        BRUSH_PARAMS.brushDirection.value.x = direction.x;
+        BRUSH_PARAMS.brushDirection.value.y = direction.y;
+        BRUSH_PARAMS.brushDirection.value.z = direction.z;
+        BRUSH_PARAMS.brushOrigin.value.x = paintRaycaster.ray.origin.x;
+        BRUSH_PARAMS.brushOrigin.value.y = paintRaycaster.ray.origin.y;
+        BRUSH_PARAMS.brushOrigin.value.z = paintRaycaster.ray.origin.z;
+
+        // Mark splat as needing update for preview
+        if (gaussianSplat) {
+            gaussianSplat.needsUpdate = true;
+        }
+
+        // Apply painting effect while dragging
+        if (isDragging && gaussianSplat) {
+            const noSplatRgba = !gaussianSplat.splatRgba;
+            gaussianSplat.splatRgba = spark.getRgba({
+                generator: gaussianSplat,
+                rgba: gaussianSplat.splatRgba
+            });
+
+            if (noSplatRgba) {
+                gaussianSplat.updateGenerator();
+            } else {
+                gaussianSplat.updateVersion();
+            }
+        }
+    });
+
+    // Mouse down handler to start painting
+    renderer.domElement.addEventListener('pointerdown', () => {
+        if (!isPaintMode || !gaussianSplat) return;
+
+        isDragging = true;
+
+        // Bake current changes
+        const noSplatRgba = !gaussianSplat.splatRgba;
+        gaussianSplat.splatRgba = spark.getRgba({
+            generator: gaussianSplat,
+            rgba: gaussianSplat.splatRgba
+        });
+
+        if (noSplatRgba) {
+            gaussianSplat.updateGenerator();
+        } else {
+            gaussianSplat.updateVersion();
+        }
+    });
+
+    // Mouse up handler to stop painting
+    renderer.domElement.addEventListener('pointerup', () => {
+        if (!isPaintMode) return;
+        isDragging = false;
+    });
+
+    console.log('Paint controls initialized');
+}
+
+/**
  * Set up keyboard event listeners
  */
 function setupKeyboardControls() {
@@ -1277,9 +1623,35 @@ function setupKeyboardControls() {
             }
         }
 
-        // Toggle camera view on P
-        if (key === 'p') {
+        // Toggle camera view on V
+        if (key === 'v') {
             toggleCameraMode();
+        }
+
+        // Toggle paint mode on P
+        if (key === 'p') {
+            togglePaintMode();
+        }
+
+        // Toggle erase mode on E
+        if (key === 'e') {
+            toggleEraseMode();
+        }
+
+        // Adjust brush radius with +/- keys
+        if (key === '=' || key === '+') {
+            adjustBrushRadius(0.01);
+        }
+        if (key === '-' || key === '_') {
+            adjustBrushRadius(-0.01);
+        }
+
+        // Adjust brush depth with [/] keys
+        if (key === '[') {
+            adjustBrushDepth(-1.0);
+        }
+        if (key === ']') {
+            adjustBrushDepth(1.0);
         }
     });
 
@@ -1612,6 +1984,50 @@ function animate() {
     if (xrManager && xrManager.getIsXRActive()) {
         // In VR mode: update XR physics and controllers
         xrManager.update(delta, [groundMesh, infiniteFloor]);
+
+        // Update VR painting
+        if (xrControllers && xrControllers.isPaintMode && gaussianSplat) {
+            // Try both controllers for painting
+            for (let controllerIndex = 0; controllerIndex < 2; controllerIndex++) {
+                const rayData = xrControllers.getRayForPainting(controllerIndex);
+                if (rayData) {
+                    // Update brush parameters with controller ray
+                    BRUSH_PARAMS.brushOrigin.value.copy(rayData.origin);
+                    BRUSH_PARAMS.brushDirection.value.copy(rayData.direction);
+
+                    // Update brush color from selected palette color
+                    const selectedColor = xrControllers.paletteColors[xrControllers.currentColorIndex];
+                    const color = new THREE.Color(selectedColor.hex).convertLinearToSRGB();
+                    BRUSH_PARAMS.brushColor.value.x = color.r;
+                    BRUSH_PARAMS.brushColor.value.y = color.g;
+                    BRUSH_PARAMS.brushColor.value.z = color.b;
+
+                    // Enable brush in VR paint mode
+                    BRUSH_PARAMS.enabled.value = true;
+                    BRUSH_PARAMS.eraseEnabled.value = xrControllers.isEraseMode;
+
+                    // If dragging (trigger held), bake the painting
+                    if (xrControllers.isDragging) {
+                        const noSplatRgba = !gaussianSplat.splatRgba;
+                        gaussianSplat.splatRgba = spark.getRgba({
+                            generator: gaussianSplat,
+                            rgba: gaussianSplat.splatRgba
+                        });
+
+                        if (noSplatRgba) {
+                            gaussianSplat.updateGenerator();
+                        } else {
+                            gaussianSplat.updateVersion();
+                        }
+                    }
+
+                    break; // Only use one controller at a time
+                }
+            }
+        } else if (xrControllers && !xrControllers.isPaintMode) {
+            // Disable brush when not in paint mode
+            BRUSH_PARAMS.enabled.value = false;
+        }
 
         // Still update debug display
         if (characterControls) {
@@ -1976,6 +2392,8 @@ async function init() {
 
     // Set up controls
     setupKeyboardControls();
+    setupPaintControls();
+    setupColorPicker();
     setupLevelingControls();
     setupStartButton();
     setupCameraToggleButton();

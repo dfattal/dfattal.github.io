@@ -32,11 +32,33 @@ export class XRControllers {
 
         // Input state
         this.thumbstickAxes = new THREE.Vector2();
-        this.isSelectPressed = false; // Trigger for teleport
+        this.isSelectPressed = false; // Trigger for teleport/paint
         this.isSqueezePressed = false; // Grip for jump/jetpack
         this.squeezeHoldTime = 0;
+        this.buttonAPressed = false; // A/X button for run toggle
+        this.buttonBPressed = false; // B/Y button for paint toggle
 
-        // Raycaster for teleportation
+        // Paint mode state
+        this.isPaintMode = false;
+        this.isEraseMode = false;
+        this.colorPalette = null; // VR color palette group
+        this.paletteColors = [
+            { name: 'Red', hex: 0xff0000 },
+            { name: 'Orange', hex: 0xff8800 },
+            { name: 'Yellow', hex: 0xffff00 },
+            { name: 'Green', hex: 0x00ff00 },
+            { name: 'Cyan', hex: 0x00ffff },
+            { name: 'Blue', hex: 0x0000ff },
+            { name: 'Purple', hex: 0x8800ff },
+            { name: 'Magenta', hex: 0xff00ff },
+            { name: 'White', hex: 0xffffff },
+            { name: 'Gray', hex: 0x808080 },
+            { name: 'Black', hex: 0x000000 },
+            { name: 'Brown', hex: 0x8b4513 }
+        ];
+        this.currentColorIndex = 4; // Start with Cyan (matches default #ff00ff in desktop)
+
+        // Raycaster for teleportation and painting
         this.raycaster = new THREE.Raycaster();
 
         // Ground meshes for raycasting (set by xrManager)
@@ -116,11 +138,22 @@ export class XRControllers {
         console.log(`Controller ${controllerIndex} select start`);
         this.isSelectPressed = true;
 
-        // Show ray for teleportation
-        if (controllerIndex === 0 && this.rayLine0) {
-            this.rayLine0.visible = true;
-        } else if (controllerIndex === 1 && this.rayLine1) {
-            this.rayLine1.visible = true;
+        // Show ray with appropriate color
+        const rayLine = controllerIndex === 0 ? this.rayLine0 : this.rayLine1;
+        if (rayLine) {
+            rayLine.visible = true;
+            // Update ray color based on mode
+            if (this.isPaintMode) {
+                const color = this.isEraseMode ? 0xff0000 : 0x00ff00; // Red for erase, green for paint
+                rayLine.material.color.setHex(color);
+            } else {
+                rayLine.material.color.setHex(0x00ff00); // Green for teleport
+            }
+        }
+
+        // Start painting if in paint mode
+        if (this.isPaintMode) {
+            this.isDragging = true;
         }
     }
 
@@ -129,14 +162,24 @@ export class XRControllers {
         this.isSelectPressed = false;
 
         // Hide ray
-        if (controllerIndex === 0 && this.rayLine0) {
-            this.rayLine0.visible = false;
-        } else if (controllerIndex === 1 && this.rayLine1) {
-            this.rayLine1.visible = false;
+        const rayLine = controllerIndex === 0 ? this.rayLine0 : this.rayLine1;
+        if (rayLine) {
+            rayLine.visible = false;
         }
 
-        // Execute teleport
-        this.xrManager.executeTeleport();
+        // Paint mode: Check for color selection first, then painting
+        if (this.isPaintMode) {
+            // Check if pointing at color palette
+            if (this.checkColorSelection(controllerIndex)) {
+                // Color selected, don't paint
+                return;
+            }
+            // Stop painting
+            this.isDragging = false;
+        } else {
+            // Teleport mode: Execute teleport
+            this.xrManager.executeTeleport();
+        }
     }
 
     onSqueezeStart(controllerIndex, event) {
@@ -189,11 +232,170 @@ export class XRControllers {
                 } else {
                     this.buttonAPressed = false;
                 }
+
+                // Check for B/Y button press (button index 5) for paint mode toggle
+                if (gamepad.buttons.length > 5 && gamepad.buttons[5].pressed) {
+                    // Debounce button press
+                    if (!this.buttonBPressed) {
+                        this.buttonBPressed = true;
+                        this.togglePaintMode();
+                    }
+                } else {
+                    this.buttonBPressed = false;
+                }
             }
         }
 
         this.thumbstickAxes.set(0, 0);
         return this.thumbstickAxes;
+    }
+
+    /**
+     * Toggle paint mode on/off in VR
+     */
+    togglePaintMode() {
+        this.isPaintMode = !this.isPaintMode;
+
+        if (this.isPaintMode) {
+            console.log('VR Paint mode: ON');
+            this.showColorPalette();
+        } else {
+            console.log('VR Paint mode: OFF');
+            this.isEraseMode = false; // Reset erase mode when exiting paint
+            this.hideColorPalette();
+        }
+    }
+
+    /**
+     * Create the VR color palette (3x4 grid of colored spheres)
+     */
+    createColorPalette() {
+        this.colorPalette = new THREE.Group();
+
+        const sphereGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+        const spacing = 0.08;
+
+        // Create 3x4 grid of color spheres
+        this.paletteColors.forEach((colorData, index) => {
+            const material = new THREE.MeshBasicMaterial({ color: colorData.hex });
+            const sphere = new THREE.Mesh(sphereGeometry, material);
+
+            // Calculate position in 3x4 grid
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            sphere.position.set(
+                col * spacing - spacing, // Center the grid
+                -row * spacing,
+                0
+            );
+
+            sphere.userData = {
+                isColorPicker: true,
+                colorIndex: index,
+                colorHex: colorData.hex,
+                colorName: colorData.name
+            };
+
+            this.colorPalette.add(sphere);
+        });
+
+        // Position palette relative to left controller (will be updated each frame)
+        this.colorPalette.position.set(0.15, 0, -0.3); // Right and forward from controller
+        this.colorPalette.visible = false;
+
+        // Add to left controller (controller1)
+        if (this.controller1) {
+            this.controller1.add(this.colorPalette);
+        }
+
+        console.log('VR color palette created');
+    }
+
+    /**
+     * Show color palette in VR
+     */
+    showColorPalette() {
+        if (!this.colorPalette) {
+            this.createColorPalette();
+        }
+        if (this.colorPalette) {
+            this.colorPalette.visible = true;
+        }
+    }
+
+    /**
+     * Hide color palette in VR
+     */
+    hideColorPalette() {
+        if (this.colorPalette) {
+            this.colorPalette.visible = false;
+        }
+    }
+
+    /**
+     * Check if controller is pointing at color palette and select color
+     * @param {number} controllerIndex - 0 or 1
+     * @returns {boolean} True if color was selected, false otherwise
+     */
+    checkColorSelection(controllerIndex) {
+        if (!this.isPaintMode || !this.colorPalette || !this.colorPalette.visible) {
+            return false;
+        }
+
+        const controller = controllerIndex === 0 ? this.controller0 : this.controller1;
+        if (!controller) return false;
+
+        // Get controller world position and direction
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.identity().extractRotation(controller.matrixWorld);
+
+        this.raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+        this.raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+        // Raycast against palette spheres
+        const intersects = this.raycaster.intersectObjects(this.colorPalette.children, false);
+
+        if (intersects.length > 0) {
+            const selectedSphere = intersects[0].object;
+            if (selectedSphere.userData.isColorPicker) {
+                this.currentColorIndex = selectedSphere.userData.colorIndex;
+                console.log(`Selected color: ${selectedSphere.userData.colorName}`);
+
+                // Visual feedback: briefly enlarge the selected sphere
+                selectedSphere.scale.set(1.3, 1.3, 1.3);
+                setTimeout(() => {
+                    selectedSphere.scale.set(1, 1, 1);
+                }, 200);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get current controller ray for painting
+     * @param {number} controllerIndex - 0 or 1
+     * @returns {object|null} Ray origin and direction, or null
+     */
+    getRayForPainting(controllerIndex) {
+        if (!this.isPaintMode) return null;
+
+        const controller = controllerIndex === 0 ? this.controller0 : this.controller1;
+        if (!controller) return null;
+
+        // Get controller world position and direction
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.identity().extractRotation(controller.matrixWorld);
+
+        const origin = new THREE.Vector3();
+        origin.setFromMatrixPosition(controller.matrixWorld);
+
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyMatrix4(tempMatrix).normalize();
+
+        return { origin, direction };
     }
 
     /**
