@@ -172,11 +172,6 @@ export class AudioManager {
         if (this.audioContext) return this.audioContext;
         const Ctor = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new Ctor();
-        try {
-            this.audioContext.onstatechange = () => {
-                try { console.log('[AudioContext] state:', this.audioContext.state); } catch (_) { }
-            };
-        } catch (_) { }
         return this.audioContext;
     }
 
@@ -243,49 +238,6 @@ export class AudioManager {
         }
     }
 
-    // Some iOS Chrome builds need a brief, near-silent signal post-resume to route audio
-    primeOutput() {
-        try {
-            const osc = this.audioContext.createOscillator();
-            const g = this.audioContext.createGain();
-            g.gain.value = 0.00001; // inaudible
-            osc.frequency.value = 440;
-            osc.connect(g).connect(this.masterGain);
-            const t = this.audioContext.currentTime;
-            osc.start(t);
-            osc.stop(t + 0.05);
-            osc.onended = () => {
-                try { osc.disconnect(); } catch (_) { }
-                try { g.disconnect(); } catch (_) { }
-            };
-        } catch (e) {
-            console.warn('primeOutput failed:', e);
-        }
-    }
-
-    // Use a muted HTMLAudioElement with a silent WAV to unlock media policies on iOS Chrome
-    async mediaElementUnlock() {
-        try {
-            const el = document.createElement('audio');
-            el.setAttribute('playsinline', 'true');
-            el.setAttribute('webkit-playsinline', 'true');
-            el.muted = true;
-            // Minimal silent WAV (zero-length data)
-            el.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
-            const p = el.play();
-            if (p && typeof p.then === 'function') {
-                await p.catch(() => { });
-            }
-            // Give the UA a tick to engage the audio route
-            await new Promise(r => setTimeout(r, 50));
-            try { el.pause(); } catch (_) { }
-            try { el.remove(); } catch (_) { }
-            console.log('Media element unlock attempted');
-        } catch (e) {
-            console.warn('mediaElementUnlock failed:', e);
-        }
-    }
-
     async loadBuffer(url) {
         const ctx = this.ensureContext();
         const response = await fetch(url);
@@ -316,15 +268,6 @@ export class AudioManager {
         });
     }
 
-    isIOSChrome() {
-        try {
-            const ua = navigator.userAgent || '';
-            return /CriOS/i.test(ua); // Chrome on iOS
-        } catch (_) {
-            return false;
-        }
-    }
-
     /**
      * Must be called from a user gesture. Resumes context and starts looped tracks at gain=0.
      */
@@ -334,55 +277,42 @@ export class AudioManager {
             return;
         }
 
-        // On iOS Chrome, (and generally if suspended) try media element unlock first
-        if (this.isMobile && (this.isIOSChrome() || (this.audioContext && this.audioContext.state === 'suspended'))) {
-            await this.mediaElementUnlock();
+        // iOS robustness: create a fresh AudioContext inside the gesture on mobile
+        if (this.isMobile) {
+            try {
+                if (this.audioContext && this.audioContext.state !== 'closed') {
+                    // Some Safari versions require closing old contexts to free hardware
+                    try { await this.audioContext.close(); } catch (_) { }
+                }
+            } catch (_) { }
+            const Ctor = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new Ctor();
+            // Reset graph and tracks
+            this.masterGain = null;
+            this.oneShotGain = null;
+            this.tracks = { background: null, walking: null, running: null, jetpack: null };
+            this.setupGraph();
         }
 
-        // Resume the context
         const ctx = this.ensureContext();
         try { await ctx.resume(); } catch (e) { console.warn('AudioContext resume failed:', e); }
-        console.log('[AudioContext] state after resume():', ctx.state);
 
-        // Poll briefly if still suspended
-        if (ctx.state === 'suspended') {
-            const start = performance.now();
-            while (ctx.state === 'suspended' && performance.now() - start < 800) {
-                try { await ctx.resume(); } catch (_) { }
-                await new Promise(r => setTimeout(r, 50));
-            }
-            console.log('[AudioContext] state after polling:', ctx.state);
+        // Decode using the (possibly new) context to ensure buffers are valid
+        try {
+            await this.preloadAll();
+        } catch (e) {
+            console.warn('Continuing without all audio buffers:', e);
         }
 
-        // Kick the audio route with an inaudible short tone (helps Chrome iOS)
-        this.primeOutput();
-
-        // Start any tracks that already have decoded buffers (no await to keep gesture alive)
-        const startedNow = [];
-        if (this.buffers.background) { this.startOrCreateTrack('background', this.buffers.background); startedNow.push('background'); }
-        if (!this.isMobile && this.buffers.walking) { this.startOrCreateTrack('walking', this.buffers.walking); startedNow.push('walking'); }
-        if (this.buffers.running) { this.startOrCreateTrack('running', this.buffers.running); startedNow.push('running'); }
-        if (this.buffers.jetpack) { this.startOrCreateTrack('jetpack', this.buffers.jetpack); startedNow.push('jetpack'); }
-        if (startedNow.length) console.log('Tracks started immediately after resume:', startedNow);
+        // Create looped tracks and start them silently
+        this.startOrCreateTrack('background', this.buffers.background);
+        if (!this.isMobile) this.startOrCreateTrack('walking', this.buffers.walking);
+        this.startOrCreateTrack('running', this.buffers.running);
+        this.startOrCreateTrack('jetpack', this.buffers.jetpack);
 
         this.audioUnlocked = true;
         this.loopedSoundsStarted = true;
-
-        // In the background, ensure all buffers are decoded for this (possibly new) context
-        this.preloadAll().then(() => {
-            const startedLater = [];
-            if (!this.tracks.background && this.buffers.background) { this.startOrCreateTrack('background', this.buffers.background); startedLater.push('background'); }
-            if (!this.isMobile && !this.tracks.walking && this.buffers.walking) { this.startOrCreateTrack('walking', this.buffers.walking); startedLater.push('walking'); }
-            if (!this.tracks.running && this.buffers.running) { this.startOrCreateTrack('running', this.buffers.running); startedLater.push('running'); }
-            if (!this.tracks.jetpack && this.buffers.jetpack) { this.startOrCreateTrack('jetpack', this.buffers.jetpack); startedLater.push('jetpack'); }
-            if (startedLater.length) {
-                console.log('Tracks started after background decode:', startedLater);
-            }
-        }).catch((e) => {
-            console.warn('Background audio preload failed:', e);
-        });
-
-        console.log('✓ Web Audio unlocked; looped tracks running when buffers available');
+        console.log('✓ Web Audio unlocked, looped tracks running at gain 0');
     }
 
     startOrCreateTrack(key, buffer) {
