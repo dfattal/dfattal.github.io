@@ -1,0 +1,1641 @@
+// LifRender.js -- test renderer for LIF files in webXR
+import { LifLoader } from '../LIF/LifLoader.js';
+import { MN2MNRenderer, ST2MNRenderer } from '../VIZ/Renderers.js';
+
+// Get the full URL
+const urlParams = new URLSearchParams(window.location.search);
+const glow = urlParams.get('glow') ? urlParams.get('glow') : true; // Default to true
+const glowAnimTime = urlParams.get('glowAnimTime') ? urlParams.get('glowAnimTime') : 2.0; // Default to 2.0
+const glowPulsePeriod = urlParams.get('glowPulsePeriod') ? urlParams.get('glowPulsePeriod') : 2.0; // Default to 2.0
+const test = urlParams.get('test') !== null ? urlParams.get('test') !== 'false' && urlParams.get('test') !== '0' : true; // Default to true
+console.log("test: ", test);
+
+let views = null;
+let stereo_render_data = null;
+let xrCanvasInitialized = false;
+let convergencePlane = null;
+let displaySwitch = false;
+
+// Three.js renderer
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+let scene, camera, renderer;
+let planeLeft = null, planeRight = null;  // VR planes
+let planeNonVR = null;                    // single-plane for NON-VR
+let texL = null;                    // loaded left eye texture
+let texR = null;                    // loaded right eye texture
+let rL = null;                      // MN2MNRenderer for left eye
+let rR = null;                      // MN2MNRenderer for right eye
+let C1 = (0,0,0);
+let sl1 = (0,0);
+let roll1 = 0;
+
+// Controller tracking
+let leftController = null;
+let rightController = null;
+let leftButtonPressed = false;
+let leftXButtonPressed = false; // Track X button state
+let leftXButtonJustPressed = false; // Track when X button is first pressed
+
+// Non-VR WebGL canvas variables
+let container, canvas, gl, nonVRRenderer = null;
+let mouseX = 0, mouseY = 0;
+let windowHalfX, windowHalfY;
+let isVRActive = false;
+let is3D = isVisionProUA() ? 0 : 1; // Force VR mode for Vision Pro
+let focus = 0.01;
+let viewportScale = 1.2;
+const MAX_TEX_SIZE_VR = 1920;
+
+let startTime;
+
+let DISTANCE = 100;       // how far from each eye to place the main SBS planes in VR
+const HUD_DISTANCE = 10;   // how far in front of camera we place the HUD plane
+
+// Temp re-usable vectors/quats
+const tmpPos = new THREE.Vector3();
+const tmpQuat = new THREE.Quaternion();
+
+let forceShowPlanes = false; // debug: show planes even if convergence calc fails
+
+// ---- Vision Pro detection & XR diagnostics (non-invasive) ----
+function isVisionProUA() {
+    const qp = new URLSearchParams(location.search);
+    if (qp.get('forcevision') === '1') return true; // manual override
+
+    const ua = (navigator.userAgent || '');
+    const uaLow = ua.toLowerCase();
+    const vendor = (navigator.vendor || '').toLowerCase();
+    const platform = (navigator.platform || '').toLowerCase();
+    const uaDataPlat = (navigator.userAgentData && navigator.userAgentData.platform)
+        ? navigator.userAgentData.platform.toLowerCase()
+        : '';
+
+    const hasVisionTokens = /visionos|applevision|apple vision/.test(uaLow) || /vision/.test(uaDataPlat);
+    const isApple = vendor.includes('apple');
+    const isNotIOS = !/iphone|ipad|ipod/.test(uaLow);
+    const macLike = platform.includes('mac');
+    const hasXR = 'xr' in navigator; // WebXR present
+
+    // Heuristic: Apple + WebXR + not iPhone/iPad, running on Mac-like platform OR explicit Vision tokens
+    return hasVisionTokens || (isApple && hasXR && isNotIOS && macLike);
+}
+
+// ---- Pre-session XR debug panel (DOM overlay) ----
+const xrDebugState = {
+    enabled: false,
+    el: null,
+    lastCheck: 0,
+};
+
+// Tiny badge to toggle the preflight panel if detection/params miss
+let xrPreBadge = null;
+function createXRPreflightBadge() {
+    if (xrPreBadge) return xrPreBadge;
+    const b = document.createElement('div');
+    b.textContent = 'XR?';
+    Object.assign(b.style, {
+        position: 'fixed', top: '8px', left: '8px', zIndex: 99998,
+        padding: '4px 6px', background: 'rgba(0,0,0,0.5)', color: '#0f0',
+        font: '11px monospace', border: '1px solid rgba(0,255,128,0.4)', borderRadius: '4px',
+        cursor: 'pointer', userSelect: 'none'
+    });
+    b.title = 'Click to show WebXR Preflight panel';
+    b.addEventListener('click', () => {
+        if (!xrDebugState.enabled) createPreXRDebugPanel();
+        updatePreXRDebugPanel(true);
+        // Hide badge when panel is shown to avoid overlap
+        b.style.display = 'none';
+    });
+    document.body.appendChild(b);
+    xrPreBadge = b;
+    return b;
+}
+
+function wantXRDebug() {
+    const qp = new URLSearchParams(location.search);
+    return isVisionProUA() || qp.get('xrdebug') === '1' || ('xr' in navigator);
+}
+
+function createPreXRDebugPanel() {
+    if (xrDebugState.el) return xrDebugState.el;
+    // Defensive: try/catch in case DOM is not ready
+    let el;
+    try {
+        el = document.createElement('div');
+        Object.assign(el.style, {
+            position: 'fixed', top: '8px', left: '8px', zIndex: 99999,
+            padding: '8px 10px', maxWidth: 'min(80vw, 800px)',
+            background: 'rgba(0,0,0,0.7)', color: '#0f0', font: '12px monospace',
+            border: '1px solid rgba(0,255,128,0.4)', borderRadius: '6px',
+            lineHeight: '1.45', whiteSpace: 'pre-wrap'
+        });
+        el.id = 'xr-pre-debug';
+
+        // Header with caret
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.gap = '8px';
+        header.style.font = '600 13px monospace';
+        header.style.marginBottom = '6px';
+
+        const caret = document.createElement('button');
+        caret.textContent = '▾';
+        Object.assign(caret.style, {
+            font: '12px monospace', width: '22px', height: '22px',
+            lineHeight: '22px', textAlign: 'center', padding: 0,
+            background: 'transparent', color: '#0f0', border: '1px solid #0f0',
+            borderRadius: '4px', cursor: 'pointer'
+        });
+
+        const title = document.createElement('div');
+        title.textContent = 'WebXR Preflight (before Enter VR)';
+
+        const body = document.createElement('div');
+        body.id = 'xr-pre-body';
+
+        const row = document.createElement('div');
+        row.style.marginTop = '8px';
+        row.style.display = 'flex';
+        row.style.gap = '8px';
+
+        // Add hard refresh button
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = 'HARD REFRESH';
+        Object.assign(refreshBtn.style, {
+            font: '12px monospace', padding: '4px 8px',
+            background: 'transparent', color: '#0f0',
+            border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer'
+        });
+        refreshBtn.addEventListener('click', () => {
+            window.location.reload(true); // Hard refresh
+        });
+        row.appendChild(refreshBtn);
+
+        let collapsed = false;
+        function setCollapsed(v) {
+            collapsed = v;
+            body.style.display = collapsed ? 'none' : 'block';
+            row.style.display = collapsed ? 'none' : 'flex';
+            caret.textContent = collapsed ? '▸' : '▾';
+        }
+        caret.addEventListener('click', () => setCollapsed(!collapsed));
+        setCollapsed(true); // default collapsed
+
+        // const forceBtn = document.createElement('button');
+        // forceBtn.textContent = 'FORCE SHOW PLANES';
+        // Object.assign(forceBtn.style, {
+        //     font: '12px monospace', padding: '4px 8px',
+        //     background: 'transparent', color: '#0f0',
+        //     border: '1px solid #0f0', borderRadius: '4px', cursor: 'pointer',
+        //     marginLeft: '8px'
+        // });
+        // forceBtn.addEventListener('click', () => {
+        //     forceShowPlanes = !forceShowPlanes;
+        //     console.log('[XR DEBUG] forceShowPlanes =', forceShowPlanes);
+        // });
+        // row.appendChild(forceBtn);
+
+        header.appendChild(caret);
+        header.appendChild(title);
+        el.appendChild(header);
+        el.appendChild(body);
+        el.appendChild(row);
+
+        document.body.appendChild(el);
+    } catch (err) {
+        console.error('Failed to create XR preflight panel:', err);
+        return null;
+    }
+    if (xrPreBadge) xrPreBadge.style.display = 'none';
+    xrDebugState.el = el;
+    xrDebugState.enabled = true;
+    return el;
+}
+
+async function updatePreXRDebugPanel(force = false) {
+    if (!xrDebugState.enabled) return;
+    const now = performance.now();
+    if (!force && now - xrDebugState.lastCheck < 500) return; // throttle
+    xrDebugState.lastCheck = now;
+
+    const body = document.getElementById('xr-pre-body');
+    if (!body) return;
+
+    const ua = navigator.userAgent || '';
+    const hasXR = !!navigator.xr;
+    let supVR = false, supAR = false;
+    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch (_) { }
+    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch (_) { }
+
+    // WebGL & asset readiness hints
+    const hasWebGL = !!document.createElement('canvas').getContext('webgl');
+    const viewsHint = Array.isArray(views) ? views.length : 0;
+
+    // --- Add Vision Pro detection signals for diagnostics ---
+    const vendor = (navigator.vendor || '').toLowerCase();
+    const platform = (navigator.platform || '').toLowerCase();
+    const uaDataPlat = (navigator.userAgentData && navigator.userAgentData.platform)
+        ? navigator.userAgentData.platform
+        : '';
+    const hasVisionTokens = /visionos|applevision|apple vision/.test(ua.toLowerCase()) || /vision/i.test(uaDataPlat);
+    const isApple = vendor.includes('apple');
+    const isNotIOS = !/iphone|ipad|ipod/i.test(ua);
+    const macLike = /mac/i.test(platform);
+
+    const lines = [
+        `Vision Pro detected (heuristic): ${isVisionProUA()}`,
+        `navigator.xr present: ${hasXR}`,
+        hasXR ? '' : '(Hint: Safari → Settings → Advanced → WebXR Experimental Features)',
+        `isSessionSupported('immersive-vr'): ${supVR}`,
+        `isSessionSupported('immersive-ar'): ${supAR}`,
+        `WebGL available: ${hasWebGL}`,
+        `LIF views loaded: ${viewsHint}`,
+        `— Detection signals —`,
+        `vendor: ${navigator.vendor || ''}`,
+        `platform: ${navigator.platform || ''}`,
+        `uaData.platform: ${uaDataPlat || ''}`,
+        `hasVisionTokens: ${hasVisionTokens}`,
+        `isApple: ${isApple}`,
+        `isNotIOS: ${isNotIOS}`,
+        `macLike: ${macLike}`,
+        `UA: ${ua}`,
+        `Checked: ${new Date().toLocaleTimeString()}`
+    ];
+
+    // Remove empty string lines for cleaner display
+    body.textContent = lines.filter(Boolean).join('\n');
+}
+
+let xrDiag = {
+    enabled: false,
+    sprite: null,
+    canvas: null,
+    ctx: null,
+    tex: null,
+    lastPaint: 0
+};
+
+function createXRDiagnosticsBillboard() {
+    if (xrDiag.sprite) return xrDiag.sprite;
+    xrDiag.canvas = document.createElement('canvas');
+    xrDiag.canvas.width = 1024; xrDiag.canvas.height = 512;
+    xrDiag.ctx = xrDiag.canvas.getContext('2d');
+    xrDiag.tex = new THREE.CanvasTexture(xrDiag.canvas);
+    const mat = new THREE.SpriteMaterial({ map: xrDiag.tex, depthTest: false, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.2, 0.6, 1); // meters in world
+    sprite.position.set(0, 1.4, -1.6); // in front of viewer
+    xrDiag.sprite = sprite;
+    return sprite;
+}
+
+async function paintXRDiagnostics(session, xrCam) {
+    if (!xrDiag.ctx) return;
+    const ctx = xrDiag.ctx;
+    const now = performance.now();
+    if (now - xrDiag.lastPaint < 150) return; // throttle ~6fps
+    xrDiag.lastPaint = now;
+
+    // Capability checks
+    const hasXR = !!navigator.xr;
+    let supVR = false, supAR = false;
+    try { supVR = hasXR && await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) { }
+    try { supAR = hasXR && await navigator.xr.isSessionSupported('immersive-ar'); } catch (e) { }
+
+    const isPresenting = !!renderer?.xr?.isPresenting;
+    const mode = session?.mode || '-';
+    const isArray = !!(xrCam && xrCam.isArrayCamera);
+    const camCount = isArray ? (xrCam.cameras?.length || 0) : (xrCam ? 1 : 0);
+
+    // FOV sample (left cam or mono cam)
+    let fovText = '-';
+    try {
+        const cam = isArray ? xrCam.cameras[0] : xrCam;
+        if (cam && cam.projectionMatrix) {
+            const f = computeFovTanAngles(cam);
+            fovText = `tanU:${f.tanUp.toFixed(3)} tanD:${f.tanDown.toFixed(3)} tanL:${f.tanLeft.toFixed(3)} tanR:${f.tanRight.toFixed(3)}`;
+        }
+    } catch (_) { }
+
+    const pL = planeLeft, pR = planeRight;
+    const pl = !!pL, pr = !!pR;
+    const plv = pl && pL.visible; const prv = pr && pR.visible;
+    const plo = pl && pL.material && pL.material.uniforms && pL.material.uniforms.uOpacity
+        ? Number(pL.material.uniforms.uOpacity.value).toFixed(2) : '-';
+    const pro = pr && pR.material && pR.material.uniforms && pR.material.uniforms.uOpacity
+        ? Number(pR.material.uniforms.uOpacity.value).toFixed(2) : '-';
+    const tl = texL?.image?.width ? `${texL.image.width}x${texL.image.height}`
+        : (rL?.gl?.canvas ? `${rL.gl.canvas.width}x${rL.gl.canvas.height}` : '-');
+    const tr = texR?.image?.width ? `${texR.image.width}x${texR.image.height}`
+        : (rR?.gl?.canvas ? `${rR.gl.canvas.width}x${rR.gl.canvas.height}` : '-');
+    const lm = pL?.layers?.mask ?? '-';
+    const rm = pR?.layers?.mask ?? '-';
+
+    // Left plane position and scale info
+    const plPos = pL ? `(${pL.position.x.toFixed(3)}, ${pL.position.y.toFixed(3)}, ${pL.position.z.toFixed(3)})` : '-';
+    const plScale = pL ? `(${pL.scale.x.toFixed(3)}, ${pL.scale.y.toFixed(3)}, ${pL.scale.z.toFixed(3)})` : '-';
+    const plQuat = pL ? `(${pL.quaternion.x.toFixed(3)}, ${pL.quaternion.y.toFixed(3)}, ${pL.quaternion.z.toFixed(3)}, ${pL.quaternion.w.toFixed(3)})` : '-';
+
+    // DISTANCE and convergence plane debug info
+    const distanceInfo = `DISTANCE: ${DISTANCE.toFixed(3)}`;
+    const focusInfo = `focus: ${focus}`;
+    const invZInfo = views && views[0] ? `inv_z_map.min: ${views[0].inv_z_map.min.toFixed(6)}` : 'inv_z_map: -';
+    const convergenceInfo = convergencePlane ? `convPlane: (${convergencePlane.position.x.toFixed(3)}, ${convergencePlane.position.y.toFixed(3)}, ${convergencePlane.position.z.toFixed(3)})` : 'convPlane: -';
+    const is3DInfo = `is3D: ${is3D}`;
+
+    // Real-time camera position values (from render loop)
+    const renderCamInfo = rL ? `rL.renderCam: (${rL.renderCam.pos.x.toFixed(3)}, ${rL.renderCam.pos.y.toFixed(3)}, ${rL.renderCam.pos.z.toFixed(3)})` : 'rL.renderCam: -';
+    const initialPosInfo = typeof initialY !== 'undefined' && typeof initialZ !== 'undefined' ? `initial: Y:${initialY.toFixed(3)} Z:${initialZ.toFixed(3)} IPD:${IPD ? IPD.toFixed(3) : '-'}` : 'initial: -';
+
+    // Draw panel
+    ctx.clearRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
+    ctx.fillStyle = 'rgba(0,0,0,0)'; // Zero opacity - invisible
+    ctx.fillRect(0, 0, xrDiag.canvas.width, xrDiag.canvas.height);
+    ctx.fillStyle = 'rgba(0,255,127,0)'; // Zero opacity text - invisible
+    ctx.font = '28px monospace';
+    ctx.fillText('WebXR Diagnostics (Vision Pro)', 24, 44);
+    ctx.font = '22px monospace';
+    const lines = [
+        `renderer.xr.isPresenting: ${isPresenting}`,
+        `ArrayCamera: ${isArray}  cameras: ${camCount}`,
+        `FOV: ${fovText}`,
+        `planes: L:${pl} (vis:${plv} op:${plo} layerMask:${lm})`,
+        `leftPlane pos: ${plPos}`,
+        `leftPlane scale: ${plScale}`,
+        `leftPlane quat: ${plQuat}`,
+        `${distanceInfo}  ${focusInfo}  ${is3DInfo}`,
+        `${invZInfo}`,
+        `${convergenceInfo}`,
+        `${renderCamInfo}`,
+        `${initialPosInfo}`,
+        `tex: L:${tl}  R:${tr}`
+    ];
+    let y = 84;
+    for (const s of lines) { ctx.fillText(s, 24, y); y += 32; }
+    xrDiag.tex.needsUpdate = true;
+}
+
+// Shared HUD globals (for both eyes)
+let hudCanvas, hudCtx, hudTexture;
+// initial position of the center eyes
+let initialY, initialZ, IPD;
+
+function disposeResources() {
+    if (renderer) {
+        // Stop the animation loop
+        renderer.setAnimationLoop(null);
+    }
+
+    if (texL) {
+        texL.dispose();
+        texL = null;
+    }
+    if (texR) {
+        texR.dispose();
+        texR = null;
+    }
+    if (renderer) {
+        renderer.dispose();
+        renderer.forceContextLoss(); // Explicitly trigger context loss (optional but recommended)
+        renderer = null;
+    }
+    if (planeLeft) {
+        planeLeft.geometry.dispose();
+        planeLeft.material.dispose();
+        planeLeft = null;
+    }
+    if (planeRight) {
+        planeRight.geometry.dispose();
+        planeRight.material.dispose();
+        planeRight = null;
+    }
+    if (rL) {
+        rL.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        rL = null;
+    }
+    if (rR) {
+        rR.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        rR = null;
+    }
+    if (nonVRRenderer) {
+        nonVRRenderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        nonVRRenderer = null;
+    }
+
+    // Reset animation variables
+    startTime = undefined;
+    xrCanvasInitialized = false;
+    isVRActive = false;
+    initialY = undefined;
+    initialZ = undefined;
+    IPD = undefined;
+
+    console.log('Resources disposed.');
+}
+
+// Expose the dispose function globally for the reset button
+window.disposeResources = disposeResources;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Get canvas and container elements
+    container = document.getElementById('canvas-container');
+    canvas = document.getElementById('glCanvas');
+
+    // Set initial window dimensions
+    windowHalfX = window.innerWidth / 2;
+    windowHalfY = window.innerHeight / 2;
+
+    // Initialize canvas size
+    resizeCanvasToContainer();
+
+    // Add mouse event listeners
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    window.addEventListener('resize', onWindowResize);
+
+    // Always provide a tiny badge to open the preflight panel
+    createXRPreflightBadge();
+
+    // Pre-session XR debug panel (shows before Enter VR)
+    if (wantXRDebug()) {
+        createPreXRDebugPanel();
+        updatePreXRDebugPanel(true);
+    }
+
+    const filePicker = document.getElementById('filePicker');
+    filePicker.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            try {
+                // Dispose of old resources explicitly before loading new ones
+                disposeResources();
+                const loader = new LifLoader();
+                await loader.load(file);
+
+                // Retrieve processed views from LifLoader.
+                views = loader.views;
+                stereo_render_data = loader.stereo_render_data;
+
+                console.log('Views:', views);
+                console.log('Stereo Render Data:', stereo_render_data);
+
+                // Hide the file picker after file selection
+                filePicker.style.display = 'none';
+                await init();
+                animate();
+
+                // We now dispatch lif-loaded in the animate function for better timing
+                // No longer need to dispatch it here
+            } catch (error) {
+                console.error('Error loading LIF:', error);
+
+                // Dispatch an error event that HTML can listen for
+                const errorEvent = new CustomEvent('lif-load-error', {
+                    detail: { message: 'Failed to load LIF file. Make sure it is a valid LIF format.' }
+                });
+                window.dispatchEvent(errorEvent);
+            }
+        }
+    });
+});
+
+function resizeCanvasToContainer() {
+    const displayWidth = container.clientWidth || window.innerWidth;
+    const displayHeight = container.clientHeight || window.innerHeight;
+
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+
+        // Update window half values for mouse tracking
+        windowHalfX = displayWidth / 2;
+        windowHalfY = displayHeight / 2;
+
+        // The renderers will handle viewport updates internally
+        // when they call drawScene in the next animation frame
+    }
+}
+
+function onDocumentMouseMove(event) {
+    if (isVRActive) return;
+
+    mouseX = (event.clientX - windowHalfX) / windowHalfX; // Normalize to [-1, 1]
+    mouseY = (event.clientY - windowHalfY) / windowHalfY; // Normalize and invert Y
+}
+
+/** Initialize scene, camera, renderer, etc. */
+async function init() {
+    // Initialize WebGL canvas for non-VR mode
+    gl = canvas.getContext('webgl');
+    if (!gl) {
+        console.error('Unable to initialize WebGL');
+        return;
+    }
+
+    // Create non-VR renderer using the canvas
+    if (views.length == 1) {
+        nonVRRenderer = await MN2MNRenderer.createInstance(gl, '../Shaders/rayCastMonoLDIGlow' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
+        nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
+        nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    } else if (views.length == 2) {
+        nonVRRenderer = await ST2MNRenderer.createInstance(gl, '../Shaders/rayCastStereoLDIGlow' + (test ? '-test' : '') + '.glsl', views, false, 2560); // limit image size to 2560px
+        nonVRRenderer.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
+        nonVRRenderer.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+    }
+
+    // Three.js scene setup for VR mode
+    scene = new THREE.Scene();
+
+    // Camera used outside VR; in VR, Three.js uses an internal ArrayCamera.
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    scene.add(camera);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Enable WebXR
+    renderer.xr.enabled = true;
+
+    // Prevent XR framebuffer rendering outside of XR session
+    renderer.autoClear = false;  // Let animation loop handle clearing
+
+    // Create standard VR button
+    const vrButton = VRButton.createButton(renderer);
+    document.body.appendChild(vrButton);
+    // Override background to semi-transparent black
+    vrButton.style.background = 'rgba(0, 0, 0, 0.5)';
+
+    // XR Debug panel: hook VR button to re-check on click
+    if (xrDebugState.enabled && vrButton) {
+        vrButton.addEventListener('click', () => {
+            // Re-run capability checks at the moment of pressing Enter VR
+            updatePreXRDebugPanel(true);
+        });
+    }
+
+    // Add XR session start/end event listeners
+    renderer.xr.addEventListener('sessionstart', () => {
+        isVRActive = true;
+        canvas.style.display = 'none'; // Hide non-VR canvas when in VR
+
+        // Dispose of nonVRRenderer to free GPU resources
+        if (nonVRRenderer) {
+            console.log('Disposing nonVRRenderer to free GPU resources');
+            // First lose the context to free GPU resources
+            nonVRRenderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
+            // Then set to null for garbage collection
+            nonVRRenderer = null;
+        }
+
+        setupVRControllers();
+
+        // If on Vision Pro, show a front-of-viewer diagnostics sprite
+        if (isVisionProUA()) {
+            xrDiag.enabled = true;
+            const b = createXRDiagnosticsBillboard();
+            scene.add(b);
+        }
+        // Hide preflight panel once we enter XR; it served its purpose
+        if (xrDebugState.el) { xrDebugState.el.style.display = 'none'; }
+    });
+
+    renderer.xr.addEventListener('sessionend', () => {
+        // Immediately stop animation loop to prevent any rendering during transition
+        renderer.setAnimationLoop(null);
+        isVRActive = false;
+        canvas.style.display = 'block'; // Show non-VR canvas when exiting VR
+        resizeCanvasToContainer(); // Make sure canvas is properly sized
+
+        // XR Diagnostics cleanup (if any)
+        if (xrDiag.sprite) { scene.remove(xrDiag.sprite); xrDiag.sprite.material.map?.dispose?.(); xrDiag.sprite.material.dispose(); xrDiag.sprite = null; }
+        xrDiag.enabled = false;
+
+        // Re-show the preflight panel so you can immediately re-check
+        if (xrDebugState.el) { xrDebugState.el.style.display = 'block'; updatePreXRDebugPanel(true); }
+        // Re-show the badge if the panel is hidden/removed
+        if (xrPreBadge) xrPreBadge.style.display = 'block';
+
+        // Reload the page when exiting VR
+        window.location.reload();
+    });
+
+    // ADD CONTEXT LOSS HANDLER HERE
+    renderer.domElement.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        console.error('WebGL context lost.');
+        disposeResources();
+    });
+
+    document.body.appendChild(renderer.domElement);
+
+    // create offscreen canvases
+    const offscreenCanvasL = document.createElement('canvas');
+    const aspectRatio = views[0].height_px / views[0].width_px;
+    offscreenCanvasL.width = Math.min(1920, views[0].width_px);
+    offscreenCanvasL.height = Math.round(offscreenCanvasL.width * aspectRatio);
+    const offscreenCanvasR = document.createElement('canvas');
+    offscreenCanvasR.width = offscreenCanvasL.width;
+    offscreenCanvasR.height = offscreenCanvasL.height;
+
+    // Get a WebGL context from the offscreen canvas.
+    const glL = offscreenCanvasL.getContext('webgl');
+    const glR = offscreenCanvasR.getContext('webgl');
+
+    if (views.length == 1) {
+        console.log("test: ", test);
+        rL = await MN2MNRenderer.createInstance(glL, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // limit image size to 3840px
+        rR = await MN2MNRenderer.createInstance(glR, '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl', views, false, 3840); // 
+        console.log("shader used: ", '../Shaders/rayCastMonoLDI' + (test ? '-test' : '') + '.glsl');
+        rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
+        rR.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
+    } else if (views.length == 2) {
+        rL = await ST2MNRenderer.createInstance(glL, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // limit image size to 1920px
+        rR = await ST2MNRenderer.createInstance(glR, '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl', views, false, 1920); // 
+        console.log("shader used: ", '../Shaders/rayCastStereoLDI' + (test ? '-test' : '') + '.glsl');
+        rL.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        rR.invd = stereo_render_data ? stereo_render_data.inv_convergence_distance : 0;
+        rL.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
+        rR.background = [0.1, 0.1, 0.1, 0.0]; // default to transparent background
+    }
+
+    // set background to white
+    // rL.background = [1,1,1];
+    // rR.background = [1,1,1];
+
+    texL = new THREE.CanvasTexture(rL.gl.canvas);
+    texR = new THREE.CanvasTexture(rR.gl.canvas);
+
+    window.addEventListener('resize', onWindowResize);
+}
+
+
+// Create and set up VR controllers
+function setupVRControllers() {
+    // Create controller objects - use InputSources to check handedness
+    const session = renderer.xr.getSession();
+
+    if (!session) {
+        console.warn('No XR session available for controller setup');
+        return;
+    }
+
+    // Function to set up controllers once input sources are available
+    function setupControllersByHandedness() {
+        if (!session.inputSources || session.inputSources.length === 0) {
+            // Try again in the next frame if no input sources are available yet
+            return requestAnimationFrame(setupControllersByHandedness);
+        }
+
+        // Clear any existing controllers
+        if (leftController) {
+            scene.remove(leftController);
+        }
+        if (rightController) {
+            scene.remove(rightController);
+        }
+
+        // Find controllers by handedness
+        session.inputSources.forEach((inputSource, index) => {
+            const controller = renderer.xr.getController(index);
+
+            if (inputSource.handedness === 'left') {
+                console.log('Found left controller');
+                leftController = controller;
+                leftController.userData.inputSource = inputSource; // Store reference to inputSource
+                scene.add(leftController);
+            }
+            else if (inputSource.handedness === 'right') {
+                console.log('Found right controller');
+                rightController = controller;
+                scene.add(rightController);
+            }
+        });
+    }
+
+    // Set up controllers
+    setupControllersByHandedness();
+
+    // Also listen for inputsourceschange event to handle controller reconnection
+    session.addEventListener('inputsourceschange', setupControllersByHandedness);
+}
+
+// Function to check X button state on left controller
+function checkXButtonState() {
+    if (!leftController || !leftController.userData.inputSource || !leftController.userData.inputSource.gamepad) {
+        return false;
+    }
+
+    const gamepad = leftController.userData.inputSource.gamepad;
+    // X button is typically at index 4 on left controller
+    if (gamepad.buttons.length > 4) {
+        return gamepad.buttons[4].pressed;
+    }
+
+    return false;
+}
+
+// Function to set canvas dimensions based on XR camera viewports and display mode
+function setCanvasDimensions(leftCam, rightCam) {
+    if (!rL || !rR || !leftCam || !rightCam) {
+        console.warn("Cannot set canvas dimensions - renderers or cameras not available");
+        return false;
+    }
+
+    if (is3D > 0.5 && !isVisionProUA()) { // 3D display (but not Vision Pro)
+        // Size canvas to match convergence plane aspect ratio, scaled to fit within viewport
+        if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
+            convergencePlane.width > 0 && convergencePlane.height > 0) {
+
+            // Calculate scale factors to fit convergence plane in viewport
+            const scaleX = leftCam.viewport.width / convergencePlane.width;
+            const scaleY = leftCam.viewport.height / convergencePlane.height;
+            const scale = Math.min(scaleX, scaleY); // Maximize scale while fitting in viewport
+
+            // Calculate final canvas dimensions
+            const canvasWidth = Math.round(convergencePlane.width * scale);
+            const canvasHeight = Math.round(convergencePlane.height * scale);
+
+            rL.gl.canvas.width = canvasWidth;
+            rL.gl.canvas.height = canvasHeight;
+            rR.gl.canvas.width = canvasWidth;
+            rR.gl.canvas.height = canvasHeight;
+
+            console.log("3D canvas sized to convergence plane - convergence:",
+                convergencePlane.width.toFixed(2), "x", convergencePlane.height.toFixed(2),
+                "viewport:", leftCam.viewport.width, "x", leftCam.viewport.height,
+                "scale:", scale.toFixed(3), "final:", canvasWidth, "x", canvasHeight);
+        } else {
+            // Fallback to viewport size if convergence plane not available
+            console.warn("Convergence plane not available, using viewport size");
+            rL.gl.canvas.width = leftCam.viewport.width;
+            rL.gl.canvas.height = leftCam.viewport.height;
+            rR.gl.canvas.width = rightCam.viewport.width;
+            rR.gl.canvas.height = rightCam.viewport.height;
+        }
+        viewportScale = 1;
+    } else { // VR
+        // Calculate scaled dimensions while preserving aspect ratio and max dimension of 2560
+        const aspectRatio = views[0].height_px / views[0].width_px;
+        let width = views[0].width_px * viewportScale;
+        let height = views[0].height_px * viewportScale;
+        if (width > MAX_TEX_SIZE_VR) {
+            width = MAX_TEX_SIZE_VR;
+            height = width * aspectRatio;
+        } else if (height > MAX_TEX_SIZE_VR) {
+            height = MAX_TEX_SIZE_VR;
+            width = height / aspectRatio;
+        }
+        rL.gl.canvas.width = width;
+        rL.gl.canvas.height = height;
+        rR.gl.canvas.width = width;
+        rR.gl.canvas.height = height;
+        rL.invd = focus * views[0].inv_z_map.min;
+        rR.invd = focus * views[0].inv_z_map.min;
+    }
+
+    // Recreate textures when canvas dimensions change to avoid texture caching issues
+    if (texL) {
+        texL.dispose();
+        texL = new THREE.CanvasTexture(rL.gl.canvas);
+        console.log("Recreated texL with new canvas dimensions");
+    }
+    if (texR) {
+        texR.dispose();
+        texR = new THREE.CanvasTexture(rR.gl.canvas);
+        console.log("Recreated texR with new canvas dimensions");
+    }
+
+    // Update plane materials with new textures if planes exist
+    if (planeLeft && planeLeft.material && planeLeft.material.uniforms) {
+        planeLeft.material.uniforms.uTexture.value = texL;
+        console.log("Updated planeLeft material with new texture");
+    }
+    if (planeRight && planeRight.material && planeRight.material.uniforms) {
+        planeRight.material.uniforms.uTexture.value = texR;
+        console.log("Updated planeRight material with new texture");
+    }
+
+    console.log("Canvas dimensions set - width:", rL.gl.canvas.width, "height:", rL.gl.canvas.height, "is3D:", is3D);
+    return true;
+}
+
+// Function to reset convergence plane and tracking variables
+function resetConvergencePlane(leftCam, rightCam) {
+    console.log("Resetting convergence plane and tracking variables...");
+
+    try {
+        // Recalculate convergence plane based on current camera positions
+        convergencePlane = locateConvergencePlane(leftCam, rightCam);
+        console.log("New convergence plane:", convergencePlane);
+
+        // Reset canvas dimensions based on new convergence plane calculation
+        setCanvasDimensions(leftCam, rightCam);
+
+        // Calculate camera positions in convergence plane's local coordinate system
+        const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
+        localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+        const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(convergencePlane.position);
+        localRightCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+        // Reset initial tracking variables using local coordinates
+        initialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+        initialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+        IPD = localLeftCamPos.distanceTo(localRightCamPos);
+
+        console.log("Reset tracking variables - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+
+        // Update plane positions and scales
+        if (planeLeft && planeRight && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height)) {
+            planeLeft.position.copy(convergencePlane.position);
+            planeLeft.quaternion.copy(convergencePlane.quaternion);
+            planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
+
+            planeRight.position.copy(convergencePlane.position);
+            planeRight.quaternion.copy(convergencePlane.quaternion);
+            planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
+
+            console.log("Updated plane positions and scales");
+        } else {
+            console.warn("Could not update plane positions - invalid values or planes not initialized");
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Error during convergence plane reset:", error);
+        return false;
+    }
+}
+
+function onWindowResize() {
+    // Update Three.js camera and renderer only if they exist
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // Resize our custom non-VR canvas
+    resizeCanvasToContainer();
+}
+
+// Returns the size, position and orientation of the convergence plane
+function locateConvergencePlane(leftCam, rightCam) {
+    console.log("locateConvergencePlane called with:",
+        "leftCam pos:", leftCam.position,
+        "rightCam pos:", rightCam.position);
+
+    // Get quaternions from cameras and verify they match
+    const leftQuat = leftCam.quaternion;
+    const rightQuat = rightCam.quaternion;
+
+    // Verify cameras have same orientation
+    if (!leftQuat.equals(rightQuat)) {
+        console.warn('Left and right camera orientations do not match');
+    }
+
+    // Calculate center position between left and right cameras
+    const centerCam = leftCam.position.clone().add(rightCam.position).multiplyScalar(0.5);
+
+    const leftFov = computeFovTanAngles(leftCam);
+    const rightFov = computeFovTanAngles(rightCam);
+
+    // console.log("FOV angles:",
+    //     "leftFov:", leftFov,
+    //     "rightFov:", rightFov);
+
+    // Check if FOVs are equal and symmetric
+    const isSymmetric = Math.abs(leftFov.tanUp) === Math.abs(leftFov.tanDown) &&
+        Math.abs(leftFov.tanLeft) === Math.abs(leftFov.tanRight);
+    const isEqual = Math.abs(leftFov.tanUp - rightFov.tanUp) < 0.0001 &&
+        Math.abs(leftFov.tanDown - rightFov.tanDown) < 0.0001 &&
+        Math.abs(leftFov.tanLeft - rightFov.tanLeft) < 0.0001 &&
+        Math.abs(leftFov.tanRight - rightFov.tanRight) < 0.0001;
+    const isMirror = Math.abs(leftFov.tanLeft) === Math.abs(rightFov.tanRight) && Math.abs(leftFov.tanRight) === Math.abs(rightFov.tanLeft) && Math.abs(leftFov.tanUp) === Math.abs(rightFov.tanUp) && Math.abs(leftFov.tanDown) === Math.abs(rightFov.tanDown);
+
+    console.log("FOV analysis:",
+        "isSymmetric:", isSymmetric,
+        "isEqual:", isEqual,
+        "isMirror:", isMirror);
+
+    // Extract FOV angles for both cameras
+    const u0 = leftFov.tanUp;
+    const d0 = -leftFov.tanDown;
+    const r0 = leftFov.tanRight;
+    const l0 = -leftFov.tanLeft;
+
+    const u1 = rightFov.tanUp;
+    const d1 = -rightFov.tanDown;
+    const r1 = rightFov.tanRight;
+    const l1 = -rightFov.tanLeft;
+
+    // Transform camera positions to local coordinate system (centered at centerCam, aligned with leftQuat)
+    const invLeftQuat = leftQuat.clone().invert();
+
+    // Get camera positions relative to centerCam, then rotate to local space
+    const localLeftPos = leftCam.position.clone().sub(centerCam).applyQuaternion(invLeftQuat);
+    const localRightPos = rightCam.position.clone().sub(centerCam).applyQuaternion(invLeftQuat);
+
+    console.log("World positions - Left:", leftCam.position, "Right:", rightCam.position, "Center:", centerCam);
+    console.log("Local positions - Left:", localLeftPos, "Right:", localRightPos);
+
+    // Use local coordinates for calculation
+    const x0 = localLeftPos.x;
+    const y0 = localLeftPos.y;
+    const z0 = localLeftPos.z;
+
+    const x1 = localRightPos.x;
+    const y1 = localRightPos.y;
+    const z1 = localRightPos.z;
+
+    // Calculate display position denominators - check for division by zero
+    const denomX = (r1 - l1 - r0 + l0);
+    const denomY = (u1 - d1 - u0 + d0);
+    console.log("Denominators for position calculation:",
+        "denomX:", denomX,
+        "denomY:", denomY);
+
+    if (Math.abs(denomX) < 0.0001 || isMirror || isVisionProUA()) {
+        console.warn("RENDERING for VR");
+        is3D = 0;
+        console.log("viewportScale:", viewportScale);
+        // Fallback to symmetric calculation
+        DISTANCE = .063 / views[0].inv_z_map.min / focus; // focus 0.01
+        const width = viewportScale * DISTANCE / views[0].focal_px * views[0].width_px;
+        const height = viewportScale * DISTANCE / views[0].focal_px * views[0].height_px;
+        console.log("VR mode DISTANCE calculation:", DISTANCE, "focus:", focus, "inv_z_map.min:", views[0].inv_z_map.min);
+        console.log("centerCam position:", centerCam, "leftQuat:", leftQuat);
+        // Position in local space, then transform back to world space
+        const localPos = new THREE.Vector3(0, 0, -DISTANCE);
+        console.log("localPos before transform:", localPos);
+        const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
+        console.log("worldPos after transform:", worldPos);
+
+        // Remove roll from quaternion by extracting yaw and pitch only
+        const euler = new THREE.Euler().setFromQuaternion(leftQuat, 'YXZ');
+        euler.z = 0; // Remove roll
+        const noRollQuat = new THREE.Quaternion().setFromEuler(euler);
+
+        return {
+            position: worldPos,
+            quaternion: noRollQuat,
+            width: width,
+            height: height
+        };
+    }
+
+    // Calculate display position in local coordinates
+    const zd = (2 * (x1 - x0) + z1 * (r1 - l1) - z0 * (r0 - l0)) / denomX;
+    const xd = x0 - (r0 - l0) * (zd - z0) / 2; // should equal x1 - (r1 - l1) * (zd - z1) / 2
+    const yd = y0 - (u0 - d0) * (zd - z0) / 2; // should equal y1 - (u1 - d1) * (zd - z1) / 2
+
+    console.log("Display position calculation (local coords):",
+        "xd:", xd, "|", x1 - (r1 - l1) * (zd - z1) / 2, "yd:", yd, "|", y1 - (u1 - d1) * (zd - z1) / 2, "zd:", zd);
+
+    // Calculate display size
+    const W = (z0 - zd) * (l0 + r0); // Should equal (z1-zd)*(l1+r1)
+    const H = (z0 - zd) * (u0 + d0); // Should equal (z1-zd)*(u1+d1)
+
+    // Transform local position back to world coordinates
+    const localPos = new THREE.Vector3(xd, yd, zd);
+    const worldPos = localPos.applyQuaternion(leftQuat).add(centerCam);
+
+    console.log("RENDERING for 3D");
+    console.log("Local result - position:", localPos, "width:", Math.abs(W), "height:", Math.abs(H));
+    console.log("World result - position:", worldPos, "width:", Math.abs(W), "height:", Math.abs(H));
+
+    return {
+        position: worldPos,
+        quaternion: leftQuat.clone(),
+        width: Math.abs(W),
+        height: Math.abs(H)
+    };
+}
+
+// Compute FOV angles from XR camera projection matrix
+function computeFovTanAngles(subcam) {
+    const projMatrix = subcam.projectionMatrix;
+
+    // Extract relevant values from projection matrix
+    const m00 = projMatrix.elements[0];
+    const m05 = projMatrix.elements[5];
+    const m08 = projMatrix.elements[8];
+    const m09 = projMatrix.elements[9];
+
+    // Check for division by zero
+    if (Math.abs(m00) < 0.0001 || Math.abs(m05) < 0.0001) {
+        console.warn("Near-zero values in projection matrix, may cause NaN in FOV calculation");
+    }
+
+    // Extract relevant values from projection matrix
+    const left = (1 - m08) / m00;
+    const right = (1 + m08) / m00;
+    const bottom = (1 - m09) / m05;
+    const top = (1 + m09) / m05;
+
+    const result = {
+        tanUp: top,
+        tanDown: -bottom,
+        tanLeft: -left,
+        tanRight: right
+    };
+
+    return result;
+}
+
+/** Our main animation/render loop (WebXR). */
+function animate() {
+    // Flag to track if animation should continue
+    let isAnimating = true;
+    let loadEventDispatched = false;
+
+    // Listen for reset event to stop animation
+    document.addEventListener('reset-viewer', () => {
+        isAnimating = false;
+    });
+
+    // Ensure the lif-loaded event is dispatched only once, at the beginning
+    // This is important for smooth transitions
+    if (nonVRRenderer) {
+        // Add a delay to ensure the renderer is ready - longer for stereo LIFs
+        const delay = views.length > 1 ? 500 : 200; // Longer delay for stereo to fully initialize
+
+        setTimeout(() => {
+            // Force at least one render to happen before we show the canvas
+            if (nonVRRenderer) {
+                // Force a first draw for both mono and stereo before showing
+                if (views.length == 1) {
+                    nonVRRenderer.drawScene(1.1); // Force a mono draw
+                } else if (views.length == 2) {
+                    nonVRRenderer.drawScene(1.1); // Force a stereo draw
+                }
+            }
+
+            if (!loadEventDispatched) {
+                loadEventDispatched = true;
+                const loadedEvent = new Event('lif-loaded');
+                window.dispatchEvent(loadedEvent);
+            }
+        }, delay);
+    }
+
+    // Animation function
+    function animateFrame() {
+        // Stop if no longer animating
+        if (!isAnimating) return;
+
+        // Check if renderer still exists
+        if (!renderer) return;
+
+        // Only use setAnimationLoop for WebXR mode
+        if (renderer.xr.isPresenting) {
+            renderer.setAnimationLoop(renderFrame);
+        } else {
+            renderer.setAnimationLoop(null); // Disable XR loop when not in XR
+            requestAnimationFrame(animateFrame);
+            renderFrame(); // Call render frame directly for non-XR mode
+        }
+    }
+
+    function renderFrame() {
+        // Additional check inside loop
+        if (!renderer || !isAnimating) {
+            renderer?.setAnimationLoop(null);
+            return;
+        }
+
+        // Get XR camera first so it's available for all subsequent code
+        const xrCam = renderer.xr.getCamera(camera);
+
+        const hasStereo = xrCam?.isArrayCamera && xrCam.cameras.length === 2;
+        if (xrDiag.enabled) {
+            // Keep billboard in front of head each frame
+            if (xrDiag.sprite && xrCam) {
+                // Position relative to the active (mono or left) camera
+                const camObj = hasStereo ? xrCam.cameras[0] : xrCam;
+                if (camObj) {
+                    camObj.getWorldPosition(tmpPos);
+                    camObj.getWorldQuaternion(tmpQuat);
+                    xrDiag.sprite.position.copy(tmpPos);
+                    xrDiag.sprite.quaternion.copy(tmpQuat);
+                    xrDiag.sprite.translateZ(-1.6);
+                    xrDiag.sprite.translateY(0.2);
+                }
+            }
+            paintXRDiagnostics(renderer.xr.getSession?.(), xrCam);
+        }
+
+        // Check X button state if in VR mode
+        if (isVRActive) {
+            const newXButtonState = checkXButtonState();
+
+            // Detect when X button is first pressed (transition from false to true)
+            leftXButtonJustPressed = newXButtonState && !leftXButtonPressed;
+
+            // Only log changes in button state to avoid console spam
+            if (newXButtonState !== leftXButtonPressed) {
+                leftXButtonPressed = newXButtonState;
+                console.log('Left X button:', leftXButtonPressed ? 'PRESSED' : 'RELEASED');
+            }
+
+            // If X button was just pressed, reset convergence plane
+            if (leftXButtonJustPressed && xrCam && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+                const leftCam = xrCam.cameras[0];
+                const rightCam = xrCam.cameras[1];
+
+                const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+            }
+        }
+
+        // Get the current time in seconds
+        const currentTime = performance.now() / 1000;
+        if (startTime === undefined) {
+            startTime = currentTime;
+        }
+
+        const uTime = glow ? (currentTime - startTime) / glowAnimTime : 1.1;
+
+        if (texL && texR && xrCam.isArrayCamera && xrCam.cameras.length === 2) {
+            // =============== VR MODE ===============
+            isVRActive = true;
+
+            // Create left/right planes if needed
+            if (!planeLeft || !planeRight) {
+                createPlanesVR();
+                // Initialize planes with convergence plane data immediately
+                try {
+                    // Make sure xrCam and its cameras array exist and are valid
+                    if (xrCam && xrCam.isArrayCamera && xrCam.cameras.length >= 2) {
+                        const leftCam = xrCam.cameras[0];
+                        const rightCam = xrCam.cameras[1];
+
+                        // console.log("Trying to initialize convergence plane with:",
+                        //     "leftCam exists:", !!leftCam,
+                        //     "rightCam exists:", !!rightCam);
+
+                        if (leftCam && rightCam && leftCam.projectionMatrix && rightCam.projectionMatrix) {
+                            convergencePlane = locateConvergencePlane(leftCam, rightCam);
+                            console.log("Convergence plane initial result:", convergencePlane);
+
+                            // Only apply if we got valid values
+                            if (convergencePlane && !isNaN(convergencePlane.width) && !isNaN(convergencePlane.height) &&
+                                !isNaN(convergencePlane.position.x)) {
+                                planeLeft.position.copy(convergencePlane.position);
+                                planeLeft.quaternion.copy(convergencePlane.quaternion);
+                                planeLeft.scale.set(convergencePlane.width, convergencePlane.height, 1);
+                                planeLeft.visible = true;
+
+                                planeRight.position.copy(convergencePlane.position);
+                                planeRight.quaternion.copy(convergencePlane.quaternion);
+                                planeRight.scale.set(convergencePlane.width, convergencePlane.height, 1);
+                                planeRight.visible = true;
+                            } else {
+                                console.warn("Invalid convergence plane values, falling back to default");
+                                // Use simple default values
+                                planeLeft.position.set(0, 0, -DISTANCE);
+                                planeRight.position.set(0, 0, -DISTANCE);
+                                planeLeft.scale.set(2, 2, 1);
+                                planeRight.scale.set(2, 2, 1);
+                                planeLeft.visible = false;  // Will be shown later in animation loop
+                                planeRight.visible = false; // Will be shown later in animation loop
+                            }
+                        } else {
+                            console.warn("XR cameras don't have valid projection matrices yet");
+                        }
+                    } else {
+                        console.warn("XR camera array not ready yet:", xrCam);
+                    }
+                } catch (error) {
+                    console.error("Error during initial convergence plane setup:", error);
+                }
+            }
+
+            // Access the sub-cameras
+            const leftCam = xrCam.cameras[0];
+            const rightCam = xrCam.cameras[1];
+
+            // Set canvas dimensions once when XR cameras are available
+            if (!xrCanvasInitialized) {
+                setCanvasDimensions(leftCam, rightCam);
+                xrCanvasInitialized = true;
+
+                // Each eye sees only its plane
+                leftCam.layers.enable(1);
+                rightCam.layers.enable(2);
+            }
+
+            // Create HUD overlay for each VR plane if not already created
+            if (!planeLeft.userData.hudOverlay) {
+                createHUDOverlayForVR(planeLeft, leftCam);
+            }
+            if (!planeRight.userData.hudOverlay) {
+                createHUDOverlayForVR(planeRight, rightCam);
+            }
+
+            if (!displaySwitch) {
+                displaySwitch = true;
+                setTimeout(() => {
+                    if (window.WebXROpenXRBridge) {
+                        console.log("Setting WebXROpenXRBridge projection method after 1 second delay");
+                        try {
+                            window.WebXROpenXRBridge.setProjectionMethod(1); // display centric projection
+                            console.log("Projection Method set to Display Centric");
+                            setTimeout(() => {
+                                window.WebXROpenXRBridge.resetSettings(1.0);
+                                console.log("Settings reset to default");
+                                setTimeout(() => {
+                                    const resetSuccess = resetConvergencePlane(leftCam, rightCam);
+                                    console.log("Convergence plane reset:", resetSuccess ? "SUCCESS" : "FAILED");
+                                }, 500);
+                            }, 500);
+
+                        } catch (error) {
+                            console.error("Error setting projection method:", error);
+                        }
+                    }
+                }, 1000); // 1 second delay
+            }
+
+            // Update HUD text
+            updateHUD(leftCam, rightCam);
+
+            // Handle fade-in animation synchronized with WebXR frame timing
+            const currentTime = performance.now();
+            const fadeDuration = 1000; // 1 second fade-in
+
+            // Initialize fade start time when planes become visible
+            if (planeLeft.visible && planeLeft.userData.fadeStartTime === null) {
+                planeLeft.userData.fadeStartTime = currentTime + 200; // 200ms delay
+                planeRight.userData.fadeStartTime = currentTime + 200;
+            }
+
+            // Update opacity during fade-in
+            if (planeLeft.userData.fadeStartTime !== null && currentTime >= planeLeft.userData.fadeStartTime) {
+                const elapsed = currentTime - planeLeft.userData.fadeStartTime;
+                const progress = Math.min(elapsed / fadeDuration, 1.0);
+
+                if (planeLeft.material && planeLeft.material.uniforms) {
+                    planeLeft.material.uniforms.uOpacity.value = progress;
+                }
+                if (planeRight.material && planeRight.material.uniforms) {
+                    planeRight.material.uniforms.uOpacity.value = progress;
+                }
+            }
+
+            // Calculate camera positions in convergence plane's local coordinate system
+            const localLeftCamPos = new THREE.Vector3().copy(leftCam.position).sub(convergencePlane.position);
+            localLeftCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+            const localRightCamPos = new THREE.Vector3().copy(rightCam.position).sub(convergencePlane.position);
+            localRightCamPos.applyQuaternion(convergencePlane.quaternion.clone().invert());
+
+            // Capture the initial head positions once (in local coordinates)
+            if (initialY === undefined) {
+                const candidateInitialY = (localLeftCamPos.y + localRightCamPos.y) / 2;
+                const candidateInitialZ = (localLeftCamPos.z + localRightCamPos.z) / 2;
+                const candidateIPD = localLeftCamPos.distanceTo(localRightCamPos);
+
+                // Vision Pro: Only set initial values if they seem reasonable (not zero/too small)
+                if (isVisionProUA()) {
+                    if (Math.abs(candidateInitialY) > 0.01) {
+                        initialY = candidateInitialY;
+                        initialZ = candidateInitialZ;
+                        IPD = candidateIPD;
+                        console.log("Vision Pro - Initial values set - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+                        console.log("convergencePlane position:", convergencePlane.position);
+                    } else {
+                        console.log("Vision Pro - Waiting for proper camera positioning - candidateY:", candidateInitialY, "candidateIPD:", candidateIPD);
+                    }
+                } else {
+                    // Other devices: use original behavior
+                    initialY = candidateInitialY;
+                    initialZ = candidateInitialZ;
+                    IPD = candidateIPD;
+                    console.log("Initial values set - initialY:", initialY, "initialZ:", initialZ, "IPD:", IPD);
+                    console.log("convergencePlane position:", convergencePlane.position);
+                }
+            }
+
+            // Only render if we have valid initial values
+            if (initialY !== undefined && initialZ !== undefined && IPD !== undefined) {
+                // Render the scene using local coordinates
+                rL.renderCam.pos.x = localLeftCamPos.x / IPD;
+                rL.renderCam.pos.y = (initialY - localLeftCamPos.y) / IPD;
+                rL.renderCam.pos.z = (initialZ - localLeftCamPos.z) / IPD;
+                rL.renderCam.sk.x = - rL.renderCam.pos.x * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.sk.y = - rL.renderCam.pos.y * rL.invd / (1 - rL.renderCam.pos.z * rL.invd);
+                rL.renderCam.f = rL.views[0].f * rL.viewportScale() * Math.max(1 - rL.renderCam.pos.z * rL.invd, 0) / viewportScale;
+                rL.drawScene(uTime % glowPulsePeriod);
+                texL.needsUpdate = true;
+
+                rR.renderCam.pos.x = localRightCamPos.x / IPD;
+                rR.renderCam.pos.y = (initialY - localRightCamPos.y) / IPD;
+                rR.renderCam.pos.z = (initialZ - localRightCamPos.z) / IPD;
+                rR.renderCam.sk.x = - rR.renderCam.pos.x * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.sk.y = - rR.renderCam.pos.y * rR.invd / (1 - rR.renderCam.pos.z * rR.invd);
+                rR.renderCam.f = rR.views[0].f * rR.viewportScale() * Math.max(1 - rR.renderCam.pos.z * rR.invd, 0) / viewportScale;
+                rR.drawScene(uTime % glowPulsePeriod);
+                texR.needsUpdate = true;
+            }
+
+            // Hide non-VR canvas
+            canvas.style.display = 'none';
+
+        } else {
+            // ============ NOT IN VR ============
+            isVRActive = false;
+
+            // Hide VR planes if they exist
+            if (planeLeft) planeLeft.visible = false;
+            if (planeRight) planeRight.visible = false;
+            xrCanvasInitialized = false; // Reset initialization if exiting VR
+
+            // Show non-VR canvas
+            canvas.style.display = 'block';
+
+            // Render to non-VR canvas using mouse position
+            if (nonVRRenderer) {
+                // Use mouse position to control camera pos
+                // Scale mouse influence (0.5 gives a good range of motion)
+                const scale = 0.5;
+                nonVRRenderer.renderCam.pos.x = -0.5 + mouseX * scale;
+                nonVRRenderer.renderCam.pos.y = mouseY * scale;
+                nonVRRenderer.renderCam.pos.z = 0; // No Z movement with mouse
+
+                // Apply the same skew corrections as in VR mode
+                nonVRRenderer.renderCam.sk.x = -nonVRRenderer.renderCam.pos.x * nonVRRenderer.invd /
+                    (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
+                nonVRRenderer.renderCam.sk.y = -nonVRRenderer.renderCam.pos.y * nonVRRenderer.invd /
+                    (1 - nonVRRenderer.renderCam.pos.z * nonVRRenderer.invd);
+
+                // Set focal length - no need to adjust for z since it's 0
+                nonVRRenderer.renderCam.f = nonVRRenderer.views[0].f * nonVRRenderer.viewportScale();
+
+                // Draw the scene
+                nonVRRenderer.drawScene(uTime % glowPulsePeriod);
+            }
+        }
+
+        if (renderer) {
+            // Only render if we're in a valid rendering state
+            // (either properly in XR mode or definitely not in XR mode)
+            if (renderer.xr.isPresenting || (!renderer.xr.isPresenting && !isVRActive)) {
+                // In non-VR mode, manually clear the renderer before rendering
+                if (!renderer.xr.isPresenting) {
+                    renderer.clear();
+                }
+                renderer.render(scene, camera);
+            }
+        }
+    }
+
+    // Start the animation
+    animateFrame();
+}
+
+/* -------------------------------------------------------------------- */
+/*                  VR Planes (Left + Right Eye)                        */
+/* -------------------------------------------------------------------- */
+
+function createPlanesVR() {
+    console.log('Creating VR planes (left + right)...');
+
+    const matLeft = new THREE.ShaderMaterial({
+        // Define uniforms: pass in the dynamic texture.
+        uniforms: {
+            uTexture: { value: texL },
+            uOpacity: { value: 0.0 } // Start with transparent for all devices
+        },
+        // Vertex shader: passes through positions and UVs.
+        vertexShader: /* glsl */`
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;  // Pass the UV coordinates to the fragment shader
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `,
+        // Fragment shader: samples the texture.
+        fragmentShader: /* glsl */`
+              uniform sampler2D uTexture; // Dynamic texture from MN2MNRenderer
+              uniform float uOpacity;     // Opacity control for fade-in
+              varying vec2 vUv;
+              void main() {
+                vec4 texColor = texture2D(uTexture, vUv);
+                gl_FragColor = vec4(texColor.rgb, texColor.a * uOpacity); // Apply opacity
+              }
+            `,
+        transparent: true // Enable transparency
+    });
+    const matRight = new THREE.ShaderMaterial({
+        // Define uniforms: pass in the dynamic texture.
+        uniforms: {
+            uTexture: { value: texR },
+            uOpacity: { value: 0.0 } // Start with transparent for all devices
+        },
+        // Vertex shader: passes through positions and UVs.
+        vertexShader: /* glsl */`
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;  // Pass the UV coordinates to the fragment shader
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        // Fragment shader: samples the texture.
+        fragmentShader: /* glsl */`
+          uniform sampler2D uTexture; // Dynamic texture from MN2MNRenderer
+          uniform float uOpacity;     // Opacity control for fade-in
+          varying vec2 vUv;
+          void main() {
+            vec4 texColor = texture2D(uTexture, vUv);
+            gl_FragColor = vec4(texColor.rgb, texColor.a * uOpacity); // Apply opacity
+          }
+        `,
+        transparent: true // Enable transparency
+    });
+
+    // 1x1 geometry, scaled each frame
+    const planeGeom = new THREE.PlaneGeometry(1, 1);
+
+    planeLeft = new THREE.Mesh(planeGeom, matLeft);
+    planeLeft.layers.set(1); // left eye only
+    planeLeft.visible = false;
+    scene.add(planeLeft);
+
+    planeRight = new THREE.Mesh(planeGeom, matRight);
+    planeRight.layers.set(2); // right eye only
+    planeRight.visible = false;
+    scene.add(planeRight);
+
+    // Store materials for fade-in animation in render loop
+    planeLeft.userData.fadeStartTime = null;
+    planeRight.userData.fadeStartTime = null;
+}
+
+/**
+ * fitAndPositionPlane(plane, subCam):
+ * 1) Copy sub-cam pos/orient
+ * 2) Parse sub-cam FOV
+ * 3) Scale so it won't crop at DISTANCE
+ * 4) Move plane DISTANCE forward
+ */
+function fitAndPositionPlane(plane, subCam) {
+    subCam.getWorldPosition(tmpPos);
+    subCam.getWorldQuaternion(tmpQuat);
+
+    plane.position.copy(tmpPos);
+    plane.quaternion.copy(tmpQuat);
+
+    // Get the vertical field-of-view (vFOV) and aspect ratio directly from the sub-camera.
+    const { fov: vFOV, aspect } = parseSubCamFov(subCam);
+
+    // Compute the horizontal FOV from the vertical FOV and the aspect ratio.
+    // The formula: hFOV = 2 * atan(aspect * tan(vFOV/2))
+    const hFOV = 2 * Math.atan(aspect * Math.tan(vFOV / 2));
+
+    // Calculate the plane dimensions so that it exactly fills the FOV at a given distance.
+    // The plane height is given by: 2 * DISTANCE * tan(vFOV/2)
+    // Similarly, the plane width is: 2 * DISTANCE * tan(hFOV/2)
+    const planeHeight = 2 * DISTANCE * Math.tan(vFOV / 2);
+    const planeWidth = 2 * DISTANCE * Math.tan(hFOV / 2);
+
+    // Set the plane's scale so it fills the view.
+    // This makes the plane exactly as wide and tall as the camera's FOV at the distance DISTANCE.
+    plane.scale.set(planeWidth, planeHeight, 1);
+    plane.translateZ(-DISTANCE);
+}
+
+function parseSubCamFov(subCam) {
+    const m = subCam.projectionMatrix.elements;
+    // For symmetric perspective: m[5] = 1 / tan(vFOV/2)
+    const vFov = 2 * Math.atan(1 / m[5]);
+    const aspect = m[5] / m[0];
+    return { fov: vFov, aspect };
+}
+
+function fitPlaneInFov(planeAspect, vFOV, camAspect, dist) {
+    // Fit vertically
+    let planeHeight = 2 * dist * Math.tan(vFOV / 2);
+    let planeWidth = planeHeight * planeAspect;
+
+    // Check horizontal
+    const hFOV = 2 * Math.atan(camAspect * Math.tan(vFOV / 2));
+    const horizontalMax = 2 * dist * Math.tan(hFOV / 2);
+
+    if (planeWidth > horizontalMax) {
+        const scale = horizontalMax / planeWidth;
+        planeWidth *= scale;
+        planeHeight *= scale;
+    }
+    return { planeWidth, planeHeight };
+}
+
+/* -------------------------------------------------------------------- */
+/*                               HUD                                    */
+/* -------------------------------------------------------------------- */
+
+/**
+ * createHUDOverlayForVR(plane, subCam):
+ *   1) Compute the view dimensions at DISTANCE using the subCam FOV.
+ *   2) Create a HUD overlay (using a shared canvas texture) sized to 1/5 of the view width (with height = half of that).
+ *   3) Position the overlay in the top-left corner of the VR plane.
+ */
+function createHUDOverlayForVR(plane, subCam) {
+    // Get the convergence plane dimensions from the parent plane
+    const planeWidth = plane.scale.x;
+    const planeHeight = plane.scale.y;
+
+    // Calculate HUD size as 1/5 of the view width
+    const hudW = planeWidth / 5;
+    const hudH = hudW / 2;
+
+    // Create shared HUD canvas/texture if not already created
+    if (!hudCanvas) {
+        hudCanvas = document.createElement('canvas');
+        hudCanvas.width = 256;
+        hudCanvas.height = 200;
+        hudCtx = hudCanvas.getContext('2d');
+        hudTexture = new THREE.CanvasTexture(hudCanvas);
+        hudTexture.encoding = THREE.sRGBEncoding;
+    }
+
+    const hudMat = new THREE.MeshBasicMaterial({
+        map: hudTexture,
+        transparent: true
+    });
+    const hudGeom = new THREE.PlaneGeometry(1, 1);
+    const hudOverlay = new THREE.Mesh(hudGeom, hudMat);
+
+    // In the VR plane's local coordinates (PlaneGeometry(1,1) spans -0.5 to 0.5),
+    // position the overlay so its center is at the top-left corner.
+    const localX = -0.5 + (hudW / (2 * planeWidth));
+    const localY = 0.5 - (hudH / (2 * planeHeight));
+    hudOverlay.position.set(localX, localY, 0.01); // slight offset to avoid z-fighting
+    hudOverlay.scale.set(hudW / planeWidth, hudH / planeHeight, 1);
+
+    // Copy the parent plane's layer so the HUD overlay appears only for that eye.
+    hudOverlay.layers.mask = plane.layers.mask;
+
+    plane.add(hudOverlay);
+    plane.userData.hudOverlay = hudOverlay;
+}
+
+/**
+ * updateHUD(leftCam, rightCam):
+ *   Draw each eye's position and forward direction onto the shared HUD canvas.
+ *   Both VR HUD overlays share this texture.
+ */
+function updateHUD(leftCam, rightCam) {
+    if (!hudCtx || !hudTexture) return;
+
+    hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+
+    // Change background color based on X button state
+    const bgColor = leftXButtonPressed ? 'rgba(255,0,0,0.7)' : 'rgba(0,0,0,0.5)';
+    hudCtx.fillStyle = bgColor;
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+
+    hudCtx.fillStyle = '#fff';
+    hudCtx.font = '18px sans-serif';
+    hudCtx.fillText('Eye Pos & Dir', 10, 24);
+
+    const leftPos = leftCam.position;
+    const rightPos = rightCam.position;
+
+    // Get forward direction vectors (negative Z in camera space)
+    const leftDir = new THREE.Vector3();
+    const rightDir = new THREE.Vector3();
+    leftCam.getWorldDirection(leftDir);
+    rightCam.getWorldDirection(rightDir);
+
+    const lx = leftPos.x.toFixed(2), ly = leftPos.y.toFixed(2), lz = leftPos.z.toFixed(2);
+    const rx = rightPos.x.toFixed(2), ry = rightPos.y.toFixed(2), rz = rightPos.z.toFixed(2);
+
+    const ldx = leftDir.x.toFixed(2), ldy = leftDir.y.toFixed(2), ldz = leftDir.z.toFixed(2);
+    const rdx = rightDir.x.toFixed(2), rdy = rightDir.y.toFixed(2), rdz = rightDir.z.toFixed(2);
+
+    hudCtx.font = '16px sans-serif';
+    hudCtx.fillText(`Left Pos:  (${lx}, ${ly}, ${lz})`, 10, 55);
+    hudCtx.fillText(`Left Dir:  (${ldx}, ${ldy}, ${ldz})`, 10, 80);
+    hudCtx.fillText(`Right Pos: (${rx}, ${ry}, ${rz})`, 10, 120);
+    hudCtx.fillText(`Right Dir: (${rdx}, ${rdy}, ${rdz})`, 10, 145);
+
+    // Show is3D status
+    hudCtx.fillText(`Mode: ${is3D > 0.5 ? '3D Display' : 'VR'}`, 10, 180);
+
+    hudTexture.needsUpdate = true;
+}
+// Optional: keyboard toggle for preflight panel ('d' key)
+window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'd') {
+        if (!xrDebugState.enabled) createPreXRDebugPanel();
+        const el = xrDebugState.el; if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (!showing) updatePreXRDebugPanel(true);
+    }
+});
