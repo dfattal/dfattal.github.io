@@ -30,6 +30,7 @@
  */
 
 import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 export class XRManager {
     constructor(renderer, camera, scene, sceneConfig) {
@@ -99,6 +100,9 @@ export class XRManager {
         // Enable WebXR on renderer
         this.renderer.xr.enabled = true;
 
+        // Create and add VR button
+        this.createVRButton();
+
         // Setup session event listeners
         this.renderer.xr.addEventListener('sessionstart', this.onSessionStart.bind(this));
         this.renderer.xr.addEventListener('sessionend', this.onSessionEnd.bind(this));
@@ -109,7 +113,15 @@ export class XRManager {
         console.log('XRManager initialized', this.xrConfig);
     }
 
-    // VR button removed - using home page button with direct requestSession call
+    createVRButton() {
+        const vrButton = VRButton.createButton(this.renderer);
+        vrButton.style.position = 'fixed';
+        vrButton.style.bottom = '90px'; // Above camera toggle button
+        vrButton.style.right = '30px';
+        vrButton.style.zIndex = '1000';
+        document.body.appendChild(vrButton);
+        this.vrButton = vrButton;
+    }
 
     createTeleportReticle() {
         // Create a circular reticle for teleportation target visualization

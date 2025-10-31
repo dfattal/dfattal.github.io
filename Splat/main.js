@@ -934,8 +934,6 @@ async function checkAllLoaded() {
 
     const loadingBars = document.getElementById('start-loading-bars');
     const startButton = document.getElementById('start-button');
-    const startWebButton = document.getElementById('start-web-button');
-    const startVRButton = document.getElementById('start-vr-button');
 
     if (loadingBars) {
         // ONLY show buttons when BOTH assets are confirmed loaded
@@ -956,19 +954,9 @@ async function checkAllLoaded() {
                 // Hide loading bars
                 loadingBars.style.display = 'none';
 
-                // Check WebXR availability and show appropriate button(s)
-                const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
-
-                if (isWebXRAvailable) {
-                    // Show dual buttons for WebXR
-                    if (startWebButton) startWebButton.style.display = 'inline-block';
-                    if (startVRButton) startVRButton.style.display = 'inline-block';
-                    console.log('Assets loaded, WebXR buttons shown');
-                } else {
-                    // Show single button for non-WebXR
-                    if (startButton) startButton.style.display = 'inline-block';
-                    console.log('Assets loaded, start button shown');
-                }
+                // Show start button (VR accessed via in-app Three.js button)
+                if (startButton) startButton.style.display = 'inline-block';
+                console.log('Assets loaded, start button shown');
             }, 500);
         } else {
             // Assets not fully loaded yet - set fallback timeout ONCE
@@ -981,16 +969,8 @@ async function checkAllLoaded() {
                         console.log('Loading timeout: assets confirmed loaded, showing buttons');
                         loadingBars.style.display = 'none';
 
-                        // Check WebXR availability and show appropriate button(s)
-                        const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
-
-                        if (isWebXRAvailable) {
-                            if (startWebButton) startWebButton.style.display = 'inline-block';
-                            const startVRButton = document.getElementById('start-vr-button');
-                            if (startVRButton) startVRButton.style.display = 'inline-block';
-                        } else {
-                            if (startButton) startButton.style.display = 'inline-block';
-                        }
+                        // Show start button
+                        if (startButton) startButton.style.display = 'inline-block';
                     } else if (!collisionLoaded || !splatLoaded) {
                         console.warn('Loading timeout: assets STILL not loaded, waiting longer...');
                         // Assets still not loaded, check again in 2 seconds
@@ -2157,12 +2137,10 @@ function setupKeyboardControls() {
  */
 async function setupStartButton() {
     const startButton = document.getElementById('start-button');
-    const startWebButton = document.getElementById('start-web-button');
-    const startVRButton = document.getElementById('start-vr-button');
     const startOverlay = document.getElementById('start-overlay');
 
-    // Handler function for starting the experience (Web mode)
-    const handleStartWeb = (event) => {
+    // Handler function for starting the experience
+    const handleStart = (event) => {
         // Prevent default behavior and event propagation
         event.preventDefault();
         event.stopPropagation();
@@ -2174,7 +2152,7 @@ async function setupStartButton() {
             return;
         }
 
-        console.log('Start button triggered - entering Web experience');
+        console.log('Start button triggered - entering experience');
 
         // Mark experience as started immediately (allows rendering)
         experienceStarted = true;
@@ -2198,95 +2176,15 @@ async function setupStartButton() {
         }
     };
 
-    // Handler function for entering VR mode
-    // CRITICAL FOR APPLE VISION PRO: Request session FIRST, before any other operations
-    // AVP requires requestSession to be called synchronously from the user gesture handler
-    const handleStartVR = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        // SAFETY CHECK: Ensure assets are fully loaded before starting
-        if (!collisionLoaded || !splatLoaded) {
-            console.warn('Assets not fully loaded yet, cannot start VR');
-            alert('Please wait for assets to finish loading...');
-            return;
-        }
-
-        console.log('Start VR button triggered - requesting VR session immediately...');
-
-        // CRITICAL: Request VR session FIRST before any other operations
-        // Apple Vision Pro requires this to be the first operation in the user gesture handler
-        // Even marking variables or hiding overlays before this can break the gesture chain on AVP
-        try {
-            if (renderer && renderer.xr) {
-                // Request session with required and optional features
-                // This MUST be the first async operation in the handler for AVP compatibility
-                const sessionInit = {
-                    requiredFeatures: ['local-floor'],
-                    optionalFeatures: ['hand-tracking', 'layers']
-                };
-
-                const session = await navigator.xr.requestSession('immersive-vr', sessionInit);
-                await renderer.xr.setSession(session);
-
-                console.log('VR session started successfully');
-
-                // Now that VR session is active, do all other setup
-                // Mark experience as started
-                experienceStarted = true;
-
-                // Hide start overlay
-                startOverlay.classList.remove('visible');
-
-                // Start magic reveal
-                startMagicReveal();
-
-                // Unlock audio in background (don't await)
-                if (audioManager) {
-                    audioManager.unlockAudio().then(() => {
-                        console.log('Audio unlocked successfully in background');
-                    }).catch(error => {
-                        console.error('Audio unlock failed:', error);
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Failed to start VR session:', error);
-            // Show error to user
-            alert('Failed to start VR session: ' + error.message);
-        }
-    };
-
-    // Check WebXR availability
-    const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
-
-    if (isWebXRAvailable) {
-        // Show dual buttons: Enter Web and Enter VR
-        console.log('WebXR supported - showing dual buttons');
-        if (startWebButton) {
-            startWebButton.addEventListener('click', handleStartWeb);
-            if (isMobile) {
-                startWebButton.addEventListener('touchstart', handleStartWeb, { passive: false });
-            }
-        }
-        if (startVRButton) {
-            startVRButton.addEventListener('click', handleStartVR);
-            if (isMobile) {
-                startVRButton.addEventListener('touchstart', handleStartVR, { passive: false });
-            }
-        }
-    } else {
-        // Show single button: Enter Experience
-        console.log('WebXR not supported - showing single button');
-        if (startButton) {
-            startButton.addEventListener('click', handleStartWeb);
-            if (isMobile) {
-                startButton.addEventListener('touchstart', handleStartWeb, { passive: false });
-            }
+    // Setup single start button (VR accessed via in-app Three.js button)
+    if (startButton) {
+        startButton.addEventListener('click', handleStart);
+        if (isMobile) {
+            startButton.addEventListener('touchstart', handleStart, { passive: false });
         }
     }
 
-    console.log('Start button(s) initialized');
+    console.log('Start button initialized');
 }
 
 /**
