@@ -144,6 +144,7 @@ let experienceStarted = false; // Flag to prevent rendering before user clicks s
 let collisionLoaded = false;
 let splatLoaded = false;
 let loadingTimeout = null;
+let buttonsShown = false; // Prevent buttons from showing multiple times
 
 // Debug wireframe for terrain
 let wireframeHelper = null;
@@ -898,20 +899,29 @@ async function loadGaussianSplat() {
  * Uses boolean flags instead of string comparison for mobile compatibility
  */
 async function checkAllLoaded() {
+    // Don't run if buttons already shown
+    if (buttonsShown) {
+        return;
+    }
+
     const loadingBars = document.getElementById('start-loading-bars');
     const startButton = document.getElementById('start-button');
     const startWebButton = document.getElementById('start-web-button');
     const startVRButton = document.getElementById('start-vr-button');
 
     if (loadingBars) {
-        // Use boolean flags instead of fragile string comparison
-        // This fixes the mobile bug where progress can be unreliable
+        // ONLY show buttons when BOTH assets are confirmed loaded
         if (collisionLoaded && splatLoaded) {
+            // Mark that we're showing buttons (prevent duplicate calls)
+            buttonsShown = true;
+
             // Clear any existing timeout
             if (loadingTimeout) {
                 clearTimeout(loadingTimeout);
                 loadingTimeout = null;
             }
+
+            console.log('All assets loaded, showing buttons...');
 
             // Add a small delay before showing button to ensure user sees 100%
             setTimeout(async () => {
@@ -933,21 +943,30 @@ async function checkAllLoaded() {
                 }
             }, 500);
         } else {
-            // Set a timeout fallback in case progress tracking fails on mobile
-            // If button hasn't shown after 10 seconds, show it anyway
+            // Assets not fully loaded yet - set fallback timeout ONCE
             if (!loadingTimeout) {
+                console.log('Assets not fully loaded, setting fallback timeout...');
                 loadingTimeout = setTimeout(async () => {
-                    console.warn('Loading timeout reached - showing start button as fallback');
-                    loadingBars.style.display = 'none';
+                    // Check if assets are NOW loaded before showing buttons
+                    if (collisionLoaded && splatLoaded && !buttonsShown) {
+                        buttonsShown = true;
+                        console.log('Loading timeout: assets confirmed loaded, showing buttons');
+                        loadingBars.style.display = 'none';
 
-                    // Check WebXR availability and show appropriate button(s)
-                    const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
+                        // Check WebXR availability and show appropriate button(s)
+                        const isWebXRAvailable = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr');
 
-                    if (isWebXRAvailable) {
-                        if (startWebButton) startWebButton.style.display = 'inline-block';
-                        if (startVRButton) startVRButton.style.display = 'inline-block';
-                    } else {
-                        if (startButton) startButton.style.display = 'inline-block';
+                        if (isWebXRAvailable) {
+                            if (startWebButton) startWebButton.style.display = 'inline-block';
+                            if (startVRButton) startVRButton.style.display = 'inline-block';
+                        } else {
+                            if (startButton) startButton.style.display = 'inline-block';
+                        }
+                    } else if (!collisionLoaded || !splatLoaded) {
+                        console.warn('Loading timeout: assets STILL not loaded, waiting longer...');
+                        // Assets still not loaded, check again in 2 seconds
+                        loadingTimeout = null;
+                        setTimeout(() => checkAllLoaded(), 2000);
                     }
                 }, 10000);
             }
@@ -1968,6 +1987,13 @@ async function setupStartButton() {
         event.preventDefault();
         event.stopPropagation();
 
+        // SAFETY CHECK: Ensure assets are fully loaded before starting
+        if (!collisionLoaded || !splatLoaded) {
+            console.warn('Assets not fully loaded yet, cannot start experience');
+            alert('Please wait for assets to finish loading...');
+            return;
+        }
+
         console.log('Start button triggered - entering Web experience');
 
         // Mark experience as started immediately (allows rendering)
@@ -1993,9 +2019,16 @@ async function setupStartButton() {
     };
 
     // Handler function for entering VR mode
-    const handleStartVR = (event) => {
+    const handleStartVR = async (event) => {
         event.preventDefault();
         event.stopPropagation();
+
+        // SAFETY CHECK: Ensure assets are fully loaded before starting
+        if (!collisionLoaded || !splatLoaded) {
+            console.warn('Assets not fully loaded yet, cannot start VR');
+            alert('Please wait for assets to finish loading...');
+            return;
+        }
 
         console.log('Start VR button triggered - entering VR experience');
 
@@ -2017,13 +2050,29 @@ async function setupStartButton() {
             });
         }
 
-        // Request VR session after a short delay to allow experience to initialize
-        setTimeout(() => {
-            if (xrManager && xrManager.vrButton) {
-                // Programmatically click the VR button
-                xrManager.vrButton.click();
+        // CRITICAL: Request VR session directly from user gesture event
+        // Vision Pro/Safari requires this to be synchronous with user interaction
+        // Works for all VR devices (Quest, Vision Pro, etc.) - no delays needed
+        try {
+            if (renderer && renderer.xr) {
+                console.log('Requesting VR session directly from user gesture...');
+
+                // Request session with required and optional features
+                const sessionInit = {
+                    requiredFeatures: ['local-floor'],
+                    optionalFeatures: ['hand-tracking', 'layers']
+                };
+
+                const session = await navigator.xr.requestSession('immersive-vr', sessionInit);
+                await renderer.xr.setSession(session);
+
+                console.log('VR session started successfully');
             }
-        }, 500);
+        } catch (error) {
+            console.error('Failed to start VR session:', error);
+            // Show error to user
+            alert('Failed to start VR session. Please try again.');
+        }
     };
 
     // Check WebXR availability

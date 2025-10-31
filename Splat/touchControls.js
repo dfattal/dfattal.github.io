@@ -72,16 +72,26 @@ export class TouchControls {
      * Handle touch start event
      */
     handleTouchStart(event) {
-        // Only handle single touches (ignore multi-touch)
-        if (event.touches.length > 1) {
+        // Check if touch is on a UI element (button, select, input, etc.)
+        const target = event.target;
+        if (target && (
+            target.tagName === 'BUTTON' ||
+            target.tagName === 'SELECT' ||
+            target.tagName === 'INPUT' ||
+            target.tagName === 'A' ||
+            target.closest('button') ||
+            target.closest('select') ||
+            target.closest('input')
+        )) {
+            // Allow default behavior for UI elements
             return;
         }
 
         const touch = event.changedTouches[0];
         const currentTime = Date.now();
 
-        // If joystick is already active, ignore new touches
-        if (this.joystick.isActive()) {
+        // If we already have an active touch or joystick is active, ignore new touches
+        if (this.activeTouchId !== null || this.joystick.isActive()) {
             return;
         }
 
