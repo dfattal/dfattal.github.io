@@ -830,6 +830,12 @@ async function loadGaussianSplat() {
         // Mark splat as loaded
         splatLoaded = true;
 
+        // Set gaussianSplat reference in xrManager for VR visibility management
+        if (xrManager) {
+            xrManager.gaussianSplat = gaussianSplat;
+            console.log('Gaussian splat reference set in XRManager');
+        }
+
         // Initialize adaptive quality system for performance optimization
         // Uses preset-based quality switching (no worldModifier conflicts)
         adaptiveQuality = new AdaptiveQualitySystem(
@@ -965,6 +971,7 @@ async function checkAllLoaded() {
 
                         if (isWebXRAvailable) {
                             if (startWebButton) startWebButton.style.display = 'inline-block';
+                            const startVRButton = document.getElementById('start-vr-button');
                             if (startVRButton) startVRButton.style.display = 'inline-block';
                         } else {
                             if (startButton) startButton.style.display = 'inline-block';
@@ -2233,14 +2240,12 @@ async function setupStartButton() {
         // Show dual buttons: Enter Web and Enter VR
         console.log('WebXR supported - showing dual buttons');
         if (startWebButton) {
-            startWebButton.style.display = 'inline-block';
             startWebButton.addEventListener('click', handleStartWeb);
             if (isMobile) {
                 startWebButton.addEventListener('touchstart', handleStartWeb, { passive: false });
             }
         }
         if (startVRButton) {
-            startVRButton.style.display = 'inline-block';
             startVRButton.addEventListener('click', handleStartVR);
             if (isMobile) {
                 startVRButton.addEventListener('touchstart', handleStartVR, { passive: false });
@@ -2250,7 +2255,6 @@ async function setupStartButton() {
         // Show single button: Enter Experience
         console.log('WebXR not supported - showing single button');
         if (startButton) {
-            startButton.style.display = 'inline-block';
             startButton.addEventListener('click', handleStartWeb);
             if (isMobile) {
                 startButton.addEventListener('touchstart', handleStartWeb, { passive: false });

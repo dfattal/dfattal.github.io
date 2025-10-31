@@ -30,7 +30,6 @@
  */
 
 import * as THREE from 'three';
-// VRButton removed - using home page button instead for better compatibility
 
 export class XRManager {
     constructor(renderer, camera, scene, sceneConfig) {
@@ -75,6 +74,7 @@ export class XRManager {
         this.orbitControls = null;
         this.xrControllers = null;
         this.xrHands = null;
+        this.gaussianSplat = null; // Gaussian splat reference for VR visibility management
 
         // World offset for reference space (accumulated position change from physics)
         this.worldOffset = new THREE.Vector3();
@@ -109,7 +109,7 @@ export class XRManager {
         console.log('XRManager initialized', this.xrConfig);
     }
 
-    // VR button removed - using home page start-vr-button instead for better AVP compatibility
+    // VR button removed - using home page button with direct requestSession call
 
     createTeleportReticle() {
         // Create a circular reticle for teleportation target visualization
@@ -130,6 +130,25 @@ export class XRManager {
         console.log('XR session starting...');
         this.session = this.renderer.xr.getSession();
         this.isXRActive = true;
+
+        // CRITICAL: Ensure Gaussian splat is visible in VR
+        // The splat might have been made visible by startMagicReveal() before session start,
+        // but we need to ensure it stays visible when VR session initializes
+        if (this.gaussianSplat) {
+            this.gaussianSplat.visible = true;
+            console.log('Gaussian splat visibility ensured for VR mode:', this.gaussianSplat.visible);
+
+            // Also log if it's in the scene hierarchy (for debugging)
+            let parent = this.gaussianSplat.parent;
+            let depth = 0;
+            while (parent && depth < 5) {
+                console.log(`  Parent ${depth}:`, parent.type || parent.constructor.name);
+                parent = parent.parent;
+                depth++;
+            }
+        } else {
+            console.warn('Gaussian splat reference not set in XRManager');
+        }
 
         // Request reference space
         try {
