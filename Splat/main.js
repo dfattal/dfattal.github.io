@@ -1398,6 +1398,73 @@ function handleMobilePaint(x, y) {
 }
 
 /**
+ * Set up jump/jetpack button for mobile
+ */
+function setupJumpJetpackButton() {
+    const button = document.getElementById('jump-jetpack-button');
+
+    if (button && isMobile) {
+        let longPressTimer = null;
+        const longPressThreshold = 400; // ms
+
+        // Handle touchstart for jump/jetpack
+        button.addEventListener('touchstart', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Trigger jump immediately
+            keysPressed[' '] = true;
+            setTimeout(() => {
+                if (!touchControls || !touchControls.jetpackActive) {
+                    keysPressed[' '] = false;
+                }
+            }, 50);
+
+            // Start long press timer for jetpack
+            longPressTimer = setTimeout(() => {
+                if (touchControls) {
+                    touchControls.activateJetpack();
+                    button.classList.add('jetpack-active');
+                }
+            }, longPressThreshold);
+        }, { passive: false });
+
+        // Handle touchend to cancel long press or deactivate jetpack
+        button.addEventListener('touchend', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Cancel long press timer
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
+            // Deactivate jetpack if active
+            if (touchControls && touchControls.jetpackActive) {
+                touchControls.deactivateJetpack();
+                button.classList.remove('jetpack-active');
+            }
+        }, { passive: false });
+
+        // Handle touchcancel
+        button.addEventListener('touchcancel', (event) => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
+            if (touchControls && touchControls.jetpackActive) {
+                touchControls.deactivateJetpack();
+                button.classList.remove('jetpack-active');
+            }
+        }, { passive: false });
+
+        console.log('Jump/jetpack button initialized');
+    }
+}
+
+/**
  * Handle mouse movement for first-person camera rotation
  */
 function onMouseMove(event) {
@@ -2632,6 +2699,7 @@ async function init() {
     setupStartButton();
     setupCameraToggleButton();
     setupPaintToggleButton();
+    setupJumpJetpackButton();
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);

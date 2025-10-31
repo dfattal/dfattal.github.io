@@ -641,6 +641,51 @@
             }
         }
 
+        /* Jump/Jetpack Button (Mobile) */
+        #jump-jetpack-button {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #jump-jetpack-button:active {
+            transform: scale(0.95);
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        #jump-jetpack-button.jetpack-active {
+            background: rgba(0, 255, 0, 0.3);
+            border-color: rgba(0, 255, 0, 0.8);
+        }
+
+        #jump-jetpack-button svg {
+            width: 30px;
+            height: 30px;
+            fill: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Show jump/jetpack button only on mobile */
+        @media (max-width: 768px),
+        (hover: none) and (pointer: coarse) {
+            #jump-jetpack-button {
+                display: flex;
+            }
+        }
+
         /* Paint Controls */
         #paint-controls {
             position: fixed;
@@ -836,6 +881,15 @@
         </div>
         <div id="brush-size-display">Radius: 0.050 | Depth: 10.0</div>
     </div>
+
+    <!-- Jump/Jetpack Button (Mobile Only) -->
+    <button id="jump-jetpack-button" title="Jump / Jetpack" aria-label="Tap to jump, hold to activate jetpack">
+        <!-- Arrow up icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 14l5-5 5 5z"/>
+            <path d="M7 10l5-5 5 5z"/>
+        </svg>
+    </button>
 
     <!-- Paint Toggle Button (Mobile Only) -->
     <button id="paint-toggle-button" title="Toggle Paint Mode" aria-label="Toggle paint mode on/off">
