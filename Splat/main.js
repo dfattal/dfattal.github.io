@@ -10,7 +10,7 @@ import { AudioManager } from './audioManager.js';
 import { XRManager } from './xrManager.js';
 import { XRControllers } from './xrControllers.js';
 import { XRHands } from './xrHands.js';
-import { AdaptiveProgressiveLOD } from './adaptiveProgressiveLOD.js';
+import { AdaptiveQualitySystem } from './adaptiveQualitySystem.js';
 
 /**
  * F1000 - Third Person Character Controller
@@ -47,8 +47,8 @@ let gaussianSplat = null;
 const splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat
 let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
 
-// Adaptive LOD system
-let adaptiveLOD = null;
+// Adaptive quality system
+let adaptiveQuality = null;
 
 // Lighting
 let directionalLight = null; // Main directional light (sun)
@@ -820,18 +820,14 @@ async function loadGaussianSplat() {
         // Mark splat as loaded
         splatLoaded = true;
 
-        // Initialize adaptive LOD system for performance optimization
-        // NOTE: applyShaderDecimation=false to avoid conflict with brush worldModifier
-        // System will still apply threshold optimizations (stochastic, pixel ratio, etc.)
-        // TODO: Combine brush and decimation modifiers for full shader-based decimation
-        adaptiveLOD = new AdaptiveProgressiveLOD(
-            gaussianSplat,
+        // Initialize adaptive quality system for performance optimization
+        // Uses preset-based quality switching (no worldModifier conflicts)
+        adaptiveQuality = new AdaptiveQualitySystem(
             spark,
-            camera,
-            20, // Target FPS
-            { applyShaderDecimation: false } // Disable shader decimation to avoid conflict with brush modifier
+            renderer,
+            20 // Target FPS (20 for smooth mobile experience)
         );
-        console.log('Adaptive LOD system initialized (threshold optimizations only)');
+        console.log('Adaptive quality system initialized');
 
         // Apply the Magic effect modifier
         // Check config for mobile support (default: desktop only - too complex for mobile GPUs)
@@ -1937,25 +1933,25 @@ function setupKeyboardControls() {
             togglePaintMode();
         }
 
-        // Manual decimation controls for testing adaptive LOD
-        // Q: Decrease decimation (improve quality)
+        // Manual quality controls for adaptive quality system
+        // Q: Increase quality (locks to manual mode)
         if (key === 'q') {
-            if (adaptiveLOD) {
-                adaptiveLOD.decreaseDecimation(0.1);
+            if (adaptiveQuality) {
+                adaptiveQuality.increaseQuality();
             }
         }
 
-        // E: Increase decimation (reduce quality)
+        // E: Decrease quality (locks to manual mode)
         if (key === 'e') {
-            if (adaptiveLOD) {
-                adaptiveLOD.increaseDecimation(0.1);
+            if (adaptiveQuality) {
+                adaptiveQuality.decreaseQuality();
             }
         }
 
-        // T: Reset to full quality
+        // T: Resume adaptive quality adjustment
         if (key === 't') {
-            if (adaptiveLOD) {
-                adaptiveLOD.resetToFullQuality();
+            if (adaptiveQuality) {
+                adaptiveQuality.resumeAdaptive();
             }
         }
 
@@ -2145,10 +2141,10 @@ function onWindowResize() {
 function animate() {
     const delta = clock.getDelta();
 
-    // Update adaptive LOD system (includes FPS tracking and quality adjustment)
-    if (adaptiveLOD) {
-        adaptiveLOD.update();
-        fps = adaptiveLOD.getFPS();
+    // Update adaptive quality system (FPS monitoring and preset switching)
+    if (adaptiveQuality) {
+        adaptiveQuality.update();
+        fps = adaptiveQuality.getFPS();
 
         // Update FPS display
         const debugFps = document.getElementById('debug-fps');
@@ -2156,23 +2152,20 @@ function animate() {
             debugFps.textContent = fps;
         }
 
-        // Update decimation level display if element exists
-        const debugDecimation = document.getElementById('debug-decimation');
-        if (debugDecimation) {
-            debugDecimation.textContent = `${adaptiveLOD.getDecimationPercent()}%`;
-        }
-
-        // Update quality level display
+        // Update quality preset display
         const debugQuality = document.getElementById('debug-quality');
         if (debugQuality) {
-            const level = adaptiveLOD.getDecimationLevel();
-            let qualityText = 'Full';
-            if (level > 0.8) qualityText = 'Potato';
-            else if (level > 0.6) qualityText = 'Low';
-            else if (level > 0.4) qualityText = 'Medium';
-            else if (level > 0.2) qualityText = 'High';
-            else if (level > 0.0) qualityText = 'Very High';
-            debugQuality.textContent = qualityText;
+            const qualityName = adaptiveQuality.getCurrentQualityName();
+            const mode = adaptiveQuality.isManualMode() ? 'MANUAL' : 'Auto';
+            debugQuality.textContent = `${qualityName} (${mode})`;
+        }
+
+        // Update decimation display (show quality index)
+        const debugDecimation = document.getElementById('debug-decimation');
+        if (debugDecimation) {
+            const index = adaptiveQuality.getCurrentQualityIndex();
+            const presets = adaptiveQuality.getQualityPresets();
+            debugDecimation.textContent = `${index}/${presets.length - 1}`;
         }
     }
 
