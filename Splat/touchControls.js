@@ -113,12 +113,8 @@ export class TouchControls {
             return;
         }
 
-        // If joystick is already active, don't process new touches
-        if (this.joystick.isActive()) {
-            return;
-        }
-
         // RIGHT SIDE: Jump/Jetpack, Camera rotation, or Paint
+        // Allow right-side touches even when joystick is active (simultaneous control)
         if (touch.clientX > screenMidpoint) {
             event.preventDefault();
 
@@ -145,15 +141,19 @@ export class TouchControls {
         }
 
         // LEFT SIDE: Joystick for movement
-        if (touch.clientX <= screenMidpoint && !this.jetpackActive) {
-            event.preventDefault();
-            const touchId = touch.identifier;
-            const touchX = touch.clientX;
-            const touchY = touch.clientY;
+        // Allow joystick in all modes (including jetpack) for simultaneous control
+        if (touch.clientX <= screenMidpoint) {
+            // Only activate joystick if not already active
+            if (!this.joystick.isActive()) {
+                event.preventDefault();
+                const touchId = touch.identifier;
+                const touchX = touch.clientX;
+                const touchY = touch.clientY;
 
-            // Activate joystick immediately (no long-press delay)
-            this.activateJoystick(touchId, touchX, touchY);
-            console.log('Single-finger joystick activated (left side)');
+                // Activate joystick immediately (no long-press delay)
+                this.activateJoystick(touchId, touchX, touchY);
+                console.log('Single-finger joystick activated (left side)');
+            }
         }
     }
 
@@ -254,8 +254,8 @@ export class TouchControls {
                             this.firstPersonCallback(deltaX, deltaY);
                         }
                     } else {
-                        // Third-person: Use OrbitControls
-                        if (this.orbitControls && this.orbitControls.enabled) {
+                        // Third-person: Use OrbitControls rotate methods (work even when OrbitControls is disabled)
+                        if (this.orbitControls) {
                             const rotateSpeed = 0.005;
                             this.orbitControls.rotateLeft(deltaX * rotateSpeed);
                             this.orbitControls.rotateUp(-deltaY * rotateSpeed);
