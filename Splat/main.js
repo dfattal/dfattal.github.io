@@ -2225,6 +2225,7 @@ function animate() {
             for (let controllerIndex = 0; controllerIndex < 2; controllerIndex++) {
                 const rayData = xrControllers.getRayForPainting(controllerIndex);
                 if (rayData) {
+                    console.log(`VR Paint: controller ${controllerIndex} painting - isDragging: ${xrControllers.isDragging}`);
                     // Update brush parameters with controller ray
                     BRUSH_PARAMS.brushOrigin.value.copy(rayData.origin);
                     BRUSH_PARAMS.brushDirection.value.copy(rayData.direction);
@@ -2241,6 +2242,7 @@ function animate() {
 
                     // If dragging (trigger held), bake the painting
                     if (xrControllers.isDragging) {
+                        console.log('VR Paint: Baking paint to texture');
                         const noSplatRgba = !gaussianSplat.splatRgba;
                         gaussianSplat.splatRgba = spark.getRgba({
                             generator: gaussianSplat,

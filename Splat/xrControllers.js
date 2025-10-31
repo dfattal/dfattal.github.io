@@ -37,6 +37,9 @@ export class XRControllers {
         this.squeezeHoldTime = 0;
         this.buttonAPressed = false; // A/X button for run toggle
         this.buttonBPressed = false; // B/Y button for paint toggle
+        this.buttonACooldown = 0; // Cooldown timer for A/X button
+        this.buttonBCooldown = 0; // Cooldown timer for B/Y button
+        this.buttonCooldownDuration = 0.3; // 300ms cooldown between toggles
 
         // Paint mode state
         this.isPaintMode = false;
@@ -134,7 +137,7 @@ export class XRControllers {
 
     // Event handlers
     onSelectStart(controllerIndex, event) {
-        console.log(`Controller ${controllerIndex} select start`);
+        console.log(`Controller ${controllerIndex} select start - isPaintMode: ${this.isPaintMode}`);
         this.isSelectPressed = true;
 
         // Show ray with appropriate color
@@ -147,12 +150,15 @@ export class XRControllers {
 
         // Start painting if in paint mode
         if (this.isPaintMode) {
+            console.log('Paint mode active - setting isDragging to true');
             this.isDragging = true;
+        } else {
+            console.log('NOT in paint mode - will teleport on release');
         }
     }
 
     onSelectEnd(controllerIndex, event) {
-        console.log(`Controller ${controllerIndex} select end`);
+        console.log(`Controller ${controllerIndex} select end - isPaintMode: ${this.isPaintMode}`);
         this.isSelectPressed = false;
 
         // Hide ray
@@ -163,15 +169,19 @@ export class XRControllers {
 
         // Paint mode: Check for color selection first, then painting
         if (this.isPaintMode) {
+            console.log('Paint mode - checking color selection');
             // Check if pointing at color palette
             if (this.checkColorSelection(controllerIndex)) {
                 // Color selected, don't paint
+                console.log('Color selected from palette');
                 return;
             }
             // Stop painting
+            console.log('Stopping paint (isDragging = false)');
             this.isDragging = false;
         } else {
             // Teleport mode: Execute teleport
+            console.log('NOT in paint mode - executing teleport');
             this.xrManager.executeTeleport();
         }
     }
@@ -218,9 +228,10 @@ export class XRControllers {
 
                 // Check for A/X button press (button index 4) for run toggle
                 if (gamepad.buttons.length > 4 && gamepad.buttons[4].pressed) {
-                    // Debounce button press
-                    if (!this.buttonAPressed) {
+                    // Only trigger if button wasn't pressed before AND cooldown is expired
+                    if (!this.buttonAPressed && this.buttonACooldown <= 0) {
                         this.buttonAPressed = true;
+                        this.buttonACooldown = this.buttonCooldownDuration; // Reset cooldown
                         this.xrManager.onRunToggle();
                     }
                 } else {
@@ -229,10 +240,14 @@ export class XRControllers {
 
                 // Check for B/Y button press (button index 5) for paint mode toggle
                 if (gamepad.buttons.length > 5 && gamepad.buttons[5].pressed) {
-                    // Debounce button press
-                    if (!this.buttonBPressed) {
+                    // Only trigger if button wasn't pressed before AND cooldown is expired
+                    if (!this.buttonBPressed && this.buttonBCooldown <= 0) {
                         this.buttonBPressed = true;
+                        this.buttonBCooldown = this.buttonCooldownDuration; // Reset cooldown
+                        console.log(`B/Y button pressed - toggling paint mode (cooldown: ${this.buttonCooldownDuration}s)`);
                         this.togglePaintMode();
+                    } else if (this.buttonBCooldown > 0) {
+                        // Button pressed but cooldown active (silent - prevents spam)
                     }
                 } else {
                     this.buttonBPressed = false;
@@ -434,6 +449,14 @@ export class XRControllers {
             }
         } else {
             this.squeezeHoldTime = 0;
+        }
+
+        // Update button cooldown timers (prevent rapid toggling)
+        if (this.buttonACooldown > 0) {
+            this.buttonACooldown -= deltaTime;
+        }
+        if (this.buttonBCooldown > 0) {
+            this.buttonBCooldown -= deltaTime;
         }
 
         // Update teleport target visualization
