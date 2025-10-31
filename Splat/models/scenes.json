@@ -12,6 +12,12 @@
       "name": "Avoncroft Museum",
       "description": "This is the Postmill at Avoncroft Museum of Historic Buildings.",
       "config": "models/AvoncroftMuseum.json"
+    },
+    {
+      "id": "CastleArgueso",
+      "name": "Castle of Argueso",
+      "description": "Medieval castle in the south of Cantabria, Spain",
+      "config": "models/CastleArgueso.json"
     }
   ]
 }

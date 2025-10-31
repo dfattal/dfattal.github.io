@@ -54,7 +54,7 @@ let vrMovementSpeed = 0; // 0-1 normalized
 let groundMesh;
 let infiniteFloor;
 let gaussianSplat = null;
-const splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat
+let splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat (from scene config)
 let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
 
 // Adaptive quality system
@@ -64,6 +64,11 @@ let adaptiveQuality = null;
 let directionalLight = null; // Main directional light (sun)
 let lightAzimuth = 213; // Light direction azimuth in degrees (0-360, 0=North, 90=East)
 let lightElevation = 37; // Light elevation in degrees (0=horizon, 90=overhead)
+
+// Base transform from scene config
+let baseRotationX = 180; // Base X rotation in degrees (from scene config)
+let baseRotationY = 0;   // Base Y rotation in degrees (from scene config)
+let baseRotationZ = 0;   // Base Z rotation in degrees (from scene config)
 
 // Leveling adjustments (applied LAST, after all other transforms)
 let levelRotationX = 0; // Fine-tune X rotation in degrees (-5 to +5)
@@ -372,8 +377,10 @@ function createGround() {
             // Scale the collision mesh
             groundMesh.scale.multiplyScalar(splatScale);
 
-            // Flip the mesh upside down (rotate 180 degrees on X axis)
-            groundMesh.rotation.x += Math.PI;
+            // Apply base rotation from scene config (convert degrees to radians)
+            groundMesh.rotation.x += baseRotationX * (Math.PI / 180);
+            groundMesh.rotation.y += baseRotationY * (Math.PI / 180);
+            groundMesh.rotation.z += baseRotationZ * (Math.PI / 180);
 
             // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
             groundMesh.position.y = -splatScale * heightOffset;
@@ -520,6 +527,9 @@ function createGround() {
  */
 function applyLevelingRotations() {
     // Convert degrees to radians
+    const baseXRad = baseRotationX * (Math.PI / 180);
+    const baseYRad = baseRotationY * (Math.PI / 180);
+    const baseZRad = baseRotationZ * (Math.PI / 180);
     const levelXRad = levelRotationX * (Math.PI / 180);
     const levelZRad = levelRotationZ * (Math.PI / 180);
 
@@ -531,9 +541,10 @@ function applyLevelingRotations() {
         // Set Y position
         groundMesh.position.y = yPosition;
 
-        // Reset to base rotation (180° flip on X)
-        groundMesh.rotation.x = Math.PI;
-        groundMesh.rotation.z = 0;
+        // Reset to base rotation from config
+        groundMesh.rotation.x = baseXRad;
+        groundMesh.rotation.y = baseYRad;
+        groundMesh.rotation.z = baseZRad;
 
         // Apply leveling adjustments (LAST transform)
         groundMesh.rotation.x += levelXRad;
@@ -545,9 +556,10 @@ function applyLevelingRotations() {
         // Set Y position
         gaussianSplat.position.y = yPosition;
 
-        // Reset to base rotation (180° flip on X)
-        gaussianSplat.rotation.x = Math.PI;
-        gaussianSplat.rotation.z = 0;
+        // Reset to base rotation from config
+        gaussianSplat.rotation.x = baseXRad;
+        gaussianSplat.rotation.y = baseYRad;
+        gaussianSplat.rotation.z = baseZRad;
 
         // Apply leveling adjustments (LAST transform)
         gaussianSplat.rotation.x += levelXRad;
@@ -557,8 +569,9 @@ function applyLevelingRotations() {
     // Apply to wireframe helper (if exists)
     if (wireframeHelper) {
         wireframeHelper.position.y = yPosition;
-        wireframeHelper.rotation.x = Math.PI;
-        wireframeHelper.rotation.z = 0;
+        wireframeHelper.rotation.x = baseXRad;
+        wireframeHelper.rotation.y = baseYRad;
+        wireframeHelper.rotation.z = baseZRad;
         wireframeHelper.rotation.x += levelXRad;
         wireframeHelper.rotation.z += levelZRad;
     }
@@ -812,8 +825,10 @@ async function loadGaussianSplat() {
         // Scale to match collision mesh
         gaussianSplat.scale.multiplyScalar(splatScale);
 
-        // Flip upside down (rotate 180 degrees on X axis) - matches collision mesh orientation
-        gaussianSplat.rotation.x += Math.PI;
+        // Apply base rotation from scene config (convert degrees to radians) - matches collision mesh orientation
+        gaussianSplat.rotation.x += baseRotationX * (Math.PI / 180);
+        gaussianSplat.rotation.y += baseRotationY * (Math.PI / 180);
+        gaussianSplat.rotation.z += baseRotationZ * (Math.PI / 180);
 
         // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
         gaussianSplat.position.y = -splatScale * heightOffset;
@@ -1080,18 +1095,27 @@ function loadCharacter() {
                 targetOffsetY
             );
 
-            // Place character on ground at spawn position
-            characterControls.placeOnGround();
-
             // Get spawn position and rotation from config
             const spawnCfg = sceneConfig?.character?.spawn || {};
             const spawnPos = spawnCfg.position || { x: 0, y: 'auto', z: 40 };
             const spawnRot = spawnCfg.rotation || { y: 0 };
 
-            // Set character position (Y is handled by placeOnGround)
+            // Set character X and Z position first
             model.position.x = spawnPos.x;
             model.position.z = spawnPos.z;
             model.rotation.y = spawnRot.y * (Math.PI / 180);  // Convert degrees to radians
+
+            // Handle Y position: if "auto", raycast from high altitude to find ground
+            if (spawnPos.y === 'auto') {
+                // Set Y to high altitude so placeOnGround() can raycast down to find terrain
+                model.position.y = 1000;
+                console.log(`Auto-detecting ground height at spawn position (${spawnPos.x}, ${spawnPos.z})...`);
+                characterControls.placeOnGround();
+            } else {
+                // Use specified Y position
+                model.position.y = spawnPos.y;
+                console.log(`Character spawned at specified position (${spawnPos.x}, ${spawnPos.y}, ${spawnPos.z})`);
+            }
 
             // Create offset vector in local space and rotate it by character's quaternion
             const localOffset = new THREE.Vector3(camOffset.x, camOffset.y, camOffset.z);
@@ -2881,6 +2905,20 @@ async function loadAndInitializeScene(sceneId) {
 function applySceneConfig() {
     // Store scene ID in sessionStorage for reload
     sessionStorage.setItem('currentScene', currentSceneId);
+
+    // Apply scale from config
+    if (sceneConfig.transform.scale !== undefined) {
+        splatScale = sceneConfig.transform.scale;
+        console.log('Applied scale from config:', splatScale);
+    }
+
+    // Apply base rotation from config
+    if (sceneConfig.transform.rotation) {
+        baseRotationX = sceneConfig.transform.rotation.x !== undefined ? sceneConfig.transform.rotation.x : 180;
+        baseRotationY = sceneConfig.transform.rotation.y !== undefined ? sceneConfig.transform.rotation.y : 0;
+        baseRotationZ = sceneConfig.transform.rotation.z !== undefined ? sceneConfig.transform.rotation.z : 0;
+        console.log('Applied rotation from config:', baseRotationX, baseRotationY, baseRotationZ);
+    }
 
     // Apply leveling defaults from config
     if (sceneConfig.transform.defaultLeveling) {
