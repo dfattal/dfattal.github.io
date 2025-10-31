@@ -81,7 +81,6 @@ export class TouchControls {
      * Handle touch start event
      */
     handleTouchStart(event) {
-        const touch = event.changedTouches[0];
         const currentTime = Date.now();
         const screenMidpoint = window.innerWidth / 2;
 
@@ -113,46 +112,52 @@ export class TouchControls {
             return;
         }
 
-        // RIGHT SIDE: Jump/Jetpack, Camera rotation, or Paint
-        // Allow right-side touches even when joystick is active (simultaneous control)
-        if (touch.clientX > screenMidpoint) {
-            event.preventDefault();
+        // Process all changed touches to support simultaneous left/right starts
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            const touch = event.changedTouches[i];
 
-            // Paint mode: Start painting with single-finger drag
-            if (this.isPaintMode) {
-                this.rightSideTouchId = touch.identifier;
-                this.rightSideTouchStartX = touch.clientX;
-                this.rightSideTouchStartY = touch.clientY;
-                this.rightSideHasMoved = false;
-                console.log('Paint mode: touch started (right side)');
-                return;
-            }
-
-            // Normal mode: Jump/Jetpack or Camera rotation
-            if (!this.rightSideTouchId && !this.firstPersonLookTouchId) {
-                this.rightSideTouchId = touch.identifier;
-                this.rightSideTouchStartTime = currentTime;
-                this.rightSideTouchStartX = touch.clientX;
-                this.rightSideTouchStartY = touch.clientY;
-                this.rightSideHasMoved = false;
-                console.log('Right-side touch started (jump/jetpack/camera detection)');
-            }
-            return;
-        }
-
-        // LEFT SIDE: Joystick for movement
-        // Allow joystick in all modes (including jetpack) for simultaneous control
-        if (touch.clientX <= screenMidpoint) {
-            // Only activate joystick if not already active
-            if (!this.joystick.isActive()) {
+            // RIGHT SIDE: Jump/Jetpack, Camera rotation, or Paint
+            // Allow right-side touches even when joystick is active (simultaneous control)
+            if (touch.clientX > screenMidpoint) {
                 event.preventDefault();
-                const touchId = touch.identifier;
-                const touchX = touch.clientX;
-                const touchY = touch.clientY;
 
-                // Activate joystick immediately (no long-press delay)
-                this.activateJoystick(touchId, touchX, touchY);
-                console.log('Single-finger joystick activated (left side)');
+                // Paint mode: Start painting with single-finger drag
+                if (this.isPaintMode) {
+                    this.rightSideTouchId = touch.identifier;
+                    this.rightSideTouchStartX = touch.clientX;
+                    this.rightSideTouchStartY = touch.clientY;
+                    this.rightSideHasMoved = false;
+                    console.log('Paint mode: touch started (right side)');
+                    continue; // Process next touch
+                }
+
+                // Normal mode: Jump/Jetpack or Camera rotation
+                if (!this.rightSideTouchId && !this.firstPersonLookTouchId) {
+                    this.rightSideTouchId = touch.identifier;
+                    this.rightSideTouchStartTime = currentTime;
+                    this.rightSideTouchStartX = touch.clientX;
+                    this.rightSideTouchStartY = touch.clientY;
+                    this.rightSideHasMoved = false;
+                    console.log('Right-side touch started (jump/jetpack/camera detection)');
+                }
+                continue; // Process next touch
+            }
+
+            // LEFT SIDE: Joystick for movement
+            // Allow joystick in all modes (including jetpack) for simultaneous control
+            if (touch.clientX <= screenMidpoint) {
+                // Only activate joystick if not already active
+                if (!this.joystick.isActive()) {
+                    event.preventDefault();
+                    const touchId = touch.identifier;
+                    const touchX = touch.clientX;
+                    const touchY = touch.clientY;
+
+                    // Activate joystick immediately (no long-press delay)
+                    this.activateJoystick(touchId, touchX, touchY);
+                    console.log('Single-finger joystick activated (left side)');
+                }
+                continue; // Process next touch
             }
         }
     }
@@ -161,9 +166,7 @@ export class TouchControls {
      * Handle touch move event
      */
     handleTouchMove(event) {
-        const touch = event.changedTouches[0];
-
-        // Handle two-finger camera rotation
+        // Handle two-finger camera rotation (exclusive mode)
         if (this.twoFingerRotation && event.touches.length === 2) {
             event.preventDefault();
 
@@ -203,27 +206,21 @@ export class TouchControls {
             return;
         }
 
-        // If joystick is active, prevent default and update joystick
-        if (this.joystick.isActive()) {
-            event.preventDefault();
+        // Process all changed touches to support simultaneous left/right actions
+        let handledAnyTouch = false;
 
-            // Find the touch that's controlling the joystick
-            for (let i = 0; i < event.changedTouches.length; i++) {
-                const touchItem = event.changedTouches[i];
-
-                // Update joystick if this is the active touch
-                if (this.activeTouchId === touchItem.identifier) {
-                    this.joystick.update(touchItem.clientX, touchItem.clientY);
-                    break;
-                }
-            }
-            return;
-        }
-
-        // Handle right-side touch movement (camera rotation or painting)
         for (let i = 0; i < event.changedTouches.length; i++) {
             const touchItem = event.changedTouches[i];
 
+            // Handle joystick touch (left side)
+            if (this.joystick.isActive() && this.activeTouchId === touchItem.identifier) {
+                event.preventDefault();
+                this.joystick.update(touchItem.clientX, touchItem.clientY);
+                handledAnyTouch = true;
+                // Don't return - continue processing other touches
+            }
+
+            // Handle right-side touch (camera rotation, painting, jetpack)
             if (touchItem.identifier === this.rightSideTouchId) {
                 event.preventDefault();
 
@@ -243,7 +240,9 @@ export class TouchControls {
                 // Paint mode: Call paint callback with touch position
                 if (this.isPaintMode && this.paintCallback) {
                     this.paintCallback(touchItem.clientX, touchItem.clientY);
-                    return;
+                    handledAnyTouch = true;
+                    // Don't return - continue processing other touches
+                    continue;
                 }
 
                 // Camera rotation mode: Works in all camera modes and during jetpack
@@ -264,7 +263,8 @@ export class TouchControls {
                     }
                 }
 
-                return;
+                handledAnyTouch = true;
+                // Don't return - continue processing other touches
             }
         }
 
