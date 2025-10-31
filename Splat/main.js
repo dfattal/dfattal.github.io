@@ -248,8 +248,9 @@ function initScene() {
         touchControls = new TouchControls(keysPressed, orbitControls);
         // Set up first-person look callback for mobile
         touchControls.setFirstPersonCallback(onTouchLook);
-        // Set up paint callback for mobile
+        // Set up paint callbacks for mobile
         touchControls.setPaintCallback(handleMobilePaint);
+        touchControls.setPaintEndCallback(handleMobilePaintEnd);
         console.log('Touch controls initialized early (before character load)');
     }
 
@@ -1410,9 +1411,27 @@ function handleMobilePaint(x, y) {
     // Enable brush to apply changes
     BRUSH_PARAMS.enabled.value = true;
 
-    // Bake changes to texture (use fast update)
-    if (gaussianSplat.material.updateVersion) {
-        gaussianSplat.material.updateVersion();
+    // Bake changes to texture (same as desktop paint logic)
+    const noSplatRgba = !gaussianSplat.splatRgba;
+    gaussianSplat.splatRgba = spark.getRgba({
+        generator: gaussianSplat,
+        rgba: gaussianSplat.splatRgba
+    });
+
+    if (noSplatRgba) {
+        gaussianSplat.updateGenerator();
+    } else {
+        gaussianSplat.updateVersion();
+    }
+}
+
+/**
+ * Handle end of mobile painting (called when touch ends)
+ */
+function handleMobilePaintEnd() {
+    // Disable brush preview
+    if (BRUSH_PARAMS && BRUSH_PARAMS.enabled) {
+        BRUSH_PARAMS.enabled.value = false;
     }
 }
 

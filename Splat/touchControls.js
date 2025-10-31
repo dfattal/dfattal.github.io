@@ -41,6 +41,7 @@ export class TouchControls {
         // Paint mode state
         this.isPaintMode = false;
         this.paintCallback = null;
+        this.paintEndCallback = null;
 
         // Bind event handlers
         this.handleTouchStart = this.handleTouchStart.bind(this);
@@ -170,6 +171,11 @@ export class TouchControls {
                 // If joystick is active, deactivate it
                 if (this.joystick.isActive()) {
                     this.deactivateJoystick();
+                }
+
+                // If in paint mode, notify end of painting (to disable brush)
+                if (this.isPaintMode && this.paintEndCallback) {
+                    this.paintEndCallback();
                 }
 
                 // Reset tracking
@@ -313,6 +319,13 @@ export class TouchControls {
      */
     setPaintCallback(callback) {
         this.paintCallback = callback;
+    }
+
+    /**
+     * Set callback for end of painting
+     */
+    setPaintEndCallback(callback) {
+        this.paintEndCallback = callback;
     }
 
     /**
