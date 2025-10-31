@@ -311,6 +311,17 @@ export class TouchControls {
      */
     setPaintMode(enabled) {
         this.isPaintMode = enabled;
+
+        // Disable OrbitControls during paint mode to prevent camera rotation
+        if (this.orbitControls) {
+            if (enabled) {
+                this.orbitControlsEnabled = this.orbitControls.enabled;
+                this.orbitControls.enabled = false;
+            } else {
+                this.orbitControls.enabled = this.orbitControlsEnabled;
+            }
+        }
+
         console.log(`TouchControls: Paint mode ${enabled ? 'ON' : 'OFF'}`);
     }
 
