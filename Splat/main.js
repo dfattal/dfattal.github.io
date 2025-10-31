@@ -10,6 +10,9 @@ import { AudioManager } from './audioManager.js';
 import { XRManager } from './xrManager.js';
 import { XRControllers } from './xrControllers.js';
 import { XRHands } from './xrHands.js';
+import { GestureDetector } from './gestureDetector.js';
+import { WristPalette } from './wristPalette.js';
+import { GestureVisuals } from './gestureVisuals.js';
 import { AdaptiveQualitySystem } from './adaptiveQualitySystem.js';
 
 /**
@@ -39,6 +42,13 @@ let audioManager;
 let xrManager = null;
 let xrControllers = null;
 let xrHands = null;
+let gestureDetector = null;
+let wristPalette = null;
+let gestureVisuals = null;
+
+// VR gesture movement state
+let vrMovementDirection = null; // THREE.Vector3
+let vrMovementSpeed = 0; // 0-1 normalized
 
 // Terrain
 let groundMesh;
@@ -1134,13 +1144,137 @@ function initXR() {
     // Create XR hands
     xrHands = new XRHands(renderer, scene, characterControls?.model);
 
+    // Create gesture detector
+    gestureDetector = new GestureDetector(xrHands, xrManager);
+
+    // Create wrist-mounted color palette
+    wristPalette = new WristPalette(scene, xrHands);
+
+    // Create gesture visuals
+    gestureVisuals = new GestureVisuals(scene);
+
+    // Wire up gesture callbacks for painting
+    gestureDetector.callbacks.onPaintStart = (handedness, rayOrigin, rayDirection) => {
+        console.log(`Gesture paint start (${handedness})`);
+        if (gaussianSplat) {
+            BRUSH_PARAMS.brushOrigin.value.copy(rayOrigin);
+            BRUSH_PARAMS.brushDirection.value.copy(rayDirection);
+            BRUSH_PARAMS.enabled.value = true;
+        }
+        // Show paint ray visual
+        if (gestureVisuals) {
+            gestureVisuals.updatePaintRay(handedness, rayOrigin, rayDirection, true);
+        }
+    };
+
+    gestureDetector.callbacks.onPaintDrag = (handedness, rayOrigin, rayDirection) => {
+        if (!gaussianSplat) return;
+
+        // Update brush parameters
+        BRUSH_PARAMS.brushOrigin.value.copy(rayOrigin);
+        BRUSH_PARAMS.brushDirection.value.copy(rayDirection);
+        BRUSH_PARAMS.enabled.value = true;
+
+        // Get selected color from wrist palette
+        const selectedColor = wristPalette ? wristPalette.getSelectedColor() : { hex: 0x8800ff };
+        const color = new THREE.Color(selectedColor.hex).convertLinearToSRGB();
+        BRUSH_PARAMS.brushColor.value.x = color.r;
+        BRUSH_PARAMS.brushColor.value.y = color.g;
+        BRUSH_PARAMS.brushColor.value.z = color.b;
+
+        // Raycast for surface-based depth
+        const paintRaycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+        const intersects = paintRaycaster.intersectObjects([groundMesh, infiniteFloor], true);
+        if (intersects.length > 0) {
+            BRUSH_PARAMS.useSurface.value = true;
+            BRUSH_PARAMS.surfacePoint.value.copy(intersects[0].point);
+        } else {
+            BRUSH_PARAMS.useSurface.value = false;
+        }
+
+        // Bake painting
+        const noSplatRgba = !gaussianSplat.splatRgba;
+        gaussianSplat.splatRgba = spark.getRgba({
+            generator: gaussianSplat,
+            rgba: gaussianSplat.splatRgba
+        });
+
+        if (noSplatRgba) {
+            gaussianSplat.updateGenerator();
+        } else {
+            gaussianSplat.updateVersion();
+        }
+
+        // Update paint ray visual
+        if (gestureVisuals) {
+            gestureVisuals.updatePaintRay(handedness, rayOrigin, rayDirection, true);
+        }
+    };
+
+    gestureDetector.callbacks.onPaintEnd = (handedness) => {
+        console.log(`Gesture paint end (${handedness})`);
+        BRUSH_PARAMS.enabled.value = false;
+
+        // Hide paint ray visual
+        if (gestureVisuals) {
+            gestureVisuals.updatePaintRay(handedness, null, null, false);
+        }
+    };
+
+    // Wire up movement callbacks
+    gestureDetector.callbacks.onMovementStart = (direction, speed) => {
+        console.log(`Movement gesture started: speed=${speed.toFixed(2)}`);
+        vrMovementDirection = direction.clone();
+        vrMovementSpeed = speed;
+    };
+
+    gestureDetector.callbacks.onMovementUpdate = (direction, speed) => {
+        // Update movement state (applied in animation loop)
+        vrMovementDirection = direction.clone();
+        vrMovementSpeed = speed;
+    };
+
+    gestureDetector.callbacks.onMovementEnd = () => {
+        console.log('Movement gesture ended');
+        vrMovementDirection = null;
+        vrMovementSpeed = 0;
+    };
+
+    // Wire up jetpack callbacks
+    gestureDetector.callbacks.onJetpackStart = (handedness) => {
+        console.log(`Jetpack gesture started (${handedness})`);
+        if (characterControls) {
+            characterControls.activateJetpack();
+        }
+    };
+
+    gestureDetector.callbacks.onJetpackEnd = (handedness) => {
+        console.log(`Jetpack gesture ended (${handedness})`);
+        if (characterControls) {
+            characterControls.deactivateJetpack();
+        }
+    };
+
+    // Wire up color selection callback
+    gestureDetector.callbacks.onColorSelect = (rayOrigin, rayDirection) => {
+        if (wristPalette) {
+            const colorIndex = wristPalette.checkHover(rayOrigin, rayDirection);
+            if (colorIndex !== null) {
+                wristPalette.selectColor(colorIndex);
+                gestureDetector.selectedColorIndex = colorIndex;
+                console.log(`Color selected: index ${colorIndex}`);
+            }
+        }
+    };
+
     // Link components together
     xrManager.characterControls = characterControls;
     xrManager.orbitControls = orbitControls;
     xrManager.xrControllers = xrControllers;
     xrManager.xrHands = xrHands;
+    xrManager.gestureDetector = gestureDetector;
 
-    console.log('WebXR system initialized');
+    console.log('WebXR system initialized with gesture detection');
 }
 
 /**
@@ -2348,6 +2482,64 @@ function animate() {
     if (xrManager && xrManager.getIsXRActive()) {
         // In VR mode: update XR physics and controllers
         xrManager.update(delta, [groundMesh, infiniteFloor]);
+
+        // Update gesture detection for hand tracking
+        if (gestureDetector) {
+            const session = renderer.xr.getSession();
+            gestureDetector.update(session, camera.position);
+        }
+
+        // Update wrist-mounted color palette
+        if (wristPalette && gestureDetector) {
+            const isPaintMode = gestureDetector.mode === 'painting';
+            wristPalette.update(isPaintMode, camera.position);
+        }
+
+        // Apply VR gesture movement and update visuals
+        if (vrMovementDirection && vrMovementSpeed > 0 && xrManager) {
+            // Base movement speeds (matching desktop controls)
+            const walkSpeed = sceneConfig?.controls?.walkSpeed || 1.5;
+            const runSpeed = sceneConfig?.controls?.runSpeed || 3.0;
+
+            // Interpolate between walk and run based on hand extension
+            const baseSpeed = walkSpeed + (runSpeed - walkSpeed) * vrMovementSpeed;
+
+            // Calculate movement offset
+            const movementOffset = vrMovementDirection.clone().multiplyScalar(baseSpeed * delta);
+
+            // Apply to reference space
+            xrManager.updateReferenceSpaceByOffset(movementOffset);
+
+            // Update movement arrow visual
+            if (gestureVisuals) {
+                gestureVisuals.updateMovementArrow(camera.position, vrMovementDirection, vrMovementSpeed, true);
+            }
+        } else if (gestureVisuals) {
+            // Hide movement arrow when not moving
+            gestureVisuals.hideMovementArrow();
+        }
+
+        // Update jetpack glow visuals
+        if (gestureVisuals && gestureDetector) {
+            const isJetpacking = gestureDetector.mode === 'jetpack' || gestureDetector.mode === 'moving_jetpack';
+            if (isJetpacking) {
+                // Get right hand position for glow
+                const session = renderer.xr.getSession();
+                if (session) {
+                    for (const source of session.inputSources) {
+                        if (source.hand && source.handedness === 'right') {
+                            const wrist = xrHands.getJointPosition(source.hand, 'wrist');
+                            if (wrist) {
+                                gestureVisuals.updateJetpackGlow('right', wrist, true);
+                            }
+                            break;
+                        }
+                    }
+                }
+            } else {
+                gestureVisuals.hideJetpackGlows();
+            }
+        }
 
         // Update VR painting
         if (xrControllers && xrControllers.isPaintMode && gaussianSplat) {

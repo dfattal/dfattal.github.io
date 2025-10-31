@@ -28,6 +28,24 @@ export class XRHands {
         this.leftHandFallback = null;
 
         this.isEnabled = false;
+
+        // Hand gesture state tracking (proven pattern from LDIPlayer)
+        this.handInputState = {
+            left: {
+                isPinching: false,
+                pinchStartTime: 0,
+                lastTapTime: 0,
+                tapCount: 0,
+                dragStartPosition: null
+            },
+            right: {
+                isPinching: false,
+                pinchStartTime: 0,
+                lastTapTime: 0,
+                tapCount: 0,
+                dragStartPosition: null
+            }
+        };
     }
 
     init() {
@@ -196,8 +214,118 @@ export class XRHands {
         }
     }
 
+    /**
+     * Get world position of a specific hand joint
+     * Proven pattern from LDIPlayer
+     * @param {XRHand} hand - The XRHand object from input source
+     * @param {string} jointName - Joint name (e.g., 'thumb-tip', 'index-finger-tip', 'wrist')
+     * @returns {THREE.Vector3|null} World position of joint or null if unavailable
+     */
+    getJointPosition(hand, jointName) {
+        if (!hand) return null;
+
+        const jointSpace = hand.get(jointName);
+        if (!jointSpace) return null;
+
+        const frame = this.renderer.xr.getFrame();
+        const referenceSpace = this.renderer.xr.getReferenceSpace();
+        if (!frame || !referenceSpace) return null;
+
+        const pose = frame.getJointPose(jointSpace, referenceSpace);
+        if (!pose) return null;
+
+        return new THREE.Vector3().setFromMatrixPosition(
+            new THREE.Matrix4().fromArray(pose.transform.matrix)
+        );
+    }
+
+    /**
+     * Calculate pinch distance (thumb-tip to index-finger-tip)
+     * Proven pattern from LDIPlayer
+     * @param {XRHand} hand - The XRHand object from input source
+     * @returns {number|null} Distance in meters or null if unavailable
+     */
+    getPinchDistance(hand) {
+        const thumbTip = this.getJointPosition(hand, 'thumb-tip');
+        const indexTip = this.getJointPosition(hand, 'index-finger-tip');
+
+        if (!thumbTip || !indexTip) return null;
+
+        return thumbTip.distanceTo(indexTip);
+    }
+
+    /**
+     * Get pointing direction from hand (wrist to index-finger-tip)
+     * @param {XRHand} hand - The XRHand object from input source
+     * @returns {THREE.Vector3|null} Normalized direction vector or null if unavailable
+     */
+    getPointingDirection(hand) {
+        const wrist = this.getJointPosition(hand, 'wrist');
+        const indexTip = this.getJointPosition(hand, 'index-finger-tip');
+
+        if (!wrist || !indexTip) return null;
+
+        return new THREE.Vector3()
+            .subVectors(indexTip, wrist)
+            .normalize();
+    }
+
+    /**
+     * Get palm orientation (palm normal vector)
+     * @param {XRHand} hand - The XRHand object from input source
+     * @returns {THREE.Vector3|null} Palm normal vector or null if unavailable
+     */
+    getPalmNormal(hand) {
+        if (!hand) return null;
+
+        const frame = this.renderer.xr.getFrame();
+        const referenceSpace = this.renderer.xr.getReferenceSpace();
+        if (!frame || !referenceSpace) return null;
+
+        // Get wrist joint pose for palm orientation
+        const wristSpace = hand.get('wrist');
+        if (!wristSpace) return null;
+
+        const pose = frame.getJointPose(wristSpace, referenceSpace);
+        if (!pose) return null;
+
+        // Palm normal is typically the +Y direction of the wrist transform
+        const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+        const palmNormal = new THREE.Vector3(0, 1, 0);
+        palmNormal.applyMatrix4(matrix);
+        palmNormal.sub(new THREE.Vector3().setFromMatrixPosition(matrix));
+        return palmNormal.normalize();
+    }
+
+    /**
+     * Reset gesture state for a specific hand
+     * @param {string} handedness - 'left' or 'right'
+     */
+    resetGestureState(handedness) {
+        if (handedness !== 'left' && handedness !== 'right') return;
+
+        this.handInputState[handedness] = {
+            isPinching: false,
+            pinchStartTime: 0,
+            lastTapTime: 0,
+            tapCount: 0,
+            dragStartPosition: null
+        };
+    }
+
+    /**
+     * Reset all gesture states (call on session end)
+     */
+    resetAllGestureStates() {
+        this.resetGestureState('left');
+        this.resetGestureState('right');
+    }
+
     // Cleanup
     dispose() {
+        // Reset gesture states
+        this.resetAllGestureStates();
+
         if (this.rightHandFallback) {
             this.scene.remove(this.rightHandFallback);
             this.rightHandFallback.traverse((child) => {
