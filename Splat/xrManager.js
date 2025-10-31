@@ -91,7 +91,7 @@ export class XRManager {
         this.init();
     }
 
-    init() {
+    async init() {
         if (!this.xrConfig.enabled) {
             console.log('XR disabled in scene config');
             return;
@@ -100,8 +100,8 @@ export class XRManager {
         // Enable WebXR on renderer
         this.renderer.xr.enabled = true;
 
-        // Create and add VR button
-        this.createVRButton();
+        // Create and add VR button (only if WebXR is supported)
+        await this.createVRButton();
 
         // Setup session event listeners
         this.renderer.xr.addEventListener('sessionstart', this.onSessionStart.bind(this));
@@ -113,14 +113,32 @@ export class XRManager {
         console.log('XRManager initialized', this.xrConfig);
     }
 
-    createVRButton() {
-        const vrButton = VRButton.createButton(this.renderer);
-        vrButton.style.position = 'fixed';
-        vrButton.style.bottom = '90px'; // Above camera toggle button
-        vrButton.style.right = '30px';
-        vrButton.style.zIndex = '1000';
-        document.body.appendChild(vrButton);
-        this.vrButton = vrButton;
+    async createVRButton() {
+        // Only show VR button if WebXR is supported
+        if (!navigator.xr) {
+            console.log('WebXR not available, VR button hidden');
+            return;
+        }
+
+        try {
+            const isSupported = await navigator.xr.isSessionSupported('immersive-vr');
+            if (!isSupported) {
+                console.log('immersive-vr not supported, VR button hidden');
+                return;
+            }
+
+            // WebXR is available, create the VR button
+            const vrButton = VRButton.createButton(this.renderer);
+            vrButton.style.position = 'fixed';
+            vrButton.style.bottom = '90px'; // Above camera toggle button
+            vrButton.style.right = '30px';
+            vrButton.style.zIndex = '1000';
+            document.body.appendChild(vrButton);
+            this.vrButton = vrButton;
+            console.log('WebXR available, VR button shown');
+        } catch (error) {
+            console.warn('Error checking WebXR support:', error);
+        }
     }
 
     createTeleportReticle() {
@@ -177,10 +195,13 @@ export class XRManager {
                 this.localSpace = await this.session.requestReferenceSpace('local');
             }
 
-            // Calculate the correct ground height at the spawn position
-            const configPos = this.xrConfig.referenceSpaceOrigin.position;
-            const spawnX = configPos.x;
-            const spawnZ = configPos.z;
+            // Get spawn position from character config (same as web experience)
+            const spawnCfg = this.sceneConfig?.character?.spawn || {};
+            const spawnPos = spawnCfg.position || { x: 0, y: 'auto', z: 40 };
+            const spawnRot = spawnCfg.rotation || { y: 0 };
+
+            const spawnX = spawnPos.x;
+            const spawnZ = spawnPos.z;
 
             // Use character controls to get ground height at this position
             const groundMeshes = this.characterControls?.groundMeshes || [];
@@ -214,7 +235,7 @@ export class XRManager {
             // Store the actual reference origin for later offset calculations
             this.actualReferenceOrigin = {
                 position: xrOriginPosition,
-                rotation: this.xrConfig.referenceSpaceOrigin.rotation,
+                rotation: spawnRot,  // Use character spawn rotation from config
                 userHeight: userHeight  // Store for future reference
             };
 
@@ -222,9 +243,10 @@ export class XRManager {
             this.characterPosition.set(xrOriginPosition.x, xrOriginPosition.y, xrOriginPosition.z);
 
             // Apply initial reference space origin with calculated ground height
+            // setReferenceSpaceOrigin expects rotation in degrees (converts internally)
             this.setReferenceSpaceOrigin(
                 xrOriginPosition,
-                this.xrConfig.referenceSpaceOrigin.rotation
+                spawnRot
             );
 
             console.log('XR reference space initialized at:', xrOriginPosition);
