@@ -2034,6 +2034,8 @@ async function setupStartButton() {
     };
 
     // Handler function for entering VR mode
+    // CRITICAL FOR APPLE VISION PRO: Request session FIRST, before any other operations
+    // AVP requires requestSession to be called synchronously from the user gesture handler
     const handleStartVR = async (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -2045,34 +2047,15 @@ async function setupStartButton() {
             return;
         }
 
-        console.log('Start VR button triggered - entering VR experience');
+        console.log('Start VR button triggered - requesting VR session immediately...');
 
-        // Mark experience as started immediately
-        experienceStarted = true;
-
-        // Hide start overlay
-        startOverlay.classList.remove('visible');
-
-        // Start magic reveal
-        startMagicReveal();
-
-        // Unlock audio
-        if (audioManager) {
-            audioManager.unlockAudio().then(() => {
-                console.log('Audio unlocked successfully in background');
-            }).catch(error => {
-                console.error('Audio unlock failed:', error);
-            });
-        }
-
-        // CRITICAL: Request VR session directly from user gesture event
-        // Vision Pro/Safari requires this to be synchronous with user interaction
-        // Works for all VR devices (Quest, Vision Pro, etc.) - no delays needed
+        // CRITICAL: Request VR session FIRST before any other operations
+        // Apple Vision Pro requires this to be the first operation in the user gesture handler
+        // Even marking variables or hiding overlays before this can break the gesture chain on AVP
         try {
             if (renderer && renderer.xr) {
-                console.log('Requesting VR session directly from user gesture...');
-
                 // Request session with required and optional features
+                // This MUST be the first async operation in the handler for AVP compatibility
                 const sessionInit = {
                     requiredFeatures: ['local-floor'],
                     optionalFeatures: ['hand-tracking', 'layers']
@@ -2082,11 +2065,30 @@ async function setupStartButton() {
                 await renderer.xr.setSession(session);
 
                 console.log('VR session started successfully');
+
+                // Now that VR session is active, do all other setup
+                // Mark experience as started
+                experienceStarted = true;
+
+                // Hide start overlay
+                startOverlay.classList.remove('visible');
+
+                // Start magic reveal
+                startMagicReveal();
+
+                // Unlock audio in background (don't await)
+                if (audioManager) {
+                    audioManager.unlockAudio().then(() => {
+                        console.log('Audio unlocked successfully in background');
+                    }).catch(error => {
+                        console.error('Audio unlock failed:', error);
+                    });
+                }
             }
         } catch (error) {
             console.error('Failed to start VR session:', error);
             // Show error to user
-            alert('Failed to start VR session. Please try again.');
+            alert('Failed to start VR session: ' + error.message);
         }
     };
 
