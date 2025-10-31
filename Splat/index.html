@@ -598,6 +598,49 @@
             }
         }
 
+        /* Paint Toggle Button (Mobile) */
+        #paint-toggle-button {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #paint-toggle-button:active {
+            transform: scale(0.95);
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        #paint-toggle-button.active {
+            background: rgba(255, 0, 255, 0.3);
+            border-color: rgba(255, 0, 255, 0.8);
+        }
+
+        #paint-toggle-button svg {
+            width: 30px;
+            height: 30px;
+            fill: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Show paint toggle button only on mobile */
+        @media (max-width: 768px),
+        (hover: none) and (pointer: coarse) {
+            #paint-toggle-button {
+                display: flex;
+            }
+        }
+
         /* Paint Controls */
         #paint-controls {
             position: fixed;
@@ -793,6 +836,14 @@
         </div>
         <div id="brush-size-display">Radius: 0.050 | Depth: 10.0</div>
     </div>
+
+    <!-- Paint Toggle Button (Mobile Only) -->
+    <button id="paint-toggle-button" title="Toggle Paint Mode" aria-label="Toggle paint mode on/off">
+        <!-- Paint brush icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20.71 5.63l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L3 16.25V21h4.75l8.92-8.92 1.42 1.42 1.41-1.41-1.92-1.92 3.12-3.12c.4-.4.4-1.03.01-1.42zM6.92 19L5 17.08l8.06-8.06 1.92 1.92L6.92 19z"/>
+        </svg>
+    </button>
 
     <!-- Camera Toggle Button (Mobile Only) -->
     <button id="camera-toggle-button" title="Toggle Camera View" aria-label="Toggle camera view between first-person and third-person">

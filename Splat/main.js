@@ -228,6 +228,11 @@ function initScene() {
     orbitControls.enablePan = orbitCfg.enablePan !== undefined ? orbitCfg.enablePan : false;
     orbitControls.maxPolarAngle = Math.PI * (orbitCfg.maxPolarAngle || 0.55);
 
+    // Disable zoom on mobile (pinch-to-zoom not needed)
+    if (isMobile) {
+        orbitControls.enableZoom = false;
+    }
+
     // Configure mouse buttons: LEFT click for rotation, RIGHT click disabled (used for painting)
     orbitControls.mouseButtons = {
         LEFT: THREE.MOUSE.ROTATE,  // Left-click for camera rotation
@@ -242,6 +247,8 @@ function initScene() {
         touchControls = new TouchControls(keysPressed, orbitControls);
         // Set up first-person look callback for mobile
         touchControls.setFirstPersonCallback(onTouchLook);
+        // Set up paint callback for mobile
+        touchControls.setPaintCallback(handleMobilePaint);
         console.log('Touch controls initialized early (before character load)');
     }
 
@@ -1293,6 +1300,100 @@ function setupCameraToggleButton() {
         }
 
         console.log('Camera toggle button initialized');
+    }
+}
+
+/**
+ * Set up paint toggle button for mobile
+ */
+function setupPaintToggleButton() {
+    const toggleButton = document.getElementById('paint-toggle-button');
+
+    if (toggleButton && isMobile) {
+        // Handle both click and touchstart for mobile
+        toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleMobilePaintMode();
+        });
+
+        toggleButton.addEventListener('touchstart', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleMobilePaintMode();
+        }, { passive: false });
+
+        console.log('Paint toggle button initialized');
+    }
+}
+
+/**
+ * Toggle paint mode on mobile
+ */
+function toggleMobilePaintMode() {
+    isPaintMode = !isPaintMode;
+
+    // Update button appearance
+    const toggleButton = document.getElementById('paint-toggle-button');
+    if (toggleButton) {
+        if (isPaintMode) {
+            toggleButton.classList.add('active');
+        } else {
+            toggleButton.classList.remove('active');
+        }
+    }
+
+    // Update touch controls
+    if (touchControls) {
+        touchControls.setPaintMode(isPaintMode);
+    }
+
+    console.log(`Mobile paint mode: ${isPaintMode ? 'ON' : 'OFF'}`);
+}
+
+/**
+ * Handle mobile painting (called from touch controls)
+ * @param {number} x - Touch X coordinate
+ * @param {number} y - Touch Y coordinate
+ */
+function handleMobilePaint(x, y) {
+    if (!isPaintMode || !gaussianSplat || !paintRaycaster) return;
+
+    // Use default purple color (same as desktop default)
+    const paintColor = new THREE.Vector3(1.0, 0.0, 1.0); // Purple in linear RGB
+
+    // Convert screen coordinates to normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2();
+    mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
+
+    // Raycast from camera
+    paintRaycaster.setFromCamera(mouse, camera);
+
+    // Update brush parameters
+    BRUSH_PARAMS.brushOrigin.value.copy(paintRaycaster.ray.origin);
+    BRUSH_PARAMS.brushDirection.value.copy(paintRaycaster.ray.direction);
+    BRUSH_PARAMS.brushColor.value.copy(paintColor);
+
+    // Check collision with ground mesh
+    const intersects = paintRaycaster.intersectObjects([groundMesh, infiniteFloor], true);
+
+    if (intersects.length > 0) {
+        // Surface-based depth mode (preferred)
+        BRUSH_PARAMS.useSurface.value = true;
+        BRUSH_PARAMS.surfacePoint.value.copy(intersects[0].point);
+    } else {
+        // Cylinder-based fallback mode
+        BRUSH_PARAMS.useSurface.value = false;
+    }
+
+    // Enable brush to apply changes
+    BRUSH_PARAMS.enabled.value = true;
+
+    // Bake changes to texture (use fast update)
+    if (gaussianSplat.material.updateVersion) {
+        gaussianSplat.material.updateVersion();
     }
 }
 
@@ -2528,6 +2629,7 @@ async function init() {
     setupLevelingControls();
     setupStartButton();
     setupCameraToggleButton();
+    setupPaintToggleButton();
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);

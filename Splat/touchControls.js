@@ -19,15 +19,8 @@ export class TouchControls {
         this.joystick = new VirtualJoystick();
 
         // Touch tracking
-        this.touchStartX = 0;
-        this.touchStartY = 0;
         this.activeTouchId = null; // Track which touch is controlling joystick
-
-        // Double-tap detection
-        this.lastTapTime = 0;
-        this.doubleTapThreshold = 300; // ms between taps
         this.jetpackActive = false;
-        this.jetpackTouchId = null;
 
         // OrbitControls state
         this.orbitControlsEnabled = true;
@@ -44,6 +37,18 @@ export class TouchControls {
         this.twoFingerTouchIds = []; // Array of touch IDs for two-finger gesture
         this.twoFingerStartX = 0;
         this.twoFingerStartY = 0;
+
+        // Right-side jump/jetpack state
+        this.rightSideTouchId = null; // Track touch on right side for jump/jetpack
+        this.rightSideTouchStartTime = 0; // Time when right-side touch started
+        this.rightSideTouchStartX = 0;
+        this.rightSideTouchStartY = 0;
+        this.rightSideHasMoved = false; // Track if right-side touch has moved (for camera rotation vs jump)
+        this.jetpackHoldThreshold = 200; // ms to hold before activating jetpack
+
+        // Paint mode state
+        this.isPaintMode = false; // Track if paint mode is active
+        this.paintCallback = null; // Callback to handle painting
 
         // Bind event handlers
         this.handleTouchStart = this.handleTouchStart.bind(this);
@@ -108,43 +113,38 @@ export class TouchControls {
             return;
         }
 
-        // In first-person mode: check if touch is on right side of screen for look control
-        if (this.cameraMode === 'first-person') {
-            // Right side: first-person look
-            if (touch.clientX > screenMidpoint && !this.firstPersonLookTouchId) {
-                event.preventDefault();
-                this.firstPersonLookTouchId = touch.identifier;
-                this.firstPersonLookStartX = touch.clientX;
-                this.firstPersonLookStartY = touch.clientY;
-                console.log('First-person look touch started (right side)');
-                return;
-            }
-
-            // Left side: joystick for movement (handled by existing logic below)
-        }
-
         // If joystick is already active, don't process new touches
-        // (stay in joystick mode)
         if (this.joystick.isActive()) {
             return;
         }
 
-        // Store initial touch position
-        this.touchStartX = touch.clientX;
-        this.touchStartY = touch.clientY;
+        // RIGHT SIDE: Jump/Jetpack, Camera rotation, or Paint
+        if (touch.clientX > screenMidpoint) {
+            event.preventDefault();
 
-        // Check for double-tap
-        if (currentTime - this.lastTapTime < this.doubleTapThreshold) {
-            // Double-tap detected
-            event.preventDefault(); // Prevent default for double-tap
-            this.handleDoubleTap(touch);
-            this.lastTapTime = 0; // Reset to avoid triple-tap
+            // Paint mode: Start painting with single-finger drag
+            if (this.isPaintMode) {
+                this.rightSideTouchId = touch.identifier;
+                this.rightSideTouchStartX = touch.clientX;
+                this.rightSideTouchStartY = touch.clientY;
+                this.rightSideHasMoved = false;
+                console.log('Paint mode: touch started (right side)');
+                return;
+            }
+
+            // Normal mode: Jump/Jetpack or Camera rotation
+            if (!this.rightSideTouchId && !this.firstPersonLookTouchId) {
+                this.rightSideTouchId = touch.identifier;
+                this.rightSideTouchStartTime = currentTime;
+                this.rightSideTouchStartX = touch.clientX;
+                this.rightSideTouchStartY = touch.clientY;
+                this.rightSideHasMoved = false;
+                console.log('Right-side touch started (jump/jetpack/camera detection)');
+            }
             return;
         }
 
-        this.lastTapTime = currentTime;
-
-        // Single-finger on left side activates joystick instantly (both third-person and first-person)
+        // LEFT SIDE: Joystick for movement
         if (touch.clientX <= screenMidpoint && !this.jetpackActive) {
             event.preventDefault();
             const touchId = touch.identifier;
@@ -155,8 +155,6 @@ export class TouchControls {
             this.activateJoystick(touchId, touchX, touchY);
             console.log('Single-finger joystick activated (left side)');
         }
-
-        // Right side or other touches: allow for camera rotation
     }
 
     /**
@@ -205,33 +203,6 @@ export class TouchControls {
             return;
         }
 
-        // In first-person mode: check if this is a look control touch (single-finger right side)
-        if (this.cameraMode === 'first-person' && this.firstPersonLookTouchId !== null) {
-            event.preventDefault();
-
-            // Find the touch controlling the look
-            for (let i = 0; i < event.changedTouches.length; i++) {
-                const touchItem = event.changedTouches[i];
-
-                if (touchItem.identifier === this.firstPersonLookTouchId) {
-                    // Calculate delta from last position
-                    const deltaX = touchItem.clientX - this.firstPersonLookStartX;
-                    const deltaY = touchItem.clientY - this.firstPersonLookStartY;
-
-                    // Update start position for next delta
-                    this.firstPersonLookStartX = touchItem.clientX;
-                    this.firstPersonLookStartY = touchItem.clientY;
-
-                    // Call callback to update camera rotation
-                    if (this.firstPersonCallback) {
-                        this.firstPersonCallback(deltaX, deltaY);
-                    }
-
-                    return;
-                }
-            }
-        }
-
         // If joystick is active, prevent default and update joystick
         if (this.joystick.isActive()) {
             event.preventDefault();
@@ -249,13 +220,63 @@ export class TouchControls {
             return;
         }
 
-        // Allow event to propagate to OrbitControls if joystick not active
+        // Handle right-side touch movement (camera rotation or painting)
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            const touchItem = event.changedTouches[i];
+
+            if (touchItem.identifier === this.rightSideTouchId) {
+                event.preventDefault();
+
+                // Calculate delta from last position
+                const deltaX = touchItem.clientX - this.rightSideTouchStartX;
+                const deltaY = touchItem.clientY - this.rightSideTouchStartY;
+
+                // Detect if touch has moved (threshold: 5 pixels)
+                if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+                    this.rightSideHasMoved = true;
+                }
+
+                // Update start position for next delta
+                this.rightSideTouchStartX = touchItem.clientX;
+                this.rightSideTouchStartY = touchItem.clientY;
+
+                // Paint mode: Call paint callback with touch position
+                if (this.isPaintMode && this.paintCallback) {
+                    this.paintCallback(touchItem.clientX, touchItem.clientY);
+                    return;
+                }
+
+                // Camera rotation mode: Works in all camera modes and during jetpack
+                if (this.rightSideHasMoved) {
+                    if (this.cameraMode === 'first-person') {
+                        // First-person: Use callback for camera rotation
+                        if (this.firstPersonCallback) {
+                            this.firstPersonCallback(deltaX, deltaY);
+                        }
+                    } else {
+                        // Third-person: Use OrbitControls
+                        if (this.orbitControls && this.orbitControls.enabled) {
+                            const rotateSpeed = 0.005;
+                            this.orbitControls.rotateLeft(deltaX * rotateSpeed);
+                            this.orbitControls.rotateUp(-deltaY * rotateSpeed);
+                            this.orbitControls.update();
+                        }
+                    }
+                }
+
+                return;
+            }
+        }
+
+        // Allow event to propagate to OrbitControls if no touch handled
     }
 
     /**
      * Handle touch end event
      */
     handleTouchEnd(event) {
+        const currentTime = Date.now();
+
         // Check if two-finger mode should end
         if (this.twoFingerRotation) {
             // Check if any of the two-finger touches ended
@@ -271,33 +292,49 @@ export class TouchControls {
             }
         }
 
-        // Check if the joystick touch ended
-        let joystickTouchEnded = false;
-        let jetpackTouchEnded = false;
-        let firstPersonLookEnded = false;
-
         for (let i = 0; i < event.changedTouches.length; i++) {
             const touch = event.changedTouches[i];
 
-            // Check first-person look touch
-            if (this.firstPersonLookTouchId === touch.identifier) {
-                firstPersonLookEnded = true;
-                this.firstPersonLookTouchId = null;
-                console.log('First-person look touch ended');
+            // Check if right-side touch ended
+            if (this.rightSideTouchId === touch.identifier) {
+                const touchDuration = currentTime - this.rightSideTouchStartTime;
+
+                // Paint mode: End painting
+                if (this.isPaintMode) {
+                    this.rightSideTouchId = null;
+                    console.log('Paint mode: touch ended');
+                    return;
+                }
+
+                // Jetpack active: Deactivate jetpack
+                if (this.jetpackActive) {
+                    this.deactivateJetpack();
+                    this.rightSideTouchId = null;
+                    console.log('Jetpack deactivated (touch ended)');
+                    return;
+                }
+
+                // Touch was quick tap without movement: Trigger jump
+                if (!this.rightSideHasMoved && touchDuration < this.jetpackHoldThreshold) {
+                    this.keysPressed[' '] = true;
+                    setTimeout(() => {
+                        this.keysPressed[' '] = false;
+                    }, 50);
+                    console.log('Jump triggered (quick tap)');
+                }
+
+                // Reset right-side state
+                this.rightSideTouchId = null;
+                this.rightSideHasMoved = false;
+                console.log('Right-side touch ended');
+                return;
             }
 
-            // Check jetpack FIRST (jetpack mode includes joystick, so check this first)
-            if (this.jetpackTouchId === touch.identifier) {
-                jetpackTouchEnded = true;
-                this.deactivateJetpack();
-                break; // Jetpack deactivation also deactivates joystick
-            }
-
-            // Check if this is the joystick control touch (but not jetpack)
-            if (this.activeTouchId === touch.identifier && !this.jetpackActive) {
-                joystickTouchEnded = true;
+            // Check if joystick touch ended
+            if (this.activeTouchId === touch.identifier) {
                 this.deactivateJoystick();
-                break;
+                console.log('Joystick touch ended');
+                return;
             }
         }
 
@@ -305,39 +342,6 @@ export class TouchControls {
         if (!this.joystick.isActive()) {
             // Don't prevent default - let OrbitControls handle the touch end
         }
-    }
-
-    /**
-     * Handle double-tap gesture
-     */
-    handleDoubleTap(touch) {
-        // Check if already holding for jetpack - if so, ignore
-        if (this.jetpackActive) return;
-
-        // Store touch info for use in setTimeout
-        const touchId = touch.identifier;
-        const touchX = touch.clientX;
-        const touchY = touch.clientY;
-
-        // Trigger jump (single frame space press, then release)
-        this.keysPressed[' '] = true;
-
-        // Release space after a short delay (simulate key press)
-        setTimeout(() => {
-            if (!this.jetpackActive) {
-                this.keysPressed[' '] = false;
-            }
-        }, 50);
-
-        // Activate jetpack mode if touch is still down after delay
-        this.jetpackTouchId = touchId;
-
-        setTimeout(() => {
-            // Check if touch is still down
-            if (this.jetpackTouchId === touchId) {
-                this.activateJetpack(touchId, touchX, touchY);
-            }
-        }, 100);
     }
 
     /**
@@ -378,14 +382,11 @@ export class TouchControls {
     }
 
     /**
-     * Activate jetpack mode with joystick
+     * Activate jetpack mode (no joystick - user can use left-side joystick separately)
      */
-    activateJetpack(touchId, x, y) {
+    activateJetpack() {
         this.jetpackActive = true;
         this.keysPressed[' '] = true; // Hold space for jetpack
-
-        // Show joystick for directional control
-        this.activateJoystick(touchId, x, y);
 
         console.log('Jetpack mode activated');
     }
@@ -395,20 +396,17 @@ export class TouchControls {
      */
     deactivateJetpack() {
         this.jetpackActive = false;
-        this.jetpackTouchId = null;
         this.keysPressed[' '] = false;
-
-        // Deactivate joystick as well
-        this.deactivateJoystick();
 
         console.log('Jetpack mode deactivated');
     }
 
     /**
-     * Update loop to sync joystick state to keysPressed
+     * Update loop to sync joystick state to keysPressed and check for jetpack activation
      */
     startUpdateLoop() {
         const update = () => {
+            // Sync joystick to keysPressed
             if (this.joystick.isActive()) {
                 const keys = this.joystick.getKeys();
 
@@ -417,6 +415,17 @@ export class TouchControls {
                 this.keysPressed['a'] = keys.a;
                 this.keysPressed['s'] = keys.s;
                 this.keysPressed['d'] = keys.d;
+            }
+
+            // Check for jetpack activation (right-side touch held without movement)
+            if (this.rightSideTouchId !== null && !this.jetpackActive && !this.isPaintMode) {
+                const currentTime = Date.now();
+                const touchDuration = currentTime - this.rightSideTouchStartTime;
+
+                // Activate jetpack if touch held for threshold duration without movement
+                if (touchDuration >= this.jetpackHoldThreshold && !this.rightSideHasMoved) {
+                    this.activateJetpack();
+                }
             }
 
             requestAnimationFrame(update);
@@ -440,6 +449,23 @@ export class TouchControls {
      */
     setFirstPersonCallback(callback) {
         this.firstPersonCallback = callback;
+    }
+
+    /**
+     * Set paint mode on/off
+     * @param {boolean} enabled - Enable or disable paint mode
+     */
+    setPaintMode(enabled) {
+        this.isPaintMode = enabled;
+        console.log(`TouchControls: Paint mode ${enabled ? 'ON' : 'OFF'}`);
+    }
+
+    /**
+     * Set callback for painting
+     * @param {function} callback - Function(x, y) called with touch coordinates during painting
+     */
+    setPaintCallback(callback) {
+        this.paintCallback = callback;
     }
 
     /**
