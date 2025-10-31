@@ -268,9 +268,15 @@ export class XRControllers {
         if (this.isPaintMode) {
             console.log('VR Paint mode: ON');
             this.showColorPalette();
+            // Hide teleportation rays when entering paint mode
+            if (this.rayLine0) this.rayLine0.visible = false;
+            if (this.rayLine1) this.rayLine1.visible = false;
+            // Clear any teleport target visualization
+            this.xrManager.updateTeleportTarget(null);
         } else {
             console.log('VR Paint mode: OFF');
             this.hideColorPalette();
+            // Rays will be shown again when trigger is pressed (handled by onSelectStart)
         }
     }
 
@@ -459,8 +465,8 @@ export class XRControllers {
             this.buttonBCooldown -= deltaTime;
         }
 
-        // Update teleport target visualization
-        if (this.isSelectPressed) {
+        // Update teleport target visualization (only when NOT in paint mode)
+        if (this.isSelectPressed && !this.isPaintMode) {
             // Raycast from primary controller (right hand)
             const hitPoint = this.raycastForTeleport(this.controller0);
             this.xrManager.updateTeleportTarget(hitPoint);
