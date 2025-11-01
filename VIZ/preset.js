@@ -1159,7 +1159,7 @@ async function main() {
           const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereo2StereoLDI' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGLST2ST(gl, fragmentShaderSource));
         } else {
-          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDIGlow' + (test ? '-test' : '') + ' .glsl');
+          const fragmentShaderSource = await loadShaderFile('../Shaders/rayCastStereoLDIGlow' + (test ? '-test' : '') + '.glsl');
           ({ programInfo, buffers } = setupWebGLST(gl, fragmentShaderSource));
         }
       }
