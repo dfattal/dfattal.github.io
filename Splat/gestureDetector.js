@@ -24,19 +24,27 @@ export const GestureMode = {
     PAINTING: 'painting',
     MOVING: 'moving',
     JETPACK: 'jetpack',
-    MOVING_JETPACK: 'moving_jetpack'
+    MOVING_JETPACK: 'moving_jetpack',
+    TELEPORTING: 'teleporting' // LEFT hand only
 };
 
 export class GestureDetector {
-    constructor(xrHands, xrManager) {
+    constructor(xrHands, xrManager, wristPalette = null) {
         this.xrHands = xrHands;
         this.xrManager = xrManager;
+        this.wristPalette = wristPalette; // Reference to WristPalette for toggle button checking
 
         // Current gesture mode
         this.mode = GestureMode.IDLE;
 
         // Active painter hand ('left', 'right', or null)
         this.activePainterHand = null;
+
+        // Paint mode enabled flag (controlled by wrist palette toggle)
+        this.paintModeEnabled = false;
+
+        // Teleport tracking (LEFT hand only)
+        this.isTeleporting = false;
 
         // Gesture callbacks
         this.callbacks = {
@@ -48,14 +56,24 @@ export class GestureDetector {
             onMovementEnd: null,     // ()
             onJetpackStart: null,    // (handedness)
             onJetpackEnd: null,      // (handedness)
-            onColorSelect: null,     // (colorIndex)
-            onTeleport: null         // (position)
+            onColorSelect: null,     // (rayOrigin, rayDirection)
+            onTeleportStart: null,   // (rayOrigin, rayDirection) - LEFT hand only
+            onTeleportUpdate: null,  // (rayOrigin, rayDirection) - Update ray during sustained pinch
+            onTeleportEnd: null,     // (rayOrigin, rayDirection) - Execute teleport on release
+            onTogglePaintMode: null  // (enabled)
         };
 
         // Selected color index (0-11 for palette)
         this.selectedColorIndex = 6; // Default to purple
 
         console.log('GestureDetector initialized with proven LDIPlayer patterns');
+    }
+
+    /**
+     * Set reference to WristPalette (call after both are created)
+     */
+    setWristPalette(wristPalette) {
+        this.wristPalette = wristPalette;
     }
 
     /**
@@ -149,11 +167,37 @@ export class GestureDetector {
         const dz = indexTip.z - state.dragStartPosition.z;
         const dragDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        // Check if drag threshold exceeded
+        // LEFT hand: Teleportation (only when paint mode OFF)
+        if (handedness === 'left' && !this.paintModeEnabled) {
+            const wrist = this.xrHands.getJointPosition(hand, 'wrist');
+            if (wrist && indexTip) {
+                const rayOrigin = wrist.clone();
+                const rayDirection = new THREE.Vector3().subVectors(indexTip, wrist).normalize();
+
+                if (!this.isTeleporting) {
+                    // Start teleportation
+                    this.isTeleporting = true;
+                    this.mode = GestureMode.TELEPORTING;
+                    console.log('LEFT hand teleportation started');
+
+                    if (this.callbacks.onTeleportStart) {
+                        this.callbacks.onTeleportStart(rayOrigin, rayDirection);
+                    }
+                } else {
+                    // Update teleport ray
+                    if (this.callbacks.onTeleportUpdate) {
+                        this.callbacks.onTeleportUpdate(rayOrigin, rayDirection);
+                    }
+                }
+            }
+            return; // Don't process painting for left hand during teleportation
+        }
+
+        // Check if drag threshold exceeded for painting (either hand when paint mode ON)
         if (dragDistance > DRAG_MOVEMENT_THRESHOLD) {
             // Dragging detected
-            if (this.mode === GestureMode.IDLE) {
-                // Start painting if no active painter
+            if (this.mode === GestureMode.IDLE && this.paintModeEnabled) {
+                // Only start painting if paint mode is enabled
                 if (this.activePainterHand === null) {
                     this.startPainting(hand, handedness);
                 }
@@ -171,6 +215,27 @@ export class GestureDetector {
      */
     onPinchRelease(hand, handedness, state, duration, now) {
         console.log(`${handedness} pinch release (duration: ${duration}ms)`);
+
+        // LEFT hand: Execute teleportation if in teleport mode
+        if (handedness === 'left' && this.isTeleporting) {
+            const wrist = this.xrHands.getJointPosition(hand, 'wrist');
+            const indexTip = this.xrHands.getJointPosition(hand, 'index-finger-tip');
+
+            if (wrist && indexTip) {
+                const rayOrigin = wrist.clone();
+                const rayDirection = new THREE.Vector3().subVectors(indexTip, wrist).normalize();
+
+                console.log('LEFT hand teleportation executed');
+                if (this.callbacks.onTeleportEnd) {
+                    this.callbacks.onTeleportEnd(rayOrigin, rayDirection);
+                }
+            }
+
+            // Reset teleport state
+            this.isTeleporting = false;
+            this.mode = GestureMode.IDLE;
+            return;
+        }
 
         if (duration < TAP_DURATION_MAX) {
             // It's a TAP
@@ -202,7 +267,7 @@ export class GestureDetector {
                 this.endPainting(handedness);
             }
 
-            // End jetpack if this hand was holding it
+            // End jetpack if this hand was holding it (RIGHT hand only)
             if (this.mode === GestureMode.JETPACK && handedness === 'right') {
                 this.endJetpack(handedness);
             }
@@ -213,20 +278,37 @@ export class GestureDetector {
      * Handle single tap
      */
     onSingleTap(hand, handedness) {
-        // Check if pointing at color palette (if visible)
-        if (handedness === 'right' && this.callbacks.onColorSelect) {
-            // Get right hand ray
-            const wrist = this.xrHands.getJointPosition(hand, 'wrist');
-            const indexTip = this.xrHands.getJointPosition(hand, 'index-finger-tip');
+        // Get ray direction for checking what we're pointing at
+        const wrist = this.xrHands.getJointPosition(hand, 'wrist');
+        const indexTip = this.xrHands.getJointPosition(hand, 'index-finger-tip');
 
-            if (wrist && indexTip) {
-                const rayOrigin = wrist.clone();
-                const rayDirection = new THREE.Vector3().subVectors(indexTip, wrist).normalize();
+        if (!wrist || !indexTip) return;
 
-                // Let callback handle palette checking
-                this.callbacks.onColorSelect(rayOrigin, rayDirection);
+        const rayOrigin = wrist.clone();
+        const rayDirection = new THREE.Vector3().subVectors(indexTip, wrist).normalize();
+
+        // Priority 1: Check if pointing at toggle button (either hand)
+        if (this.wristPalette && this.wristPalette.checkToggleButtonHover(rayOrigin, rayDirection)) {
+            // Toggle paint mode
+            const newState = this.wristPalette.togglePaintMode();
+            this.paintModeEnabled = newState;
+
+            // Notify callback
+            if (this.callbacks.onTogglePaintMode) {
+                this.callbacks.onTogglePaintMode(newState);
             }
+
+            console.log(`Paint mode toggled via wrist button: ${newState ? 'ON' : 'OFF'}`);
+            return; // Don't process other tap actions
         }
+
+        // Priority 2: Check if pointing at color palette (paint mode enabled)
+        if (this.paintModeEnabled && this.callbacks.onColorSelect) {
+            this.callbacks.onColorSelect(rayOrigin, rayDirection);
+            return;
+        }
+
+        // Quick taps don't trigger teleportation - teleportation requires sustained LEFT hand pinch
     }
 
     /**
@@ -345,7 +427,10 @@ export class GestureDetector {
      */
     checkMovementGesture(cameraPosition) {
         const session = this.xrManager.renderer.xr.getSession();
-        if (!session) return;
+        if (!session) {
+            console.log('[Movement] No XR session');
+            return;
+        }
 
         // Find left hand
         let leftHand = null;
@@ -356,16 +441,23 @@ export class GestureDetector {
             }
         }
 
-        if (!leftHand) return;
+        if (!leftHand) {
+            console.log('[Movement] No left hand found');
+            return;
+        }
 
         // Get hand position and pointing direction
         const wrist = this.xrHands.getJointPosition(leftHand, 'wrist');
         const indexTip = this.xrHands.getJointPosition(leftHand, 'index-finger-tip');
 
-        if (!wrist || !indexTip || !cameraPosition) return;
+        if (!wrist || !indexTip || !cameraPosition) {
+            console.log('[Movement] Missing joint positions - wrist:', !!wrist, 'indexTip:', !!indexTip, 'camera:', !!cameraPosition);
+            return;
+        }
 
         // Calculate hand extension from head
         const extensionDistance = wrist.distanceTo(cameraPosition);
+        console.log(`[Movement] Extension distance: ${extensionDistance.toFixed(3)}m (min: ${HAND_EXTENSION_MIN}m)`);
 
         if (extensionDistance >= HAND_EXTENSION_MIN) {
             // Hand is extended enough - calculate movement
@@ -383,6 +475,8 @@ export class GestureDetector {
                 1.0
             );
 
+            console.log(`[Movement] Hand extended! Speed: ${extensionNormalized.toFixed(2)}, Mode: ${this.mode}`);
+
             if (this.mode === GestureMode.IDLE || this.mode === GestureMode.JETPACK) {
                 // Start movement
                 const newMode = this.mode === GestureMode.JETPACK
@@ -390,6 +484,7 @@ export class GestureDetector {
                     : GestureMode.MOVING;
                 this.mode = newMode;
 
+                console.log(`[Movement] Started - New mode: ${newMode}`);
                 if (this.callbacks.onMovementStart) {
                     this.callbacks.onMovementStart(pointingDirection, extensionNormalized);
                 }
@@ -401,13 +496,17 @@ export class GestureDetector {
             }
         } else {
             // Hand dropped below threshold
+            console.log('[Movement] Hand not extended enough');
+
             if (this.mode === GestureMode.MOVING) {
                 this.mode = GestureMode.IDLE;
+                console.log('[Movement] Ended - Mode: IDLE');
                 if (this.callbacks.onMovementEnd) {
                     this.callbacks.onMovementEnd();
                 }
             } else if (this.mode === GestureMode.MOVING_JETPACK) {
                 this.mode = GestureMode.JETPACK;
+                console.log('[Movement] Ended - Mode: JETPACK');
                 if (this.callbacks.onMovementEnd) {
                     this.callbacks.onMovementEnd();
                 }
@@ -417,10 +516,16 @@ export class GestureDetector {
 
     /**
      * Check for right hand hold gesture (jetpack)
+     * RIGHT hand only - does not conflict with LEFT hand teleportation
      */
     checkJetpackGesture() {
         const state = this.xrHands.handInputState.right;
         const now = performance.now();
+
+        // Don't activate jetpack during teleportation or painting
+        if (this.mode === GestureMode.TELEPORTING || this.mode === GestureMode.PAINTING) {
+            return;
+        }
 
         // Check if right hand is pinching and has been for >600ms
         if (state.isPinching) {
@@ -429,6 +534,7 @@ export class GestureDetector {
             if (holdDuration >= JETPACK_HOLD_DURATION) {
                 // Jetpack should be active
                 if (this.mode !== GestureMode.JETPACK && this.mode !== GestureMode.MOVING_JETPACK) {
+                    console.log(`RIGHT hand jetpack activated (hold duration: ${holdDuration}ms)`);
                     this.startJetpack('right');
                 }
             }

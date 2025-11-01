@@ -33,6 +33,11 @@ export class WristPalette {
         this.selectedIndex = 6; // Default to purple
         this.hoveredIndex = -1;
 
+        // Toggle button for paint mode
+        this.toggleButton = null;
+        this.toggleButtonHovered = false;
+        this.paintModeEnabled = false; // Tracks paint mode state
+
         // Palette group (attached to wrist)
         this.paletteGroup = null;
         this.isVisible = false;
@@ -111,22 +116,36 @@ export class WristPalette {
         this.selectionRing.visible = false;
         this.paletteGroup.add(this.selectionRing);
 
+        // Create toggle button (positioned above color palette)
+        const toggleButtonRadius = this.sphereRadius * 2.5; // Larger than color spheres
+        const toggleGeometry = new THREE.SphereGeometry(toggleButtonRadius, 16, 16);
+        const toggleMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff0000, // Red = OFF (will change to green when ON)
+            roughness: 0.3,
+            metalness: 0.1,
+            emissive: 0xff0000,
+            emissiveIntensity: 0.3
+        });
+        this.toggleButton = new THREE.Mesh(toggleGeometry, toggleMaterial);
+
+        // Position above color palette
+        this.toggleButton.position.set(0, this.sphereRadius * 6, 0);
+        this.toggleButton.userData.isToggleButton = true;
+        this.paletteGroup.add(this.toggleButton);
+
         // Add to scene
         this.scene.add(this.paletteGroup);
 
-        console.log('WristPalette created with', this.colors.length, 'colors');
+        console.log('WristPalette created with', this.colors.length, 'colors and toggle button');
     }
 
     /**
      * Update palette position and visibility
-     * @param {boolean} isPaintMode - Whether paint mode is active
      * @param {THREE.Vector3} cameraPosition - Current camera/head position
      */
-    update(isPaintMode, cameraPosition) {
-        if (!isPaintMode) {
-            this.hide();
-            return;
-        }
+    update(cameraPosition) {
+        // Palette now shows when palm is facing user (regardless of paint mode)
+        // This allows users to access the toggle button at any time
 
         // Check if hand tracking is available and palm is facing user
         const session = this.xrHands.renderer.xr.getSession();
@@ -204,6 +223,71 @@ export class WristPalette {
             this.setHovered(-1);
             return null;
         }
+    }
+
+    /**
+     * Check if pointing at toggle button
+     * @param {THREE.Vector3} rayOrigin - Ray origin (wrist position)
+     * @param {THREE.Vector3} rayDirection - Ray direction (normalized)
+     * @returns {boolean} - True if pointing at toggle button
+     */
+    checkToggleButtonHover(rayOrigin, rayDirection) {
+        if (!this.isVisible || !this.toggleButton) return false;
+
+        const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+        const intersects = raycaster.intersectObject(this.toggleButton);
+
+        const isHovering = intersects.length > 0;
+
+        // Update hover state
+        if (isHovering !== this.toggleButtonHovered) {
+            this.toggleButtonHovered = isHovering;
+
+            // Visual feedback for hover
+            if (this.toggleButton) {
+                if (isHovering) {
+                    this.toggleButton.scale.set(1.2, 1.2, 1.2);
+                    this.toggleButton.material.emissiveIntensity = 0.6;
+                } else {
+                    this.toggleButton.scale.set(1, 1, 1);
+                    this.toggleButton.material.emissiveIntensity = 0.3;
+                }
+            }
+        }
+
+        return isHovering;
+    }
+
+    /**
+     * Toggle paint mode on/off
+     * @returns {boolean} - New paint mode state
+     */
+    togglePaintMode() {
+        this.paintModeEnabled = !this.paintModeEnabled;
+
+        // Update toggle button appearance
+        if (this.toggleButton) {
+            const color = this.paintModeEnabled ? 0x00ff00 : 0xff0000; // Green = ON, Red = OFF
+            this.toggleButton.material.color.setHex(color);
+            this.toggleButton.material.emissive.setHex(color);
+
+            // Pulse effect on toggle
+            this.toggleButton.scale.set(1.4, 1.4, 1.4);
+            setTimeout(() => {
+                this.toggleButton.scale.set(1, 1, 1);
+            }, 100);
+        }
+
+        console.log(`Paint mode toggled: ${this.paintModeEnabled ? 'ON' : 'OFF'}`);
+        return this.paintModeEnabled;
+    }
+
+    /**
+     * Get current paint mode state
+     * @returns {boolean}
+     */
+    getPaintModeEnabled() {
+        return this.paintModeEnabled;
     }
 
     /**
@@ -301,6 +385,11 @@ export class WristPalette {
         if (this.selectionRing) {
             this.selectionRing.geometry.dispose();
             this.selectionRing.material.dispose();
+        }
+
+        if (this.toggleButton) {
+            this.toggleButton.geometry.dispose();
+            this.toggleButton.material.dispose();
         }
 
         if (this.paletteGroup) {

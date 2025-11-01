@@ -1155,11 +1155,11 @@ function initXR() {
     // Create XR hands
     xrHands = new XRHands(renderer, scene, characterControls?.model);
 
-    // Create gesture detector
-    gestureDetector = new GestureDetector(xrHands, xrManager);
-
-    // Create wrist-mounted color palette
+    // Create wrist-mounted color palette (must be created before gestureDetector)
     wristPalette = new WristPalette(scene, xrHands);
+
+    // Create gesture detector (pass wristPalette for toggle button checking)
+    gestureDetector = new GestureDetector(xrHands, xrManager, wristPalette);
 
     // Create gesture visuals
     gestureVisuals = new GestureVisuals(scene);
@@ -1275,6 +1275,61 @@ function initXR() {
                 gestureDetector.selectedColorIndex = colorIndex;
                 console.log(`Color selected: index ${colorIndex}`);
             }
+        }
+    };
+
+    // Wire up teleportation callbacks (LEFT hand only)
+    gestureDetector.callbacks.onTeleportStart = (rayOrigin, rayDirection) => {
+        console.log('Teleport started (LEFT hand)');
+        if (xrManager) {
+            // Cast ray to find ground target
+            const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+            const intersects = raycaster.intersectObjects([groundMesh, infiniteFloor], true);
+
+            if (intersects.length > 0) {
+                // Show teleport reticle at target
+                xrManager.updateTeleportTarget(intersects[0].point);
+            } else {
+                // No valid target
+                xrManager.updateTeleportTarget(null);
+            }
+        }
+    };
+
+    gestureDetector.callbacks.onTeleportUpdate = (rayOrigin, rayDirection) => {
+        if (xrManager) {
+            // Update ray as hand moves
+            const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+            const intersects = raycaster.intersectObjects([groundMesh, infiniteFloor], true);
+
+            if (intersects.length > 0) {
+                xrManager.updateTeleportTarget(intersects[0].point);
+            } else {
+                xrManager.updateTeleportTarget(null);
+            }
+        }
+    };
+
+    gestureDetector.callbacks.onTeleportEnd = (rayOrigin, rayDirection) => {
+        console.log('Teleport executed (LEFT hand released)');
+        if (xrManager) {
+            // Execute teleport to target (if valid)
+            xrManager.executeTeleport();
+        }
+    };
+
+    // Wire up paint mode toggle callback
+    gestureDetector.callbacks.onTogglePaintMode = (enabled) => {
+        console.log(`Paint mode toggled via gesture: ${enabled ? 'ON' : 'OFF'}`);
+
+        // Sync with controller paint mode if using controllers
+        if (xrControllers) {
+            xrControllers.isPaintMode = enabled;
+        }
+
+        // Update brush state
+        if (gaussianSplat) {
+            BRUSH_PARAMS.enabled.value = enabled;
         }
     };
 
@@ -2415,10 +2470,9 @@ function animate() {
             gestureDetector.update(session, camera.position);
         }
 
-        // Update wrist-mounted color palette
-        if (wristPalette && gestureDetector) {
-            const isPaintMode = gestureDetector.mode === 'painting';
-            wristPalette.update(isPaintMode, camera.position);
+        // Update wrist-mounted color palette (shows when palm facing user)
+        if (wristPalette) {
+            wristPalette.update(camera.position);
         }
 
         // Apply VR gesture movement and update visuals
