@@ -80,6 +80,10 @@ export class XRManager {
         // World offset for reference space (accumulated position change from physics)
         this.worldOffset = new THREE.Vector3();
 
+        // Accumulated rotations (in radians) for XR space rotation via right thumbstick
+        this.yRotation = 0;  // Yaw (left/right turning)
+        this.xRotation = 0;  // Pitch (up/down looking), clamped to ±85 degrees
+
         // Actual initial reference space origin (with calculated ground height)
         // This is set during onSessionStart and used as the base for offset calculations
         this.actualReferenceOrigin = null;
@@ -279,6 +283,8 @@ export class XRManager {
         // Reset physics state
         this.vrVelocity.set(0, 0, 0);
         this.worldOffset.set(0, 0, 0);
+        this.yRotation = 0;  // Reset yaw rotation offset
+        this.xRotation = 0;  // Reset pitch rotation offset
         this.isGrounded = false;
         this.airTime = 0;
         this.jetpackActive = false;
@@ -377,11 +383,13 @@ export class XRManager {
             z: pos.z + this.worldOffset.z
         };
 
-        // Create new reference space with updated position
+        // Create new reference space with updated position AND rotation
+        // Combine base rotation (from spawn config) with accumulated rotations (from right thumbstick)
         const tempCamera = new THREE.PerspectiveCamera();
         tempCamera.position.set(newPos.x, newPos.y, newPos.z);
         tempCamera.rotation.order = 'YXZ';
-        tempCamera.rotation.y = rot.y * (Math.PI / 180);
+        tempCamera.rotation.y = rot.y * (Math.PI / 180) + this.yRotation;  // Yaw: base + accumulated
+        tempCamera.rotation.x = this.xRotation;  // Pitch: accumulated only
         tempCamera.updateMatrixWorld();
 
         const quat = tempCamera.quaternion;
@@ -487,6 +495,45 @@ export class XRManager {
     }
 
     /**
+     * Handle rotation from right controller thumbstick
+     *
+     * @param {THREE.Vector2} thumbstick - Right thumbstick axes (-1 to 1)
+     * @param {number} deltaTime - Frame delta time in seconds
+     */
+    handleThumbstickRotation(thumbstick, deltaTime) {
+        if (!this.isXRActive || !thumbstick) return;
+
+        const rotationSpeed = 2.0; // radians per second at full stick deflection
+        const deadzone = 0.15; // Ignore small stick movements
+        const pitchLimit = Math.PI / 2 - 0.1; // ±85 degrees (~1.484 radians)
+
+        let needsUpdate = false;
+
+        // Horizontal rotation (yaw) - X-axis, INVERTED (negative to match natural direction)
+        if (Math.abs(thumbstick.x) > deadzone) {
+            const yawDelta = -thumbstick.x * rotationSpeed * deltaTime; // Negative for natural direction
+            this.yRotation += yawDelta;
+            needsUpdate = true;
+        }
+
+        // Vertical rotation (pitch) - Y-axis, INVERTED (negative to match natural direction)
+        if (Math.abs(thumbstick.y) > deadzone) {
+            const pitchDelta = -thumbstick.y * rotationSpeed * deltaTime; // Negative for natural direction
+            this.xRotation += pitchDelta;
+
+            // Clamp pitch to ±85 degrees
+            this.xRotation = Math.max(-pitchLimit, Math.min(pitchLimit, this.xRotation));
+            needsUpdate = true;
+        }
+
+        // Update reference space if rotation changed
+        if (needsUpdate) {
+            // Pass zero offset since we're only updating rotation
+            this.updateReferenceSpaceByOffset(new THREE.Vector3());
+        }
+    }
+
+    /**
      * Update physics for VR character position (gravity, collision, jumping, jetpack)
      * Physics is applied to the reference space origin (play space center), NOT the camera
      *
@@ -501,12 +548,18 @@ export class XRManager {
         // Physics should keep the play space center (feet) on the ground
         const currentPos = this.characterPosition.clone();
 
-        // Get thumbstick movement from controllers
+        // Get thumbstick movement from controllers (left controller)
         let thumbstickMovement = new THREE.Vector3();
         if (this.xrControllers) {
             const thumbstick = this.xrControllers.getThumbstickAxes();
             if (thumbstick) {
                 thumbstickMovement = this.handleThumbstickMovement(thumbstick, deltaTime) || new THREE.Vector3();
+            }
+
+            // Get right thumbstick for rotation control
+            const rightThumbstick = this.xrControllers.getRightThumbstickAxes();
+            if (rightThumbstick) {
+                this.handleThumbstickRotation(rightThumbstick, deltaTime);
             }
         }
 
@@ -632,6 +685,15 @@ export class XRManager {
     onRunToggle() {
         this.isRunning = !this.isRunning;
         console.log('Run mode:', this.isRunning ? 'ON' : 'OFF');
+    }
+
+    onResetPitch() {
+        // Reset pitch (vertical rotation) to flat/level (0 degrees)
+        this.xRotation = 0;
+        console.log('Camera pitch reset to flat (0 degrees)');
+
+        // Update reference space to apply the reset
+        this.updateReferenceSpaceByOffset(new THREE.Vector3());
     }
 
     // Cleanup

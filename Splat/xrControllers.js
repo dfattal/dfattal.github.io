@@ -31,14 +31,18 @@ export class XRControllers {
         this.rayLine1 = null;
 
         // Input state
-        this.thumbstickAxes = new THREE.Vector2();
+        this.leftThumbstickAxes = new THREE.Vector2();  // Left controller (movement)
+        this.rightThumbstickAxes = new THREE.Vector2(); // Right controller (rotation)
+        this.thumbstickAxes = new THREE.Vector2(); // Legacy for backward compatibility
         this.isSelectPressed = false; // Trigger for teleport/paint
         this.isSqueezePressed = false; // Grip for jump/jetpack
         this.squeezeHoldTime = 0;
         this.buttonAPressed = false; // A/X button for run toggle
         this.buttonBPressed = false; // B/Y button for paint toggle
+        this.rightStickPressed = false; // Right thumbstick press for pitch reset
         this.buttonACooldown = 0; // Cooldown timer for A/X button
         this.buttonBCooldown = 0; // Cooldown timer for B/Y button
+        this.rightStickCooldown = 0; // Cooldown timer for right stick press
         this.buttonCooldownDuration = 0.3; // 300ms cooldown between toggles
 
         // Paint mode state
@@ -205,24 +209,35 @@ export class XRControllers {
 
     /**
      * Get thumbstick axes from XR gamepads
-     * @returns {THREE.Vector2|null} Thumbstick axes (-1 to 1) or null if no gamepad
+     * LEFT controller (index 1): Movement
+     * RIGHT controller (index 0): Rotation
+     * @returns {THREE.Vector2|null} Left thumbstick axes for movement (-1 to 1) or null if no gamepad
      */
     getThumbstickAxes() {
         const session = this.renderer.xr.getSession();
         if (!session) return null;
 
-        // Try to get gamepad from either controller
+        // Reset both thumbstick values
+        this.leftThumbstickAxes.set(0, 0);
+        this.rightThumbstickAxes.set(0, 0);
+
+        // Process each controller separately
         for (const inputSource of session.inputSources) {
-            if (inputSource.gamepad) {
+            if (inputSource.gamepad && inputSource.handedness) {
                 const gamepad = inputSource.gamepad;
+                const isLeftHand = inputSource.handedness === 'left';
 
                 // Standard mapping: axes[2] = thumbstick X, axes[3] = thumbstick Y
                 if (gamepad.axes.length >= 4) {
-                    this.thumbstickAxes.set(gamepad.axes[2], gamepad.axes[3]);
+                    const x = gamepad.axes[2];
+                    const y = gamepad.axes[3];
 
-                    // Check if thumbstick has significant input
-                    if (this.thumbstickAxes.lengthSq() > 0.01) {
-                        return this.thumbstickAxes;
+                    if (isLeftHand) {
+                        // Left controller: Movement
+                        this.leftThumbstickAxes.set(x, y);
+                    } else {
+                        // Right controller: Rotation
+                        this.rightThumbstickAxes.set(x, y);
                     }
                 }
 
@@ -252,11 +267,38 @@ export class XRControllers {
                 } else {
                     this.buttonBPressed = false;
                 }
+
+                // Check for right thumbstick press (button index 3) for pitch reset - RIGHT CONTROLLER ONLY
+                if (!isLeftHand && gamepad.buttons.length > 3 && gamepad.buttons[3].pressed) {
+                    // Only trigger if button wasn't pressed before AND cooldown is expired
+                    if (!this.rightStickPressed && this.rightStickCooldown <= 0) {
+                        this.rightStickPressed = true;
+                        this.rightStickCooldown = this.buttonCooldownDuration; // Reset cooldown
+                        console.log('Right stick pressed - resetting camera pitch to flat');
+                        this.xrManager.onResetPitch();
+                    }
+                } else if (!isLeftHand) {
+                    this.rightStickPressed = false;
+                }
             }
+        }
+
+        // Return left thumbstick for movement (backward compatibility)
+        if (this.leftThumbstickAxes.lengthSq() > 0.01) {
+            this.thumbstickAxes.copy(this.leftThumbstickAxes);
+            return this.thumbstickAxes;
         }
 
         this.thumbstickAxes.set(0, 0);
         return this.thumbstickAxes;
+    }
+
+    /**
+     * Get right thumbstick axes for rotation
+     * @returns {THREE.Vector2} Right thumbstick axes (-1 to 1)
+     */
+    getRightThumbstickAxes() {
+        return this.rightThumbstickAxes;
     }
 
     /**
@@ -463,6 +505,9 @@ export class XRControllers {
         }
         if (this.buttonBCooldown > 0) {
             this.buttonBCooldown -= deltaTime;
+        }
+        if (this.rightStickCooldown > 0) {
+            this.rightStickCooldown -= deltaTime;
         }
 
         // Update teleport target visualization (only when NOT in paint mode)
