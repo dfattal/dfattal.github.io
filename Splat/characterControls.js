@@ -165,6 +165,18 @@ export class CharacterControls {
     }
 
     /**
+     * Get character position for debugging and spawn config
+     * @returns {Object} - {x, y, z} coordinates
+     */
+    getPosition() {
+        return {
+            x: this.model.position.x,
+            y: this.model.position.y,
+            z: this.model.position.z
+        };
+    }
+
+    /**
      * Get current movement state for audio system
      * @returns {string} - 'idle', 'walk', 'run', or 'jetpack'
      *

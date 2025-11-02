@@ -56,6 +56,7 @@ let infiniteFloor;
 let gaussianSplat = null;
 let splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat (from scene config)
 let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
+let autoExpansionRadius = 2500; // Auto-calculated magic effect radius based on splat extent (in splat space)
 
 // Adaptive quality system
 let adaptiveQuality = null;
@@ -214,8 +215,8 @@ function initScene() {
         maxPixelRadius: isMobile ? 256 : 384,
         // Cull transparent splats more aggressively
         minAlpha: isMobile ? 1.0 / 255.0 : 0.7 / 255.0,
-        // More aggressive frustum culling
-        clipXY: isMobile ? 1.2 : 1.3,
+        // Generous frustum culling (increased for large-scale scenes)
+        clipXY: isMobile ? 1.6 : 2.0,
         // Reduce Gaussian falloff (flatter shading, better performance)
         falloff: isMobile ? 0.8 : 0.95,
     });
@@ -390,9 +391,16 @@ function createGround() {
             // and bbox.min.y becomes the top (max height)
             const rawHeight = Math.abs(bbox.max.y - bbox.min.y);
             const maxTerrainHeight = rawHeight * splatScale;
-            maxCharacterHeight = maxTerrainHeight * 2;
 
-            console.log(`Terrain max height: ${maxTerrainHeight.toFixed(2)}, Character height cap: ${maxCharacterHeight.toFixed(2)}`);
+            // Read maxHeightMultiplier from config (default: 2.0, -1.0 = no ceiling)
+            const maxHeightMultiplier = sceneConfig?.character?.maxHeightMultiplier ?? 2.0;
+            if (maxHeightMultiplier < 0) {
+                maxCharacterHeight = null; // No height ceiling
+                console.log(`Terrain max height: ${maxTerrainHeight.toFixed(2)}, Character height cap: NONE (unlimited)`);
+            } else {
+                maxCharacterHeight = maxTerrainHeight * maxHeightMultiplier;
+                console.log(`Terrain max height: ${maxTerrainHeight.toFixed(2)}, Character height cap: ${maxCharacterHeight.toFixed(2)} (multiplier: ${maxHeightMultiplier})`);
+            }
 
             groundMesh.receiveShadow = true;
             groundMesh.castShadow = true;
@@ -611,8 +619,10 @@ function applyLightOrientation() {
 function createMagicModifier() {
     // Get Magic effect settings from config
     const magicCfg = sceneConfig?.scene?.magicEffect || {};
-    const expansionRadius = magicCfg.expansionRadius || 2500;
+    const expansionRadius = magicCfg.expansionRadius ?? autoExpansionRadius; // Use auto-calculated radius if not specified
     const duration = magicCfg.duration || 2.0;
+
+    console.log(`Creating magic modifier: radius=${expansionRadius.toFixed(1)}, duration=${duration.toFixed(1)}s ${magicCfg.expansionRadius ? '(from config)' : '(auto-calculated)'}`);
 
     return dyno.dynoBlock(
         { gsplat: dyno.Gsplat },
@@ -811,6 +821,38 @@ async function loadGaussianSplat() {
 
         console.log('SplatMesh initialized successfully');
 
+        // Get bounding box in splat space (before transforms) for auto-configuration
+        const splatBBox = gaussianSplat.getBoundingBox(false); // false = include splat sizes, not just centers
+        const splatExtent = new THREE.Vector3();
+        splatBBox.getSize(splatExtent);
+        const splatMaxDimension = Math.max(splatExtent.x, splatExtent.y, splatExtent.z);
+        const splatRadius = splatExtent.length() / 2; // Distance from center to corner
+
+        console.log('Splat bounding box (local space):');
+        console.log('  min:', splatBBox.min);
+        console.log('  max:', splatBBox.max);
+        console.log('  extent:', splatExtent);
+        console.log('  max dimension:', splatMaxDimension.toFixed(2));
+        console.log('  radius (center to corner):', splatRadius.toFixed(2));
+
+        // Auto-configure camera far plane based on splat extent × scale
+        // Use 1.5x multiplier for safety margin
+        const autoFarPlane = splatRadius * splatScale * 1.5;
+        const configFarPlane = sceneConfig?.camera?.far || 1000;
+        const finalFarPlane = Math.max(autoFarPlane, configFarPlane);
+
+        if (camera) {
+            camera.far = finalFarPlane;
+            camera.updateProjectionMatrix();
+            console.log(`Camera far plane: config=${configFarPlane}, auto=${autoFarPlane.toFixed(0)}, using=${finalFarPlane.toFixed(0)}`);
+        }
+
+        // Auto-configure magic effect expansion radius in splat space (before scaling)
+        // Use the XZ radius (horizontal extent) since the effect expands radially in XZ plane
+        const splatRadiusXZ = Math.sqrt(splatExtent.x * splatExtent.x + splatExtent.z * splatExtent.z) / 2;
+        autoExpansionRadius = splatRadiusXZ * 1.1; // 1.1x multiplier to ensure full coverage
+        console.log(`Magic effect expansion radius: auto=${autoExpansionRadius.toFixed(1)} (in splat space)`);
+
         // Update progress to 100%
         if (progressBar && progressText) {
             progressBar.style.width = '100%';
@@ -853,11 +895,29 @@ async function loadGaussianSplat() {
 
         // Initialize adaptive quality system for performance optimization
         // Uses preset-based quality switching (no worldModifier conflicts)
+        // Platform-specific settings:
+        // - Desktop: 30 FPS target, start at Ultra (index 0)
+        // - Mobile: 20 FPS target, start at Medium (index 2)
+        // - VR: Will be 50 FPS when active, start at Medium (index 2) for mobile-class performance
+        const desktopTargetFPS = 30;
+        const mobileTargetFPS = 20;
+        const vrTargetFPS = 50;
+
+        const initialTargetFPS = isMobile ? mobileTargetFPS : desktopTargetFPS;
+        const initialQualityIndex = isMobile ? 2 : 0; // Desktop=Ultra(0), Mobile=Medium(2)
+
         adaptiveQuality = new AdaptiveQualitySystem(
             spark,
             renderer,
-            20 // Target FPS (20 for smooth mobile experience)
+            initialTargetFPS,
+            initialQualityIndex
         );
+
+        // Store VR target FPS for later use
+        adaptiveQuality.vrTargetFPS = vrTargetFPS;
+        adaptiveQuality.desktopTargetFPS = desktopTargetFPS;
+        adaptiveQuality.mobileTargetFPS = mobileTargetFPS;
+
         console.log('Adaptive quality system initialized');
 
         // Apply the Magic effect modifier
@@ -2460,7 +2520,22 @@ function animate() {
     }
 
     // Update XR system if active
-    if (xrManager && xrManager.getIsXRActive()) {
+    const isXRActive = xrManager && xrManager.getIsXRActive();
+
+    // Dynamically adjust target FPS when entering/exiting VR
+    if (adaptiveQuality) {
+        const currentTargetIsVR = adaptiveQuality.targetFPS === adaptiveQuality.vrTargetFPS;
+        if (isXRActive && !currentTargetIsVR) {
+            // Just entered VR - switch to VR target FPS (50+)
+            adaptiveQuality.setTargetFPS(adaptiveQuality.vrTargetFPS);
+        } else if (!isXRActive && currentTargetIsVR) {
+            // Just exited VR - switch back to desktop/mobile target FPS
+            const nonVRTarget = isMobile ? adaptiveQuality.mobileTargetFPS : adaptiveQuality.desktopTargetFPS;
+            adaptiveQuality.setTargetFPS(nonVRTarget);
+        }
+    }
+
+    if (isXRActive) {
         // In VR mode: update XR physics and controllers
         xrManager.update(delta, [groundMesh, infiniteFloor]);
 
@@ -2598,12 +2673,14 @@ function animate() {
             const debugAnimation = document.getElementById('debug-animation');
             const debugJetpack = document.getElementById('debug-jetpack');
             const debugGroundDist = document.getElementById('debug-ground-dist');
+            const debugPosition = document.getElementById('debug-position');
 
-            if (debugState && debugAnimation && debugJetpack && debugGroundDist) {
+            if (debugState && debugAnimation && debugJetpack && debugGroundDist && debugPosition) {
                 const isGrounded = characterControls.getGroundedState();
                 const currentAction = characterControls.getCurrentAction();
                 const isJetpackActive = characterControls.getJetpackActive();
                 const groundDistance = characterControls.getGroundDistance();
+                const position = characterControls.getPosition();
 
                 debugState.textContent = isGrounded ? 'GROUNDED' : 'IN AIR';
                 debugState.className = isGrounded ? 'grounded' : 'in-air';
@@ -2611,6 +2688,7 @@ function animate() {
                 debugJetpack.textContent = isJetpackActive ? 'ACTIVE' : 'OFF';
                 debugJetpack.className = isJetpackActive ? 'jetpack-active' : '';
                 debugGroundDist.textContent = groundDistance.toFixed(1) + 'm';
+                debugPosition.textContent = `(${position.x.toFixed(1)}|${position.y.toFixed(1)}|${position.z.toFixed(1)})`;
             }
 
             // Update audio based on character movement state
@@ -2634,7 +2712,7 @@ function animate() {
     }
 
     // Update orbit controls (not during transition to avoid interference, and not in XR mode)
-    if (!isCameraTransitioning && (!xrManager || !xrManager.getIsXRActive())) {
+    if (!isCameraTransitioning && !isXRActive) {
         orbitControls.update();
     }
 

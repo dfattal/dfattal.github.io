@@ -18,6 +18,12 @@
       "name": "Castle of Argueso",
       "description": "Medieval castle in the south of Cantabria, Spain",
       "config": "models/CastleArgueso.json"
+    },
+    {
+      "id": "Alcatraz",
+      "name": "Alcatraz",
+      "description": "Alcatraz, the prison island in the San Francisco Bay.",
+      "config": "models/Alcatraz.json"
     }
   ]
 }

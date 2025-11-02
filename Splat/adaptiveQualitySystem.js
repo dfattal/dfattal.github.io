@@ -16,10 +16,11 @@
 import * as THREE from 'three';
 
 export class AdaptiveQualitySystem {
-    constructor(spark, renderer, targetFPS = 20) {
+    constructor(spark, renderer, targetFPS = 20, initialQualityIndex = 0) {
         this.spark = spark;
         this.renderer = renderer;
         this.targetFPS = targetFPS;
+        this.initialTargetFPS = targetFPS; // Store for mode switching
 
         // FPS tracking
         this.frameCount = 0;
@@ -49,7 +50,7 @@ export class AdaptiveQualitySystem {
                 minPixelRadius: 0.0,           // Show all splats
                 maxPixelRadius: 512.0,         // Full size cap
                 minAlpha: 0.5 / 255.0,         // Show very transparent splats
-                clipXY: 1.4,                   // Generous frustum culling
+                clipXY: 2.0,                   // Very generous frustum culling (increased for large scenes)
                 falloff: 1.0,                  // Full Gaussian falloff
                 stochastic: false,             // Sorted rendering (best quality)
                 sortDistance: 0.01,            // Frequent sorting
@@ -62,7 +63,7 @@ export class AdaptiveQualitySystem {
                 minPixelRadius: 0.3,           // Cull tiny splats
                 maxPixelRadius: 384.0,
                 minAlpha: 0.7 / 255.0,
-                clipXY: 1.3,
+                clipXY: 1.8,                   // Generous frustum culling (increased for large scenes)
                 falloff: 0.95,
                 stochastic: false,
                 sortDistance: 0.02,
@@ -75,7 +76,7 @@ export class AdaptiveQualitySystem {
                 minPixelRadius: 0.5,
                 maxPixelRadius: 256.0,
                 minAlpha: 1.0 / 255.0,
-                clipXY: 1.2,
+                clipXY: 1.6,                   // Moderate frustum culling (increased for large scenes)
                 falloff: 0.85,
                 stochastic: false,
                 sortDistance: 0.05,
@@ -88,7 +89,7 @@ export class AdaptiveQualitySystem {
                 minPixelRadius: 0.8,           // More aggressive tiny splat culling
                 maxPixelRadius: 192.0,
                 minAlpha: 1.8 / 255.0,         // Cull more transparent splats
-                clipXY: 1.1,                   // Tighter frustum culling
+                clipXY: 1.4,                   // Moderate frustum culling (increased for large scenes)
                 falloff: 0.70,                 // Flatter shading (continued from Medium 0.85)
                 stochastic: false,             // NEVER enable - causes grainy noise!
                 sortDistance: 0.08,            // Less frequent sorting (but still sorted for clean look)
@@ -101,7 +102,7 @@ export class AdaptiveQualitySystem {
                 minPixelRadius: 1.2,           // Very aggressive culling of tiny splats
                 maxPixelRadius: 128.0,
                 minAlpha: 2.5 / 255.0,         // Cull very transparent splats
-                clipXY: 1.0,                   // Tight frustum culling
+                clipXY: 1.2,                   // Less aggressive frustum culling (increased for large scenes)
                 falloff: 0.60,                 // Very flat shading (maximum performance)
                 stochastic: false,             // NEVER enable - causes grainy noise!
                 sortDistance: 0.15,            // Least frequent sorting (but still sorted for clean look)
@@ -110,8 +111,8 @@ export class AdaptiveQualitySystem {
             }
         ];
 
-        // Current quality index (start at best quality)
-        this.currentQualityIndex = 0;
+        // Current quality index (start at specified quality)
+        this.currentQualityIndex = Math.min(initialQualityIndex, this.qualityPresets.length - 1);
 
         // Manual mode flag - when true, automatic adjustment is disabled
         this.manualMode = false;
@@ -122,7 +123,7 @@ export class AdaptiveQualitySystem {
         // Apply initial quality
         this.applyQualityPreset(this.currentQualityIndex);
 
-        console.log('[AdaptiveQuality] Initialized - Starting at Ultra quality');
+        console.log(`[AdaptiveQuality] Initialized - Starting at ${this.getCurrentQualityName()} quality (target: ${this.targetFPS} FPS)`);
     }
 
     update() {
@@ -239,6 +240,17 @@ export class AdaptiveQualitySystem {
         this.manualMode = false;
         console.log('[AdaptiveQuality] Resumed adaptive quality adjustment');
         console.log(`[AdaptiveQuality] Current quality: ${this.getCurrentQualityName()} (will adjust based on FPS)`);
+    }
+
+    // Update target FPS dynamically (e.g., when entering/exiting VR)
+    setTargetFPS(newTargetFPS) {
+        if (newTargetFPS !== this.targetFPS) {
+            const oldTarget = this.targetFPS;
+            this.targetFPS = newTargetFPS;
+            // Clear FPS history to allow quick adjustment to new target
+            this.fpsHistory = [];
+            console.log(`[AdaptiveQuality] Target FPS changed: ${oldTarget} → ${newTargetFPS}`);
+        }
     }
 
     // Getters for UI
