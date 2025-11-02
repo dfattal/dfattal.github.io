@@ -187,6 +187,7 @@
         { name: 'sh0.webp', required: true },
         { name: 'shN_centroids.webp', required: false },
         { name: 'shN_labels.webp', required: false },
+        { name: 'xl.webp', required: false, isDatasetImage: true }, // Dataset image from S3
       ];
 
       const checkFileExists = async (url) => {
@@ -226,6 +227,85 @@
         }
       };
 
+      const detectVersionAndCDN = async (id) => {
+        try {
+          // Strategy 1: Try HEAD requests for v3, v2, then v1 (most reliable)
+          console.log('Auto-detecting version...');
+
+          // Try v3 first (future-proofing)
+          const v3Base = `https://d28zzqy0iyovbz.cloudfront.net/${id}/v3`;
+          try {
+            const v3Test = await fetch(`${v3Base}/meta.json`, { method: 'HEAD' });
+            if (v3Test.ok) {
+              console.log('✓ Detected version: v3');
+              return { base: v3Base, version: 'v3' };
+            }
+          } catch (e) {
+            console.log('v3 not available');
+          }
+
+          // Try v2
+          const v2Base = `https://d28zzqy0iyovbz.cloudfront.net/${id}/v2`;
+          try {
+            const v2Test = await fetch(`${v2Base}/meta.json`, { method: 'HEAD' });
+            if (v2Test.ok) {
+              console.log('✓ Detected version: v2');
+              return { base: v2Base, version: 'v2' };
+            }
+          } catch (e) {
+            console.log('v2 not available');
+          }
+
+          // Try v1 (fallback)
+          const v1Base = `https://d28zzqy0iyovbz.cloudfront.net/${id}/v1`;
+          try {
+            const v1Test = await fetch(`${v1Base}/meta.json`, { method: 'HEAD' });
+            if (v1Test.ok) {
+              console.log('✓ Detected version: v1');
+              return { base: v1Base, version: 'v1' };
+            }
+          } catch (e) {
+            console.log('v1 not available');
+          }
+
+          // Strategy 2: Try to parse HTML as fallback
+          try {
+            const iframeUrl = `https://superspl.at/s?id=${id}`;
+            const response = await fetch(iframeUrl);
+            const html = await response.text();
+
+            // Look for version numbers in URLs
+            const versionRegex = /\/v(\d+)\//g;
+            const matches = [...html.matchAll(versionRegex)];
+
+            if (matches.length > 0) {
+              const versions = matches.map(m => parseInt(m[1]));
+              const highestVersion = Math.max(...versions);
+              console.log(`✓ Detected from HTML: v${highestVersion}`);
+              return {
+                base: `https://d28zzqy0iyovbz.cloudfront.net/${id}/v${highestVersion}`,
+                version: `v${highestVersion}`
+              };
+            }
+          } catch (htmlErr) {
+            console.warn('HTML parsing failed:', htmlErr);
+          }
+
+          // Last resort: default to v1
+          console.warn('⚠ Could not detect version, defaulting to v1');
+          return {
+            base: `https://d28zzqy0iyovbz.cloudfront.net/${id}/v1`,
+            version: 'v1'
+          };
+        } catch (err) {
+          console.error('Version detection error:', err);
+          return {
+            base: `https://d28zzqy0iyovbz.cloudfront.net/${id}/v1`,
+            version: 'v1'
+          };
+        }
+      };
+
       const handleDownload = async () => {
         try {
           // Extract ID from URL
@@ -237,10 +317,16 @@
 
           const id = idMatch[1];
           setModelId(id);
-          const base = `https://d28zzqy0iyovbz.cloudfront.net/${id}/v1`;
 
           setDownloading(true);
-          setStatus({ type: 'info', message: '⬇️ Downloading files (please wait, rate limited)...' });
+          setStatus({ type: 'info', message: `🔍 Detecting version for model: ${id}...` });
+
+          // Auto-detect version and CDN
+          const { base, version } = await detectVersionAndCDN(id);
+          console.log(`Detected model: ${id}`);
+          console.log(`Detected version: ${version}`);
+
+          setStatus({ type: 'info', message: `⬇️ Downloading ${files.length} files (${version}, please wait)...` });
           setFileProgress(files.map(f => ({
             name: f.name,
             status: 'pending',
@@ -251,12 +337,17 @@
           let skippedCount = 0;
           const zip = new JSZip();
           const folderName = `supersplat_${id}`;
+          let datasetImageBlob = null; // Store dataset image separately
 
           // Download each file with retry logic
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const fileName = file.name;
-            const fileUrl = `${base}/${fileName}`;
+
+            // Dataset image uses S3 bucket instead of CloudFront
+            const fileUrl = file.isDatasetImage
+              ? `https://s3-eu-west-1.amazonaws.com/images.playcanvas.com/splat/${id}/${version}/${fileName}`
+              : `${base}/${fileName}`;
 
             // Update progress
             setFileProgress(prev => prev.map((item, idx) =>
@@ -274,8 +365,14 @@
                 skippedCount++;
                 console.log(`Skipped optional file: ${fileName}`);
               } else {
-                // Add file to zip
-                zip.file(fileName, blob);
+                // Dataset image is downloaded separately, not added to zip
+                if (file.isDatasetImage) {
+                  datasetImageBlob = blob;
+                  console.log('Dataset image will be downloaded separately');
+                } else {
+                  // Add file to zip (all files except dataset image)
+                  zip.file(fileName, blob);
+                }
 
                 // Update progress
                 setFileProgress(prev => prev.map((item, idx) =>
@@ -310,6 +407,21 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
+
+            // Download dataset image separately if it exists
+            if (datasetImageBlob) {
+              setStatus({ type: 'info', message: '🖼️ Downloading dataset image...' });
+              await new Promise(resolve => setTimeout(resolve, 500)); // Small delay before second download
+
+              const imgLink = document.createElement('a');
+              imgLink.href = URL.createObjectURL(datasetImageBlob);
+              imgLink.download = `${folderName}_preview.webp`;
+              imgLink.style.display = 'none';
+              document.body.appendChild(imgLink);
+              imgLink.click();
+              document.body.removeChild(imgLink);
+              URL.revokeObjectURL(imgLink.href);
+            }
           }
 
           const requiredCount = files.filter(f => f.required).length;
@@ -317,20 +429,22 @@
             f.required && fileProgress[i]?.status === 'downloaded'
           ).length;
 
+          const datasetImageMsg = datasetImageBlob ? ' + preview image' : '';
+
           if (successCount === files.length) {
             setStatus({
               type: 'success',
-              message: `✅ Downloaded ${folderName}.sog with all ${files.length} files!`
+              message: `✅ Downloaded ${folderName}.sog (${version}) with all ${files.length} files${datasetImageMsg}!`
             });
           } else if (successCount >= requiredCount) {
             const msg = skippedCount > 0
-              ? `✅ Downloaded ${folderName}.sog (${successCount} files, ${skippedCount} optional files unavailable)`
-              : `✅ Downloaded ${folderName}.sog with ${successCount}/${files.length} files`;
+              ? `✅ Downloaded ${folderName}.sog (${version}) - ${successCount} files${datasetImageMsg}, ${skippedCount} optional unavailable`
+              : `✅ Downloaded ${folderName}.sog (${version}) with ${successCount}/${files.length} files${datasetImageMsg}`;
             setStatus({ type: 'success', message: msg });
           } else if (successCount > 0) {
             setStatus({
               type: 'error',
-              message: `⚠️ Downloaded ${successCount}/${files.length} files to ${folderName}.sog. Some required files failed.`
+              message: `⚠️ Downloaded ${successCount}/${files.length} files to ${folderName}.sog (${version})${datasetImageMsg}. Some required files failed.`
             });
           } else {
             setStatus({
@@ -359,6 +473,11 @@
               placeholder="Paste SuperSplat URL (e.g. https://superspl.at/view?id=4f1af145)"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !downloading && url.trim()) {
+                  handleDownload();
+                }
+              }}
               disabled={downloading}
             />
           </div>
