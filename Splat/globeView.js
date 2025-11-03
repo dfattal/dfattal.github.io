@@ -88,6 +88,11 @@ export class GlobeView {
         // Create Earth sphere
         await this.createEarth();
 
+        // Rotate Earth to show Europe initially (50°N, 10°E)
+        // Rotate around Y axis to position longitude (10°E)
+        this.earth.rotation.y = -10 * (Math.PI / 180);
+        // Tilt slightly to show latitude (50°N is already well-positioned at equator view)
+
         // Create atmosphere glow
         this.createAtmosphere();
 

@@ -2992,6 +2992,13 @@ function applySceneConfig() {
 async function initGlobe(scenes) {
     console.log('Initializing globe view...');
 
+    // Hide start overlay immediately to prevent flash
+    const startOverlay = document.getElementById('start-overlay');
+    if (startOverlay) {
+        startOverlay.classList.remove('visible');
+        startOverlay.style.display = 'none';
+    }
+
     const globeContainer = document.getElementById('globe-overlay');
     if (!globeContainer) {
         console.error('Globe container not found');
