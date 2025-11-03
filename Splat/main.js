@@ -393,23 +393,44 @@ function createGround() {
             // Calculate max height AFTER scale/rotation but BEFORE heightOffset is applied
             // This gives us the true mesh bounds in world space
 
-            // First compute geometry bounding box (needed for accurate world bounds)
-            meshGeometry.computeBoundingBox();
+            try {
+                // First compute geometry bounding box (needed for accurate world bounds)
+                if (!meshGeometry.boundingBox) {
+                    meshGeometry.computeBoundingBox();
+                }
 
-            groundMesh.updateMatrixWorld(true); // Ensure world matrix is up to date
-            const worldBBox = new THREE.Box3().setFromObject(groundMesh);
-            maxTerrainHeight = worldBBox.max.y; // Highest point in world space (after all transforms)
-            console.log(`[Collision Mesh] World bounding box (at Y=0): min.y=${worldBBox.min.y.toFixed(2)}, max.y=${worldBBox.max.y.toFixed(2)}`);
-            console.log(`[Collision Mesh] maxTerrainHeight = ${maxTerrainHeight.toFixed(2)} (highest walkable point after all transforms)`);
+                // Use geometry bounding box directly with transforms applied
+                // More efficient than setFromObject() which traverses all vertices
+                const geomBBox = meshGeometry.boundingBox.clone();
 
-            // Calculate heightOffset bounds based on mesh geometry at position Y=0
-            // When mesh is at Y=0:
-            // - If lowest point (min.y) is negative, we can raise mesh by -min.y to bring bottom to Y=0
-            // - If highest point (max.y) is positive, we can lower mesh by -max.y to bring top to Y=0
-            maxOffsetUp = worldBBox.min.y < 0 ? -worldBBox.min.y : 0;
-            minOffsetDown = worldBBox.max.y > 0 ? -worldBBox.max.y : 0;
-            console.log(`[Height Offset Bounds] Calculated from worldBBox: min.y=${worldBBox.min.y.toFixed(2)}, max.y=${worldBBox.max.y.toFixed(2)}`);
-            console.log(`[Height Offset Bounds] Range: ${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)} (scaled units)`);
+                // Apply scale transform
+                geomBBox.min.multiplyScalar(splatScale);
+                geomBBox.max.multiplyScalar(splatScale);
+
+                // Apply rotation transform (180° on X-axis flips min/max Y)
+                // After 180° X rotation: original min.y becomes max.y, original max.y becomes min.y
+                const rotatedMin = new THREE.Vector3(geomBBox.min.x, -geomBBox.max.y, geomBBox.min.z);
+                const rotatedMax = new THREE.Vector3(geomBBox.max.x, -geomBBox.min.y, geomBBox.max.z);
+
+                maxTerrainHeight = rotatedMax.y; // Highest point in world space (after all transforms)
+                console.log(`[Collision Mesh] World bounding box (at Y=0): min.y=${rotatedMin.y.toFixed(2)}, max.y=${rotatedMax.y.toFixed(2)}`);
+                console.log(`[Collision Mesh] maxTerrainHeight = ${maxTerrainHeight.toFixed(2)} (highest walkable point after all transforms)`);
+
+                // Calculate heightOffset bounds based on mesh geometry at position Y=0
+                // When mesh is at Y=0:
+                // - If lowest point (min.y) is negative, we can raise mesh by -min.y to bring bottom to Y=0
+                // - If highest point (max.y) is positive, we can lower mesh by -max.y to bring top to Y=0
+                maxOffsetUp = rotatedMin.y < 0 ? -rotatedMin.y : 0;
+                minOffsetDown = rotatedMax.y > 0 ? -rotatedMax.y : 0;
+                console.log(`[Height Offset Bounds] Calculated from worldBBox: min.y=${rotatedMin.y.toFixed(2)}, max.y=${rotatedMax.y.toFixed(2)}`);
+                console.log(`[Height Offset Bounds] Range: ${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)} (scaled units)`);
+            } catch (error) {
+                console.error('[Collision Mesh] Failed to calculate bounds:', error);
+                // Fallback to safe defaults
+                maxTerrainHeight = 100;
+                maxOffsetUp = 0;
+                minOffsetDown = -100;
+            }
 
             // Resolve "max" or "min" config values now that bounds are calculated
             if (heightOffsetConfigValue === "max") {
@@ -1038,6 +1059,7 @@ async function loadGaussianSplat() {
 
     } catch (error) {
         console.error('Error loading Gaussian splat:', error);
+        // Scene will not start if splat fails to load (checkAllLoaded handles this)
     }
 }
 
