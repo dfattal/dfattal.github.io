@@ -366,8 +366,11 @@ export class GlobeView {
         // Mouse move for hover effects
         window.addEventListener('mousemove', this.onMouseMove.bind(this));
 
-        // Click for site selection
+        // Click for site selection (desktop)
         window.addEventListener('click', this.onClick.bind(this));
+
+        // Touch for site selection (mobile)
+        window.addEventListener('touchend', this.onTouch.bind(this));
 
         // Window resize
         window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -405,6 +408,25 @@ export class GlobeView {
             this.renderer.domElement.style.cursor = 'pointer';
         } else {
             this.renderer.domElement.style.cursor = 'default';
+        }
+    }
+
+    /**
+     * Handle touch for site selection (mobile)
+     */
+    onTouch(event) {
+        // Check if touch ended on a label (CSS2D element)
+        const touch = event.changedTouches[0];
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+
+        if (target && target.closest('.globe-site-marker')) {
+            const markerElement = target.closest('.globe-site-marker');
+            const siteId = markerElement.dataset.siteId;
+            if (siteId && this.onSiteSelected) {
+                console.log('Touch site selected:', siteId);
+                this.onSiteSelected(siteId);
+                event.preventDefault(); // Prevent click event from also firing
+            }
         }
     }
 
@@ -512,6 +534,7 @@ export class GlobeView {
         // Remove event listeners
         window.removeEventListener('mousemove', this.onMouseMove.bind(this));
         window.removeEventListener('click', this.onClick.bind(this));
+        window.removeEventListener('touchend', this.onTouch.bind(this));
         window.removeEventListener('resize', this.onWindowResize.bind(this));
 
         // Dispose controls
