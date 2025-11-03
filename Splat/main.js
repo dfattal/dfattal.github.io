@@ -81,7 +81,10 @@ let baseRotationZ = 0;   // Base Z rotation in degrees (from scene config)
 // Leveling adjustments (applied LAST, after all other transforms)
 let levelRotationX = 0; // Fine-tune X rotation in degrees (-5 to +5)
 let levelRotationZ = 0; // Fine-tune Z rotation in degrees (-5 to +5)
-let heightOffset = 0.60; // Vertical offset for terrain (how far below Y=0)
+let heightOffset = 0.0; // Vertical offset for terrain in scaled units (0 = mesh Y=0 aligns with world Y=0)
+let heightOffsetConfigValue = 0.0; // Store the original config value (can be number, "max", or "min")
+let maxOffsetUp = 0; // Maximum positive offset (raising mesh up), calculated from lowest point
+let minOffsetDown = 0; // Minimum negative offset (lowering mesh down), calculated from highest point
 
 // Animation
 const clock = new THREE.Clock();
@@ -361,16 +364,6 @@ function createGround() {
             // Create the ground mesh from the collision geometry
             const meshGeometry = collisionMesh.geometry;
 
-            // Compute bounding box to get max height
-            meshGeometry.computeBoundingBox();
-            const bbox = meshGeometry.boundingBox;
-
-            console.log('Collision mesh bounding box (local geometry space):');
-            console.log('  min:', bbox.min);
-            console.log('  max:', bbox.max);
-            console.log('  Y range: min =', bbox.min.y.toFixed(4), ', max =', bbox.max.y.toFixed(4));
-            console.log('  After 180° flip on X-axis, the lowest point will be at:', bbox.max.y.toFixed(4));
-
             groundMesh = new THREE.Mesh(meshGeometry, collisionMaterial);
 
             // Copy transform from the original mesh
@@ -389,22 +382,51 @@ function createGround() {
             groundMesh.rotation.y += baseRotationY * (Math.PI / 180);
             groundMesh.rotation.z += baseRotationZ * (Math.PI / 180);
 
-            // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
-            groundMesh.position.y = -splatScale * heightOffset;
-
-            // Calculate max height after transforms (flipped: max becomes min, scaled)
-            // When flipped upside down, the original bbox.max.y becomes the bottom
-            // and bbox.min.y becomes the top (max height)
-            const rawHeight = Math.abs(bbox.max.y - bbox.min.y);
-            maxTerrainHeight = rawHeight * splatScale; // Store globally for "auto" height cap calculation
-            console.log(`Collision mesh max height: ${maxTerrainHeight.toFixed(2)} (highest walkable point after all transforms)`);
-
-            // NOTE: maxCharacterHeight will be set after splat loads (uses collision mesh height for "auto")
+            // Initially position at Y=0 to calculate bounding box and bounds
+            groundMesh.position.y = 0;
 
             groundMesh.receiveShadow = true;
             groundMesh.castShadow = true;
             groundMesh.visible = false;  // Hide collision mesh, only show wireframe
             scene.add(groundMesh);
+
+            // Calculate max height AFTER scale/rotation but BEFORE heightOffset is applied
+            // This gives us the true mesh bounds in world space
+
+            // First compute geometry bounding box (needed for accurate world bounds)
+            meshGeometry.computeBoundingBox();
+
+            groundMesh.updateMatrixWorld(true); // Ensure world matrix is up to date
+            const worldBBox = new THREE.Box3().setFromObject(groundMesh);
+            maxTerrainHeight = worldBBox.max.y; // Highest point in world space (after all transforms)
+            console.log(`[Collision Mesh] World bounding box (at Y=0): min.y=${worldBBox.min.y.toFixed(2)}, max.y=${worldBBox.max.y.toFixed(2)}`);
+            console.log(`[Collision Mesh] maxTerrainHeight = ${maxTerrainHeight.toFixed(2)} (highest walkable point after all transforms)`);
+
+            // Calculate heightOffset bounds based on mesh geometry at position Y=0
+            // When mesh is at Y=0:
+            // - If lowest point (min.y) is negative, we can raise mesh by -min.y to bring bottom to Y=0
+            // - If highest point (max.y) is positive, we can lower mesh by -max.y to bring top to Y=0
+            maxOffsetUp = worldBBox.min.y < 0 ? -worldBBox.min.y : 0;
+            minOffsetDown = worldBBox.max.y > 0 ? -worldBBox.max.y : 0;
+            console.log(`[Height Offset Bounds] Calculated from worldBBox: min.y=${worldBBox.min.y.toFixed(2)}, max.y=${worldBBox.max.y.toFixed(2)}`);
+            console.log(`[Height Offset Bounds] Range: ${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)} (scaled units)`);
+
+            // Resolve "max" or "min" config values now that bounds are calculated
+            if (heightOffsetConfigValue === "max") {
+                heightOffset = maxOffsetUp;
+                console.log(`[Height Offset] Resolved "max" to ${heightOffset.toFixed(2)}`);
+            } else if (heightOffsetConfigValue === "min") {
+                heightOffset = minOffsetDown;
+                console.log(`[Height Offset] Resolved "min" to ${heightOffset.toFixed(2)}`);
+            }
+
+            // Update height slider bounds now that they're calculated
+            updateHeightSliderBounds();
+
+            // Apply heightOffset (now in scaled units, no multiplication by splatScale)
+            groundMesh.position.y = heightOffset;
+
+            // NOTE: maxCharacterHeight will be set after splat loads (uses collision mesh height for "auto")
 
             // Create infinite floor plane at ground level (Y=0) with sand texture
             const infiniteFloorGeometry = new THREE.PlaneGeometry(10000, 10000);
@@ -441,6 +463,8 @@ function createGround() {
             infiniteFloor.rotation.x = -Math.PI / 2; // Make horizontal
             infiniteFloor.position.y = 0; // Ground level at Y=0
             infiniteFloor.receiveShadow = true;
+            // Set initial visibility from scene config (default: true)
+            infiniteFloor.visible = sceneConfig?.scene?.infiniteFloor?.visible !== false;
             scene.add(infiniteFloor);
 
             // Create wireframe helper (hidden by default)
@@ -540,8 +564,8 @@ function applyLevelingRotations() {
     const levelXRad = levelRotationX * (Math.PI / 180);
     const levelZRad = levelRotationZ * (Math.PI / 180);
 
-    // Calculate Y position from height offset
-    const yPosition = -splatScale * heightOffset;
+    // Calculate Y position from height offset (now in scaled units, no multiplication needed)
+    const yPosition = heightOffset;
 
     // Apply to collision mesh (if loaded)
     if (groundMesh) {
@@ -855,12 +879,14 @@ async function loadGaussianSplat() {
         // Configure character height ceiling based on collision mesh dimensions
         // Read maxHeight from config: number = absolute height, "auto" = 2x collision mesh height, negative = unlimited
         const configMaxHeight = sceneConfig?.character?.maxHeight;
-        console.log(`[Height Cap Config] configMaxHeight="${configMaxHeight}", maxTerrainHeight=${maxTerrainHeight.toFixed(2)}`);
+        console.log(`[Height Cap Config] configMaxHeight="${configMaxHeight}", maxTerrainHeight=${maxTerrainHeight.toFixed(2)}, heightOffset=${heightOffset.toFixed(2)}`);
 
         if (configMaxHeight === "auto") {
-            // Auto: 2× the collision mesh's max height (highest walkable point after all transforms)
-            maxCharacterHeight = maxTerrainHeight * 2.0;
-            console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (auto: 2× collision mesh height ${maxTerrainHeight.toFixed(2)})`);
+            // Auto: 2× the collision mesh's max height (accounting for heightOffset)
+            // The actual terrain height after heightOffset is: maxTerrainHeight + heightOffset
+            const actualTerrainHeight = maxTerrainHeight + heightOffset;
+            maxCharacterHeight = actualTerrainHeight * 2.0;
+            console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (auto: 2× actual terrain height ${actualTerrainHeight.toFixed(2)} = 2× (${maxTerrainHeight.toFixed(2)} + ${heightOffset.toFixed(2)}))`);
         } else if (typeof configMaxHeight === 'number') {
             if (configMaxHeight < 0) {
                 // Negative value: No height ceiling
@@ -873,8 +899,9 @@ async function loadGaussianSplat() {
             }
         } else {
             // No config or invalid: Default to auto behavior
-            maxCharacterHeight = maxTerrainHeight * 2.0;
-            console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (default auto: 2× collision mesh height ${maxTerrainHeight.toFixed(2)})`);
+            const actualTerrainHeight = maxTerrainHeight + heightOffset;
+            maxCharacterHeight = actualTerrainHeight * 2.0;
+            console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (default auto: 2× actual terrain height ${actualTerrainHeight.toFixed(2)} = 2× (${maxTerrainHeight.toFixed(2)} + ${heightOffset.toFixed(2)}))`);
         }
 
         console.log(`[Height Cap Final] maxCharacterHeight = ${maxCharacterHeight === null ? 'null (unlimited)' : maxCharacterHeight.toFixed(2)}`);
@@ -904,8 +931,8 @@ async function loadGaussianSplat() {
         gaussianSplat.rotation.y += baseRotationY * (Math.PI / 180);
         gaussianSplat.rotation.z += baseRotationZ * (Math.PI / 180);
 
-        // Translate down to align with infinite floor at Y=0 (do this AFTER scale and rotation)
-        gaussianSplat.position.y = -splatScale * heightOffset;
+        // Apply height offset (now in scaled units, no multiplication needed)
+        gaussianSplat.position.y = heightOffset;
 
         // Add to spark renderer (not directly to scene)
         spark.add(gaussianSplat);
@@ -2736,6 +2763,22 @@ function animate() {
 }
 
 /**
+ * Update height slider bounds after collision mesh loads
+ */
+function updateHeightSliderBounds() {
+    const heightSlider = document.getElementById('level-height-slider');
+    const heightValue = document.getElementById('level-height-value');
+
+    if (heightSlider && heightValue) {
+        heightSlider.min = minOffsetDown.toFixed(2);
+        heightSlider.max = maxOffsetUp.toFixed(2);
+        heightSlider.value = heightOffset.toString();
+        heightValue.textContent = `${heightOffset.toFixed(2)} [${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)}]`;
+        console.log(`[UI] Height slider bounds updated: [${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)}]`);
+    }
+}
+
+/**
  * Set up leveling control sliders
  */
 function setupLevelingControls() {
@@ -2752,13 +2795,11 @@ function setupLevelingControls() {
     const elevationValue = document.getElementById('light-elevation-value');
     const resetButton = document.getElementById('leveling-reset');
 
-    // Configure height slider based on scene config (±1 unit from config value)
-    if (heightSlider && sceneConfig?.transform?.heightOffset !== undefined) {
-        const configHeight = sceneConfig.transform.heightOffset;
-        heightSlider.min = (configHeight - 1).toString();
-        heightSlider.max = (configHeight + 1).toString();
+    // Height slider bounds will be set after collision mesh loads (via updateHeightSliderBounds)
+    // Just set initial value for now
+    if (heightSlider && heightValue) {
         heightSlider.value = heightOffset.toString();
-        heightValue.textContent = heightOffset.toFixed(2);
+        heightValue.textContent = `${heightOffset.toFixed(2)} [calculating...]`;
     }
 
     // X-axis slider handler
@@ -2783,7 +2824,7 @@ function setupLevelingControls() {
     if (heightSlider) {
         heightSlider.addEventListener('input', (e) => {
             heightOffset = parseFloat(e.target.value);
-            heightValue.textContent = heightOffset.toFixed(2);
+            heightValue.textContent = `${heightOffset.toFixed(2)} [${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)}]`;
             applyLevelingRotations();
         });
     }
@@ -2812,7 +2853,16 @@ function setupLevelingControls() {
             // Reset terrain leveling to scene config defaults
             const defaultLevelingX = sceneConfig?.transform?.defaultLeveling?.x || 0;
             const defaultLevelingZ = sceneConfig?.transform?.defaultLeveling?.z || 0;
-            const defaultHeight = sceneConfig?.transform?.heightOffset || 0.6;
+
+            // Resolve heightOffset config value ("max", "min", or number)
+            let defaultHeight = 0.0;
+            if (heightOffsetConfigValue === "max") {
+                defaultHeight = maxOffsetUp;
+            } else if (heightOffsetConfigValue === "min") {
+                defaultHeight = minOffsetDown;
+            } else if (typeof heightOffsetConfigValue === 'number') {
+                defaultHeight = heightOffsetConfigValue;
+            }
 
             levelRotationX = defaultLevelingX;
             levelRotationZ = defaultLevelingZ;
@@ -2822,7 +2872,7 @@ function setupLevelingControls() {
             heightSlider.value = defaultHeight;
             xValue.textContent = defaultLevelingX.toFixed(1) + '°';
             zValue.textContent = defaultLevelingZ.toFixed(1) + '°';
-            heightValue.textContent = defaultHeight.toFixed(2);
+            heightValue.textContent = `${defaultHeight.toFixed(2)} [${minOffsetDown.toFixed(2)} to ${maxOffsetUp.toFixed(2)}]`;
 
             // Reset light orientation to scene config defaults
             const defaultAzimuth = sceneConfig?.lighting?.directional?.azimuth || 213;
@@ -2884,7 +2934,8 @@ async function initSceneSelector() {
             const sceneId = e.target.value;
             if (sceneId !== currentSceneId) {
                 console.log(`Switching to scene: ${sceneId}`);
-                await loadAndInitializeScene(sceneId);
+                // Use URLRouter to preserve URL parameters during scene change
+                urlRouter.navigateToSite(sceneId);
             }
         });
 
@@ -2905,7 +2956,8 @@ async function initSceneSelector() {
                         if (startTitle) startTitle.textContent = selectedScene.name;
                         if (startDescription) startDescription.textContent = selectedScene.description || 'Prepare for an amazing journey';
                     }
-                    await loadAndInitializeScene(sceneId);
+                    // Use URLRouter to preserve URL parameters during scene change
+                    urlRouter.navigateToSite(sceneId);
                 }
             });
         }
@@ -2971,9 +3023,16 @@ function applySceneConfig() {
         levelRotationZ = sceneConfig.transform.defaultLeveling.z || 0;
     }
 
-    // Apply height offset
+    // Store height offset config value (can be number, "max", or "min")
+    // Will be resolved to actual value after collision mesh loads
     if (sceneConfig.transform.heightOffset !== undefined) {
-        heightOffset = sceneConfig.transform.heightOffset;
+        heightOffsetConfigValue = sceneConfig.transform.heightOffset;
+        // If it's a number, apply it immediately
+        if (typeof heightOffsetConfigValue === 'number') {
+            heightOffset = heightOffsetConfigValue;
+        }
+        // If it's "max" or "min", will be resolved after bounds are calculated
+        console.log(`[Config] heightOffset config value: ${heightOffsetConfigValue}`);
     }
 
     // Apply lighting defaults

@@ -25,7 +25,7 @@
       "y": 0,
       "z": 0
     },
-    "heightOffset": 0.60,
+    "heightOffset": -0.60,
     "defaultLeveling": {
       "x": 0,
       "y": 0,
@@ -96,6 +96,7 @@
     "backgroundColor": "#a8def0",
     "infiniteFloor": {
       "enabled": true,
+      "visible": true,
       "size": 10000,
       "positionY": 0,
       "textureRepeat": 1000,

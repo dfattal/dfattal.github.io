@@ -61,10 +61,13 @@ export class URLRouter {
 
     /**
      * Navigate to a specific site by updating URL
+     * Preserves all other URL parameters
      * @param {string} siteId - Site ID to navigate to
      */
     navigateToSite(siteId) {
-        const newURL = `${window.location.pathname}?site=${siteId}`;
+        const params = new URLSearchParams(window.location.search);
+        params.set('site', siteId);
+        const newURL = `${window.location.pathname}?${params.toString()}`;
         window.location.href = newURL;
     }
 
@@ -85,10 +88,13 @@ export class URLRouter {
 
     /**
      * Update URL without page reload (for browser history)
+     * Preserves all other URL parameters
      * @param {string} siteId - Site ID to add to URL
      */
     updateURLWithoutReload(siteId) {
-        const newURL = `${window.location.pathname}?site=${siteId}`;
+        const params = new URLSearchParams(window.location.search);
+        params.set('site', siteId);
+        const newURL = `${window.location.pathname}?${params.toString()}`;
         window.history.pushState({ siteId }, '', newURL);
     }
 }

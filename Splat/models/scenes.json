@@ -36,6 +36,15 @@
       "latitude": 37.8267,
       "longitude": -122.4233,
       "thumbnail": "models/thumbnails/Alcatraz-preview.webp"
+    },
+    {
+      "id": "PalaceFineArtsSF",
+      "name": "Palace of Fine Arts",
+      "description": "Palace of Fine Arts in San Francisco, California",
+      "config": "models/PalaceFineArtsSF.json",
+      "latitude": 37.7749,
+      "longitude": -122.4194,
+      "thumbnail": "models/thumbnails/PalaceFineArtsSF-preview.webp"
     }
   ]
 }
