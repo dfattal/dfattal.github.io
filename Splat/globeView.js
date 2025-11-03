@@ -61,7 +61,15 @@ export class GlobeView {
         // Create camera
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-        this.camera.position.set(0, 0, 12);
+
+        // Position camera to face Europe (view from southwest)
+        // Europe is around 50°N, 10°E, so position camera at 20°N, -30°W for good view
+        const cameraDistance = 12;
+        const cameraLat = 45; // Latitude for camera view angle
+        const cameraLon = 10; // Longitude for camera view angle
+        const cameraPos = this.latLongToVector3(cameraLat, cameraLon, cameraDistance);
+        this.camera.position.copy(cameraPos);
+        this.camera.lookAt(0, 0, 0); // Look at globe center
 
         // Create WebGL renderer
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -87,11 +95,6 @@ export class GlobeView {
 
         // Create Earth sphere
         await this.createEarth();
-
-        // Rotate Earth to show Europe initially (50°N, 10°E)
-        // Rotate around Y axis to position longitude (10°E)
-        this.earth.rotation.y = -10 * (Math.PI / 180);
-        // Tilt slightly to show latitude (50°N is already well-positioned at equator view)
 
         // Create atmosphere glow
         this.createAtmosphere();
