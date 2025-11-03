@@ -110,10 +110,9 @@ export class CharacterControls {
             this.groundMeshes = Array.isArray(groundMeshes) ? groundMeshes : [groundMeshes];
         }
 
-        // Set max height cap if provided
-        if (maxHeight !== null) {
-            this.maxHeight = maxHeight;
-        }
+        // Set max height cap (null = unlimited)
+        this.maxHeight = maxHeight;
+        console.log(`[CharacterControls] maxHeight set to: ${this.maxHeight === null ? 'null (unlimited)' : this.maxHeight.toFixed(2)}`);
 
         // Set camera target offset
         this.targetOffsetY = targetOffsetY;
@@ -513,8 +512,9 @@ export class CharacterControls {
             }
         }
 
-        // Check for maximum height cap (2x terrain height)
+        // Check for maximum height cap
         if (this.maxHeight !== null && this.model.position.y > this.maxHeight) {
+            console.log(`[Height Cap] Enforcing ceiling: position.y=${this.model.position.y.toFixed(2)} > maxHeight=${this.maxHeight.toFixed(2)}`);
             this.model.position.y = this.maxHeight;
             this.verticalVelocity = 0;  // Stop upward movement
         }
@@ -915,6 +915,7 @@ export class CharacterControls {
 
         // Check for maximum height cap
         if (this.maxHeight !== null && newPosition.y > this.maxHeight) {
+            console.log(`[Height Cap VR] Enforcing ceiling: position.y=${newPosition.y.toFixed(2)} > maxHeight=${this.maxHeight.toFixed(2)}`);
             newPosition.y = this.maxHeight;
             velocity.y = 0;
         }

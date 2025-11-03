@@ -14,6 +14,8 @@ import { GestureDetector } from './gestureDetector.js';
 import { WristPalette } from './wristPalette.js';
 import { GestureVisuals } from './gestureVisuals.js';
 import { AdaptiveQualitySystem } from './adaptiveQualitySystem.js';
+import { URLRouter } from './urlRouter.js';
+import { GlobeView } from './globeView.js';
 
 /**
  * F1000 - Third Person Character Controller
@@ -24,6 +26,10 @@ import { AdaptiveQualitySystem } from './adaptiveQualitySystem.js';
 let scenesManifest = null;   // Loaded scenes manifest
 let sceneConfig = null;       // Currently loaded scene configuration
 let currentSceneId = null;    // Current scene ID
+
+// Globe and URL routing
+let urlRouter = null;         // URL router for site navigation
+let globeView = null;         // Globe visualization
 
 // Scene, camera, renderer
 let scene;
@@ -55,7 +61,8 @@ let groundMesh;
 let infiniteFloor;
 let gaussianSplat = null;
 let splatScale = 1.0; // Scale factor for both collision mesh and Gaussian splat (from scene config)
-let maxCharacterHeight = null; // Maximum height cap for character (2x terrain height)
+let maxCharacterHeight = null; // Maximum height cap for character
+let maxTerrainHeight = 0; // Highest point of collision mesh (after all transforms) for auto height cap calculation
 let autoExpansionRadius = 2500; // Auto-calculated magic effect radius based on splat extent (in splat space)
 
 // Adaptive quality system
@@ -133,7 +140,6 @@ let cameraMode = 'third-person'; // 'third-person' or 'first-person'
 let firstPersonPitch = 0; // Camera pitch rotation (X-axis) in radians
 let firstPersonYaw = 0;   // Camera yaw rotation (Y-axis) in radians
 let pointerLocked = false; // Track pointer lock state
-let isLeftMouseDown = false; // Track left mouse button for camera rotation in paint mode
 
 // First-person camera constants
 const FIRST_PERSON_MOUSE_SENSITIVITY = 0.002; // Mouse movement sensitivity (for pointer lock)
@@ -390,17 +396,10 @@ function createGround() {
             // When flipped upside down, the original bbox.max.y becomes the bottom
             // and bbox.min.y becomes the top (max height)
             const rawHeight = Math.abs(bbox.max.y - bbox.min.y);
-            const maxTerrainHeight = rawHeight * splatScale;
+            maxTerrainHeight = rawHeight * splatScale; // Store globally for "auto" height cap calculation
+            console.log(`Collision mesh max height: ${maxTerrainHeight.toFixed(2)} (highest walkable point after all transforms)`);
 
-            // Read maxHeightMultiplier from config (default: 2.0, -1.0 = no ceiling)
-            const maxHeightMultiplier = sceneConfig?.character?.maxHeightMultiplier ?? 2.0;
-            if (maxHeightMultiplier < 0) {
-                maxCharacterHeight = null; // No height ceiling
-                console.log(`Terrain max height: ${maxTerrainHeight.toFixed(2)}, Character height cap: NONE (unlimited)`);
-            } else {
-                maxCharacterHeight = maxTerrainHeight * maxHeightMultiplier;
-                console.log(`Terrain max height: ${maxTerrainHeight.toFixed(2)}, Character height cap: ${maxCharacterHeight.toFixed(2)} (multiplier: ${maxHeightMultiplier})`);
-            }
+            // NOTE: maxCharacterHeight will be set after splat loads (uses collision mesh height for "auto")
 
             groundMesh.receiveShadow = true;
             groundMesh.castShadow = true;
@@ -852,6 +851,39 @@ async function loadGaussianSplat() {
         const splatRadiusXZ = Math.sqrt(splatExtent.x * splatExtent.x + splatExtent.z * splatExtent.z) / 2;
         autoExpansionRadius = splatRadiusXZ * 1.1; // 1.1x multiplier to ensure full coverage
         console.log(`Magic effect expansion radius: auto=${autoExpansionRadius.toFixed(1)} (in splat space)`);
+
+        // Configure character height ceiling based on collision mesh dimensions
+        // Read maxHeight from config: number = absolute height, "auto" = 2x collision mesh height, negative = unlimited
+        const configMaxHeight = sceneConfig?.character?.maxHeight;
+        console.log(`[Height Cap Config] configMaxHeight="${configMaxHeight}", maxTerrainHeight=${maxTerrainHeight.toFixed(2)}`);
+
+        if (configMaxHeight === "auto") {
+            // Auto: 2× the collision mesh's max height (highest walkable point after all transforms)
+            maxCharacterHeight = maxTerrainHeight * 2.0;
+            console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (auto: 2× collision mesh height ${maxTerrainHeight.toFixed(2)})`);
+        } else if (typeof configMaxHeight === 'number') {
+            if (configMaxHeight < 0) {
+                // Negative value: No height ceiling
+                maxCharacterHeight = null;
+                console.log(`[Height Cap] Set to NONE (unlimited) - config value: ${configMaxHeight}`);
+            } else {
+                // Positive number: Absolute height in scene units
+                maxCharacterHeight = configMaxHeight;
+                console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (absolute from config)`);
+            }
+        } else {
+            // No config or invalid: Default to auto behavior
+            maxCharacterHeight = maxTerrainHeight * 2.0;
+            console.log(`[Height Cap] Set to ${maxCharacterHeight.toFixed(2)} (default auto: 2× collision mesh height ${maxTerrainHeight.toFixed(2)})`);
+        }
+
+        console.log(`[Height Cap Final] maxCharacterHeight = ${maxCharacterHeight === null ? 'null (unlimited)' : maxCharacterHeight.toFixed(2)}`);
+
+        // Update CharacterControls if it was already created (race condition fix)
+        if (characterControls) {
+            characterControls.maxHeight = maxCharacterHeight;
+            console.log(`[Height Cap] Updated existing CharacterControls.maxHeight to ${maxCharacterHeight === null ? 'null (unlimited)' : maxCharacterHeight.toFixed(2)}`);
+        }
 
         // Update progress to 100%
         if (progressBar && progressText) {
@@ -1766,10 +1798,8 @@ function onMouseMove(event) {
         return;
     }
 
-    // Two modes: pointer lock (normal) or left-click drag (paint mode)
-    const shouldRotate = pointerLocked || (isLeftMouseDown && isPaintMode);
-
-    if (!shouldRotate) {
+    // Only rotate camera if pointer is locked (paint mode disables rotation)
+    if (!pointerLocked) {
         return;
     }
 
@@ -1786,25 +1816,8 @@ function onMouseMove(event) {
     }
 }
 
-/**
- * Handle mouse down for first-person camera rotation in paint mode
- */
-function onMouseDown(event) {
-    // Track left mouse button (button 0) for first-person rotation in paint mode
-    if (event.button === 0 && cameraMode === 'first-person' && isPaintMode) {
-        isLeftMouseDown = true;
-    }
-}
-
-/**
- * Handle mouse up for first-person camera rotation in paint mode
- */
-function onMouseUp(event) {
-    // Release left mouse button
-    if (event.button === 0) {
-        isLeftMouseDown = false;
-    }
-}
+// Mouse down/up handlers removed - no longer needed for camera rotation in paint mode
+// Paint mode now uses left-click for painting, camera rotation is disabled
 
 /**
  * Handle pointer lock change events
@@ -1895,17 +1908,27 @@ function togglePaintMode() {
         renderer.domElement.classList.remove('paint-mode');
     }
 
-    // Paint mode doesn't disable camera controls anymore
-    // LEFT-click rotates camera, RIGHT-click or CTRL+move paints
+    // Disable camera controls in paint mode
     if (isPaintMode) {
-        // Exit pointer lock when entering paint mode
+        // Exit pointer lock when entering paint mode (first-person)
         exitPointerLock();
-        console.log('Paint mode: ON - RIGHT-click drag or CTRL+move to paint, LEFT-click drag to rotate camera');
-    } else {
-        // Request pointer lock when exiting paint mode (if in first-person)
-        if (cameraMode === 'first-person') {
-            requestPointerLock();
+
+        // Disable OrbitControls when entering paint mode (third-person)
+        if (cameraMode === 'third-person') {
+            orbitControls.enabled = false;
         }
+
+        console.log('Paint mode: ON - LEFT-click drag or CTRL+move to paint, camera rotation disabled');
+    } else {
+        // Re-enable camera controls when exiting paint mode
+        if (cameraMode === 'first-person') {
+            // Request pointer lock for first-person
+            requestPointerLock();
+        } else if (cameraMode === 'third-person') {
+            // Re-enable OrbitControls for third-person
+            orbitControls.enabled = true;
+        }
+
         console.log('Paint mode: OFF');
     }
 }
@@ -2032,12 +2055,11 @@ function setupPaintControls() {
         }
     });
 
-    // Mouse down handler to start painting (RIGHT click drag only)
+    // Mouse down handler to start painting (LEFT click drag)
     renderer.domElement.addEventListener('pointerdown', (event) => {
-        // Handle RIGHT button (button 2) for click-drag painting
-        if (!isPaintMode || !gaussianSplat || event.button !== 2) return;
+        // Handle LEFT button (button 0) for click-drag painting
+        if (!isPaintMode || !gaussianSplat || event.button !== 0) return;
 
-        // Prevent context menu on right-click
         event.preventDefault();
 
         isDragging = true;
@@ -2056,18 +2078,11 @@ function setupPaintControls() {
         }
     });
 
-    // Mouse up handler to stop painting (RIGHT click drag only)
+    // Mouse up handler to stop painting (LEFT click drag)
     renderer.domElement.addEventListener('pointerup', (event) => {
-        // Handle RIGHT button (button 2) for click-drag painting
-        if (!isPaintMode || event.button !== 2) return;
+        // Handle LEFT button (button 0) for click-drag painting
+        if (!isPaintMode || event.button !== 0) return;
         isDragging = false;
-    });
-
-    // Prevent context menu when in paint mode (for right-click painting)
-    renderer.domElement.addEventListener('contextmenu', (event) => {
-        if (isPaintMode) {
-            event.preventDefault();
-        }
     });
 
     console.log('Paint controls initialized');
@@ -2971,6 +2986,35 @@ function applySceneConfig() {
 }
 
 /**
+ * Initialize and display the globe for site selection
+ * @param {Array} scenes - Array of available scenes
+ */
+async function initGlobe(scenes) {
+    console.log('Initializing globe view...');
+
+    const globeContainer = document.getElementById('globe-overlay');
+    if (!globeContainer) {
+        console.error('Globe container not found');
+        return;
+    }
+
+    // Create globe view with site selection callback
+    globeView = new GlobeView(globeContainer, (siteId) => {
+        console.log('Site selected:', siteId);
+        // Navigate to selected site
+        urlRouter.navigateToSite(siteId);
+    });
+
+    // Initialize globe with scenes data
+    await globeView.init(scenes);
+
+    // Show globe overlay
+    globeView.show();
+
+    console.log('Globe view initialized successfully');
+}
+
+/**
  * Initialize the application
  */
 async function init() {
@@ -2979,9 +3023,20 @@ async function init() {
     // Initialize scene selector first
     await initSceneSelector();
 
-    // Check if there's a scene stored in session
-    const storedScene = sessionStorage.getItem('currentScene');
-    let sceneToLoad = storedScene || getDefaultScene(scenesManifest);
+    // Initialize URL router
+    urlRouter = new URLRouter();
+    const scenes = getAvailableScenes(scenesManifest);
+
+    // Check if we should show globe or proceed to site
+    if (urlRouter.shouldShowGlobe(scenes)) {
+        console.log('No valid site parameter - showing globe');
+        await initGlobe(scenes);
+        return; // Stop here - globe will handle navigation to sites
+    }
+
+    // Valid site parameter exists - proceed with that site
+    console.log('Valid site parameter found - loading site:', urlRouter.getCurrentSiteId());
+    let sceneToLoad = urlRouter.getCurrentSiteId();
 
     // Load scene configuration
     const configPath = getSceneConfigPath(scenesManifest, sceneToLoad);
@@ -3033,8 +3088,6 @@ async function init() {
 
     // Set up mouse event listeners for camera control
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('mouseup', onMouseUp);
 
     // Set up pointer lock event listeners
     document.addEventListener('pointerlockchange', onPointerLockChange);

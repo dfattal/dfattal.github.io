@@ -43,27 +43,16 @@
         "y": 0
       }
     },
-    "maxHeightMultiplier": 2.0
+    "maxHeight": "auto"
   },
   "xr": {
     "enabled": true,
     "referenceSpaceType": "local-floor",
-    "referenceSpaceOrigin": {
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 30
-      },
-      "rotation": {
-        "y": 0
-      }
-    },
     "userHeight": 1.6
   },
   "camera": {
     "fov": 60,
     "near": 0.1,
-    "far": 1000,
     "offsetFromCharacter": {
       "x": 0,
       "y": 2,
@@ -133,7 +122,6 @@
     "magicEffect": {
       "enabled": true,
       "mobileEnabled": true,
-      "expansionRadius": 2500,
       "duration": 2.0,
       "soundDelay": 2.0
     }

@@ -75,13 +75,16 @@ function validateSceneConfig(config) {
 /**
  * Get available scene IDs from manifest
  * @param {Object} manifest - Scenes manifest object
- * @returns {Array<string>} Array of scene IDs
+ * @returns {Array<Object>} Array of scene objects with id, name, description, latitude, longitude, thumbnail
  */
 export function getAvailableScenes(manifest) {
     return manifest.scenes.map(scene => ({
         id: scene.id,
         name: scene.name,
-        description: scene.description || ''
+        description: scene.description || '',
+        latitude: scene.latitude || 0,
+        longitude: scene.longitude || 0,
+        thumbnail: scene.thumbnail || 'models/thumbnails/placeholder.jpg'
     }));
 }
 
@@ -103,4 +106,35 @@ export function getDefaultScene(manifest) {
 export function getSceneConfigPath(manifest, sceneId) {
     const scene = manifest.scenes.find(s => s.id === sceneId);
     return scene ? scene.config : null;
+}
+
+/**
+ * Get scene details by ID
+ * @param {Object} manifest - Scenes manifest object
+ * @param {string} sceneId - Scene ID
+ * @returns {Object|null} Scene object or null if not found
+ */
+export function getSceneById(manifest, sceneId) {
+    const scene = manifest.scenes.find(s => s.id === sceneId);
+    if (!scene) return null;
+
+    return {
+        id: scene.id,
+        name: scene.name,
+        description: scene.description || '',
+        latitude: scene.latitude || 0,
+        longitude: scene.longitude || 0,
+        thumbnail: scene.thumbnail || 'models/thumbnails/placeholder.jpg',
+        config: scene.config
+    };
+}
+
+/**
+ * Validate if a scene ID exists in the manifest
+ * @param {Object} manifest - Scenes manifest object
+ * @param {string} sceneId - Scene ID to validate
+ * @returns {boolean} True if scene exists
+ */
+export function isValidScene(manifest, sceneId) {
+    return manifest.scenes.some(s => s.id === sceneId);
 }

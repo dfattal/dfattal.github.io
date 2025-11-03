@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F1000 - Third Person Character Controller</title>
+    <title>Historic Sites Navigator</title>
 
     <!-- Import Map for Three.js and Spark from CDN -->
     <script type="importmap">
@@ -558,6 +558,87 @@
             }
         }
 
+        /* Globe Overlay */
+        #globe-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000510;
+            z-index: 3000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        #globe-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #globe-title {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 48px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
+            z-index: 3001;
+            text-align: center;
+        }
+
+        #globe-instructions {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            color: #aaa;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            z-index: 3001;
+        }
+
+        /* Globe site marker styles */
+        .globe-site-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            user-select: none;
+        }
+
+        .globe-site-marker:hover {
+            transform: scale(1.2);
+        }
+
+        /* Globe thumbnail container hover effect */
+        .globe-site-marker:hover .globe-thumbnail-container {
+            border-color: #ffffff !important;
+            box-shadow: 0 0 40px rgba(255, 255, 255, 0.9) !important;
+        }
+
+        /* Mobile adjustments for globe */
+        @media (max-width: 768px) {
+            #globe-title {
+                font-size: 32px;
+                top: 30px;
+                padding: 0 20px;
+            }
+
+            #globe-instructions {
+                font-size: 14px;
+                bottom: 30px;
+                padding: 0 20px;
+            }
+        }
+
         /* Camera Toggle Button (Mobile) */
         #camera-toggle-button {
             position: fixed;
@@ -828,6 +909,12 @@
             </div>
             <div class="loading-percent" id="splat-progress-text">0%</div>
         </div>
+    </div>
+
+    <!-- Globe Site Selector Overlay -->
+    <div id="globe-overlay">
+        <h1 id="globe-title">Select Your Destination</h1>
+        <p id="globe-instructions">Click on a site to begin your journey</p>
     </div>
 
     <!-- Start Experience Overlay (visible by default) -->
