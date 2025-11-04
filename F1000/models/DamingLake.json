@@ -19,7 +19,7 @@
     }
   },
   "transform": {
-    "scale": 150.0,
+    "scale": 1.0,
     "rotation": {
       "x": 180,
       "y": 0,
@@ -35,12 +35,12 @@
   "character": {
     "spawn": {
       "position": {
-        "x": 1.3,
+        "x": 5.2,
         "y": "auto",
-        "z": 1
+        "z": -27.3
       },
       "rotation": {
-        "y": 0
+        "y": 180
       }
     },
     "maxHeight": "auto"
