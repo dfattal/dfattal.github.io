@@ -35,12 +35,12 @@
   "character": {
     "spawn": {
       "position": {
-        "x": 5.2,
+        "x": 29.9,
         "y": "auto",
-        "z": -27.3
+        "z": 17.0
       },
       "rotation": {
-        "y": 180
+        "y": 0
       }
     },
     "maxHeight": "auto"
