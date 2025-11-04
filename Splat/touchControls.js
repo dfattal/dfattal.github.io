@@ -198,9 +198,10 @@ export class TouchControls {
                 this.firstPersonCallback(deltaX, deltaY);
             }
         } else {
-            // Third-person: Use OrbitControls
+            // Third-person: Use QuaternionCameraController
             if (this.orbitControls) {
-                this.orbitControls.rotateLeft(deltaX * rotateSpeed);
+                // Invert horizontal to match natural touch behavior (drag right → camera right)
+                this.orbitControls.rotateLeft(-deltaX * rotateSpeed);
                 this.orbitControls.rotateUp(-deltaY * rotateSpeed);
                 this.orbitControls.update();
             }

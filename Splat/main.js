@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { QuaternionCameraController } from './quaternionCameraController.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { SplatMesh, dyno, SparkRenderer } from '@sparkjsdev/spark';
 import { CharacterControls } from './characterControls.js';
@@ -149,6 +149,18 @@ const FIRST_PERSON_MOUSE_SENSITIVITY = 0.002; // Mouse movement sensitivity (for
 const FIRST_PERSON_TOUCH_SENSITIVITY = 0.005; // Touch movement sensitivity for mobile
 const FIRST_PERSON_MAX_PITCH = Math.PI / 2 - 0.1; // ±85 degrees vertical look limit (in radians)
 
+/**
+ * Normalize angle to [-π, +π] range to prevent accumulation
+ * @param {number} angle - Angle in radians
+ * @returns {number} Normalized angle in [-π, +π] range
+ */
+function normalizeAngle(angle) {
+    // Normalize to [-π, +π] range
+    while (angle > Math.PI) angle -= Math.PI * 2;
+    while (angle < -Math.PI) angle += Math.PI * 2;
+    return angle;
+}
+
 // Camera transition state
 let isCameraTransitioning = false;
 let cameraTransitionProgress = 0;
@@ -245,9 +257,9 @@ function initScene() {
     // Add lights
     setupLighting();
 
-    // Set up orbit controls with config values
+    // Set up quaternion-based camera controller with config values
     const orbitCfg = sceneConfig?.camera?.orbitControls || {};
-    orbitControls = new OrbitControls(camera, renderer.domElement);
+    orbitControls = new QuaternionCameraController(camera, renderer.domElement);
     orbitControls.enableDamping = orbitCfg.enableDamping !== undefined ? orbitCfg.enableDamping : true;
     orbitControls.minDistance = orbitCfg.minDistance || 1;
     orbitControls.maxDistance = orbitCfg.maxDistance || 5;
@@ -256,15 +268,12 @@ function initScene() {
 
     // Disable zoom on mobile (pinch-to-zoom not needed)
     if (isMobile) {
-        orbitControls.enableZoom = false;
+        // Note: QuaternionCameraController doesn't have enableZoom property
+        // Wheel zoom is always enabled, but mobile devices don't have mouse wheels
     }
 
-    // Configure mouse buttons: LEFT click for rotation, RIGHT click disabled (used for painting)
-    orbitControls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,  // Left-click for camera rotation
-        MIDDLE: THREE.MOUSE.DOLLY,
-        RIGHT: -1  // Disable right-click (reserved for painting)
-    };
+    // Note: QuaternionCameraController uses left mouse button by default
+    // Right-click is automatically disabled (reserved for painting)
 
     orbitControls.update();
 
@@ -1256,6 +1265,8 @@ function loadCharacter() {
                 model.position.y + worldTargetOffset.y,
                 model.position.z + worldTargetOffset.z
             );
+            // Sync controller internal state from current camera position and target
+            orbitControls.syncFromCamera();
             orbitControls.update();
 
             console.log('Character loaded successfully at position:', model.position);
@@ -1543,7 +1554,7 @@ function toggleCameraMode() {
         // Extract character's current facing direction from quaternion
         const euler = new THREE.Euler();
         euler.setFromQuaternion(model.quaternion, 'YXZ');
-        firstPersonYaw = euler.y;
+        firstPersonYaw = normalizeAngle(euler.y);
         firstPersonPitch = 0;
 
         // Store current camera state as start
@@ -1852,8 +1863,9 @@ function onMouseMove(event) {
         return;
     }
 
-    // Update yaw (horizontal rotation) - unlimited
+    // Update yaw (horizontal rotation) - normalized to prevent accumulation
     firstPersonYaw -= event.movementX * FIRST_PERSON_MOUSE_SENSITIVITY;
+    firstPersonYaw = normalizeAngle(firstPersonYaw);
 
     // Update pitch (vertical rotation) - clamped to ±85 degrees
     firstPersonPitch -= event.movementY * FIRST_PERSON_MOUSE_SENSITIVITY;
@@ -1913,8 +1925,9 @@ function onTouchLook(deltaX, deltaY) {
         return;
     }
 
-    // Update yaw (horizontal rotation) - unlimited
+    // Update yaw (horizontal rotation) - normalized to prevent accumulation
     firstPersonYaw -= deltaX * FIRST_PERSON_TOUCH_SENSITIVITY;
+    firstPersonYaw = normalizeAngle(firstPersonYaw);
 
     // Update pitch (vertical rotation) - clamped to ±85 degrees
     // Drag down (positive deltaY) -> look up (negative pitch in Three.js)
@@ -2521,8 +2534,9 @@ function animate() {
                 // Enable OrbitControls
                 orbitControls.enabled = true;
 
-                // CRITICAL: Update OrbitControls to recalculate internal spherical coordinates
+                // CRITICAL: Sync controller state and update to recalculate internal spherical coordinates
                 // This prevents distance drift when characterControls updates the target on next frame
+                orbitControls.syncFromCamera();
                 orbitControls.update();
 
                 // Log final state for debugging
@@ -2775,8 +2789,8 @@ function animate() {
         console.log(`[Post-transition ${((POST_TRANSITION_LOG_DURATION - postTransitionLogTimer) * 1000).toFixed(0)}ms] Pos: (${camera.position.x.toFixed(3)}, ${camera.position.y.toFixed(3)}, ${camera.position.z.toFixed(3)}) Distance: ${distToTarget.toFixed(6)} OrbitEnabled: ${orbitControls.enabled}`);
     }
 
-    // Update orbit controls (not during transition to avoid interference, and not in XR mode)
-    if (!isCameraTransitioning && !isXRActive) {
+    // Update orbit controls (only in third-person mode, not during transition, and not in XR mode)
+    if (!isCameraTransitioning && !isXRActive && cameraMode === 'third-person') {
         orbitControls.update();
     }
 
