@@ -45,6 +45,15 @@
       "latitude": 37.7749,
       "longitude": -122.4194,
       "thumbnail": "models/thumbnails/PalaceFineArtsSF-preview.webp"
+    },
+    {
+      "id": "DamingLake",
+      "name": "Daming Lake",
+      "description": "Historic lake in Jinan, Shandong Province, China",
+      "config": "models/DamingLake.json",
+      "latitude": 36.6833,
+      "longitude": 117.0167,
+      "thumbnail": "models/thumbnails/DamingLake-preview.webp"
     }
   ]
 }
