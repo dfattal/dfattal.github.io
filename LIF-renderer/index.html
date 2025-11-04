@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIF Renderer Demo</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+    }
+
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 5px;
+      z-index: 100;
+    }
+  </style>
+  <script type="module" crossorigin src="/LIF-renderer/assets/main-C9iTsW_e.js"></script>
+</head>
+
+<body>
+  <div id="info">
+    LIF Renderer Demo<br>
+    FPS: <span id="fps">60</span><br>
+    Points: <span id="point-count">0</span><br>
+    Mode: <span id="mode">Free Camera</span><br>
+    <span id="controls">
+      WASD: Move camera<br>
+      Left Click + Drag: Look around<br>
+      Double Click: Orbit point<br>
+      F: Toggle frustum
+    </span>
+  </div>
+
+</body>
+
+</html>
