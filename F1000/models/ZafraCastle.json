@@ -1,0 +1,130 @@
+{
+  "name": "Zafra Castle",
+  "description": "Medieval castle with historic atmosphere",
+  "assets": {
+    "splatFile": "models/ZafraCastle.sog",
+    "collisionFile": "models/ZafraCastle-collision.glb",
+    "characterFile": "models/Soldier.glb",
+    "textures": {
+      "floor": {
+        "color": "textures/sand/Sand 002_COLOR.jpg",
+        "normal": "textures/sand/Sand 002_NRM.jpg",
+        "displacement": "textures/sand/Sand 002_DISP.jpg",
+        "ao": "textures/sand/Sand 002_OCC.jpg"
+      }
+    },
+    "audio": {
+      "jetpack": "sounds/thrusters_loopwav-14699.mp3",
+      "magicReveal": "sounds/a-magical-intro-395716.mp3"
+    }
+  },
+  "transform": {
+    "scale": 1.0,
+    "rotation": {
+      "x": 180,
+      "y": 0,
+      "z": 0
+    },
+    "heightOffset": "max",
+    "defaultLeveling": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  "character": {
+    "spawn": {
+      "position": {
+        "x": -0.9,
+        "y": "auto",
+        "z": 4.8
+      },
+      "rotation": {
+        "y": 0
+      }
+    },
+    "maxHeight": "auto"
+  },
+  "xr": {
+    "enabled": true,
+    "referenceSpaceType": "local-floor",
+    "userHeight": 1.6
+  },
+  "camera": {
+    "fov": 60,
+    "near": 0.1,
+    "offsetFromCharacter": {
+      "x": 0,
+      "y": 2,
+      "z": 5
+    },
+    "targetOffset": {
+      "y": 2
+    },
+    "orbitControls": {
+      "minDistance": 1,
+      "maxDistance": 5,
+      "maxPolarAngle": 0.55,
+      "enableDamping": true,
+      "enablePan": false
+    }
+  },
+  "lighting": {
+    "ambient": {
+      "color": "#ffffff",
+      "intensity": 0.7
+    },
+    "directional": {
+      "color": "#ffffff",
+      "intensity": 1.0,
+      "azimuth": 213,
+      "elevation": 37,
+      "distance": 100,
+      "castShadow": true,
+      "shadowCamera": {
+        "top": 50,
+        "bottom": -50,
+        "left": -50,
+        "right": 50,
+        "near": 0.1,
+        "far": 200
+      },
+      "shadowMapSize": 2048
+    }
+  },
+  "scene": {
+    "backgroundColor": "#a8def0",
+    "infiniteFloor": {
+      "enabled": true,
+      "visible": false,
+      "size": 10000,
+      "positionY": 0,
+      "textureRepeat": 1000,
+      "material": {
+        "roughness": 0.9,
+        "metalness": 0.0,
+        "aoMapIntensity": 1.0,
+        "displacementScale": 0
+      }
+    },
+    "collisionMesh": {
+      "visible": false,
+      "material": {
+        "color": "#808080",
+        "roughness": 0.8,
+        "metalness": 0.2
+      }
+    },
+    "wireframe": {
+      "color": "#00ff00",
+      "linewidth": 2,
+      "opacity": 0.8
+    },
+    "magicEffect": {
+      "enabled": true,
+      "mobileEnabled": true,
+      "duration": 2.0,
+      "soundDelay": 2.0
+    }
+  }
+}

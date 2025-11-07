@@ -54,6 +54,15 @@
       "latitude": 36.6833,
       "longitude": 117.0167,
       "thumbnail": "models/thumbnails/DamingLake-preview.webp"
+    },
+    {
+      "id": "ZafraCastle",
+      "name": "Zafra Castle",
+      "description": "Medieval castle in Zafra, Spain",
+      "config": "models/ZafraCastle.json",
+      "latitude": 38.4250,
+      "longitude": -6.4167,
+      "thumbnail": "models/thumbnails/ZafraCastle-preview.webp"
     }
   ]
 }
