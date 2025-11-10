@@ -63,6 +63,15 @@
       "latitude": 38.4250,
       "longitude": -6.4167,
       "thumbnail": "models/thumbnails/ZafraCastle-preview.webp"
+    },
+    {
+      "id": "ChateauCampagne",
+      "name": "Chateau Campagne",
+      "description": "Chateau Campagne in Dordogne, France",
+      "config": "models/ChateauCampagne.json",
+      "latitude": 45.0,
+      "longitude": 0.7,
+      "thumbnail": "models/thumbnails/ChateauCampagne-preview.webp"
     }
   ]
 }
