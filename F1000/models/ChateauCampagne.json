@@ -19,7 +19,7 @@
     }
   },
   "transform": {
-    "scale": 1.0,
+    "scale": 30.0,
     "rotation": {
       "x": 180,
       "y": 0,
@@ -123,8 +123,9 @@
     "magicEffect": {
       "enabled": true,
       "mobileEnabled": true,
-      "duration": 2.0,
-      "soundDelay": 2.0
+      "duration": 4.0,
+      "soundDelay": 2.0,
+      "expansionRadius": 5000
     }
   }
 }
