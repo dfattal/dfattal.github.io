@@ -424,6 +424,49 @@
             transform: translateY(0);
         }
 
+        /* Username input in start overlay */
+        #username-container {
+            margin: 0 0 30px 0;
+        }
+
+        #username-container label {
+            display: block;
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #username-input {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            outline: none;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        #username-input:hover {
+            background: rgba(0, 255, 0, 0.1);
+            border-color: #00cc00;
+        }
+
+        #username-input:focus {
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        #username-input::placeholder {
+            color: #555;
+        }
+
         /* Scene selector in start overlay */
         #start-scene-selector {
             margin: 0 0 30px 0;
@@ -925,6 +968,12 @@
         <div id="start-content">
             <h1 id="start-title">Loading...</h1>
             <p id="start-description">Preparing your journey</p>
+
+            <!-- Username input (shown after loading) -->
+            <div id="username-container" style="display: none;">
+                <label for="username-input">Your Name:</label>
+                <input type="text" id="username-input" placeholder="Enter your name" maxlength="20" />
+            </div>
 
             <!-- Start button: Single entry point (VR accessed via in-app Three.js button) -->
             <div id="start-buttons-container">
