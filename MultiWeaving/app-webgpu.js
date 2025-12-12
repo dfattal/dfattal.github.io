@@ -16,6 +16,9 @@
     let uniformBuffers = [];
     let bindGroups = [];
     let viewerStatesBuffer;
+    let sbsTextureView;
+    let sbsSampler;
+    let useTexture = false;
 
     async function initWebGPU() {
       if (!navigator.gpu) {
@@ -55,6 +58,8 @@
             pixelPitchMm: f32,
             resolutionH: i32,
             resolutionV: i32,
+            useTexture: i32,
+            _padding: i32,  // padding to 64 bytes
           }
 
           struct ViewerStates {
@@ -63,6 +68,8 @@
 
           @group(0) @binding(0) var<uniform> uniforms: Uniforms;
           @group(0) @binding(1) var<uniform> viewerStates: ViewerStates;
+          @group(0) @binding(2) var sbsTexture: texture_2d<f32>;
+          @group(0) @binding(3) var sbsSampler: sampler;
 
           struct VertexOutput {
             @builtin(position) position: vec4<f32>,
@@ -120,7 +127,9 @@
             let donopx = 0.5 / tan(radians(uniforms.FOVdeg * 0.5));
 
             var redAccum: f32 = 0.0;
+            var greenAccum: f32 = 0.0;
             var blueAccum: f32 = 0.0;
+            var weightSum: f32 = 0.0;
 
             let N = min(uniforms.N, ${MAX_N});
 
@@ -158,20 +167,53 @@
               let h = phase(xy, eyePos, v, donopx);
               let w = exp(-f32(N*N) * h * h);
 
-              redAccum = redAccum + w * pixVal;
-              blueAccum = blueAccum + w * (1.0 - pixVal);
+              if (uniforms.useTexture == 1) {
+                // Sample from SBS texture (flip V coordinate to fix y-flip)
+                // Left image: left half of texture (u: 0 to 0.5)
+                // Right image: right half of texture (u: 0.5 to 1.0)
+                let leftUV = vec2<f32>(quantizedU * 0.5, 1.0 - quantizedV);
+                let rightUV = vec2<f32>(quantizedU * 0.5 + 0.5, 1.0 - quantizedV);
+
+                var leftColor = textureSample(sbsTexture, sbsSampler, leftUV).rgb;
+                var rightColor = textureSample(sbsTexture, sbsSampler, rightUV).rgb;
+
+                // Convert from gamma to linear space (approximate: square the values)
+                leftColor = leftColor * leftColor;
+                rightColor = rightColor * rightColor;
+
+                // Use full RGB: blend left and right colors based on pixVal
+                redAccum = redAccum + w * (pixVal * rightColor.r + (1.0 - pixVal) * leftColor.r);
+                greenAccum = greenAccum + w * (pixVal * rightColor.g + (1.0 - pixVal) * leftColor.g);
+                blueAccum = blueAccum + w * (pixVal * rightColor.b + (1.0 - pixVal) * leftColor.b);
+                weightSum = weightSum + w;
+              } else {
+                // Test pattern: red for right, blue for left
+                redAccum = redAccum + w * pixVal;
+                blueAccum = blueAccum + w * (1.0 - pixVal);
+                weightSum = weightSum + w;
+              }
             }
 
-            let maxVal = max(redAccum, blueAccum);
-            if (maxVal > 0.0) {
-              redAccum = redAccum / maxVal;
-              blueAccum = blueAccum / maxVal;
+            // Normalize by sum of weights (better for texture mode)
+            if (uniforms.useTexture == 1 && weightSum > 0.0) {
+              redAccum = redAccum / weightSum;
+              greenAccum = greenAccum / weightSum;
+              blueAccum = blueAccum / weightSum;
+            } else {
+              // Test pattern: normalize by max value
+              let maxVal = max(max(redAccum, greenAccum), blueAccum);
+              if (maxVal > 0.0) {
+                redAccum = redAccum / maxVal;
+                greenAccum = greenAccum / maxVal;
+                blueAccum = blueAccum / maxVal;
+              }
             }
 
             let r = sqrt(clamp(redAccum, 0.0, 1.0));
+            let g = sqrt(clamp(greenAccum, 0.0, 1.0));
             let b = sqrt(clamp(blueAccum, 0.0, 1.0));
 
-            return vec4<f32>(r, 0.0, b, 1.0);
+            return vec4<f32>(r, g, b, 1.0);
           }
         `
       });
@@ -202,8 +244,24 @@
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
 
+      // Create SBS texture (1x1 placeholder initially)
+      const sbsTexture = device.createTexture({
+        size: { width: 1, height: 1 },
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+
+      sbsSampler = device.createSampler({
+        magFilter: 'linear',
+        minFilter: 'linear',
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      });
+
+      sbsTextureView = sbsTexture.createView();
+
       // Create uniform buffers and bind groups for each viewport (MAX_VIEWERS × 2 eyes)
-      const uniformBufferSize = 64; // Aligned size for the uniform struct
+      const uniformBufferSize = 68; // Aligned size for the uniform struct (added useTexture + padding)
       for (let vi = 0; vi < MAX_VIEWERS; vi++) {
         for (let eye = 0; eye < 2; eye++) {
           const uniformBuffer = device.createBuffer({
@@ -226,6 +284,14 @@
                 resource: {
                   buffer: viewerStatesBuffer,
                 },
+              },
+              {
+                binding: 2,
+                resource: sbsTextureView,
+              },
+              {
+                binding: 3,
+                resource: sbsSampler,
               },
             ],
           });
@@ -268,6 +334,9 @@
     const viewerControlsDiv = document.getElementById('viewerControls');
     const viewportGrid = document.getElementById('viewportGrid');
     const fpsDisplay = document.getElementById('fpsDisplay');
+    const sbsImageInput = document.getElementById('sbsImage');
+    const clearImageButton = document.getElementById('clearImage');
+    const imageStatusLabel = document.getElementById('imageStatus');
 
     // FPS tracking
     let lastFrameTime = performance.now();
@@ -482,7 +551,7 @@
       for (let vi = 0; vi < MAX_VIEWERS; vi++) {
         for (let eye = 0; eye < 2; eye++) {
           // Create buffer with proper types (mix of f32 and i32)
-          const buffer = new ArrayBuffer(64);
+          const buffer = new ArrayBuffer(68);
           const floatView = new Float32Array(buffer);
           const intView = new Int32Array(buffer);
 
@@ -498,7 +567,9 @@
           floatView[9] = pixelPitch;        // f32 pixelPitchMm
           intView[10] = resH;               // i32 resolutionH
           intView[11] = resV;               // i32 resolutionV
-          // [12-15] remain 0 (padding)
+          intView[12] = useTexture ? 1 : 0; // i32 useTexture
+          intView[13] = 0;                  // i32 padding
+          // [14-16] remain 0 (padding to 68 bytes)
 
           const bufferIndex = vi * 2 + eye;
           device.queue.writeBuffer(uniformBuffers[bufferIndex], 0, buffer);
@@ -576,6 +647,176 @@
 
     resolutionHInput.addEventListener('change', () => {
       updateScreenDimensions();
+      drawScene();
+    });
+
+    // SBS image loading
+    sbsImageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      img.onload = () => {
+        // Downsample to render resolution to avoid texture size limits
+        const resH = parseInt(resolutionHInput.value, 10) || 1600;
+        const resV = Math.round(resH * 9 / 16);
+
+        // Use SBS aspect ratio (2:1 width to height for side-by-side)
+        const targetWidth = resH * 2;  // SBS is double-wide
+        const targetHeight = resV;
+
+        // Create a canvas to downsample the image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+        // Create new texture with downsampled dimensions
+        const newTexture = device.createTexture({
+          size: { width: targetWidth, height: targetHeight },
+          format: 'rgba8unorm',
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+
+        // Write image data to texture
+        device.queue.writeTexture(
+          { texture: newTexture },
+          imageData.data,
+          {
+            offset: 0,
+            bytesPerRow: targetWidth * 4,
+            rowsPerImage: targetHeight
+          },
+          { width: targetWidth, height: targetHeight, depthOrArrayLayers: 1 }
+        );
+
+        // Update texture view
+        sbsTextureView = newTexture.createView();
+
+        // Recreate bind groups with new texture
+        bindGroups = [];
+        for (let vi = 0; vi < MAX_VIEWERS; vi++) {
+          for (let eye = 0; eye < 2; eye++) {
+            const bufferIndex = vi * 2 + eye;
+            const bindGroup = device.createBindGroup({
+              layout: pipeline.getBindGroupLayout(0),
+              entries: [
+                {
+                  binding: 0,
+                  resource: { buffer: uniformBuffers[bufferIndex] },
+                },
+                {
+                  binding: 1,
+                  resource: { buffer: viewerStatesBuffer },
+                },
+                {
+                  binding: 2,
+                  resource: sbsTextureView,
+                },
+                {
+                  binding: 3,
+                  resource: sbsSampler,
+                },
+              ],
+            });
+            bindGroups.push(bindGroup);
+          }
+        }
+
+        useTexture = true;
+        const imageName = file ? file.name : 'restored image';
+        imageStatusLabel.textContent = `Using SBS image: ${imageName}`;
+
+        // Save downsampled image data for version switching
+        try {
+          window.currentSBSImage = tempCanvas.toDataURL('image/jpeg', 0.9);
+          window.currentSBSImageName = imageName;
+        } catch (e) {
+          console.warn('Could not save image data:', e);
+        }
+
+        drawScene();
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // Restore saved image if available
+    if (window.savedSBSImage) {
+      const img = new Image();
+      img.onload = async () => {
+        const resH = parseInt(resolutionHInput.value, 10) || 1600;
+        const resV = Math.round(resH * 9 / 16);
+        const targetWidth = resH * 2;
+        const targetHeight = resV;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+        const newTexture = device.createTexture({
+          size: { width: targetWidth, height: targetHeight },
+          format: 'rgba8unorm',
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+
+        device.queue.writeTexture(
+          { texture: newTexture },
+          imageData.data,
+          {
+            offset: 0,
+            bytesPerRow: targetWidth * 4,
+            rowsPerImage: targetHeight
+          },
+          { width: targetWidth, height: targetHeight, depthOrArrayLayers: 1 }
+        );
+
+        sbsTextureView = newTexture.createView();
+
+        // Recreate bind groups with new texture
+        bindGroups = [];
+        for (let vi = 0; vi < MAX_VIEWERS; vi++) {
+          for (let eye = 0; eye < 2; eye++) {
+            const bufferIndex = vi * 2 + eye;
+            const bindGroup = device.createBindGroup({
+              layout: pipeline.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: { buffer: uniformBuffers[bufferIndex] } },
+                { binding: 1, resource: { buffer: viewerStatesBuffer } },
+                { binding: 2, resource: sbsTextureView },
+                { binding: 3, resource: sbsSampler },
+              ],
+            });
+            bindGroups.push(bindGroup);
+          }
+        }
+
+        useTexture = true;
+        imageStatusLabel.textContent = `Using SBS image: ${window.savedSBSImageName || 'restored'}`;
+
+        // Save the downsampled canvas as data URL for next switch
+        try {
+          window.currentSBSImage = tempCanvas.toDataURL('image/jpeg', 0.9);
+          window.currentSBSImageName = window.savedSBSImageName;
+        } catch (e) {
+          console.warn('Could not save restored image data:', e);
+        }
+
+        drawScene();
+      };
+      img.src = window.savedSBSImage;
+    }
+
+    clearImageButton.addEventListener('click', () => {
+      useTexture = false;
+      imageStatusLabel.textContent = 'Using test pattern (red/blue)';
+      sbsImageInput.value = '';
+      window.currentSBSImage = null;
+      window.currentSBSImageName = null;
       drawScene();
     });
 

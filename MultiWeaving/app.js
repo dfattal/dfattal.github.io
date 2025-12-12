@@ -67,6 +67,10 @@
       uniform int   u_resolutionH;     // horizontal resolution
       uniform int   u_resolutionV;     // vertical resolution
 
+      // SBS texture support
+      uniform sampler2D u_sbsTexture;  // side-by-side stereo texture
+      uniform int u_useTexture;        // 1 = use texture, 0 = use test pattern
+
       // constants from your MATLAB code
       uniform float u_SL;  // slant parameter
       const float NREFR = 1.6;
@@ -112,7 +116,9 @@
 
         // accumulators for current viewer+eye
         float redAccum = 0.0;
+        float greenAccum = 0.0;
         float blueAccum = 0.0;
+        float weightSum = 0.0;
 
         // clamp N just in case
         int N = u_N;
@@ -156,22 +162,54 @@
           float h = phase(xy, eyePos, v, donopx);
           float w = exp(-float(N*N) * h * h);
 
-          redAccum  += w * pixVal;
-          blueAccum += w * (1.0 - pixVal);
+          if (u_useTexture == 1) {
+            // Sample from SBS texture (flip V coordinate to fix y-flip)
+            // Left image: left half of texture (u: 0 to 0.5)
+            // Right image: right half of texture (u: 0.5 to 1.0)
+            vec2 leftUV = vec2(quantizedU * 0.5, 1.0 - quantizedV);
+            vec2 rightUV = vec2(quantizedU * 0.5 + 0.5, 1.0 - quantizedV);
+
+            vec3 leftColor = texture2D(u_sbsTexture, leftUV).rgb;
+            vec3 rightColor = texture2D(u_sbsTexture, rightUV).rgb;
+
+            // Convert from gamma to linear space (approximate: square the values)
+            leftColor = leftColor * leftColor;
+            rightColor = rightColor * rightColor;
+
+            // Use full RGB: blend left and right colors based on pixVal
+            redAccum   += w * (pixVal * rightColor.r + (1.0 - pixVal) * leftColor.r);
+            greenAccum += w * (pixVal * rightColor.g + (1.0 - pixVal) * leftColor.g);
+            blueAccum  += w * (pixVal * rightColor.b + (1.0 - pixVal) * leftColor.b);
+            weightSum  += w;
+          } else {
+            // Test pattern: red for right, blue for left
+            redAccum  += w * pixVal;
+            blueAccum += w * (1.0 - pixVal);
+            weightSum += w;
+          }
         }
 
-        // simple normalization & gamma
-        float maxVal = max(redAccum, blueAccum);
-        if (maxVal > 0.0) {
-          redAccum  /= maxVal;
-          blueAccum /= maxVal;
+        // Normalize by sum of weights (better for texture mode)
+        if (u_useTexture == 1 && weightSum > 0.0) {
+          redAccum   /= weightSum;
+          greenAccum /= weightSum;
+          blueAccum  /= weightSum;
+        } else {
+          // Test pattern: normalize by max value
+          float maxVal = max(max(redAccum, greenAccum), blueAccum);
+          if (maxVal > 0.0) {
+            redAccum   /= maxVal;
+            greenAccum /= maxVal;
+            blueAccum  /= maxVal;
+          }
         }
 
         // gamma 1/2 like sqrt()
         float r = sqrt(clamp(redAccum, 0.0, 1.0));
+        float g = sqrt(clamp(greenAccum, 0.0, 1.0));
         float b = sqrt(clamp(blueAccum, 0.0, 1.0));
 
-        gl_FragColor = vec4(r, 0.0, b, 1.0);
+        gl_FragColor = vec4(r, g, b, 1.0);
       }
     `;
 
@@ -234,6 +272,20 @@
     const u_pixelPitchMmLoc   = gl.getUniformLocation(program, 'u_pixelPitchMm');
     const u_resolutionHLoc    = gl.getUniformLocation(program, 'u_resolutionH');
     const u_resolutionVLoc    = gl.getUniformLocation(program, 'u_resolutionV');
+    const u_sbsTextureLoc     = gl.getUniformLocation(program, 'u_sbsTexture');
+    const u_useTextureLoc     = gl.getUniformLocation(program, 'u_useTexture');
+
+    // Create texture for SBS image
+    const sbsTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, sbsTexture);
+    // Create a 1x1 placeholder texture
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    let useTexture = false;
 
     // Screen dimensions and IPD set once (IPD is constant, screen dims updated in drawScene)
     gl.uniform1f(u_IPDmmLoc, IPD_mm);
@@ -255,6 +307,9 @@
     const viewerControlsDiv = document.getElementById('viewerControls');
     const viewportGrid = document.getElementById('viewportGrid');
     const fpsDisplay = document.getElementById('fpsDisplay');
+    const sbsImageInput = document.getElementById('sbsImage');
+    const clearImageButton = document.getElementById('clearImage');
+    const imageStatusLabel = document.getElementById('imageStatus');
 
     // FPS tracking
     let lastFrameTime = performance.now();
@@ -468,6 +523,12 @@
       gl.uniform1i(u_resolutionHLoc, resH);
       gl.uniform1i(u_resolutionVLoc, resV);
 
+      // Bind texture and set texture uniform
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, sbsTexture);
+      gl.uniform1i(u_sbsTextureLoc, 0);
+      gl.uniform1i(u_useTextureLoc, useTexture ? 1 : 0);
+
       // flatten viewer centers into Float32Array
       const centers = new Float32Array(MAX_VIEWERS * 3);
       for (let i = 0; i < MAX_VIEWERS; i++) {
@@ -529,6 +590,101 @@
 
     resolutionHInput.addEventListener('change', () => {
       updateScreenDimensions();
+      drawScene();
+    });
+
+    // SBS image loading
+    sbsImageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      img.onload = () => {
+        // Downsample to render resolution for efficiency
+        const resH = parseInt(resolutionHInput.value, 10) || 1600;
+        const resV = Math.round(resH * 9 / 16);
+
+        // Use SBS aspect ratio (2:1 width to height for side-by-side)
+        const targetWidth = resH * 2;  // SBS is double-wide
+        const targetHeight = resV;
+
+        // Create a canvas to downsample the image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        gl.bindTexture(gl.TEXTURE_2D, sbsTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+        useTexture = true;
+        const imageName = file ? file.name : 'restored image';
+        imageStatusLabel.textContent = `Using SBS image: ${imageName}`;
+
+        // Save downsampled image data for version switching
+        try {
+          window.currentSBSImage = tempCanvas.toDataURL('image/jpeg', 0.9);
+          window.currentSBSImageName = imageName;
+        } catch (e) {
+          console.warn('Could not save image data:', e);
+        }
+
+        drawScene();
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // Restore saved image if available
+    if (window.savedSBSImage) {
+      const img = new Image();
+      img.onload = () => {
+        const event = { target: { files: [null] } };
+        // Trigger the same loading logic
+        const resH = parseInt(resolutionHInput.value, 10) || 1600;
+        const resV = Math.round(resH * 9 / 16);
+        const targetWidth = resH * 2;
+        const targetHeight = resV;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        gl.bindTexture(gl.TEXTURE_2D, sbsTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+        useTexture = true;
+        imageStatusLabel.textContent = `Using SBS image: ${window.savedSBSImageName || 'restored'}`;
+
+        // Save the downsampled canvas as data URL for next switch
+        try {
+          window.currentSBSImage = tempCanvas.toDataURL('image/jpeg', 0.9);
+          window.currentSBSImageName = window.savedSBSImageName;
+        } catch (e) {
+          console.warn('Could not save restored image data:', e);
+        }
+
+        drawScene();
+      };
+      img.src = window.savedSBSImage;
+    }
+
+    clearImageButton.addEventListener('click', () => {
+      useTexture = false;
+      imageStatusLabel.textContent = 'Using test pattern (red/blue)';
+      sbsImageInput.value = '';
+      window.currentSBSImage = null;
+      window.currentSBSImageName = null;
       drawScene();
     });
 
