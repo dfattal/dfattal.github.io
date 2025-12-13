@@ -93,9 +93,15 @@
         return exp(-float(N) * abs(h));  // For pixel assignment
       }
 
+      // Alternative radfun using smooth box (could be useful later)
+      // float radfun(float h, int N) {
+      //   float halfN = 0.5 / float(N);
+      //   return smoothbox(-halfN, halfN, halfN, h);
+      // }
+
       float radfun(float h, int N) {
-        float halfN = 0.5 / float(N);
-        return smoothbox(-halfN, halfN, halfN, h);  // Physical radiance model
+        float Nf = float(N);
+        return exp(-2.0 * Nf * Nf * h * h);  // Physical radiance model
       }
 
       // Helper function to get viewer center by index (workaround for GLSL ES 1.0)

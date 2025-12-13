@@ -129,9 +129,15 @@
             return exp(-f32(N) * abs(h));  // For pixel assignment
           }
 
+          // Alternative radfun using smooth box (could be useful later)
+          // fn radfun_smoothbox(h: f32, N: i32) -> f32 {
+          //   let halfN = 0.5 / f32(N);
+          //   return smoothbox(-halfN, halfN, halfN, h);
+          // }
+
           fn radfun(h: f32, N: i32) -> f32 {
-            let halfN = 0.5 / f32(N);
-            return smoothbox(-halfN, halfN, halfN, h);  // Physical radiance model
+            let Nf = f32(N);
+            return exp(-2.0 * Nf * Nf * h * h);  // Physical radiance model
           }
 
           @fragment
