@@ -111,6 +111,29 @@
             return m - 0.5;
           }
 
+          // Helper functions for pixel assignment and radiance
+          fn t(x1: f32, x2: f32, x: f32) -> f32 {
+            return clamp((x - x1) / (x2 - x1), 0.0, 1.0);
+          }
+
+          fn smoothstep_custom(x1: f32, x2: f32, x: f32) -> f32 {
+            let t_val = t(x1, x2, x);
+            return t_val * t_val * (3.0 - 2.0 * t_val);
+          }
+
+          fn smoothbox(x1: f32, x2: f32, sm: f32, x: f32) -> f32 {
+            return smoothstep_custom(x1 - sm, x1 + sm, x) * (1.0 - smoothstep_custom(x2 - sm, x2 + sm, x));
+          }
+
+          fn scorefun(h: f32, N: i32) -> f32 {
+            return exp(-f32(N) * abs(h));  // For pixel assignment
+          }
+
+          fn radfun(h: f32, N: i32) -> f32 {
+            let halfN = 0.5 / f32(N);
+            return smoothbox(-halfN, halfN, halfN, h);  // Physical radiance model
+          }
+
           @fragment
           fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
             // Quantize UV coordinates to pixel grid to simulate actual resolution
@@ -137,8 +160,8 @@
               if (k >= N) { break; }
               let v = (f32(k) + 0.5) / f32(N);
 
-              var sumL: f32 = 0.0;
-              var sumR: f32 = 0.0;
+              var scoreL: f32 = 0.0;
+              var scoreR: f32 = 0.0;
 
               for (var vi: i32 = 0; vi < ${MAX_VIEWERS}; vi = vi + 1) {
                 if (vi >= uniforms.numViewers) { break; }
@@ -150,12 +173,12 @@
                 let phL = phase(xy, LE, v, donopx);
                 let phR = phase(xy, RE, v, donopx);
 
-                sumL += exp(-f32(N*N) * phL * phL);
-                sumR += exp(-f32(N*N) * phR * phR);
+                scoreL += scorefun(phL, N);
+                scoreR += scorefun(phR, N);
               }
 
-              let denom = sumL + sumR;
-              let pixVal = select(0.0, sumR / denom, denom > 0.0);
+              // Binary pixel assignment based on voting
+              let pixVal = select(0.0, 1.0, scoreR > scoreL);
 
               let cCenter = viewerStates.positions[uniforms.currentViewer].xyz;
               let eyePos = select(
@@ -165,7 +188,7 @@
               );
 
               let h = phase(xy, eyePos, v, donopx);
-              let w = exp(-f32(N*N) * h * h);
+              let w = radfun(h, N);  // Use physical radiance model
 
               if (uniforms.useTexture == 1) {
                 // Sample from SBS texture (flip V coordinate to fix y-flip)

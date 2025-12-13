@@ -75,6 +75,29 @@
       uniform float u_SL;  // slant parameter
       const float NREFR = 1.6;
 
+      // Helper functions for pixel assignment and radiance
+      float t(float x1, float x2, float x) {
+        return clamp((x - x1) / (x2 - x1), 0.0, 1.0);
+      }
+
+      float smoothstep_custom(float x1, float x2, float x) {
+        float t_val = t(x1, x2, x);
+        return t_val * t_val * (3.0 - 2.0 * t_val);
+      }
+
+      float smoothbox(float x1, float x2, float sm, float x) {
+        return smoothstep_custom(x1 - sm, x1 + sm, x) * (1.0 - smoothstep_custom(x2 - sm, x2 + sm, x));
+      }
+
+      float scorefun(float h, int N) {
+        return exp(-float(N) * abs(h));  // For pixel assignment
+      }
+
+      float radfun(float h, int N) {
+        float halfN = 0.5 / float(N);
+        return smoothbox(-halfN, halfN, halfN, h);  // Physical radiance model
+      }
+
       // Helper function to get viewer center by index (workaround for GLSL ES 1.0)
       vec3 getViewerCenter(int idx) {
         if (idx == 0) return u_viewerCenters[0];
@@ -131,9 +154,9 @@
           if (k >= N) break;
           float v = (float(k) + 0.5) / float(N);
 
-          // global pixel assignment: compute weighted sum across all viewers
-          float sumL = 0.0;
-          float sumR = 0.0;
+          // global pixel assignment: score-based voting across all viewers
+          float scoreL = 0.0;
+          float scoreR = 0.0;
 
           for (int vi = 0; vi < MAX_VIEWERS; ++vi) {
             if (vi >= u_numViewers) break;
@@ -145,13 +168,12 @@
             float phL = phase(xy, LE, v, donopx);
             float phR = phase(xy, RE, v, donopx);
 
-            sumL += exp(-float(N*N) * phL * phL);
-            sumR += exp(-float(N*N) * phR * phR);
+            scoreL += scorefun(phL, N);
+            scoreR += scorefun(phR, N);
           }
 
-          // pixVal = sumR / (sumL + sumR), handling zero denominator
-          float denom = sumL + sumR;
-          float pixVal = (denom > 0.0) ? (sumR / denom) : 0.0;
+          // Binary assignment based on voting
+          float pixVal = (scoreR > scoreL) ? 1.0 : 0.0;
 
           // now phase for this viewer + this eye only
           vec3 cCenter = getViewerCenter(u_currentViewer);
@@ -160,7 +182,7 @@
             : cCenter + vec3( u_IPDmm * 0.5, 0.0, 0.0);
 
           float h = phase(xy, eyePos, v, donopx);
-          float w = exp(-float(N*N) * h * h);
+          float w = radfun(h, N);  // Use physical radiance model
 
           if (u_useTexture == 1) {
             // Sample from SBS texture (flip V coordinate to fix y-flip)
