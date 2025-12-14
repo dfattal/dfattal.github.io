@@ -207,6 +207,17 @@
         <input id="numViewers" type="number" min="1" max="4" value="2">
       </div>
 
+      <h2>Viewer Weighting</h2>
+
+      <div class="row">
+        <label for="weightingPolicy">Weighting Policy</label>
+        <select id="weightingPolicy" style="width: 100%; padding: 4px; background: #2a2c34; border: 1px solid #555; color: #f0f0f0; border-radius: 3px; font-size: 12px;">
+          <option value="equal">Equal (all viewers weighted 1.0)</option>
+          <option value="cascade">Priority Cascade (1000, 100, 10, 1)</option>
+          <option value="proximity">Proximity-based (exponential falloff)</option>
+        </select>
+      </div>
+
       <h2>Image Source</h2>
 
       <div class="row">
@@ -221,7 +232,34 @@
         <span id="imageStatus">Using test pattern (red/blue)</span>
       </div>
 
-      <div id="viewerControls"></div>
+      <h2>Viewer Positions</h2>
+
+      <div id="sceneVisualization" style="margin-bottom: 16px;">
+        <canvas id="sceneCanvas"
+                width="800"
+                height="600"
+                style="width: 100%;
+                       background: #1a1b1f;
+                       border: 1px solid #333;
+                       border-radius: 4px;
+                       cursor: default;
+                       display: block;">
+        </canvas>
+      </div>
+
+      <!-- Proximity parameters (hidden by default, shown below scene when proximity policy selected) -->
+      <div id="proximityControls" style="display: none; margin-bottom: 16px;">
+        <div class="row">
+          <label for="proximityC">Proximity C (z-axis falloff)
+            <span class="small-value" id="proximityCValue"></span>
+          </label>
+          <input id="proximityC" type="range" min="0" max="5" step="0.1" value="1.0">
+        </div>
+
+        <div class="row" style="font-size: 11px; color: #999; margin-top: 4px;">
+          Weight = exp(-(x/1000)² - (y/1000)² - c*(z/1000)²)
+        </div>
+      </div>
 
       <h2>Global Parameters</h2>
 
@@ -299,6 +337,19 @@
         document.getElementById('screenDiagonal').value = state.screenDiagonal || 65;
         document.getElementById('resolutionH').value = state.resolutionH || 1600;
 
+        // Restore weighting policy
+        if (state.weightingPolicy) {
+          document.getElementById('weightingPolicy').value = state.weightingPolicy;
+          // Show/hide proximity controls based on policy
+          document.getElementById('proximityControls').style.display =
+            (state.weightingPolicy === 'proximity') ? 'block' : 'none';
+        }
+
+        // Restore proximity parameter
+        if (state.proximityParams) {
+          document.getElementById('proximityC').value = state.proximityParams.c || 1.0;
+        }
+
         // Store saved image for app to restore
         if (state.sbsImageData) {
           window.savedSBSImage = state.sbsImageData;
@@ -326,7 +377,11 @@
         resolutionH: document.getElementById('resolutionH').value,
         viewerPositions: window.currentViewerPositions || [],
         sbsImageData: window.currentSBSImage || null,
-        sbsImageName: window.currentSBSImageName || null
+        sbsImageName: window.currentSBSImageName || null,
+        weightingPolicy: document.getElementById('weightingPolicy').value,
+        proximityParams: {
+          c: document.getElementById('proximityC').value
+        }
       };
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
 
