@@ -472,10 +472,23 @@
     const numViewsValueLabel = document.getElementById('numViewsValue');
     const slantSlider = document.getElementById('slant');
     const slantValueLabel = document.getElementById('slantValue');
+    const deltaNSlider = document.getElementById('deltaN');
+    const deltaNValueLabel = document.getElementById('deltaNValue');
+    const conicKSlider = document.getElementById('conicK');
+    const conicKValueLabel = document.getElementById('conicKValue');
+    const screenResKInput = document.getElementById('screenResK');
     const screenDiagonalInput = document.getElementById('screenDiagonal');
     const resolutionHInput = document.getElementById('resolutionH');
     const screenDimensionsLabel = document.getElementById('screenDimensions');
     const resolutionDisplayLabel = document.getElementById('resolutionDisplay');
+    const screenResDisplayLabel = document.getElementById('screenResDisplay');
+    const lensHPitchLabel = document.getElementById('lensHPitch');
+    const verticalResLossLabel = document.getElementById('verticalResLoss');
+    const screenPixelPitchLabel = document.getElementById('screenPixelPitch');
+    const lensPitchLabel = document.getElementById('lensPitch');
+    const dOverNLabel = document.getElementById('dOverN');
+    const radiusOfCurvatureLabel = document.getElementById('radiusOfCurvature');
+    const lensHeightLabel = document.getElementById('lensHeight');
     const viewerControlsDiv = document.getElementById('viewerControls');
     const viewportGrid = document.getElementById('viewportGrid');
     const fpsDisplay = document.getElementById('fpsDisplay');
@@ -1295,6 +1308,55 @@
       numViewsValueLabel.textContent = `${N}`;
       slantValueLabel.textContent = slant.toFixed(3);
 
+      // Validate px * sl range
+      const px = N * slant;  // lens horizontal pitch (pixels)
+      const pxTimesSlant = Math.abs(px * slant);
+      const isOutOfRange = pxTimesSlant > 1.5 || pxTimesSlant < (2/3);
+
+      // Apply red color if out of range
+      if (isOutOfRange) {
+        numViewsValueLabel.style.color = '#ff4444';
+        slantValueLabel.style.color = '#ff4444';
+        lensHPitchLabel.style.color = '#ff4444';
+        verticalResLossLabel.style.color = '#ff4444';
+      } else {
+        numViewsValueLabel.style.color = '';
+        slantValueLabel.style.color = '';
+        lensHPitchLabel.style.color = '';
+        verticalResLossLabel.style.color = '';
+      }
+
+      // Get lens optics parameters
+      const deltaN = parseFloat(deltaNSlider.value);
+      const conicK = parseFloat(conicKSlider.value);
+      const screenResK = parseInt(screenResKInput.value, 10);
+
+      // Update value displays
+      deltaNValueLabel.textContent = deltaN.toFixed(3);
+      conicKValueLabel.textContent = conicK.toFixed(2);
+
+      // Compute lens optics parameters
+      const screenResHorizontal = screenResK * 960;  // e.g., 8k -> 7680px
+      const screenResVertical = Math.round(screenResHorizontal * 9 / 16);
+      const donopx = 0.5 / Math.tan((fov / 2) * Math.PI / 180);
+      // px already computed above for validation
+      const delta_mm = screenW_mm / screenResHorizontal;       // screen pixel pitch (mm)
+      const p_mm = px * delta_mm / Math.sqrt(1 + slant * slant);  // lens pitch (mm)
+      const don_mm = donopx * px * delta_mm;                   // d_over_n (mm)
+      const roc = don_mm * deltaN;                             // radius of curvature (mm)
+      const lensHeight_mm = (p_mm/2) * (p_mm/2) / (roc + Math.sqrt(roc*roc - (conicK+1)*(p_mm/2)*(p_mm/2)));
+
+      // Update lens optics display
+      const verticalResLoss = 1 / slant;  // Vertical resolution loss in pixels
+      screenResDisplayLabel.textContent = `${screenResK}k (${screenResHorizontal} × ${screenResVertical} px)`;
+      lensHPitchLabel.textContent = `${px.toFixed(3)} px`;
+      verticalResLossLabel.textContent = `${verticalResLoss.toFixed(3)} px`;
+      screenPixelPitchLabel.textContent = `${delta_mm.toFixed(6)} mm`;
+      lensPitchLabel.textContent = `${p_mm.toFixed(6)} mm`;
+      dOverNLabel.textContent = `${don_mm.toFixed(6)} mm`;
+      radiusOfCurvatureLabel.textContent = `${roc.toFixed(6)} mm`;
+      lensHeightLabel.textContent = `${lensHeight_mm.toFixed(6)} mm`;
+
       // Update proximity parameter value display
       document.getElementById('proximityCValue').textContent = proximityParams.c.toFixed(2);
 
@@ -1414,6 +1476,9 @@
     });
     numViewsSlider.addEventListener('input', drawScene);
     slantSlider.addEventListener('input', drawScene);
+    deltaNSlider.addEventListener('input', drawScene);
+    conicKSlider.addEventListener('input', drawScene);
+    screenResKInput.addEventListener('change', drawScene);
 
     // Weighting policy event handlers
     const weightingPolicySelect = document.getElementById('weightingPolicy');

@@ -281,7 +281,23 @@
         <label for="slant">Slant (SL)
           <span class="small-value" id="slantValue"></span>
         </label>
-        <input id="slant" type="range" min="-0.5" max="0.5" step="0.01" value="0.333">
+        <input id="slant" type="range" min="-0.5" max="0.5" step="0.01" value="0.11">
+      </div>
+
+      <h2>Lens Optics</h2>
+
+      <div class="row">
+        <label for="deltaN">deltaN (refr. index diff)
+          <span class="small-value" id="deltaNValue"></span>
+        </label>
+        <input id="deltaN" type="range" min="0.01" max="0.5" step="0.01" value="0.3">
+      </div>
+
+      <div class="row">
+        <label for="conicK">Conic constant K
+          <span class="small-value" id="conicKValue"></span>
+        </label>
+        <input id="conicK" type="range" min="-3" max="0" step="0.1" value="-1.5">
       </div>
 
       <h2>Screen Configuration</h2>
@@ -292,14 +308,34 @@
       </div>
 
       <div class="row inline-row">
-        <label for="resolutionH">Horizontal resolution (px)</label>
+        <label for="screenResK">Screen resolution (k)</label>
+        <input id="screenResK" type="number" min="2" max="16" step="1" value="16">
+      </div>
+
+      <div class="row inline-row">
+        <label for="resolutionH">Simulation Resolution (px)</label>
         <input id="resolutionH" type="number" min="640" max="16384" step="1" value="1600">
       </div>
 
       <div class="row">
         <span style="font-size:11px;color:#999;">
           Screen: <span id="screenDimensions">1439 × 809 mm</span> |
-          Resolution: <span id="resolutionDisplay">3840 × 2160 px</span>
+          Render Res: <span id="resolutionDisplay">1600 × 900 px</span>
+        </span>
+      </div>
+
+      <h2>Lens Optics Output</h2>
+
+      <div class="row">
+        <span style="font-size:11px;color:#999;">
+          Screen Res: <span id="screenResDisplay">8k (7680 × 4320 px)</span><br>
+          Lens horiz. pitch: <span id="lensHPitch">-- px</span><br>
+          Vertical Res. loss: <span id="verticalResLoss">-- px</span><br>
+          Screen pixel pitch: <span id="screenPixelPitch">-- mm</span><br>
+          Lens pitch: <span id="lensPitch">-- mm</span><br>
+          d/n: <span id="dOverN">-- mm</span><br>
+          Radius of curvature: <span id="radiusOfCurvature">-- mm</span><br>
+          <strong>Lens height: <span id="lensHeight">-- mm</span></strong>
         </span>
       </div>
 
