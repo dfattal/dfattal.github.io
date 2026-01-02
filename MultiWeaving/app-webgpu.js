@@ -1293,7 +1293,7 @@
 
       const num = clamp(parseInt(numViewersInput.value, 10) || 1, 1, MAX_VIEWERS);
       const fov = parseFloat(fovSlider.value);
-      const N = clamp(parseInt(numViewsSlider.value, 10) || 8, 8, MAX_N);
+      const N = clamp(parseInt(numViewsSlider.value, 10) || 4, 4, MAX_N);
       const slant = parseFloat(slantSlider.value);
       const resH = parseInt(resolutionHInput.value, 10) || 3840;
       const resV = Math.round(resH * 9 / 16);
