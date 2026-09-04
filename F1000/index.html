@@ -8,6 +8,15 @@
 
     <!-- Load Three.js, Spark, and Socket.IO from CDN -->
 
+    <!-- DXR_SDK_PIN: the two @displayxr/inline3d entries above are pinned BY HAND to a
+         displayxr-web commit on jsDelivr's GitHub CDN, because the view-rig API
+         (inline3dViewRigSupported / handle.setViewRig / cameraRigFromCamera /
+         EyeCamera.setLocalFrom*) landed after the last npm release (1.2.1). Move to an
+         npm version once one ships with it. Re-pin BOTH lines together — they are one SDK.
+         They are fetched ONLY on a DisplayXR Browser (src/dxrMode.js dynamic-imports them
+         behind a capability check), so every other browser pays nothing for them, and a
+         wrong pin degrades the page to the mono path with a console warning rather than
+         breaking it. -->
 
     <style>
         body {
@@ -30,6 +39,16 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+        }
+
+        /* DisplayXR Browser (glasses-free 3D): the WebGL backing store becomes DOUBLE-WIDTH
+           side-by-side, so the renderer must not be allowed to write px sizes onto the
+           element. The CSS box stays 1:1 at the viewport — the browser squashing a 2:1 store
+           into it IS the SBS squeeze the weave un-squeezes. src/dxrMode.js sets these inline
+           too; the rule is here so the intent is visible next to the rest of the layout. */
+        canvas.dxr-stereo {
+            width: 100vw;
+            height: 100vh;
         }
 
         /* Debug Info HUD */
@@ -605,6 +624,12 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.5s ease;
+            /* display:none by default, NOT just opacity:0. On the site path (?site=…) the
+               globe is never built, and a full-bleed element sharing the canvas rect breaks
+               the DisplayXR weave match and drops the tile to raw side-by-side — an
+               opacity:0 element still reports a rect. GlobeView.show() sets an inline
+               display:block, which overrides this. */
+            display: none;
         }
 
         #globe-overlay.visible {
@@ -864,11 +889,13 @@
             "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js",
             "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/",
             "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@0.1.10/dist/spark.module.js",
-            "socket.io-client": "https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/+esm"
+            "socket.io-client": "https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/+esm",
+            "@displayxr/inline3d": "https://cdn.jsdelivr.net/gh/DisplayXR/displayxr-web@436af57dc886b8a363ce8f3aaebd9053ccdb185e/js/inline3d.js",
+            "@displayxr/inline3d/three": "https://cdn.jsdelivr.net/gh/DisplayXR/displayxr-web@436af57dc886b8a363ce8f3aaebd9053ccdb185e/js/inline3d-three.js"
         }
     }
     </script>
-  <script type="module" crossorigin src="/F1000/assets/index-DaWkAUXL.js"></script>
+  <script type="module" crossorigin src="/F1000/assets/index-GjKAf1Vz.js"></script>
 </head>
 
 <body>

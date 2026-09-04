@@ -50,6 +50,10 @@
     "referenceSpaceType": "local-floor",
     "userHeight": 1.6
   },
+  "dxr": {
+    "_comment": "DisplayXR Browser (glasses-free 3D). Zero-disparity distance in metres for first-person; third-person uses the live camera-to-character distance. See CLAUDE.md.",
+    "firstPersonConvergence": 3.0
+  },
   "camera": {
     "fov": 60,
     "near": 0.1,
