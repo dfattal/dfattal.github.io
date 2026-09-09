@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1000 multi-touch probe</title>
+<!--
+  TEMPORARY probe (delete with the tablet bug). No game code, no three.js, no SDK: just the
+  event stream. It exists to answer ONE question that the app cannot answer about itself —
+  when a finger is already holding a fixed button whose touchstart is preventDefault()ed,
+  does the browser still deliver a SECOND touch to the page?
+
+  Two surfaces, deliberately different:
+    HOLD (red)  - mimics the jetpack button exactly: position:fixed, touch-action:none,
+                  touchstart -> preventDefault + stopPropagation.
+    PLAIN (grey)- mimics the canvas: touch-action:none, nothing else.
+  Both touch AND pointer events are logged, because if touch loses the second finger while
+  pointer keeps it, the fix is to drive the controls from pointer events instead.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #0f0;
+               font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+               -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #surface { position: absolute; inset: 0; touch-action: none; }
+  #log { position: absolute; inset: 0; padding: 8px; overflow: hidden; white-space: pre;
+         pointer-events: none; }
+  #head { color: #ff0; }
+  #hold { position: fixed; bottom: 40px; right: 30px; width: 84px; height: 84px;
+          border-radius: 50%; background: #a00; color: #fff; display: flex;
+          align-items: center; justify-content: center; font-size: 14px; font-weight: bold;
+          touch-action: none; -webkit-tap-highlight-color: transparent; z-index: 10; }
+  #hold.held { background: #0a0; }
+  #clear { position: fixed; bottom: 40px; left: 30px; padding: 12px 16px; background: #333;
+           color: #fff; border: 1px solid #666; border-radius: 6px; touch-action: none; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="surface"></div>
+<div id="log"><span id="head"></span>
+</div>
+<div id="hold">HOLD</div>
+<button id="clear">clear</button>
+<script>
+(function () {
+  var logEl = document.getElementById('log');
+  var headEl = document.getElementById('head');
+  var hold = document.getElementById('hold');
+  var lines = [];
+  var pointers = new Set();
+
+  headEl.textContent =
+    'maxTouchPoints=' + navigator.maxTouchPoints +
+    '  pointer=' + ('onpointerdown' in window) +
+    '\n' + navigator.userAgent.slice(0, 70) +
+    '\n1) two fingers on the grey area  -> expect n=2' +
+    '\n2) hold RED, then a finger on grey -> does n=2 appear?\n';
+
+  function put(text) {
+    lines.push(text);
+    if (lines.length > 14) lines.shift();
+    logEl.textContent = headEl.textContent + lines.join('\n');
+    logEl.insertBefore(headEl, logEl.firstChild);
+  }
+
+  function name(el) { return el && el.id ? '#' + el.id : (el && el.tagName) || '?'; }
+
+  // Window/capture: ahead of every other handler, so nothing below can hide an event.
+  ['touchstart', 'touchend', 'touchcancel'].forEach(function (type) {
+    window.addEventListener(type, function (e) {
+      var ids = [];
+      for (var i = 0; i < e.changedTouches.length; i++) ids.push(e.changedTouches[i].identifier);
+      put('T ' + type.replace('touch', '') + ' #' + ids.join(',') +
+          '  n=' + e.touches.length + '  on:' + name(e.target));
+    }, { capture: true, passive: true });
+  });
+
+  ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (type) {
+    window.addEventListener(type, function (e) {
+      if (type === 'pointerdown') pointers.add(e.pointerId); else pointers.delete(e.pointerId);
+      put('P ' + type.replace('pointer', '') + ' id=' + e.pointerId +
+          '  live=' + pointers.size + '  on:' + name(e.target));
+    }, { capture: true, passive: true });
+  });
+
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (type) {
+    window.addEventListener(type, function () { put('G ' + type); }, { capture: true, passive: true });
+  });
+
+  // The mimic of the jetpack button: the ONLY surface that prevents and stops its touchstart.
+  hold.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    hold.classList.add('held');
+    put('   HOLD took #' + e.changedTouches[0].identifier);
+  }, { passive: false });
+  ['touchend', 'touchcancel'].forEach(function (type) {
+    hold.addEventListener(type, function (e) {
+      hold.classList.remove('held');
+      put('   HOLD ' + type.replace('touch', '') + ' #' + e.changedTouches[0].identifier);
+    }, { passive: false });
+  });
+
+  document.getElementById('clear').addEventListener('click', function () {
+    lines = [];
+    logEl.textContent = headEl.textContent;
+    logEl.insertBefore(headEl, logEl.firstChild);
+  });
+})();
+</script>
+</body>
+</html>
