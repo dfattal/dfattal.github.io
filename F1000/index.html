@@ -39,6 +39,11 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+            /* The play surface takes every touch itself. `manipulation` (inherited from body)
+               still lets the browser claim a second finger as a pinch/pan, and claiming it
+               CANCELS the touches already down — which is how a look-around swipe used to kill
+               a held jetpack. Menus and panels keep body's `manipulation` and still scroll. */
+            touch-action: none;
         }
 
         /* DisplayXR Browser (glasses-free 3D): the WebGL backing store becomes DOUBLE-WIDTH
@@ -801,6 +806,9 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             -webkit-user-select: none;
+            /* Held for the whole flight: the browser must never reinterpret this touch as a
+               gesture and cancel it out from under the jetpack. */
+            touch-action: none;
         }
 
         #jump-jetpack-button:active {
@@ -895,7 +903,7 @@
         }
     }
     </script>
-  <script type="module" crossorigin src="/F1000/assets/index-3PQ0VHF0.js"></script>
+  <script type="module" crossorigin src="/F1000/assets/index-lVd_INNd.js"></script>
 </head>
 
 <body>
