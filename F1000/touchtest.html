@@ -25,11 +25,14 @@
   #log { position: absolute; inset: 0; padding: 8px; overflow: hidden; white-space: pre;
          pointer-events: none; }
   #head { color: #ff0; }
-  #hold { position: fixed; bottom: 40px; right: 30px; width: 84px; height: 84px;
-          border-radius: 50%; background: #a00; color: #fff; display: flex;
-          align-items: center; justify-content: center; font-size: 14px; font-weight: bold;
-          touch-action: none; -webkit-tap-highlight-color: transparent; z-index: 10; }
-  #hold.held { background: #0a0; }
+  #hold, #holdbtn { position: fixed; bottom: 40px; width: 84px; height: 84px;
+          border-radius: 50%; color: #fff; display: flex; padding: 0; border: 0;
+          align-items: center; justify-content: center; font-size: 13px; font-weight: bold;
+          font-family: inherit; touch-action: none; -webkit-tap-highlight-color: transparent;
+          z-index: 10; }
+  #hold    { right: 30px;  background: #a00; }   /* plain DIV   */
+  #holdbtn { right: 130px; background: #06a; }   /* native BUTTON, like the jetpack control */
+  #hold.held, #holdbtn.held { background: #0a0; }
   #clear { position: fixed; bottom: 40px; left: 30px; padding: 12px 16px; background: #333;
            color: #fff; border: 1px solid #666; border-radius: 6px; touch-action: none; z-index: 10; }
 </style>
@@ -38,7 +41,8 @@
 <div id="surface"></div>
 <div id="log"><span id="head"></span>
 </div>
-<div id="hold">HOLD</div>
+<div id="hold">DIV</div>
+<button id="holdbtn">BUTTON</button>
 <button id="clear">clear</button>
 <script>
 (function () {
@@ -52,8 +56,9 @@
     'maxTouchPoints=' + navigator.maxTouchPoints +
     '  pointer=' + ('onpointerdown' in window) +
     '\n' + navigator.userAgent.slice(0, 70) +
-    '\n1) two fingers on the grey area  -> expect n=2' +
-    '\n2) hold RED, then a finger on grey -> does n=2 appear?\n';
+    '\n1) two fingers on grey        -> expect n=2' +
+    '\n2) hold RED div, 2nd on grey  -> n=2?' +
+    '\n3) hold BLUE button, 2nd grey -> n=2?\n';
 
   function put(text) {
     lines.push(text);
@@ -86,19 +91,26 @@
     window.addEventListener(type, function () { put('G ' + type); }, { capture: true, passive: true });
   });
 
-  // The mimic of the jetpack button: the ONLY surface that prevents and stops its touchstart.
-  hold.addEventListener('touchstart', function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    hold.classList.add('held');
-    put('   HOLD took #' + e.changedTouches[0].identifier);
-  }, { passive: false });
-  ['touchend', 'touchcancel'].forEach(function (type) {
-    hold.addEventListener(type, function (e) {
-      hold.classList.remove('held');
-      put('   HOLD ' + type.replace('touch', '') + ' #' + e.changedTouches[0].identifier);
+  // Two mimics of the jetpack control, identical in CSS and handlers and differing ONLY in the
+  // element: a plain DIV and a native BUTTON. The game's control is a <button>, and a native
+  // control has activation behaviour of its own — if holding BUTTON loses the second finger
+  // while holding DIV keeps it, that is the whole bug.
+  function wireHold(el, label) {
+    el.addEventListener('touchstart', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.add('held');
+      put('   ' + label + ' took #' + e.changedTouches[0].identifier);
     }, { passive: false });
-  });
+    ['touchend', 'touchcancel'].forEach(function (type) {
+      el.addEventListener(type, function (e) {
+        el.classList.remove('held');
+        put('   ' + label + ' ' + type.replace('touch', '') + ' #' + e.changedTouches[0].identifier);
+      }, { passive: false });
+    });
+  }
+  wireHold(hold, 'DIV');
+  wireHold(document.getElementById('holdbtn'), 'BUTTON');
 
   document.getElementById('clear').addEventListener('click', function () {
     lines = [];
