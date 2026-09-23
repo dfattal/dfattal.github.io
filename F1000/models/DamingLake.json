@@ -3,6 +3,7 @@
   "description": "Historic lake in Jinan, Shandong Province, China",
   "assets": {
     "splatFile": "models/DamingLake.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/DamingLake/streamed-v1/lod-meta.json",
     "collisionFile": "models/DamingLake-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {

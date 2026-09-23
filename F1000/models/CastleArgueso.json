@@ -3,6 +3,7 @@
   "description": "Medieval castle in the south of Cantabria, Spain",
   "assets": {
     "splatFile": "models/CastleArgueso.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/CastleArgueso/streamed-v1/lod-meta.json",
     "collisionFile": "models/CastleArgueso-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {

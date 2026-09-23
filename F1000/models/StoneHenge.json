@@ -3,6 +3,7 @@
   "description": "Ancient stone circle with magical atmosphere",
   "assets": {
     "splatFile": "models/StoneHenge.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/StoneHenge/streamed-v1/lod-meta.json",
     "collisionFile": "models/StoneHenge-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {

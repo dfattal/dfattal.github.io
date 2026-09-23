@@ -16,7 +16,13 @@
          They are fetched ONLY on a DisplayXR Browser (src/dxrMode.js dynamic-imports them
          behind a capability check), so every other browser pays nothing for them, and a
          wrong pin degrades the page to the mono path with a console warning rather than
-         breaking it. -->
+         breaking it.
+         DXR_PC_SDK_PIN: `@displayxr/inline3d-pc/` is the SDK the ?engine=playcanvas path loads
+         (src/engine/playcanvasWorld.js imports inline3d-splat.js and inline3d.js from it, so both
+         come from ONE version). It needs addSplat(…, { controls:'page', onBeforeFrame }), i.e.
+         the SDK with the page-driven camera mode. It is a separate prefix on purpose: the Spark
+         path above stays on its own pin, untouched. `playcanvas` is the engine that SDK tests
+         against (PLAYCANVAS_TESTED). Neither is fetched unless ?engine=playcanvas. -->
 
     <style>
         body {
@@ -899,11 +905,13 @@
             "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.1.0/dist/spark.module.js",
             "socket.io-client": "https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/+esm",
             "@displayxr/inline3d": "https://cdn.jsdelivr.net/gh/DisplayXR/displayxr-web@498f002512dbf1d44fd657d849ed992ec00c74f6/js/inline3d.js",
-            "@displayxr/inline3d/three": "https://cdn.jsdelivr.net/gh/DisplayXR/displayxr-web@498f002512dbf1d44fd657d849ed992ec00c74f6/js/inline3d-three.js"
+            "@displayxr/inline3d/three": "https://cdn.jsdelivr.net/gh/DisplayXR/displayxr-web@498f002512dbf1d44fd657d849ed992ec00c74f6/js/inline3d-three.js",
+            "@displayxr/inline3d-pc/": "https://cdn.jsdelivr.net/npm/@displayxr/inline3d@1.11.0/js/",
+            "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2.22.3/build/playcanvas.mjs"
         }
     }
     </script>
-  <script type="module" crossorigin src="/F1000/assets/index-D5ZMld5e.js"></script>
+  <script type="module" crossorigin src="/F1000/assets/index-BUv-iO4V.js"></script>
 </head>
 
 <body>

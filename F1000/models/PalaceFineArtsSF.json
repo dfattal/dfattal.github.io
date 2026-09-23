@@ -3,6 +3,7 @@
   "description": "Palace of Fine Arts in San Francisco, California",
   "assets": {
     "splatFile": "models/PalaceFineArtsSF.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/PalaceFineArtsSF/streamed-v1/lod-meta.json",
     "collisionFile": "models/PalaceFineArtsSF-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {

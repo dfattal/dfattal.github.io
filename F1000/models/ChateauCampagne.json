@@ -3,6 +3,7 @@
   "description": "Chateau Campagne in Dordogne, France",
   "assets": {
     "splatFile": "models/ChateauCampagne.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/ChateauCampagne/streamed-v1/lod-meta.json",
     "collisionFile": "models/ChateauCampagne-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {

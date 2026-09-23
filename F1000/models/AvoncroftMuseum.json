@@ -3,6 +3,7 @@
   "description": "This is the Postmill at Avoncroft Museum of Historic Buildings.",
   "assets": {
     "splatFile": "models/AvoncroftMuseum.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/AvoncroftMuseum/streamed-v1/lod-meta.json",
     "collisionFile": "models/AvoncroftMuseum-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {

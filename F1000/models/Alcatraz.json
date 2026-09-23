@@ -3,6 +3,7 @@
   "description": "Alcatraz, the prison island in the San Francisco Bay.",
   "assets": {
     "splatFile": "models/Alcatraz.sog",
+    "streamedSplat": "https://kypxikvxlrwsvwslpbmd.supabase.co/storage/v1/object/public/media/f1000/Alcatraz/streamed-v1/lod-meta.json",
     "collisionFile": "models/Alcatraz-collision.glb",
     "characterFile": "models/Soldier.glb",
     "textures": {
